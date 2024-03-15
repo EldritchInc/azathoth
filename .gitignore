@@ -1,0 +1,6 @@
+/*/
+!/azathoth/
+!/azathoth.egg-info/
+!/build/
+!/tests/
+__pycache__/
