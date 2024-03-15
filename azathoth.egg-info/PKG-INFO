@@ -1,0 +1,36 @@
+Metadata-Version: 2.1
+Name: azathoth
+Version: 0.1.0
+Summary: An advanced AI framework
+Home-page: UNKNOWN
+Author: Oren Montano
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 1 - Planning
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Information Technology
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# Azathoth AI Framework
+
+Welcome to the **Azathoth AI Framework**, an innovative Python library designed for constructing agentic intelligences. Our framework facilitates the development of advanced AI agents, leveraging the power of external tools, including Large Language Models (LLMs), image processing systems, and more, to create robust and versatile intelligences.
+
+## Features
+
+- **Versatile Agent Construction**: Build AI agents with complex behaviors, capable of operating in diverse environments.
+- **Integration with Advanced Tools**: Seamlessly incorporate LLMs, image recognition systems, and other cutting-edge technologies to enhance agent capabilities.
+- **Python-Based**: Utilize the extensive Python ecosystem for development, ensuring ease of use and broad compatibility.
+- **Open Source**: Collaborate, modify, and distribute the framework with the support of a growing community.
+
+## MORE SOON
+
+

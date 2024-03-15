@@ -1,6 +1,11 @@
 {
     "cSpell.words": [
+        "azathoth",
         "boto",
+        "jsonschema",
         "openai"
+    ],
+    "python.analysis.extraPaths": [
+        "./azathoth/prompting"
     ]
 }

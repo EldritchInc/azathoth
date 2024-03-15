@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='azathoh',
+    name='azathoth',
     version='0.1.0',
     description='An advanced AI framework',
     long_description=open('README.md').read(),

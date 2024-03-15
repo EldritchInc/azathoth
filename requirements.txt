@@ -1,0 +1,5 @@
+CouchDB
+boto3
+openai
+requests
+jsonschema

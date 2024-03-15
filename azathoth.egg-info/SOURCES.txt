@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+azathoth.egg-info/PKG-INFO
+azathoth.egg-info/SOURCES.txt
+azathoth.egg-info/dependency_links.txt
+azathoth.egg-info/requires.txt
+azathoth.egg-info/top_level.txt
