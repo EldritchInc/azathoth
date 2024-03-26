@@ -9,4 +9,15 @@ Welcome to the **Azathoth AI Framework**, an innovative Python library designed 
 - **Python-Based**: Utilize the extensive Python ecosystem for development, ensuring ease of use and broad compatibility.
 - **Open Source**: Collaborate, modify, and distribute the framework with the support of a growing community.
 
+## Running the Prompt UI
+
+To run the Prompt UI, follow these steps:
+
+1. Navigate to the `azathoth/ui/prompt-ui` directory.
+2. Install the dependencies by running `npm install`.
+3. Build the React app by running `npm run build`.
+4. Navigate back to the root directory of the library.
+5. Start the UI server by running `python -m azathoth.ui_server`.
+6. Open your browser and visit `http://localhost:5000` to access the Prompt UI.
+
 ## MORE SOON
