@@ -2,8 +2,13 @@
     "cSpell.words": [
         "azathoth",
         "boto",
+        "codeeditor",
+        "Glyphicon",
+        "jsonify",
         "jsonschema",
-        "openai"
+        "noconflict",
+        "openai",
+        "rjsf"
     ],
     "python.analysis.extraPaths": [
         "./azathoth/prompting"

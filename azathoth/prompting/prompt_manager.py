@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Callable
-from prompt_goal import PromptGoal
-from prompt import Prompt
-from couchdb import CouchDB
+from azathoth.prompting.prompt_goal import PromptGoal
+from azathoth.prompting.prompt import Prompt
+from azathoth.prompting.couchdb import CouchDB
 
 class PromptManager:
     def __init__(self, db: CouchDB):
@@ -14,30 +14,86 @@ class PromptManager:
         # Create a new PromptGoal instance
         prompt_goal = PromptGoal(prompt_goal_data)
         
-        # Save the prompt goal to the database
-        self.db.save_prompt_goal(prompt_goal)
+        # Convert the PromptGoal object to a dictionary
+        prompt_goal_dict = {
+            "prompt_goal_id": prompt_goal.prompt_goal_id,
+            "prompt_goal_name": prompt_goal.prompt_goal_name,
+            "type": "prompt_goal", # "type" is always set to "prompt_goal
+            "desired_outcomes": prompt_goal.desired_outcomes,
+            "needs": prompt_goal.needs,
+            "wants": prompt_goal.wants, # Added "wants" field
+            "prompt_goal_description": prompt_goal.prompt_goal_description,
+            "response_schema": prompt_goal.response_schema,
+            "statistics": prompt_goal.statistics
+        }
+        
+        # Save the prompt goal dictionary to the database
+        self.db.create_prompt_goal(prompt_goal_dict)
+        
+        return prompt_goal
+        
+        return prompt_goal
+    
+    def update_prompt_goal(self, prompt_goal_data: Dict[str, Any]) -> PromptGoal:
+        # Validate the prompt goal data
+        PromptGoal.validate_data(prompt_goal_data)
+        
+        # Create a new PromptGoal instance
+        prompt_goal = PromptGoal(prompt_goal_data)
+        
+        # Convert the PromptGoal object to a dictionary
+        prompt_goal_dict = {
+            "prompt_goal_id": prompt_goal.prompt_goal_id,
+            "prompt_goal_name": prompt_goal.prompt_goal_name,
+            "type": "prompt_goal", # "type" is always set to "prompt_goal
+            "desired_outcomes": prompt_goal.desired_outcomes,
+            "needs": prompt_goal.needs,
+            "wants": prompt_goal.wants, # Added "wants" field
+            "prompt_goal_description": prompt_goal.prompt_goal_description,
+            "response_schema": prompt_goal.response_schema,
+            "statistics": prompt_goal.statistics,
+            "_id": prompt_goal._id,
+            "_rev": prompt_goal._rev
+        }
+        
+        if "deleted" in prompt_goal_data:
+            prompt_goal_dict["deleted"] = prompt_goal_data["deleted"]
+        
+        # Update the prompt goal dictionary in the database
+        self.db.update_prompt_goal(prompt_goal._id, prompt_goal_dict)
         
         return prompt_goal
 
     def get_prompt_goal(self, prompt_goal_id: str) -> PromptGoal:
-        # Retrieve the prompt goal data from the database
         prompt_goal_data = self.db.get_prompt_goal(prompt_goal_id)
         
         if prompt_goal_data:
-            # Create a PromptGoal instance from the retrieved data
             prompt_goal = PromptGoal(prompt_goal_data)
             return prompt_goal
         else:
             return None
 
     def get_all_prompt_goals(self) -> List[PromptGoal]:
-        # Retrieve all prompt goal data from the database
         prompt_goal_data_list = self.db.get_all_prompt_goals()
         
-        # Create PromptGoal instances from the retrieved data
-        prompt_goals = [PromptGoal(data) for data in prompt_goal_data_list]
+        prompt_goals = []
+        for data in prompt_goal_data_list:
+            try:
+                prompt_goal = PromptGoal(data)
+                prompt_goals.append(prompt_goal)
+            except ValueError as e:
+                print(f"Skipping invalid prompt goal data: {e}")
         
         return prompt_goals
+    
+    def get_all_prompts_for_goal(self, prompt_goal_id: str) -> List[Prompt]:
+        # Retrieve all prompts associated with the prompt goal
+        prompt_data_list = self.db.get_prompts_for_goal(prompt_goal_id)
+        
+        # Create Prompt instances from the retrieved data
+        prompts = [Prompt(data, prompt_goal_id) for data in prompt_data_list]
+        
+        return prompts
 
     def create_prompt(self, prompt_goal_id: str, prompt_data: Dict[str, Any]) -> Prompt:
         # Retrieve the prompt goal

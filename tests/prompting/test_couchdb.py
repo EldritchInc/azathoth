@@ -15,7 +15,7 @@ class TestCouchDB(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["id"], "test_id")
-        mock_session.return_value.request.assert_called_once_with('POST', 'http://example.com/test_db/', json={"test": "data"}, auth=None)
+        mock_session.return_value.request.assert_called_once_with('POST', 'http://example.com/test_db/', json={"test": "data"})
 
 if __name__ == '__main__':
     unittest.main()

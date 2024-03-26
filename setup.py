@@ -8,6 +8,8 @@ setup(
     long_description_content_type='text/markdown',
     author='Oren Montano',
     packages=find_packages(),
+    package_data={'': ['ui/prompt-ui/build/*']},
+    include_package_data=True,
     install_requires=[
         # List your project's dependencies here.
         # They will be installed by pip when your project is installed.

@@ -2,13 +2,12 @@ import re
 import json
 from datetime import datetime
 import jsonschema
-from azathoth.prompting.couchdb import create_prompt_goal, delete_prompt, filter_test_inputs, export_data, db
-from azathoth.prompting.prompt_goal import PromptGoal
+from azathoth.prompting.couchdb import CouchDB
 from typing import List, Dict, Any
 
 
 class Prompt:
-    def __init__(self, prompt_data: Dict[str, Any], prompt_goal: PromptGoal):
+    def __init__(self, prompt_data: Dict[str, Any], prompt_goal_id: str):
         self.validate_data(prompt_data)
         self.prompt_id = prompt_data["prompt_id"]
         self.prompt_version = prompt_data["prompt_version"]
@@ -19,7 +18,7 @@ class Prompt:
         self.temperature = prompt_data["temperature"]
         self.prompt_text = prompt_data["prompt"]
         self.chat = prompt_data["chat"]
-        self.prompt_goal = prompt_goal
+        self.prompt_goal_id = prompt_goal_id
         self.response_history: List[Dict[str, Any]] = []
 
     @staticmethod
@@ -30,7 +29,12 @@ class Prompt:
             "type": "object",
             "properties": {
                 "$schema": {"type": "string"},
+                "type": {
+                    "type": "string",
+                    "description": "Always set to 'prompt'.",
+                },
                 "prompt_id": {"type": "string"},
+                "prompt_name": {"type": "string"},
                 "prompt_version": {"type": "integer"},
                 "model": {"type": "string"},
                 "model_brand": {"type": "string"},
@@ -115,6 +119,9 @@ class Prompt:
     def update(self, prompt_data: Dict[str, Any]):
         # Update the prompt data
         self.validate_data(prompt_data)
+        self.prompt_name = prompt_data["prompt_name"]
+        self._id = prompt_data["_id"]
+        self._rev = prompt_data["_rev"]
         self.prompt_version = prompt_data["prompt_version"]
         self.model = prompt_data["model"]
         self.model_brand = prompt_data["model_brand"]
@@ -134,9 +141,9 @@ class Prompt:
     def store_response(self, context: dict, response: str):
         # Enhanced to store response history in CouchDB
         response_record = {"context": context, "response": response, "prompt_id": self.prompt_id}
-        db.create_document(response_record, doc_id=db.generate_doc_id("response_"))
+        CouchDB.create_document(response_record, doc_id=CouchDB.generate_doc_id("response_"))
         self.response_history.append(response_record)
 
     def load_response_history(self):
         # Load response history for this prompt from CouchDB
-        self.response_history = db.get_prompts_for_goal(self.prompt_id, include_deleted=False)
+        self.response_history = CouchDB.get_prompts_for_goal(self.prompt_id, include_deleted=False)
