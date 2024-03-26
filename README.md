@@ -9,6 +9,15 @@ Welcome to the **Azathoth AI Framework**, an innovative Python library designed 
 - **Python-Based**: Utilize the extensive Python ecosystem for development, ensuring ease of use and broad compatibility.
 - **Open Source**: Collaborate, modify, and distribute the framework with the support of a growing community.
 
+## CouchDB Setup Instructions
+
+1. Install CouchDB on your system by following the official installation guide: https://docs.couchdb.org/en/stable/install/index.html
+2. Once CouchDB is installed and running, open a web browser and navigate to `http://localhost:5984/_utils` to access the CouchDB web interface.
+3. In the web interface, click on the "Create Database" button and enter a database name (e.g., "azathoth"). Make sure to use the same database name as specified in the library's configuration.
+4. That's it! You don't need to manually create any design documents or views. The library will handle that automatically when it initializes the CouchDB instance.
+
+Note: If you're using a different database name or have custom configuration settings, make sure to update the library's configuration accordingly.
+
 ## Running the Prompt UI
 
 To run the Prompt UI, follow these steps:
