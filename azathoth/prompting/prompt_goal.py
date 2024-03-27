@@ -138,23 +138,3 @@ class PromptGoal:
             # If validation fails, throw an error to be caught by the caller.
             raise ValueError(f"Invalid prompt goal data: {e.message}")
 
-    def create_prompt(self, prompt_text: str, model: str, parameters: dict) -> Prompt:
-        prompt_id = str(uuid.uuid4())
-        prompt = Prompt(prompt_id, prompt_text, model, parameters, self)
-        self.prompts.append(prompt)
-        return prompt
-
-    def get_statistics(self) -> Dict[str, Any]:
-        return self.statistics
-
-    def update_statistics(self, statistics: Dict[str, Any]):
-        # Assuming `statistics` contains the exact structure to update.
-        self.statistics.update(statistics)
-
-    def export_data(self, format: str) -> str:
-        try:
-            exported_data = CouchDB.export_data(self.prompt_goal_id, format)
-            return exported_data
-        except Exception as e:
-            # Handle or log the error based on your application's logging strategy.
-            raise RuntimeError(f"Failed to export data: {e}")

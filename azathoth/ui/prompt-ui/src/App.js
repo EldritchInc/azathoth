@@ -4,6 +4,7 @@ import 'ace-builds/webpack-resolver'
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Dashboard from "./components/Dashboard";
 import PromptGoalEditor from "./components/PromptGoalEditor";
+import PromptEditor from "./components/PromptEditor";
 
 import Container from "react-bootstrap/Container";
 
@@ -23,6 +24,8 @@ function App() {
           />
           {/* Add a route for adding a new prompt goal without an ID */}
           <Route path="/edit-prompt-goal" element={<PromptGoalEditor />} />
+          <Route path="/edit-prompt/:promptGoalId/:promptId" element={<PromptEditor />} />
+          <Route path="/edit-prompt/:promptGoalId" element={<PromptEditor />} />
         </Routes>
       </Router>
     </Container>

@@ -4,6 +4,7 @@
         "boto",
         "codeeditor",
         "Glyphicon",
+        "incompletes",
         "jsonify",
         "jsonschema",
         "noconflict",

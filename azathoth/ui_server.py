@@ -33,7 +33,15 @@ def prompts(prompt_goal_id):
         prompt_data = request.get_json()
         prompt = prompt_manager.create_prompt(prompt_goal_id, prompt_data)
         return jsonify(prompt.__dict__)
-
+@app.route('/prompt-goals/<string:prompt_goal_id>/test-inputs', methods=['GET', 'POST'])
+def test_inputs(prompt_goal_id):
+    if request.method == 'GET':
+        test_inputs = prompt_manager.get_all_test_inputs_for_goal(prompt_goal_id)
+        return jsonify([test_input.__dict__ for test_input in test_inputs])
+    elif request.method == 'POST':
+        test_input_data = request.get_json()
+        test_input = prompt_manager.create_test_input(prompt_goal_id, test_input_data)
+        return jsonify(test_input.__dict__)
 @app.route('/prompt-goals', methods=['GET', 'POST', 'PUT'])
 def prompt_goals():
     if request.method == 'GET':
@@ -56,6 +64,24 @@ def prompt_goal(prompt_goal_id):
         prompt_goal_data = request.get_json()
         prompt_goal = prompt_manager.update_prompt_goal(prompt_goal_data)
         return jsonify(prompt_goal.__dict__)
+@app.route('/prompts/<string:prompt_id>', methods=['GET', 'PUT'])
+def prompt(prompt_id):
+    if request.method == 'GET':
+        prompt = prompt_manager.get_prompt(prompt_id)
+        return jsonify(prompt.__dict__)
+    elif request.method == 'PUT':
+        prompt_data = request.get_json()
+        prompt = prompt_manager.update_prompt(prompt_data)
+        return jsonify(prompt.__dict__)
+@app.route('/test-inputs/<string:test_input_id>', methods=['GET', 'PUT'])
+def test_input(test_input_id):
+    if request.method == 'GET':
+        test_input = prompt_manager.get_test_input(test_input_id)
+        return jsonify(test_input.__dict__)
+    elif request.method == 'PUT':
+        test_input_data = request.get_json()
+        test_input = prompt_manager.update_test_input(test_input_data)
+        return jsonify(test_input.__dict__)
 @app.route('/run-tests', methods=['POST', 'OPTIONS'])
 def run_tests():
     if request.method == 'OPTIONS':

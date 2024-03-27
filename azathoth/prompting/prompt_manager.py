@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Callable
 from azathoth.prompting.prompt_goal import PromptGoal
 from azathoth.prompting.prompt import Prompt
+from azathoth.prompting.test_input import TestInput
 from azathoth.prompting.couchdb import CouchDB
 
 class PromptManager:
@@ -94,6 +95,79 @@ class PromptManager:
         prompts = [Prompt(data, prompt_goal_id) for data in prompt_data_list]
         
         return prompts
+    
+    def create_test_input(self, prompt_goal_id: str, test_input_data: Dict[str, Any]) -> TestInput:
+        # Retrieve the prompt goal
+        prompt_goal = self.get_prompt_goal(prompt_goal_id)
+        
+        if prompt_goal:
+            # Validate the test input data
+            TestInput.validate_data(test_input_data)
+            
+            # Create a new TestInput instance
+            test_input = TestInput(test_input_data, prompt_goal_id)
+            
+            # Save the test input to the database
+            self.db.save_test_input(test_input)
+            
+            return test_input
+        else:
+            return None
+        
+    def get_test_inputs_for_goal(self, prompt_goal_id: str) -> List[TestInput]:
+        # Retrieve all test inputs associated with the prompt goal
+        test_input_data_list = self.db.get_test_inputs_for_goal(prompt_goal_id)
+        
+        # Create TestInput instances from the retrieved data
+        test_inputs = [TestInput(data, prompt_goal_id) for data in test_input_data_list]
+        
+        return test_inputs
+    
+    def get_test_input(self, test_input_id: str) -> TestInput:
+        # Retrieve the test input data from the database
+        test_input_data = self.db.get_test_input(test_input_id)
+        
+        if test_input_data:
+            # Retrieve the associated prompt goal
+            prompt_goal_id = test_input_data["prompt_goal_id"]
+            prompt_goal = self.get_prompt_goal(prompt_goal_id)
+            
+            if prompt_goal:
+                # Create a TestInput instance from the retrieved data
+                test_input = TestInput(test_input_data, prompt_goal_id)
+                return test_input
+            else:
+                return None
+        else:
+            return None
+        
+    def update_test_input(self, test_input_id: str, test_input_data: Dict[str, Any]) -> TestInput:
+        # Retrieve the test input
+        test_input = self.get_test_input(test_input_id)
+        
+        if test_input:
+            # Validate the test input data
+            TestInput.validate_data(test_input_data)
+            
+            # Update the test input data in the database
+            self.db.update_test_input(test_input_id, test_input_data)
+            
+            # Create a new TestInput instance with the updated data
+            updated_test_input = TestInput(test_input_data, test_input.prompt_goal_id)
+            
+            return updated_test_input
+        else:
+            return None
+        
+    def delete_test_input(self, test_input_id: str, hard_delete: bool = False):
+        # Retrieve the test input
+        test_input = self.get_test_input(test_input_id)
+        
+        if test_input:
+            # Delete the test input from the database
+            self.db.delete_test_input(test_input_id, hard_delete)
+        else:
+            pass
 
     def create_prompt(self, prompt_goal_id: str, prompt_data: Dict[str, Any]) -> Prompt:
         # Retrieve the prompt goal
@@ -180,11 +254,13 @@ class PromptManager:
         prompt = self.get_prompt(prompt_id)
         
         if prompt:
+            # Update the prompt goal with the test input
+            self.db.create_test_input(prompt.prompt_goal.prompt_goal_id, context)
             # Execute the prompt with the given context
             response = prompt.execute(context)
             
             # Update the prompt goal with the test input
-            self.db.add_test_input(prompt.prompt_goal.prompt_goal_id, context, response)
+            self.db.create_prompt_output(prompt.prompt_goal.prompt_goal_id, prompt, response)
             
             return response
         else:
