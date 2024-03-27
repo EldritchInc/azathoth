@@ -3,14 +3,27 @@ from flask_cors import CORS
 import os
 from azathoth.prompting.prompt_manager import PromptManager
 from azathoth.prompting.couchdb import CouchDB
+import json
+
+def load_config():
+    with open('config.json') as f:
+        return json.load(f)
+
+config = load_config()
+
+
 
 app = Flask(__name__, static_folder='ui/prompt-ui/build')
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-couch_user_name = os.environ.get('COUCH_USER_NAME')
-couch_password = os.environ.get('COUCH_PASSWORD')
+db_host = config['database']['host']
+db_port = config['database']['port']
+db_name = config['database']['name']
+db_user = config['database']['user']
+db_password = config['database']['password']
+db_connect_string = f'http://{db_host}:{db_port}'
 
-db = CouchDB('http://localhost:5984', 'azathoth', couch_user_name, couch_password)
+db = CouchDB(db_connect_string, db_name, db_user, db_password)
 db.create_views()
 prompt_manager = PromptManager(db)
 

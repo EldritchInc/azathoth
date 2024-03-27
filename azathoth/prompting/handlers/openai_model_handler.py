@@ -1,11 +1,16 @@
+import json
 from azathoth.prompting.handlers.base_model_handler import BaseModelHandler
 from openai import OpenAI
 from azathoth.util.logging import error_log, info_log
 
+def load_config():
+    with open('../config.json') as f:
+        return json.load(f)
+
+config = load_config()
 class OpenAIModelHandler(BaseModelHandler):
-    def __init__(self, model_config):
-        super().__init__(model_config)
-        self.api_token = self.model_config.get("api_token", "")
+    def __init__(self):
+        self.api_token = config["api"]["openai_key"]
         if not self.api_token:
             raise ValueError("API token for OpenAI is not provided in the model config.")
         self.client = OpenAI(api_key=self.api_token)
