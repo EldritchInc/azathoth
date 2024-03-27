@@ -1,0 +1,14 @@
+{
+    "database": {
+      "host": "localhost",
+      "port": 5984,
+      "name": "azathoth",
+      "user": "admin",
+      "password": "password"
+    },
+    "api": {
+      "openai_key": "your_openai_api_key_here",
+      "hugging_face_token": "your_hugging_face_token_here"
+    }
+  }
+  
