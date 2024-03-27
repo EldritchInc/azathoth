@@ -22,6 +22,18 @@ class CouchDB:
                 },
                 "all_prompt_goals": {
                     "map": "function (doc) { if (doc.type === 'prompt_goal' && !doc.deleted) { emit(null, doc); } }"
+                },
+                "test_inputs_by_goal": {
+                    "map": "function (doc) { if (doc.type === 'test_input' && !doc.deleted && doc.prompt_goal_id) { emit(doc.prompt_goal_id, doc); } }"
+                },
+                "filter_test_inputs": {
+                    "map": "function (doc) { if (doc.type === 'test_input' && !doc.deleted) { emit(null, doc); } }"
+                },
+                "all_prompt_outputs_for_test_input": {
+                    "map": "function (doc) { if (doc.type === 'prompt_output' && doc.test_input_id) { emit(doc.test_input_id, doc); } }"
+                },
+                "all_prompt_outputs_for_prompt": {
+                    "map": "function (doc) { if (doc.type === 'prompt_output' && doc.prompt_id) { emit(doc.prompt_id, doc); } }"
                 }
             }
         }
@@ -110,10 +122,6 @@ class CouchDB:
         test_inputs = self.query_view("design_doc_name", "test_inputs_by_goal", key=prompt_goal_id)
         return test_inputs if test_inputs else []
 
-    def get_test_inputs_for_prompt(self, prompt_id):
-        test_inputs = self.query_view("design_doc_name", "test_inputs_by_prompt", key=prompt_id)
-        return test_inputs if test_inputs else []
-    
     def get_all_prompt_goals(self):
         prompt_goals = self.query_view("design_doc_name", "all_prompt_goals")
         if prompt_goals:
@@ -133,21 +141,66 @@ class CouchDB:
     def update_prompt_goal(self, prompt_goal_id, prompt_goal_data):
         return self.update_document(prompt_goal_id, prompt_goal_data)
     
-    def create_test_input(self, test_input_data):
+    def create_test_input(self, test_input_data, prompt_goal_id):
         doc_id = self.generate_doc_id("test_input_")
+        test_input_data["prompt_goal_id"] = prompt_goal_id
         return self.create_document(test_input_data, doc_id=doc_id)
     
-    def update_test_input(self, test_input_id, is_correct):
-        test_input = self.get_document(test_input_id)
-        test_input["is_correct"] = is_correct
-        return self.update_document(test_input_id, test_input)
+    def update_test_input(self, test_input_id, test_input_data):
+        return self.update_document(test_input_id, test_input_data)
     
-    def delete_test_input(self, test_input_id):
+    def delete_test_input(self, test_input_id, hard_delete=False):
         test_input = self.get_document(test_input_id)
-        return self.delete_document(test_input_id, test_input['_rev'])
+        return self.delete_document(test_input_id, test_input['_rev'], hard_delete=hard_delete)
 
     def filter_test_inputs(self, criteria):
-        return self.query_view("design_doc_name", "view_name", **criteria)
+        return self.query_view("design_doc_name", "filter_test_inputs", **criteria)
+
+    def create_prompt_output(self, prompt_output_data, prompt_id, test_input_id):
+        doc_id = self.generate_doc_id("prompt_output_")
+        prompt_output_data["prompt_id"] = prompt_id
+        prompt_output_data["test_input_id"] = test_input_id
+        return self.create_document(prompt_output_data, doc_id=doc_id)
+        
+    def get_prompt_outputs_for_test_input(self, test_input_id):
+        prompt_outputs = self.query_view("design_doc_name", "all_prompt_outputs_for_test_input", key=test_input_id)
+        return prompt_outputs if prompt_outputs else []
+        
+    def get_prompt_output(self, prompt_output_id):
+        return self.get_document(prompt_output_id)
+        
+    def update_prompt_output(self, prompt_output_id, prompt_output_data):
+        return self.update_document(prompt_output_id, prompt_output_data)
+        
+    def delete_prompt_output(self, prompt_output_id, hard_delete=False):
+        prompt_output = self.get_document(prompt_output_id)
+        return self.delete_document(prompt_output_id, prompt_output['_rev'], hard_delete=hard_delete)
+        
+    def get_prompt_outputs_for_prompt(self, prompt_id):
+        prompt_outputs = self.query_view("design_doc_name", "all_prompt_outputs_for_prompt", key=prompt_id)
+        return prompt_outputs if prompt_outputs else []
+    
+    def create_prompt_aggregation(self, prompt_aggregation_data):
+        doc_id = self.generate_doc_id("prompt_aggregation_")
+        return self.create_document(prompt_aggregation_data, doc_id=doc_id)
+    
+    def get_prompt_aggregation(self, prompt_aggregation_id):
+        return self.get_document(prompt_aggregation_id)
+    
+    def update_prompt_aggregation(self, prompt_aggregation_id, prompt_aggregation_data):
+        return self.update_document(prompt_aggregation_id, prompt_aggregation_data)
+    
+    def delete_prompt_aggregation(self, prompt_aggregation_id, hard_delete=False):
+        prompt_aggregation = self.get_document(prompt_aggregation_id)
+        return self.delete_document(prompt_aggregation_id, prompt_aggregation['_rev'], hard_delete=hard_delete)
+    
+    def get_prompt_aggregations_for_prompt(self, prompt_id):
+        prompt_aggregations = self.query_view("design_doc_name", "prompt_aggregations_for_prompt", key=prompt_id)
+        return prompt_aggregations if prompt_aggregations else []
+    
+    def get_prompt_aggregations_for_test_input(self, test_input_id):
+        prompt_aggregations = self.query_view("design_doc_name", "prompt_aggregations_for_test_input", key=test_input_id)
+        return prompt_aggregations if prompt_aggregations else []    
 
     def export_data(self, data, destination, format='json'):
         if format == 'json':

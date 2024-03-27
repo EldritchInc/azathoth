@@ -1,13 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTimes } from "@fortawesome/free-solid-svg-icons";
 import Button from "react-bootstrap/Button";
 import Container from "react-bootstrap/Container";
 import Modal from "react-bootstrap/Modal";
+import Collapse from "react-bootstrap/Collapse";
+import Tab from "react-bootstrap/Tab";
+import Tabs from "react-bootstrap/Tabs";
 import { deletePromptGoal } from "../api/promptApi";
 
+import { fetchPrompts, fetchTestInputs } from "../api/promptApi";
+
 const PromptGoalList = ({ promptGoals }) => {
+  const [expandedGoalId, setExpandedGoalId] = useState(null);
+  const [prompts, setPrompts] = useState([]);
+  const [testInputs, setTestInputs] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedPromptGoalId, setSelectedPromptGoalId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -24,6 +32,10 @@ const PromptGoalList = ({ promptGoals }) => {
   const filteredPromptGoals = promptGoals.filter((goal) =>
     goal.prompt_goal_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handlePromptGoalClick = (goalId) => {
+    setExpandedGoalId(expandedGoalId === goalId ? null : goalId);
+  };
 
   const indexOfLastGoal = currentPage * goalsPerPage;
   const indexOfFirstGoal = indexOfLastGoal - goalsPerPage;
@@ -53,35 +65,85 @@ const PromptGoalList = ({ promptGoals }) => {
     nav(`/edit-prompt-goal/${promptGoalId}`); // Navigate with ID for editing
   };
 
+  useEffect(() => {
+    const fetchData = async () => {
+      if (expandedGoalId) {
+        try {
+          const fetchedPrompts = await fetchPrompts(expandedGoalId);
+          setPrompts(fetchedPrompts);
+
+          const fetchedTestInputs = await fetchTestInputs(expandedGoalId);
+          setTestInputs(fetchedTestInputs);
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      } else {
+        setPrompts([]);
+        setTestInputs([]);
+      }
+    };
+
+    fetchData();
+  }, [expandedGoalId]);
+
   return (
     <Container className="dashboard-container">
       <h2>Prompt Goals</h2>
       <div className="search-add-container">
-      <input
-        type="text"
-        className="search-input"
-        placeholder="Search prompt goals..."
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ marginBottom: "20px" }}
-      />
-      <Button onClick={handleAddClick}>Add New Prompt Goal</Button>
+        <input
+          type="text"
+          className="search-input"
+          placeholder="Search prompt goals..."
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ marginBottom: "20px" }}
+        />
+        <Button onClick={handleAddClick}>Add New Prompt Goal</Button>
       </div>
-      {currentGoals.map((promptGoal) => (
-        <div className="prompt-goal-item" key={promptGoal._id}>
-          <h3>{promptGoal.prompt_goal_name}</h3>
-          <div className="prompt-goal-buttons">
-          <Button onClick={() => handleEditClick(promptGoal._id)}>Edit</Button>
-          <Button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => confirmDelete(promptGoal._id)}
-            style={{ marginLeft: "10px" }}
-          >
-            <FontAwesomeIcon icon={faTimes} /> Delete
-          </Button>
+      <div className="prompt-goal-list">
+        {currentGoals.map((promptGoal) => (
+          <div key={promptGoal._id} className="prompt-goal">
+            <div
+              className="prompt-goal-header"
+              onClick={() => handlePromptGoalClick(promptGoal._id)}
+            >
+              <h3>{promptGoal.prompt_goal_name}</h3>
+              <div className="prompt-goal-buttons">
+                <Button variant="link">
+                  {expandedGoalId === promptGoal._id ? "Collapse" : "Expand"}
+                </Button>
+                <Button onClick={() => handleEditClick(promptGoal._id)}>
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => confirmDelete(promptGoal._id)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  <FontAwesomeIcon icon={faTimes} /> Delete
+                </Button>
+              </div>
+            </div>
+            <div className="prompt-goal-details">
+              <Collapse Collapse in={expandedGoalId === promptGoal._id}>
+                <div className="prompt-goal-details">
+                  <div className="prompt-goal-description">
+                    {promptGoal.description}
+                  </div>
+                  <Tabs defaultActiveKey="prompts">
+                    <Tab eventKey="prompts" title="Prompts">
+                      <PromptList prompts={prompts} />
+                    </Tab>
+                    <Tab eventKey="tests" title="Tests">
+                      <TestList tests={testInputs} />
+                    </Tab>
+                  </Tabs>
+                </div>
+              </Collapse>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
       <div className="pagination">
         {[
           ...Array(Math.ceil(filteredPromptGoals.length / goalsPerPage)).keys(),
@@ -114,6 +176,48 @@ const PromptGoalList = ({ promptGoals }) => {
         </Modal.Footer>
       </Modal>
     </Container>
+  );
+};
+
+const PromptList = ({ promptGoalId, prompts }) => {
+  const nav = useNavigate();
+  const handleAddPromptClick = () => {
+    nav(`/edit-prompt/${promptGoalId}`); // Navigate with ID for adding prompt
+  };
+
+  return (
+    <div className="prompt-list">
+      {prompts.map((prompt) => (
+        <div key={prompt._id} className="prompt-item">
+          <div className="prompt-header">
+            <h4>{prompt.name}</h4>
+            <Button variant="link">Edit</Button>
+            <Button variant="link">Delete</Button>
+            <Button variant="link">Run Tests</Button>
+          </div>
+          <div className="prompt-description">{prompt.description}</div>
+        </div>
+      ))}
+      <Button variant="primary" onClick={handleAddPromptClick}>Add Prompt</Button>
+    </div>
+  );
+};
+
+const TestList = ({ tests }) => {
+  return (
+    <div className="test-list">
+      {tests.map((test) => (
+        <div key={test._id} className="test-item">
+          <div className="test-header">
+            <h4>{test.name}</h4>
+            <Button variant="link">Edit</Button>
+            <Button variant="link">Delete</Button>
+          </div>
+          <div className="test-description">{test.description}</div>
+        </div>
+      ))}
+      <Button variant="primary">Add Test Case</Button>
+    </div>
   );
 };
 

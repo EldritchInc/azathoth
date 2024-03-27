@@ -1,46 +1,131 @@
-.header {
-  text-align: center;
-}
-
-.dashboard-container {
-  display: flex;
-  flex-direction: column;
-  align-items: start;
-}
-
-.search-add-container {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  width: 100%;
-}
-
-.search-input {
-  flex-grow: 1;
-  margin-right: 10px; /* Adjust the space between the search input and the button */
-}
-
-.prompt-goal-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.prompt-goal-buttons {
-  margin-left: auto; /* Push buttons to the right */
-}
-
-.prompt-goal-form label, .prompt-goal-form .form-text {
+/* General body styling for a consistent font and background */
+body {
   font-family: 'Open Sans', sans-serif;
+  background-color: #f4f4f4;
+  color: #333;
 }
 
-.form-text-small {
-  font-size: 0.875rem;
+/* The main container to give a max-width and central alignment */
+.dashboard-container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-.form-control-subtle {
-  background-color: #f8f9fa;
-  border-color: #ced4da;
+/* Enhance the visual separation and interaction */
+.prompt-goal {
+  border-bottom: 1px solid #eee;
+  padding: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.prompt-goal:hover {
+  background-color: #f9f9f9;
+}
+
+/* Styling for the search input */
+.search-input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+/* Consistent button styling */
+button {
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  margin: 0 5px;
+  cursor: pointer;
+}
+
+/* Primary button styling */
+.btn-primary {
+  background-color: #0056b3;
+  color: white;
+}
+
+/* Secondary button styling */
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+/* Danger button for deletions, etc. */
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+/* Link button to mimic a text link */
+.btn-link {
+  background-color: transparent;
+  color: #0056b3;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* More consistent margins for headers within the card */
+.prompt-goal-header h3 {
+  margin: 0;
+  padding: 0;
+  color: #0056b3;
+  cursor: pointer;
+}
+
+/* Style for the pagination container */
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding-top: 20px;
+}
+
+/* Pagination button */
+.pagination button {
+  background-color: transparent;
+  color: #0056b3;
+}
+
+/* Pagination button hover and focus */
+.pagination button:hover, .pagination button:focus {
+  background-color: #e2e6ea;
+}
+
+/* Active pagination button */
+.pagination button.active {
+  background-color: #0056b3;
+  color: white;
+}
+
+/* Add a shadow and padding to the expanded details for emphasis */
+.prompt-goal-details {
+  padding: 15px;
+  border-top: 1px solid #eee; /* Only show when expanded */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: #fafafa;
+}
+
+/* Transition for the collapse action */
+.prompt-goal-details {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Adjust the header to have an indicator for expand/collapse */
+.prompt-goal-header h3::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 5px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+  background-size: cover;
+  transform: rotate(0); /* rotate for expand/collapse */
+  transition: transform 0.3s ease;
+}
+
+/* Rotate the icon when the item is expanded */
+.prompt-goal-header h3.expanded::after {
+  transform: rotate(180deg);
 }
