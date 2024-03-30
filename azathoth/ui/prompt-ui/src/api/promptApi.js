@@ -2,11 +2,34 @@ import axios from "axios";
 
 const BASE_URL = "http://127.0.0.1:5000"; // Replace with your backend URL
 
+export const getModelBrands = async () => {
+  try {
+    const response = await axios.get(`${BASE_URL}/models`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching model brands:", error);
+    throw error;
+  }
+}
+
+export const getModelsForBrand = async (brand) => {
+  try {
+    const response = await axios.get(`${BASE_URL}/models/${brand}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching models for brand:", error);
+    throw error;
+  }
+}
+
 export const fetchPrompts = async (prompt_goal_id) => {
+  console.log("Fetching prompts for prompt goal ID:", prompt_goal_id);
   try {
     const response = await axios.get(
-      `${BASE_URL}/prompt-goals/${prompt_goal_id}/prompts`
+      `${BASE_URL}/prompt-goals/${prompt_goal_id}/prompts`, 
+      { headers: { 'Content-Type': 'application/json' } }
     );
+    
     return response.data;
   } catch (error) {
     console.error("Error fetching prompts:", error);
@@ -48,15 +71,18 @@ export const fetchPromptGoal = async (promptGoalId) => {
   }
 };
 
-export const savePrompt = async (promptData) => {
+export const savePrompt = async (promptGoalId, promptData) => {
   try {
-    const response = await axios.post(`${BASE_URL}/prompts`, promptData);
+    const response = await axios.post(
+      `${BASE_URL}/prompt-goals/${promptGoalId}/prompts`,
+      promptData
+    );
     return response.data;
   } catch (error) {
-    console.error("Error saving prompt:", error);
+    console.error("Error creating prompt:", error);
     throw error;
   }
-};
+}
 
 export const savePromptGoal = async (promptGoalData) => {
   try {

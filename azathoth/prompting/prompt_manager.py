@@ -96,6 +96,15 @@ class PromptManager:
         
         return prompts
     
+    def get_all_test_inputs_for_goal(self, prompt_goal_id: str) -> List[TestInput]:
+        # Retrieve all test inputs associated with the prompt goal
+        test_input_data_list = self.db.get_test_inputs_for_goal(prompt_goal_id)
+        
+        # Create TestInput instances from the retrieved data
+        test_inputs = [TestInput(data, prompt_goal_id) for data in test_input_data_list]
+        
+        return test_inputs
+    
     def create_test_input(self, prompt_goal_id: str, test_input_data: Dict[str, Any]) -> TestInput:
         # Retrieve the prompt goal
         prompt_goal = self.get_prompt_goal(prompt_goal_id)

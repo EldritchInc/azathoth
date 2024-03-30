@@ -4,15 +4,19 @@ import json
 from azathoth.util.logging import error_log, info_log
 
 def load_config():
-    with open('../config.json') as f:
+    with open('config.json') as f:
         return json.load(f)
 
 config = load_config()
 class HuggingFaceModelHandler(BaseModelHandler):
     def __init__(self):
         self.api_token = config["api"]["hugging_face_token"]
+        self.hugging_face_inference_url = config["api"]["hugging_face_inference_url"]
         if not self.api_token:
             raise ValueError("API token for Hugging Face is not provided in the model config.")
+    
+    def get_models(self):
+        return ["mistralai/Mistral-7B-v0.1", "mistralai/Mistral-7B-Instruct-v0.2"]
 
     def execute_prompt(self, prompt, command_conversation):
         """
@@ -20,18 +24,19 @@ class HuggingFaceModelHandler(BaseModelHandler):
         """
         try:
             payload = self.prepare_payload(prompt, command_conversation)
-            response = self.send_request(payload)
+            model = prompt["model"]
+            response = self.send_request(model, payload)
             return self.process_response(response)
         except Exception as e:
             error_log(f"Error executing prompt on Hugging Face model: {e}")
             raise
 
-    def send_request(self, payload):
+    def send_request(self, model, payload):
         """
         Sends a POST request to the Hugging Face API.
         """
         headers = {"Authorization": f"Bearer {self.api_token}"}
-        response = requests.post(self.model_config["url"], headers=headers, json=payload)
+        response = requests.post(self.hugging_face_inference_url + model, headers=headers, json=payload)
         info_log(f"Hugging Face API response: {response.status_code}")
 
         if response.status_code != 200:

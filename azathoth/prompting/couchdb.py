@@ -51,6 +51,10 @@ class CouchDB:
     def _make_request(self, method, path, **kwargs):
         url = f"{self.base_url}/{self.db_name}/{path}"
         try:
+            if 'params' in kwargs and 'key' in kwargs['params']:
+                # JSON-encode the 'key' parameter to ensure it's correctly formatted for the CouchDB query
+                kwargs['params']['key'] = json.dumps(kwargs['params']['key'])
+            
             if self.auth:
                 kwargs['auth'] = self.auth
             response = self.session.request(method, url, **kwargs)
@@ -59,6 +63,7 @@ class CouchDB:
         except requests.exceptions.RequestException as e:
             print(f"Request failed: {e}")
             return None
+
 
     def create_document(self, doc, doc_id=None):
         if doc_id:
@@ -95,11 +100,15 @@ class CouchDB:
 
     def create_prompt_goal(self, goal_data):
         doc_id = self.generate_doc_id("prompt_goal_")
+        goal_data["type"] = "prompt_goal"
+        goal_data["prompt_goal_id"] = doc_id
         return self.create_document(goal_data, doc_id=doc_id)
 
     def create_prompt(self, prompt_data, prompt_goal_id):
         doc_id = self.generate_doc_id("prompt_")
         prompt_data["prompt_goal_id"] = prompt_goal_id
+        prompt_data["type"] = "prompt"
+        prompt_data["prompt_id"] = doc_id
         return self.create_document(prompt_data, doc_id=doc_id)
 
     def delete_prompt(self, prompt_id, hard_delete=False):
@@ -111,16 +120,22 @@ class CouchDB:
         return self.delete_document(prompt_goal_id, prompt_goal['_rev'], hard_delete=hard_delete)
 
     def get_prompts_for_goal(self, prompt_goal_id, include_deleted=False):
-        prompts = self.query_view("design_doc_name", "prompts_by_goal", key=prompt_goal_id)
-        if not prompts:
+        prompt_query_result = self.query_view("design_doc_name", "prompts_by_goal", key=prompt_goal_id)
+        if not prompt_query_result:
             return []
+        prompts = prompt_query_result.get('rows', [])
         if not include_deleted:
-            prompts = [prompt for prompt in prompts if not prompt.get('deleted', False)]
-        return prompts if prompts else []
+            prompts = [prompt for prompt in prompts if not prompt.get('value', {}).get('deleted', False)]
+        return prompts
 
-    def get_test_inputs_for_goal(self, prompt_goal_id):
-        test_inputs = self.query_view("design_doc_name", "test_inputs_by_goal", key=prompt_goal_id)
-        return test_inputs if test_inputs else []
+    def get_test_inputs_for_goal(self, prompt_goal_id, include_deleted=False):
+        test_inputs_result = self.query_view("design_doc_name", "test_inputs_by_goal", key=prompt_goal_id)
+        if not test_inputs_result:
+            return []
+        test_inputs = test_inputs_result.get('rows', [])
+        if not include_deleted:
+            test_inputs = [test_input for test_input in test_inputs if not test_input.get('deleted', False)]
+        return test_inputs
 
     def get_all_prompt_goals(self):
         prompt_goals = self.query_view("design_doc_name", "all_prompt_goals")
@@ -144,6 +159,8 @@ class CouchDB:
     def create_test_input(self, test_input_data, prompt_goal_id):
         doc_id = self.generate_doc_id("test_input_")
         test_input_data["prompt_goal_id"] = prompt_goal_id
+        test_input_data["type"] = "test_input"
+        test_input_data["test_input_id"] = doc_id
         return self.create_document(test_input_data, doc_id=doc_id)
     
     def update_test_input(self, test_input_id, test_input_data):
@@ -158,8 +175,10 @@ class CouchDB:
 
     def create_prompt_output(self, prompt_output_data, prompt_id, test_input_id):
         doc_id = self.generate_doc_id("prompt_output_")
+        prompt_output_data["type"] = "prompt_output"
         prompt_output_data["prompt_id"] = prompt_id
         prompt_output_data["test_input_id"] = test_input_id
+        prompt_output_data["prompt_output_id"] = doc_id
         return self.create_document(prompt_output_data, doc_id=doc_id)
         
     def get_prompt_outputs_for_test_input(self, test_input_id):
@@ -182,6 +201,8 @@ class CouchDB:
     
     def create_prompt_aggregation(self, prompt_aggregation_data):
         doc_id = self.generate_doc_id("prompt_aggregation_")
+        prompt_aggregation_data["type"] = "prompt_aggregation"
+        prompt_aggregation_data["prompt_aggregation_id"] = doc_id
         return self.create_document(prompt_aggregation_data, doc_id=doc_id)
     
     def get_prompt_aggregation(self, prompt_aggregation_id):

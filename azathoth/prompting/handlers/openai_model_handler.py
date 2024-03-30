@@ -4,7 +4,7 @@ from openai import OpenAI
 from azathoth.util.logging import error_log, info_log
 
 def load_config():
-    with open('../config.json') as f:
+    with open('config.json') as f:
         return json.load(f)
 
 config = load_config()
@@ -14,6 +14,9 @@ class OpenAIModelHandler(BaseModelHandler):
         if not self.api_token:
             raise ValueError("API token for OpenAI is not provided in the model config.")
         self.client = OpenAI(api_key=self.api_token)
+        
+    def get_models(self):
+        return ["gpt-3.5-turbo", "gpt-4.5-turbo", "gpt-4", "gpt-3.5-turbo-16k"]
 
     def execute_prompt(self, prompt, command_conversation):
         """

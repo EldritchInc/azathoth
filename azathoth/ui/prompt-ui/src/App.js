@@ -24,8 +24,8 @@ function App() {
           />
           {/* Add a route for adding a new prompt goal without an ID */}
           <Route path="/edit-prompt-goal" element={<PromptGoalEditor />} />
-          <Route path="/edit-prompt/:promptGoalId/:promptId" element={<PromptEditor />} />
           <Route path="/edit-prompt/:promptGoalId" element={<PromptEditor />} />
+          <Route path="/edit-prompt/:promptGoalId/:promptId" element={<PromptEditor />} />
         </Routes>
       </Router>
     </Container>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button, Form, Row, Col } from 'react-bootstrap';
 
-const DynamicList = ({ label, name, items, onChange, itemType = 'object', schema }) => {
+const DynamicList = ({ label, name, items, onChange, schema, renderItem }) => {
   const handleAddItem = (parentIndex = null, key = null) => {
     if (parentIndex !== null && key !== null) {
       const updatedItems = [...items];
@@ -56,10 +56,36 @@ const DynamicList = ({ label, name, items, onChange, itemType = 'object', schema
   const renderItemFields = (item, index) => {
     return Object.keys(schema).map((key) => {
       const isArray = schema[key].type === 'array';
-      const isArrayOfObjects = isArray && schema[key].items.type === 'object';
+      const isArrayOfObjects = isArray && schema[key].items && schema[key].items.type === 'object';
+      const isArrayOfStrings = isArray && schema[key].items && schema[key].items.type === 'string';
 
-      if (schema.type === 'array' && schema[key].items.type === 'text') {
-        // Handling arrays of simple text strings
+      if (isArrayOfObjects) {
+        return (
+          <div key={key}>
+            <Form.Label>{key}</Form.Label>
+            {item[key].map((nestedItem, nestedIndex) => (
+              <Row key={nestedIndex}>
+                {Object.keys(schema[key].items.properties).map((nestedKey) => (
+                  <Col key={nestedKey} xs={12}>
+                    <Form.Control
+                      type="text"
+                      placeholder={schema[key].items.properties[nestedKey].placeholder || ''}
+                      value={nestedItem[nestedKey] || ''}
+                      onChange={(e) =>
+                        handleItemChange(index, key, { [nestedKey]: e.target.value }, nestedIndex)
+                      }
+                    />
+                  </Col>
+                ))}
+                <Col xs={12}>
+                  <Button variant="danger" onClick={() => handleRemoveItem(index, key, nestedIndex)}>Remove</Button>
+                </Col>
+              </Row>
+            ))}
+            <Button onClick={() => handleAddItem(index, key)}>Add to {key}</Button>
+          </div>
+        );
+      } else if (isArrayOfStrings) {
         return (
           <div key={key}>
             <Form.Label>{key}</Form.Label>
@@ -68,51 +94,12 @@ const DynamicList = ({ label, name, items, onChange, itemType = 'object', schema
                 <Col xs={10}>
                   <Form.Control
                     type="text"
-                    placeholder={schema[key].items.placeholder}
-                    value={nestedItem}
+                    placeholder={schema[key].items.placeholder || ''}
+                    value={nestedItem || ''}
                     onChange={(e) => handleItemChange(index, key, e.target.value, nestedIndex)}
                   />
                 </Col>
                 <Col xs={2}>
-                  <Button variant="danger" onClick={() => handleRemoveItem(index, key, nestedIndex)}>Remove</Button>
-                </Col>
-              </Row>
-            ))}
-            <Button onClick={() => handleAddItem(index, key)}>Add to {key}</Button>
-          </div>
-        );
-      } else if (isArray) {
-        return (
-          <div key={key}>
-            <Form.Label>{key}</Form.Label>
-            {item[key].map((nestedItem, nestedIndex) => (
-              <Row key={nestedIndex}>
-                {isArrayOfObjects ? (
-                  // For nested array of objects
-                  Object.keys(nestedItem).map((nestedKey) => (
-                    <Col key={nestedKey} xs={12}>
-                      <Form.Control
-                        type="text"
-                        placeholder={nestedKey}
-                        value={nestedItem[nestedKey]}
-                        onChange={(e) =>
-                          handleItemChange(index, key, { [nestedKey]: e.target.value }, nestedIndex)
-                        }
-                      />
-                    </Col>
-                  ))
-                ) : (
-                  // For simple array (e.g., array of strings)
-                  <Col xs={12}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Value"
-                      value={nestedItem}
-                      onChange={(e) => handleItemChange(index, key, e.target.value, nestedIndex)}
-                    />
-                  </Col>
-                )}
-                <Col xs={12}>
                   <Button variant="danger" onClick={() => handleRemoveItem(index, key, nestedIndex)}>Remove</Button>
                 </Col>
               </Row>
@@ -141,12 +128,25 @@ const DynamicList = ({ label, name, items, onChange, itemType = 'object', schema
   return (
     <Form.Group controlId={name}>
       <Form.Label>{label}</Form.Label>
-      {items.map((item, index) => (
-        <div key={index}>
-          {renderItemFields(item, index)}
-          <Button variant="outline-danger" onClick={() => handleRemoveItem(index)}>Remove Item</Button>
-        </div>
-      ))}
+      {renderItem ? (
+        items.map((item, index) =>
+          renderItem(
+            item,
+            index,
+            (itemIndex, value) => handleItemChange(itemIndex, value),
+            (itemIndex) => handleRemoveItem(itemIndex)
+          )
+        )
+      ) : (
+        items.map((item, index) => (
+          <div key={index}>
+            {renderItemFields(item, index)}
+            <Button variant="outline-danger" onClick={() => handleRemoveItem(index)}>
+              Remove Item
+            </Button>
+          </div>
+        ))
+      )}
       <Button onClick={() => handleAddItem()}>Add New Item</Button>
     </Form.Group>
   );
