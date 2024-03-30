@@ -4,9 +4,11 @@
         "boto",
         "codeeditor",
         "Glyphicon",
+        "huggingface",
         "incompletes",
         "jsonify",
         "jsonschema",
+        "mistralai",
         "noconflict",
         "openai",
         "rjsf"

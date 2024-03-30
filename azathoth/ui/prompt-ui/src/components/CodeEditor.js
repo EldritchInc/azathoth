@@ -6,12 +6,7 @@ import 'ace-builds/src-noconflict/theme-github';
 
 const CodeEditor = ({ name, value, onChange }) => {
   const handleChange = (newValue) => {
-    onChange({
-      target: {
-        name,
-        value: newValue,
-      },
-    });
+    onChange(newValue);
   };
 
   // Convert value to a JSON string if it's not a string

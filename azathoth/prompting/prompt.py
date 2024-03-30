@@ -21,6 +21,27 @@ class Prompt:
         self.prompt_goal_id = prompt_goal_id
         self.response_history: List[Dict[str, Any]] = []
 
+    def __dict__(self):
+        dict_representation = {
+            "prompt_id": self.prompt_id,
+            "prompt_version": self.prompt_version,
+            "model": self.model,
+            "model_brand": self.model_brand,
+            "needs": self.needs,
+            "response_tokens": self.response_tokens,
+            "temperature": self.temperature,
+            "prompt": self.prompt_text,
+            "chat": self.chat,
+            "prompt_goal_id": self.prompt_goal_id,
+        }
+        if self.deleted:
+            dict_representation["deleted"] = True
+        if self._rev:
+            dict_representation["_rev"] = self._rev
+        if self._id:
+            dict_representation["_id"] = self._id
+        return dict_representation
+
     @staticmethod
     def validate_data(prompt_data: Dict[str, Any]):
         schema = {
@@ -35,15 +56,10 @@ class Prompt:
                 },
                 "prompt_id": {"type": "string"},
                 "prompt_name": {"type": "string"},
-                "prompt_version": {"type": "integer"},
+                "prompt_version": {"anyOf": [{"type": "number"}, {"type": "string"}]},
                 "model": {"type": "string"},
                 "model_brand": {"type": "string"},
-                "needs": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                },
-                "response_tokens": {"type": "integer"},
-                "temperature": {"type": "number"},
+                "needs": {"type": "array", "items": {"type": "string"}},
                 "prompt": {"type": "string"},
                 "chat": {
                     "type": "array",
@@ -52,49 +68,66 @@ class Prompt:
                         "properties": {
                             "chat_element_id": {"type": "string"},
                             "message": {"type": "string"},
+                            "response_tokens": {"anyOf": [{"type": "integer"}, {"type": "string"}]},
+                            "temperature": {"anyOf": [{"type": "number"}, {"type": "string"}]},
                             "jump_regex": {
                                 "type": "array",
                                 "items": {
                                     "type": "object",
                                     "properties": {
                                         "regex": {"type": "string"},
-                                        "jump": {"type": "string"}
+                                        "jump": {"type": "string"},
                                     },
-                                    "required": ["regex", "jump"]
-                                }
+                                    "required": ["regex", "jump"],
+                                },
                             },
                             "stop_regex": {
                                 "type": "array",
-                                "items": {"type": "string"}
-                            }
+                                "items": {"type": "string"},
+                            },
                         },
-                        "required": ["chat_element_id", "message"]
-                    }
-                }
+                        "required": ["chat_element_id", "message"],
+                    },
+                },
             },
-            "required": ["prompt_id", "prompt_version", "model", "model_brand", "needs", "response_tokens", "temperature", "prompt", "chat"],
-            "additionalProperties": False
+            "required": [
+                "prompt_version",
+                "model",
+                "model_brand",
+                "needs",
+                "prompt",
+                "chat",
+            ],
+            "additionalProperties": False,
         }
         jsonschema.validate(prompt_data, schema)
 
     def execute(self, context: dict) -> str:
         # Implementing the core logic to simulate the interaction with a model
         current_timestamp = datetime.now().timestamp()
-        context['prompt_goal_input_timestamp'] = str(current_timestamp)
-        command_conversation = [{"role": "system", "content": self.prompt_text.format(**context)}]
+        context["prompt_goal_input_timestamp"] = str(current_timestamp)
+        command_conversation = [
+            {"role": "system", "content": self.prompt_text.format(**context)}
+        ]
         candidate_result, chat_index, end_met = "", 0, False
 
         while not end_met:
             if len(self.chat) > chat_index:
-                chat_message_with_data, command_conversation, candidate_result = self.process_chat_message(chat_index, context, command_conversation)
-                end_met, chat_index = self.evaluate_end_conditions(chat_index, candidate_result)
+                chat_message_with_data, command_conversation, candidate_result = (
+                    self.process_chat_message(chat_index, context, command_conversation)
+                )
+                end_met, chat_index = self.evaluate_end_conditions(
+                    chat_index, candidate_result
+                )
             else:
                 candidate_result = self.generate_response(command_conversation).strip()
                 end_met = True
 
         return self.clean_up_response(candidate_result)
-    
-    def process_chat_message(self, chat_index: int, context: dict, command_conversation: List[Dict[str, Any]]):
+
+    def process_chat_message(
+        self, chat_index: int, context: dict, command_conversation: List[Dict[str, Any]]
+    ):
         chat_element = self.chat[chat_index]
         chat_message_with_data = chat_element["message"].format(**context)
         command_conversation.append({"role": "user", "content": chat_message_with_data})
@@ -107,9 +140,11 @@ class Prompt:
     def evaluate_end_conditions(self, chat_index: int, candidate_result: str):
         chat_element = self.chat[chat_index]
         has_stop = "stop_regex" in chat_element
-        end_met = has_stop and any(re.search(pattern, candidate_result) for pattern in chat_element["stop_regex"])
+        end_met = has_stop and any(
+            re.search(pattern, candidate_result)
+            for pattern in chat_element["stop_regex"]
+        )
         return end_met, chat_index + 1 if not has_stop or not end_met else chat_index
-
 
     def generate_response(self, context: dict) -> str:
         # Implement the logic to generate a response using the specified model and parameters
@@ -137,13 +172,21 @@ class Prompt:
 
     def get_response_history(self) -> List[Dict[str, Any]]:
         return self.response_history
-    
+
     def store_response(self, context: dict, response: str):
         # Enhanced to store response history in CouchDB
-        response_record = {"context": context, "response": response, "prompt_id": self.prompt_id}
-        CouchDB.create_document(response_record, doc_id=CouchDB.generate_doc_id("response_"))
+        response_record = {
+            "context": context,
+            "response": response,
+            "prompt_id": self.prompt_id,
+        }
+        CouchDB.create_document(
+            response_record, doc_id=CouchDB.generate_doc_id("response_")
+        )
         self.response_history.append(response_record)
 
     def load_response_history(self):
         # Load response history for this prompt from CouchDB
-        self.response_history = CouchDB.get_prompts_for_goal(self.prompt_id, include_deleted=False)
+        self.response_history = CouchDB.get_prompts_for_goal(
+            self.prompt_id, include_deleted=False
+        )

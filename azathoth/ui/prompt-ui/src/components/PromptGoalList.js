@@ -8,6 +8,8 @@ import Modal from "react-bootstrap/Modal";
 import Collapse from "react-bootstrap/Collapse";
 import Tab from "react-bootstrap/Tab";
 import Tabs from "react-bootstrap/Tabs";
+import PromptList from "./PromptList";
+import TestList from "./TestList";
 import { deletePromptGoal } from "../api/promptApi";
 
 import { fetchPrompts, fetchTestInputs } from "../api/promptApi";
@@ -132,10 +134,10 @@ const PromptGoalList = ({ promptGoals }) => {
                   </div>
                   <Tabs defaultActiveKey="prompts">
                     <Tab eventKey="prompts" title="Prompts">
-                      <PromptList prompts={prompts} />
+                      <PromptList prompts={prompts} promptGoalId={expandedGoalId} />
                     </Tab>
                     <Tab eventKey="tests" title="Tests">
-                      <TestList tests={testInputs} />
+                      <TestList tests={testInputs} promptGoalId={expandedGoalId} />
                     </Tab>
                   </Tabs>
                 </div>
@@ -176,48 +178,6 @@ const PromptGoalList = ({ promptGoals }) => {
         </Modal.Footer>
       </Modal>
     </Container>
-  );
-};
-
-const PromptList = ({ promptGoalId, prompts }) => {
-  const nav = useNavigate();
-  const handleAddPromptClick = () => {
-    nav(`/edit-prompt/${promptGoalId}`); // Navigate with ID for adding prompt
-  };
-
-  return (
-    <div className="prompt-list">
-      {prompts.map((prompt) => (
-        <div key={prompt._id} className="prompt-item">
-          <div className="prompt-header">
-            <h4>{prompt.name}</h4>
-            <Button variant="link">Edit</Button>
-            <Button variant="link">Delete</Button>
-            <Button variant="link">Run Tests</Button>
-          </div>
-          <div className="prompt-description">{prompt.description}</div>
-        </div>
-      ))}
-      <Button variant="primary" onClick={handleAddPromptClick}>Add Prompt</Button>
-    </div>
-  );
-};
-
-const TestList = ({ tests }) => {
-  return (
-    <div className="test-list">
-      {tests.map((test) => (
-        <div key={test._id} className="test-item">
-          <div className="test-header">
-            <h4>{test.name}</h4>
-            <Button variant="link">Edit</Button>
-            <Button variant="link">Delete</Button>
-          </div>
-          <div className="test-description">{test.description}</div>
-        </div>
-      ))}
-      <Button variant="primary">Add Test Case</Button>
-    </div>
   );
 };
 
