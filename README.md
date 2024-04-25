@@ -2,6 +2,8 @@
 
 Welcome to the **Azathoth AI Framework**, an innovative Python library designed for constructing agentic intelligences. Our framework facilitates the development of advanced AI agents, leveraging the power of external tools, including Large Language Models (LLMs), image processing systems, and more, to create robust and versatile intelligences.
 
+as far as I know, the only OSS software in development with a song on a released album dedicated to it
+[Eris' Gift](https://open.spotify.com/track/6TebeIJkyhUQhvULctPkYc?si=9lZXkCuGSBO9zqp3H19OtQ&context=spotify%3Aalbum%3A0aYdIPm6JOGKJ4DEqiXcwZ)
 ## Features
 
 - **Versatile Agent Construction**: Build AI agents with complex behaviors, capable of operating in diverse environments.
