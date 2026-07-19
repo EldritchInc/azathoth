@@ -1,100 +1,265 @@
-# Azathoth AI Framework
+# Azathoth
 
-Welcome to the **Azathoth AI Framework**, an innovative Python library designed for constructing agentic intelligences. Our framework facilitates the development of advanced AI agents, leveraging the power of external tools, including Large Language Models (LLMs), image processing systems, and more, to create robust and versatile intelligences.
+> An optimization engine for AI workflows that learns which strategies work best for different kinds of problems.
 
-as far as I know, the only OSS software in development with a song on a released album dedicated to it
-[Eris' Gift](https://open.spotify.com/track/6TebeIJkyhUQhvULctPkYc?si=9lZXkCuGSBO9zqp3H19OtQ&context=spotify%3Aalbum%3A0aYdIPm6JOGKJ4DEqiXcwZ)
-## Features
+## Overview
 
-- **Versatile Agent Construction**: Build AI agents with complex behaviors, capable of operating in diverse environments.
-- **Integration with Advanced Tools**: Seamlessly incorporate LLMs, image recognition systems, and other cutting-edge technologies to enhance agent capabilities.
-- **Python-Based**: Utilize the extensive Python ecosystem for development, ensuring ease of use and broad compatibility.
-- **Open Source**: Collaborate, modify, and distribute the framework with the support of a growing community.
+Azathoth is an experimental platform for optimizing AI systems through empirical evaluation rather than intuition.
 
-## Prerequisites
+Instead of asking:
 
-Before you start, ensure you have the following installed on your system:
-- Python (3.7 or higher)
-- Node.js (v14.0.0 or higher) and npm (v6.0.0 or higher)
-- CouchDB (2.3.1 or higher)
+> "What's the best prompt?"
 
-## Installation
+Azathoth asks:
 
-### CouchDB Setup Instructions
+> "Given this type of context, what combination of prompts, models, tools, retrieval, and workflow consistently produces the best outcome?"
 
-1. **Install CouchDB**: Follow the [official CouchDB installation guide](https://docs.couchdb.org/en/stable/install/index.html). macOS users, please ensure to set an admin password when prompted—a small field for this might be easy to miss.
-2. **Configure CouchDB**:
-   - Access the CouchDB web interface by navigating to `http://localhost:5984/_utils`.
-   - Create a new database named "azathoth" or your preferred name.
-   - Ensure the framework's configuration matches your database name.
+The goal is to build an optimization engine that can discover, evaluate, and continuously improve AI workflows using real-world examples.
 
-### Flask Dependencies
+---
 
-Ensure all Python dependencies are installed by running:
-```shell
-pip install Flask Flask-CORS
+# Motivation
+
+Most AI applications contain dozens of hidden decisions:
+
+- Which model should answer?
+- Which prompt should be used?
+- Should additional information be retrieved?
+- Should a tool be called instead?
+- Should another question be asked first?
+- Is this a single-step or multi-step problem?
+
+These decisions are usually hard-coded by developers.
+
+Azathoth attempts to learn them.
+
+---
+
+# Core Idea
+
+Given:
+
+- a goal
+- example contexts
+- expected outcomes
+- evaluation criteria
+- available models and tools
+
+Azathoth searches for the workflow that produces the best results.
+
+That workflow may include:
+
+- prompt selection
+- model routing
+- retrieval
+- tool execution
+- clarification questions
+- multi-step reasoning
+
+Rather than producing a single "best prompt," Azathoth builds a collection of specialized strategies for different regions of the problem space.
+
+---
+
+# MVP Goals
+
+The initial version focuses on:
+
+- Context-aware routing
+- Prompt optimization
+- Model arbitrage
+- Workflow evaluation
+- Strategy selection
+- Continuous regression testing
+
+The MVP intentionally does **not** attempt to build autonomous agents or AGI.
+
+---
+
+# High-Level Architecture
+
 ```
-This installs Flask and Flask-CORS, required to run the UI server. For a complete list of dependencies, refer to the `requirements.txt` file.
+Optimization Job
+        │
+        ▼
+Context Analysis
+        │
+        ▼
+Strategy Generation
+        │
+        ▼
+Execution
+        │
+        ▼
+Evaluation
+        │
+        ▼
+Optimization
+        │
+        ▼
+Knowledge Library
+```
 
-### Running the Prompt UI
+The output is an optimized strategy rather than a single prompt.
 
-#### Frontend Setup
+---
 
-1. Navigate to the Prompt UI directory:
-   ```shell
-   cd azathoth/ui/prompt-ui
-   ```
-2. Install Node.js dependencies:
-   ```shell
-   npm install
-   ```
-3. Build the React application:
-   ```shell
-   npm run build
-   ```
+# Context as Shared State
 
-#### Backend Setup
+Every workflow step can contribute information.
 
-1. Return to the root directory of the Azathoth AI Framework:
-   ```shell
-   cd ../../
-   ```
-2. Start the UI server:
-   ```shell
-   python -m azathoth.ui_server
-   ```
-3. Access the Prompt UI by visiting `http://localhost:5000` in your browser.
+Examples include:
 
-## Configuration Management
+- retrieved documents
+- classifications
+- tool outputs
+- confidence scores
+- extracted entities
+- user responses
+- evaluation results
 
-Use the `config.json` file to manage all application configurations, including API keys and database information, to simplify the setup process.
+Subsequent decisions operate on the updated context rather than only the original request.
 
-## Default Prompt Goal Examples
+This allows workflows to become progressively more informed.
 
-To help you get started, here are some default prompt goal examples and JSON schemas. [Link to examples]
+---
 
-## Troubleshooting
+# Strategy Optimization
 
-- **No CouchDB Admin password found**: Ensure you've set an admin password for CouchDB. This field is required during the installation but might be easy to overlook on macOS.
-- **ModuleNotFoundError for Flask or Flask-CORS**: Make sure you've installed all Python dependencies from the `requirements.txt` file.
-- **Adding a goal crashes on empty JSON schema**: Ensure that the JSON schema for new goals is valid and not empty. Here's a basic schema to start with: [Link to schema]
+Strategies may consist of combinations of:
 
-## Security Audit
+- Prompt templates
+- Language models
+- Retrieval steps
+- Tool invocations
+- Clarification questions
+- Multi-step workflows
 
-We regularly review and update dependencies to ensure security. Our commitment to security is reflected in our choice of reputable dependencies such as Flask for our web server and React for our frontend. We appreciate the community's vigilance and welcome any security audits to help us improve.
+Each candidate strategy is evaluated against user-defined success criteria.
 
-## Support the Project
+---
 
-Developing and maintaining open-source projects like the Azathoth AI Framework requires time, effort, and resources. If you find this project useful and want to support its growth, consider becoming a patron. Your contributions can help ensure the project remains up-to-date, secure, and able to evolve with new features and improvements.
+# Information Acquisition
 
-[Become a Patron on Patreon](https://www.patreon.com/AzathothAI)
+Sometimes the best next action is not answering the question.
 
-Your support is greatly appreciated, whether it's through contributing code, reporting bugs, or providing financial assistance. Every bit helps make Azathoth AI Framework better for everyone.
+Instead, the system may determine that acquiring one additional piece of information significantly improves expected performance.
 
-## Contributing
+Information may come from:
 
-We welcome contributions from the community! Whether it's adding new features, improving documentation, or reporting bugs, your help makes Azathoth better for everyone.
+- the user
+- retrieval
+- external systems
+- classifiers
+- tools
+- previous workflow outputs
 
-## License
+Future versions may learn when acquiring information is worth the additional cost.
 
-The Azathoth AI Framework is open-source software licensed under the [MIT license](LICENSE).
+---
+
+# Evaluation
+
+Evaluation is a first-class component.
+
+Possible evaluators include:
+
+- exact matches
+- structured output validation
+- classifier scores
+- LLM judges
+- human review
+
+Multiple evaluators can be combined into a single optimization objective.
+
+---
+
+# Optimization Objectives
+
+Strategies can be optimized against combinations of:
+
+- Quality
+- Accuracy
+- Cost
+- Latency
+- Reliability
+- Complexity
+
+The optimization objective is configurable depending on the application.
+
+---
+
+# Learning
+
+Every workflow execution produces evidence.
+
+Successful strategies become reusable.
+
+Failures become regression tests.
+
+The objective is for the system to improve over time through empirical measurement rather than manual tuning.
+
+---
+
+# Long-Term Direction
+
+The current project focuses on workflow optimization.
+
+Possible future research areas include:
+
+- adaptive context modeling
+- automatic workflow discovery
+- hierarchical planning
+- persistent episodic memory
+- continual learning
+- autonomous tool creation
+- long-running goals
+
+These are intentionally outside the scope of the MVP.
+
+---
+
+# Technology
+
+Current implementation direction:
+
+- Python
+- FastAPI
+- Pydantic
+- PostgreSQL
+- LiteLLM
+- pytest
+
+Planned integrations may include:
+
+- Promptfoo
+- Braintrust
+- LangSmith
+- DSPy
+
+The goal is to integrate existing tooling rather than recreate it.
+
+---
+
+# Current Status
+
+Azathoth is in active architectural development.
+
+The current focus is defining the core abstractions before committing to implementation details.
+
+---
+
+# Guiding Principles
+
+- Optimize with evidence, not intuition.
+- Treat prompts as one strategy among many.
+- Keep context structured and reusable.
+- Separate optimization from execution.
+- Make every evaluation reproducible.
+- Learn from both success and failure.
+- Prefer modular components over framework lock-in.
+
+---
+
+# License
+
+TBD
