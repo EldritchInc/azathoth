@@ -30,7 +30,7 @@ jobs:
         run: ruff format --check .
 
       - name: Type check
-        run: mypy azathoth tests
+        run: mypy src/azathoth tests
 
       - name: Test
         run: pytest
