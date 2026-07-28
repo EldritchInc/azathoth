@@ -252,9 +252,7 @@ strategy = EventFieldStrategy(
     output_event_type="customer.message.extracted",
 )
 
-result = asyncio.run(
-    StrategyExecutor().execute(strategy, context)
-)
+result = asyncio.run(StrategyExecutor().execute(strategy, context))
 
 assert result.output == "I was charged twice."
 assert result.initial_context == context
