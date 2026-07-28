@@ -1,0 +1,287 @@
+Metadata-Version: 2.4
+Name: azathoth-ai
+Version: 0.1.0
+Summary: An empirical optimization engine for context-aware AI workflows.
+Author: Eris Discordia Montano
+License: TBD
+Keywords: artificial-intelligence,llm,prompt-optimization,model-routing,evaluation,workflow-optimization
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Typing :: Typed
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic>=2
+Provides-Extra: dev
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Dynamic: license-file
+
+# Azathoth
+
+> An optimization engine for AI workflows that learns which strategies work best for different kinds of problems.
+
+## Overview
+
+Azathoth is an experimental platform for optimizing AI systems through empirical evaluation rather than intuition.
+
+Instead of asking:
+
+> "What's the best prompt?"
+
+Azathoth asks:
+
+> "Given this type of context, what combination of prompts, models, tools, retrieval, and workflow consistently produces the best outcome?"
+
+The goal is to build an optimization engine that can discover, evaluate, and continuously improve AI workflows using real-world examples.
+
+---
+
+# Motivation
+
+Most AI applications contain dozens of hidden decisions:
+
+- Which model should answer?
+- Which prompt should be used?
+- Should additional information be retrieved?
+- Should a tool be called instead?
+- Should another question be asked first?
+- Is this a single-step or multi-step problem?
+
+These decisions are usually hard-coded by developers.
+
+Azathoth attempts to learn them.
+
+---
+
+# Core Idea
+
+Given:
+
+- a goal
+- example contexts
+- expected outcomes
+- evaluation criteria
+- available models and tools
+
+Azathoth searches for the workflow that produces the best results.
+
+That workflow may include:
+
+- prompt selection
+- model routing
+- retrieval
+- tool execution
+- clarification questions
+- multi-step reasoning
+
+Rather than producing a single "best prompt," Azathoth builds a collection of specialized strategies for different regions of the problem space.
+
+---
+
+# MVP Goals
+
+The initial version focuses on:
+
+- Context-aware routing
+- Prompt optimization
+- Model arbitrage
+- Workflow evaluation
+- Strategy selection
+- Continuous regression testing
+
+The MVP intentionally does **not** attempt to build autonomous agents or AGI.
+
+---
+
+# High-Level Architecture
+
+```
+Optimization Job
+        │
+        ▼
+Context Analysis
+        │
+        ▼
+Strategy Generation
+        │
+        ▼
+Execution
+        │
+        ▼
+Evaluation
+        │
+        ▼
+Optimization
+        │
+        ▼
+Knowledge Library
+```
+
+The output is an optimized strategy rather than a single prompt.
+
+---
+
+# Context as Shared State
+
+Every workflow step can contribute information.
+
+Examples include:
+
+- retrieved documents
+- classifications
+- tool outputs
+- confidence scores
+- extracted entities
+- user responses
+- evaluation results
+
+Subsequent decisions operate on the updated context rather than only the original request.
+
+This allows workflows to become progressively more informed.
+
+---
+
+# Strategy Optimization
+
+Strategies may consist of combinations of:
+
+- Prompt templates
+- Language models
+- Retrieval steps
+- Tool invocations
+- Clarification questions
+- Multi-step workflows
+
+Each candidate strategy is evaluated against user-defined success criteria.
+
+---
+
+# Information Acquisition
+
+Sometimes the best next action is not answering the question.
+
+Instead, the system may determine that acquiring one additional piece of information significantly improves expected performance.
+
+Information may come from:
+
+- the user
+- retrieval
+- external systems
+- classifiers
+- tools
+- previous workflow outputs
+
+Future versions may learn when acquiring information is worth the additional cost.
+
+---
+
+# Evaluation
+
+Evaluation is a first-class component.
+
+Possible evaluators include:
+
+- exact matches
+- structured output validation
+- classifier scores
+- LLM judges
+- human review
+
+Multiple evaluators can be combined into a single optimization objective.
+
+---
+
+# Optimization Objectives
+
+Strategies can be optimized against combinations of:
+
+- Quality
+- Accuracy
+- Cost
+- Latency
+- Reliability
+- Complexity
+
+The optimization objective is configurable depending on the application.
+
+---
+
+# Learning
+
+Every workflow execution produces evidence.
+
+Successful strategies become reusable.
+
+Failures become regression tests.
+
+The objective is for the system to improve over time through empirical measurement rather than manual tuning.
+
+---
+
+# Long-Term Direction
+
+The current project focuses on workflow optimization.
+
+Possible future research areas include:
+
+- adaptive context modeling
+- automatic workflow discovery
+- hierarchical planning
+- persistent episodic memory
+- continual learning
+- autonomous tool creation
+- long-running goals
+
+These are intentionally outside the scope of the MVP.
+
+---
+
+# Technology
+
+Current implementation direction:
+
+- Python
+- FastAPI
+- Pydantic
+- PostgreSQL
+- LiteLLM
+- pytest
+
+Planned integrations may include:
+
+- Promptfoo
+- Braintrust
+- LangSmith
+- DSPy
+
+The goal is to integrate existing tooling rather than recreate it.
+
+---
+
+# Current Status
+
+Azathoth is in active architectural development.
+
+The current focus is defining the core abstractions before committing to implementation details.
+
+---
+
+# Guiding Principles
+
+- Optimize with evidence, not intuition.
+- Treat prompts as one strategy among many.
+- Keep context structured and reusable.
+- Separate optimization from execution.
+- Make every evaluation reproducible.
+- Learn from both success and failure.
+- Prefer modular components over framework lock-in.
+
+---
+
+# License
+
+TBD
