@@ -77,7 +77,7 @@ The MVP intentionally does **not** attempt to build autonomous agents or AGI.
 
 # High-Level Architecture
 
-```
+```text
 Optimization Job
         │
         ▼
@@ -103,6 +103,66 @@ The output is an optimized strategy rather than a single prompt.
 
 ---
 
+# Core Domain Model
+
+The foundation of Azathoth is a reproducible optimization example.
+
+Every optimization example consists of four core concepts:
+
+- **Goal** — What the system is trying to accomplish.
+- **Context** — An immutable, event-backed history describing everything currently known.
+- **Expected Outcome** — The result a successful strategy should produce.
+- **Comparison Method** — How that outcome should later be evaluated.
+
+This representation allows optimization jobs to be serialized, versioned, replayed, and evaluated consistently across different models and workflows.
+
+```python
+from azathoth.context import Context, ContextEvent
+from azathoth.evaluation import ExpectedOutcome, OutcomeComparison
+from azathoth.goals import Goal
+from azathoth.optimization import OptimizationExample
+
+example = OptimizationExample(
+    name="Duplicate billing charge",
+    goal=Goal(
+        name="Classify support requests",
+        description="Identify the correct category for each request.",
+        success_criteria=("The predicted category matches the expected category.",),
+    ),
+    context=Context().append(
+        ContextEvent(
+            event_type="customer.message.received",
+            payload={
+                "message": "I was charged twice for the same purchase.",
+            },
+            producer="example",
+        )
+    ),
+    expected_outcome=ExpectedOutcome(
+        description="The request is classified as a duplicate charge.",
+        value="duplicate_charge",
+        comparison=OutcomeComparison.EXACT,
+    ),
+)
+```
+
+Optimization examples can be serialized and restored without losing their structure.
+
+```python
+serialized = example.model_dump_json()
+restored = OptimizationExample.model_validate_json(serialized)
+
+assert restored == example
+```
+
+A runnable version of this example is included in the repository:
+
+```bash
+python examples/create_optimization_example.py
+```
+
+---
+
 # Context as Shared State
 
 Every workflow step can contribute information.
@@ -117,9 +177,17 @@ Examples include:
 - user responses
 - evaluation results
 
-Subsequent decisions operate on the updated context rather than only the original request.
+Rather than mutating shared state, Azathoth records these as immutable context events.
 
-This allows workflows to become progressively more informed.
+Subsequent workflow steps operate on the accumulated context rather than only the original request.
+
+This provides:
+
+- reproducible executions
+- complete execution traces
+- provenance tracking
+- deterministic replay
+- a foundation for continual optimization
 
 ---
 
@@ -223,8 +291,8 @@ These are intentionally outside the scope of the MVP.
 Current implementation direction:
 
 - Python
-- FastAPI
 - Pydantic
+- FastAPI
 - PostgreSQL
 - LiteLLM
 - pytest
@@ -242,9 +310,11 @@ The goal is to integrate existing tooling rather than recreate it.
 
 # Current Status
 
-Azathoth is in active architectural development.
+Azathoth is in active development.
 
-The current focus is defining the core abstractions before committing to implementation details.
+The current milestone is establishing the core domain model and execution abstractions that will support workflow optimization.
+
+Development is intentionally proceeding in small, testable increments with complete type checking, automated tests, architectural decision records, and continuous integration.
 
 ---
 
@@ -252,7 +322,7 @@ The current focus is defining the core abstractions before committing to impleme
 
 - Optimize with evidence, not intuition.
 - Treat prompts as one strategy among many.
-- Keep context structured and reusable.
+- Keep context structured, immutable, and reproducible.
 - Separate optimization from execution.
 - Make every evaluation reproducible.
 - Learn from both success and failure.
