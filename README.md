@@ -204,6 +204,67 @@ Strategies may consist of combinations of:
 
 Each candidate strategy is evaluated against user-defined success criteria.
 
+## Strategy execution
+
+Azathoth strategies operate against immutable, event-backed context.
+
+The execution engine records lifecycle events consistently around every
+strategy:
+
+```text
+context
+   |
+   v
+strategy.execution.started
+   |
+   v
+strategy output and domain events
+   |
+   v
+strategy.execution.completed
+```
+
+A strategy only implements its domain behavior. The executor is responsible for
+recording when and how that behavior ran.
+
+```python
+import asyncio
+
+from azathoth.context import Context, ContextEvent
+from azathoth.execution import StrategyExecutor
+from azathoth.strategies import EventFieldStrategy, StrategyMetadata
+
+context = Context().append(
+    ContextEvent(
+        event_type="customer.message.received",
+        payload={"message": "I was charged twice."},
+        producer="example",
+    )
+)
+
+strategy = EventFieldStrategy(
+    metadata=StrategyMetadata(
+        name="Extract customer message",
+        description="Extract the latest customer support message.",
+    ),
+    event_type="customer.message.received",
+    field_name="message",
+    output_event_type="customer.message.extracted",
+)
+
+result = asyncio.run(StrategyExecutor().execute(strategy, context))
+
+assert result.output == "I was charged twice."
+assert result.initial_context == context
+assert result.final_context is not context
+```
+
+Run the complete example:
+
+```bash
+python examples/execute_strategy.py
+```
+
 ---
 
 # Information Acquisition
