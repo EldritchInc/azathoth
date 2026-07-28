@@ -1,9 +1,14 @@
 /*/
-!/azathoth/
-!/prompt-ui/
+!/.github/
+!/src/
+!/src/azathoth/
+!/src/prompt-ui/
 !/azathoth.egg-info/
 !/build/
 !/tests/
+!/docs/
+!/examples/
+!/old_tests/
 __pycache__/
 .DS_Store
 config.json
