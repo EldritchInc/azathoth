@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azathoth-ai"
+version = "0.1.0"
+description = "An empirical optimization engine for context-aware AI workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "TBD" }
+authors = [
+    { name = "Eris Discordia Montano" }
+]
+keywords = [
+    "artificial-intelligence",
+    "llm",
+    "prompt-optimization",
+    "model-routing",
+    "evaluation",
+    "workflow-optimization"
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Typing :: Typed"
+]
+
+dependencies = [
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+pretty = true

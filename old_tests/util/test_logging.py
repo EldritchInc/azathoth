@@ -1,5 +1,5 @@
 import unittest
-from azathoth.util.logging import format_log_message
+from src.azathoth.util.logging import format_log_message
 from datetime import datetime
 
 class TestLogging(unittest.TestCase):

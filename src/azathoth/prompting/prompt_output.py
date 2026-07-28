@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 import uuid
 import jsonschema
 import datetime
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.couchdb import CouchDB
 
 class PromptOutput:
     def __init__(self, prompt_output_data: Dict[str, Any], prompt_id: str, test_input_id: str):

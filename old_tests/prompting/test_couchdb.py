@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from unittest.mock import MagicMock
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.couchdb import CouchDB
 
 class TestCouchDB(unittest.TestCase):
     @patch('azathoth.prompting.couchdb.requests.Session')

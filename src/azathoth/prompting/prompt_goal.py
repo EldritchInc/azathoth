@@ -2,8 +2,8 @@ import json
 from typing import List, Dict, Any
 import uuid
 import jsonschema
-from azathoth.prompting.prompt import Prompt
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.prompt import Prompt
+from src.azathoth.prompting.couchdb import CouchDB
 
 class PromptGoal:
     def __init__(self, prompt_goal_data: Dict[str, Any]):

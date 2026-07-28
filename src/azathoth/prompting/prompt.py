@@ -2,7 +2,7 @@ import re
 import json
 from datetime import datetime
 import jsonschema
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.couchdb import CouchDB
 from typing import List, Dict, Any
 
 
