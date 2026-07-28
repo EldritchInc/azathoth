@@ -1,0 +1,7 @@
+pydantic>=2
+
+[dev]
+mypy
+pytest
+pytest-cov
+ruff
