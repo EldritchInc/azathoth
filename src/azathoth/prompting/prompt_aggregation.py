@@ -4,8 +4,8 @@ import numpy as np
 from datetime import datetime, timezone
 import uuid
 import jsonschema
-from azathoth.prompting.prompt import Prompt
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.prompt import Prompt
+from src.azathoth.prompting.couchdb import CouchDB
 
 
 class PromptAggregation:

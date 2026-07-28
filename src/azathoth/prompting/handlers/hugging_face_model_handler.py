@@ -1,7 +1,7 @@
-from azathoth.prompting.handlers.base_model_handler import BaseModelHandler
+from src.azathoth.prompting.handlers.base_model_handler import BaseModelHandler
 import requests
 import json
-from azathoth.util.logging import error_log, info_log
+from src.azathoth.util.logging import error_log, info_log
 
 def load_config():
     with open('config.json') as f:

@@ -2,12 +2,12 @@ import json
 from typing import List, Dict, Any
 import uuid
 import jsonschema
-from azathoth.prompting.prompt_goal import PromptGoal
-from azathoth.prompting.prompt import Prompt
-from azathoth.prompting.prompt_output import PromptOutput
-from azathoth.prompting.test_input import TestInput
-from azathoth.prompting.prompt_aggregation import PromptAggregation
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.prompt_goal import PromptGoal
+from src.azathoth.prompting.prompt import Prompt
+from src.azathoth.prompting.prompt_output import PromptOutput
+from src.azathoth.prompting.test_input import TestInput
+from src.azathoth.prompting.prompt_aggregation import PromptAggregation
+from src.azathoth.prompting.couchdb import CouchDB
 
 class AdaptivePromptSelector:
     def __init__(self, adaptive_prompt_selector_data: Dict[str, Any]):

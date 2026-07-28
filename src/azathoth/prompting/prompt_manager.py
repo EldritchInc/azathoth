@@ -1,8 +1,8 @@
 from typing import List, Dict, Any, Callable
-from azathoth.prompting.prompt_goal import PromptGoal
-from azathoth.prompting.prompt import Prompt
-from azathoth.prompting.test_input import TestInput
-from azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.prompt_goal import PromptGoal
+from src.azathoth.prompting.prompt import Prompt
+from src.azathoth.prompting.test_input import TestInput
+from src.azathoth.prompting.couchdb import CouchDB
 
 class PromptManager:
     def __init__(self, db: CouchDB):

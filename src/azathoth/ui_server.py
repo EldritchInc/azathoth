@@ -1,13 +1,13 @@
 from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 import os
-from azathoth.prompting.prompt_manager import PromptManager
-from azathoth.prompting.couchdb import CouchDB
-from azathoth.prompting.handlers.openai_model_handler import OpenAIModelHandler
-from azathoth.prompting.handlers.hugging_face_model_handler import HuggingFaceModelHandler
-from azathoth.prompting.model_registry import ModelRegistry
+from src.azathoth.prompting.prompt_manager import PromptManager
+from src.azathoth.prompting.couchdb import CouchDB
+from src.azathoth.prompting.handlers.openai_model_handler import OpenAIModelHandler
+from src.azathoth.prompting.handlers.hugging_face_model_handler import HuggingFaceModelHandler
+from src.azathoth.prompting.model_registry import ModelRegistry
 import json
-from azathoth.util.logging import debug_log, set_log_level
+from src.azathoth.util.logging import debug_log, set_log_level
 
 set_log_level('debug')
 

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from azathoth.prompting.llm_executor import LLMExecutor
-from azathoth.prompting.handlers.base_model_handler import BaseModelHandler
+from src.azathoth.prompting.llm_executor import LLMExecutor
+from src.azathoth.prompting.handlers.base_model_handler import BaseModelHandler
 
 class TestLLMExecutor(unittest.TestCase):
     def setUp(self):
