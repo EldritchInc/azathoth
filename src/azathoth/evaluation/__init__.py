@@ -7,11 +7,14 @@ from azathoth.evaluation.models import (
     ExpectedOutcome,
     OutcomeComparison,
 )
+from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 
 __all__ = [
     "EvaluationEvidence",
     "EvaluationResult",
     "EvaluationStatus",
+    "Evaluator",
+    "EvaluatorMetadata",
     "ExpectedOutcome",
     "OutcomeComparison",
 ]
