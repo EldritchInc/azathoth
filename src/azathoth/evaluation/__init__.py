@@ -1,5 +1,22 @@
 """Evaluation domain models and interfaces."""
 
-from azathoth.evaluation.models import ExpectedOutcome, OutcomeComparison
+from azathoth.evaluation.exact import ExactMatchEvaluator
+from azathoth.evaluation.models import (
+    EvaluationEvidence,
+    EvaluationResult,
+    EvaluationStatus,
+    ExpectedOutcome,
+    OutcomeComparison,
+)
+from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 
-__all__ = ["ExpectedOutcome", "OutcomeComparison"]
+__all__ = [
+    "EvaluationEvidence",
+    "EvaluationResult",
+    "EvaluationStatus",
+    "Evaluator",
+    "EvaluatorMetadata",
+    "ExactMatchEvaluator",
+    "ExpectedOutcome",
+    "OutcomeComparison",
+]
