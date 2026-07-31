@@ -1,5 +1,6 @@
 """Optimization job models and services."""
 
+from azathoth.optimization.experiment import ExperimentRunner
 from azathoth.optimization.models import (
     OptimizationExample,
     OptimizationRun,
@@ -8,6 +9,7 @@ from azathoth.optimization.models import (
 from azathoth.optimization.runner import OptimizationRunner
 
 __all__ = [
+    "ExperimentRunner",
     "OptimizationExample",
     "OptimizationRun",
     "OptimizationRunner",
