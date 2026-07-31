@@ -78,31 +78,40 @@ The MVP intentionally does **not** attempt to build autonomous agents or AGI.
 # High-Level Architecture
 
 ```text
-Optimization Example
+Optimization Examples
         │
         ▼
-Strategy
+Candidate Strategies
         │
         ▼
-Strategy Executor
+Experiment Runner
         │
-        ▼
-Execution Result
-        │
-        ▼
-Evaluator
-        │
-        ▼
-Evaluation Result
-        │
-        ▼
-Optimization Run
-        │
-        ▼
-Future Optimizer
+        ├── Strategy A × Every Example
+        ├── Strategy B × Every Example
+        └── Strategy N × Every Example
+                    │
+                    ▼
+            Optimization Runs
+                    │
+                    ▼
+           Strategy Scorecards
+                    │
+                    ▼
+             Strategy Ranker
+                    │
+                    ▼
+            Strategy Ranking
+                    │
+                    ▼
+                 Winner
 ```
 
-The output is an optimized strategy rather than a single prompt.
+The current implementation can execute candidate strategies across a shared
+example set, aggregate their results into evidence-backed scorecards, and rank
+the candidates deterministically.
+
+Prompt generation, model-provider integration, cost-aware arbitrage, and
+automatic strategy mutation remain future milestones.
 
 ---
 
@@ -287,6 +296,38 @@ python examples/execute_strategy.py
 
 ---
 
+## Experiments and strategy ranking
+
+Azathoth can run multiple candidate strategies against the same collection of
+optimization examples.
+
+```python
+scorecards = await ExperimentRunner().run(
+    examples=examples,
+    strategies=strategies,
+    evaluator=evaluator,
+)
+
+ranking = StrategyRanker().rank(scorecards)
+
+winner = ranking.winner
+```
+
+For each strategy, the experiment runner produces a `StrategyScorecard`
+containing every underlying optimization run.
+
+Scorecards derive their aggregate metrics directly from that evidence:
+
+- run count;
+- passed count;
+- pass rate;
+- mean evaluation score.
+
+The initial ranker uses a deterministic policy that prioritizes pass rate and
+mean evaluation score. Experiment execution and ranking are intentionally
+separate so future applications can introduce different optimization
+objectives without rerunning the experiment.
+
 # Information Acquisition
 
 Sometimes the best next action is not answering the question.
@@ -379,17 +420,20 @@ These are intentionally outside the scope of the MVP.
 
 # Technology
 
-Current implementation direction:
+Currently used:
 
-- Python
+- Python 3.11+
 - Pydantic
+- pytest
+- mypy
+- Ruff
+- GitHub Actions
+
+Planned infrastructure and integrations:
+
 - FastAPI
 - PostgreSQL
 - LiteLLM
-- pytest
-
-Planned integrations may include:
-
 - Promptfoo
 - Braintrust
 - LangSmith
@@ -401,23 +445,25 @@ The goal is to integrate existing tooling rather than recreate it.
 
 # Current Status
 
-Azathoth is in active development.
+Azathoth now has a working empirical strategy-comparison pipeline.
 
-The current milestone establishes Azathoth's first end-to-end optimization pipeline.
+Implemented capabilities include:
 
-Implemented components include:
+- immutable goals and optimization examples;
+- immutable, event-backed context;
+- asynchronous executable strategies;
+- traceable strategy execution;
+- pluggable evaluators;
+- durable optimization runs;
+- experiments across multiple strategies and examples;
+- evidence-backed strategy scorecards;
+- deterministic candidate ranking;
+- end-to-end integration coverage;
+- strict type checking, automated tests, ADRs, and continuous integration.
 
-- immutable optimization examples
-- immutable event-backed context
-- pluggable strategies
-- deterministic strategy execution
-- pluggable evaluators
-- optimization run orchestration
-- end-to-end integration tests
-
-Upcoming milestones will focus on comparing multiple candidate strategies, selecting the best-performing workflow, and building the optimization engine itself.
-
-Development is intentionally proceeding in small, testable increments with complete type checking, automated tests, architectural decision records, and continuous integration.
+The next milestones will introduce real prompt and model-backed strategies,
+provider integrations, richer evaluation methods, and optimization across
+quality, cost, and latency.
 
 ---
 
