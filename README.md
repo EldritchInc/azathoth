@@ -78,25 +78,28 @@ The MVP intentionally does **not** attempt to build autonomous agents or AGI.
 # High-Level Architecture
 
 ```text
-Optimization Job
+Optimization Example
         │
         ▼
-Context Analysis
+Strategy
         │
         ▼
-Strategy Generation
+Strategy Executor
         │
         ▼
-Execution
+Execution Result
         │
         ▼
-Evaluation
+Evaluator
         │
         ▼
-Optimization
+Evaluation Result
         │
         ▼
-Knowledge Library
+Optimization Run
+        │
+        ▼
+Future Optimizer
 ```
 
 The output is an optimized strategy rather than a single prompt.
@@ -160,6 +163,23 @@ A runnable version of this example is included in the repository:
 ```bash
 python examples/create_optimization_example.py
 ```
+
+---
+
+## Current Architecture
+
+The current implementation establishes the foundation for empirical optimization.
+
+Today, Azathoth can:
+
+- represent optimization examples as immutable domain models
+- execute strategies against immutable context
+- evaluate strategy outputs using pluggable evaluators
+- record complete optimization runs
+- replay executions deterministically
+- serialize every stage of the optimization pipeline
+
+Optimization algorithms that compare and improve strategies will build on this foundation.
 
 ---
 
@@ -300,6 +320,16 @@ Possible evaluators include:
 
 Multiple evaluators can be combined into a single optimization objective.
 
+Each evaluation produces an immutable `EvaluationResult` containing:
+
+- evaluator identity
+- evaluator version
+- score
+- pass/fail status
+- supporting evidence
+
+Evaluation results become part of an `OptimizationRun`, allowing executions to be reproduced, audited, and compared over time.
+
 ---
 
 # Optimization Objectives
@@ -373,7 +403,19 @@ The goal is to integrate existing tooling rather than recreate it.
 
 Azathoth is in active development.
 
-The current milestone is establishing the core domain model and execution abstractions that will support workflow optimization.
+The current milestone establishes Azathoth's first end-to-end optimization pipeline.
+
+Implemented components include:
+
+- immutable optimization examples
+- immutable event-backed context
+- pluggable strategies
+- deterministic strategy execution
+- pluggable evaluators
+- optimization run orchestration
+- end-to-end integration tests
+
+Upcoming milestones will focus on comparing multiple candidate strategies, selecting the best-performing workflow, and building the optimization engine itself.
 
 Development is intentionally proceeding in small, testable increments with complete type checking, automated tests, architectural decision records, and continuous integration.
 
