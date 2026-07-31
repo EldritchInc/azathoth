@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    computed_field,
     model_validator,
 )
 
@@ -14,6 +15,7 @@ from azathoth.context import Context
 from azathoth.evaluation import EvaluationResult, ExpectedOutcome
 from azathoth.execution import ExecutionResult
 from azathoth.goals import Goal
+from azathoth.strategies import StrategyMetadata
 
 
 class OptimizationExample(BaseModel):
@@ -55,3 +57,59 @@ class OptimizationRun(BaseModel):
         """Return whether the evaluated strategy run passed."""
 
         return self.evaluation.passed
+
+
+class StrategyScorecard(BaseModel):
+    """Aggregated optimization evidence for one candidate strategy."""
+
+    model_config = ConfigDict(frozen=True)
+
+    strategy: StrategyMetadata
+    runs: tuple[OptimizationRun, ...] = Field(min_length=1)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def run_count(self) -> int:
+        """Return the number of evaluated runs in this scorecard."""
+
+        return len(self.runs)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def passed_count(self) -> int:
+        """Return the number of runs that passed evaluation."""
+
+        return sum(run.passed for run in self.runs)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def pass_rate(self) -> float:
+        """Return the proportion of runs that passed."""
+
+        return self.passed_count / self.run_count
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def mean_score(self) -> float:
+        """Return the arithmetic mean of all evaluation scores."""
+
+        return sum(run.evaluation.score for run in self.runs) / self.run_count
+
+    @model_validator(mode="after")
+    def validate_strategy_identity(self) -> "StrategyScorecard":
+        """Ensure every run belongs to the scorecard's strategy."""
+
+        mismatched_runs = tuple(
+            run
+            for run in self.runs
+            if (
+                run.execution.strategy_id != self.strategy.id
+                or run.execution.strategy_name != self.strategy.name
+                or run.execution.strategy_version != self.strategy.version
+            )
+        )
+
+        if mismatched_runs:
+            raise ValueError("Every optimization run must belong to the scorecard strategy.")
+
+        return self
