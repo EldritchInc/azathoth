@@ -113,3 +113,38 @@ class StrategyScorecard(BaseModel):
             raise ValueError("Every optimization run must belong to the scorecard strategy.")
 
         return self
+
+
+class RankedStrategy(BaseModel):
+    """A strategy scorecard assigned a deterministic rank."""
+
+    model_config = ConfigDict(frozen=True)
+
+    rank: int = Field(ge=1)
+    scorecard: StrategyScorecard
+
+
+class StrategyRanking(BaseModel):
+    """An ordered comparison of candidate strategy scorecards."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entries: tuple[RankedStrategy, ...] = Field(min_length=1)
+
+    @property
+    def winner(self) -> StrategyScorecard:
+        """Return the highest-ranked strategy scorecard."""
+
+        return self.entries[0].scorecard
+
+    @model_validator(mode="after")
+    def validate_rank_order(self) -> "StrategyRanking":
+        """Ensure ranking positions are consecutive and ordered."""
+
+        expected_ranks = tuple(range(1, len(self.entries) + 1))
+        actual_ranks = tuple(entry.rank for entry in self.entries)
+
+        if actual_ranks != expected_ranks:
+            raise ValueError("Strategy ranking entries must use consecutive ranks starting at 1.")
+
+        return self
