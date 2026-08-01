@@ -70,6 +70,7 @@ class StrategyExecutor:
             strategy_name=metadata.name,
             strategy_version=metadata.version,
             output=outcome.output,
+            metrics=outcome.metrics,
             initial_context=context,
             final_context=final_context,
             started_at=started_at,

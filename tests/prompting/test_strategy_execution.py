@@ -48,6 +48,12 @@ def test_executor_runs_prompt_strategy() -> None:
     )
 
     assert result.output == "duplicate_charge"
+    assert result.metrics is not None
+    assert result.metrics.provider == "test"
+    assert result.metrics.model == "stub"
+    assert result.metrics.total_tokens == 12
+    assert result.metrics.latency_ms == 15
+    assert result.metrics.estimated_cost_usd == 0.0001
 
     assert tuple(event.event_type for event in result.final_context.events) == (
         "strategy.execution.started",

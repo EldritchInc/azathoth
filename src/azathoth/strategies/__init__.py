@@ -6,7 +6,11 @@ from azathoth.strategies.exceptions import (
     RequiredFieldNotFoundError,
     StrategyError,
 )
-from azathoth.strategies.models import StrategyMetadata, StrategyOutcome
+from azathoth.strategies.models import (
+    StrategyExecutionMetrics,
+    StrategyMetadata,
+    StrategyOutcome,
+)
 from azathoth.strategies.protocols import Strategy
 
 __all__ = [
@@ -15,6 +19,7 @@ __all__ = [
     "RequiredFieldNotFoundError",
     "Strategy",
     "StrategyError",
+    "StrategyExecutionMetrics",
     "StrategyMetadata",
     "StrategyOutcome",
 ]

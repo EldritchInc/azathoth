@@ -83,6 +83,14 @@ def test_context_strategy_renders_prompt_before_model_call() -> None:
 
     assert model.received_prompt == Prompt(text="Classify: I was charged twice.")
     assert outcome.output == "duplicate_charge"
+    assert outcome.metrics is not None
+    assert outcome.metrics.provider == "test"
+    assert outcome.metrics.model == "stub"
+    assert outcome.metrics.prompt_tokens == 10
+    assert outcome.metrics.completion_tokens == 2
+    assert outcome.metrics.total_tokens == 12
+    assert outcome.metrics.latency_ms == 15
+    assert outcome.metrics.estimated_cost_usd == 0.0001
 
 
 def test_context_strategy_exposes_metadata_and_template() -> None:
