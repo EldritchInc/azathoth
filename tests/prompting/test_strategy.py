@@ -92,6 +92,14 @@ def test_prompt_strategy_returns_model_response_as_strategy_output() -> None:
 
     assert outcome.output == "refund_request"
     assert outcome.events == ()
+    assert outcome.metrics is not None
+    assert outcome.metrics.provider == "test"
+    assert outcome.metrics.model == "stub"
+    assert outcome.metrics.prompt_tokens == 10
+    assert outcome.metrics.completion_tokens == 2
+    assert outcome.metrics.total_tokens == 12
+    assert outcome.metrics.latency_ms == 15
+    assert outcome.metrics.estimated_cost_usd == 0.0001
 
 
 def test_prompt_strategy_exposes_metadata_and_prompt() -> None:

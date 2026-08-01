@@ -2,7 +2,11 @@
 
 from azathoth.context import Context
 from azathoth.providers import LanguageModel, Prompt
-from azathoth.strategies import StrategyMetadata, StrategyOutcome
+from azathoth.strategies import (
+    StrategyExecutionMetrics,
+    StrategyMetadata,
+    StrategyOutcome
+)
 
 
 class PromptStrategy:
@@ -38,4 +42,13 @@ class PromptStrategy:
 
         return StrategyOutcome(
             output=response.text,
+            metrics=StrategyExecutionMetrics(
+                provider=response.provider,
+                model=response.model,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                total_tokens=response.total_tokens,
+                latency_ms=response.latency_ms,
+                estimated_cost_usd=response.estimated_cost_usd,
+            ),
         )

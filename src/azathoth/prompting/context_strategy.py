@@ -3,7 +3,11 @@
 from azathoth.context import Context
 from azathoth.prompting.models import PromptTemplate
 from azathoth.providers import LanguageModel
-from azathoth.strategies import StrategyMetadata, StrategyOutcome
+from azathoth.strategies import (
+    StrategyExecutionMetrics,
+    StrategyMetadata,
+    StrategyOutcome,
+)
 
 
 class ContextPromptStrategy:
@@ -36,8 +40,18 @@ class ContextPromptStrategy:
         """Render and execute the prompt against the supplied context."""
 
         prompt = self._template.render(context)
+        prompt = self._template.render(context)
         response = await self._language_model.complete(prompt)
 
         return StrategyOutcome(
             output=response.text,
+            metrics=StrategyExecutionMetrics(
+                provider=response.provider,
+                model=response.model,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                total_tokens=response.total_tokens,
+                latency_ms=response.latency_ms,
+                estimated_cost_usd=response.estimated_cost_usd,
+            ),
         )

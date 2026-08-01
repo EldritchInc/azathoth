@@ -6,7 +6,7 @@ from uuid import UUID
 
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import StrategyExecutor
-from azathoth.strategies import StrategyMetadata, StrategyOutcome
+from azathoth.strategies import StrategyExecutionMetrics, StrategyMetadata, StrategyOutcome
 
 
 class RecordingStrategy:
@@ -37,6 +37,15 @@ class RecordingStrategy:
                     producer="recording-strategy",
                     confidence=0.98,
                 ),
+            ),
+            metrics=StrategyExecutionMetrics(
+                provider="test-provider",
+                model="test-model",
+                prompt_tokens=10,
+                completion_tokens=2,
+                total_tokens=12,
+                latency_ms=15,
+                estimated_cost_usd=0.0001,
             ),
         )
 
@@ -105,3 +114,27 @@ def test_executor_records_strategy_identity() -> None:
     assert result.strategy_id == strategy.metadata.id
     assert result.strategy_name == "Recording strategy"
     assert result.strategy_version == "1.0.0"
+
+
+def test_executor_preserves_strategy_execution_metrics() -> None:
+    timestamps = iter(
+        (
+            datetime(2026, 8, 1, 1, 0, tzinfo=UTC),
+            datetime(2026, 8, 1, 1, 0, 1, tzinfo=UTC),
+        )
+    )
+    executor = StrategyExecutor(clock=lambda: next(timestamps))
+
+    result = asyncio.run(
+        executor.execute(
+            RecordingStrategy(),
+            Context(),
+        )
+    )
+
+    assert result.metrics is not None
+    assert result.metrics.provider == "test-provider"
+    assert result.metrics.model == "test-model"
+    assert result.metrics.total_tokens == 12
+    assert result.metrics.latency_ms == 15
+    assert result.metrics.estimated_cost_usd == 0.0001
