@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 from azathoth.context import Context
+from azathoth.strategies import StrategyExecutionMetrics
 
 
 class ExecutionResult(BaseModel):
@@ -17,6 +18,7 @@ class ExecutionResult(BaseModel):
     strategy_name: str
     strategy_version: str
     output: JsonValue
+    metrics: StrategyExecutionMetrics | None = None
     initial_context: Context
     final_context: Context
     started_at: datetime
