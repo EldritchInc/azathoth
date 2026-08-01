@@ -23,6 +23,13 @@ class RecordingLanguageModel:
 
         return ModelResponse(
             text=self._response_text,
+            provider="test",
+            model="stub",
+            prompt_tokens=10,
+            completion_tokens=2,
+            total_tokens=12,
+            latency_ms=15,
+            estimated_cost_usd=0.0001,
         )
 
 

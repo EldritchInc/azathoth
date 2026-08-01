@@ -21,11 +21,23 @@ def test_prompt_round_trips() -> None:
 def test_model_response_round_trips() -> None:
     response = ModelResponse(
         text="Hello human",
+        provider="test",
+        model="stub",
+        prompt_tokens=10,
+        completion_tokens=2,
+        total_tokens=12,
+        latency_ms=15,
+        estimated_cost_usd=0.0001,
     )
 
     restored = ModelResponse.model_validate_json(response.model_dump_json())
 
     assert restored == response
+    assert response.provider == "test"
+    assert response.model == "stub"
+    assert response.total_tokens == 12
+    assert response.latency_ms == 15
+    assert response.estimated_cost_usd == 0.0001
 
 
 def test_prompt_is_immutable() -> None:
@@ -40,7 +52,16 @@ def test_prompt_is_immutable() -> None:
 
 
 def test_model_response_is_immutable() -> None:
-    response = ModelResponse(text="Hello")
+    response = ModelResponse(
+        text="Hello",
+        provider="test",
+        model="stub",
+        prompt_tokens=10,
+        completion_tokens=2,
+        total_tokens=12,
+        latency_ms=15,
+        estimated_cost_usd=0.0001,
+    )
 
     try:
         response.text = "Changed"
