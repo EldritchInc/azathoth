@@ -12,7 +12,7 @@ Instead of asking:
 
 Azathoth asks:
 
-> "Given this type of context, what combination of prompts, models, tools, retrieval, and workflow consistently produces the best outcome?"
+> "Given this type of context, what combination of strategies, prompts, models, tools, retrieval, and workflow consistently produces the best outcome?"
 
 The goal is to build an optimization engine that can discover, evaluate, and continuously improve AI workflows using real-world examples.
 
@@ -84,6 +84,21 @@ Optimization Examples
 Candidate Strategies
         │
         ▼
+Prompt Rendering
+        │
+        ▼
+Language Models
+        │
+        ▼
+Strategy Execution
+        │
+        ▼
+Evaluation
+        │
+        ▼
+Optimization Runs
+        │
+        ▼
 Experiment Runner
         │
         ├── Strategy A × Every Example
@@ -104,14 +119,22 @@ Experiment Runner
                     │
                     ▼
                  Winner
+        │
+        ▼
+Strategy Scorecards
+        │
+        ▼
+Strategy Ranking
+        │
+        ▼
+Best Candidate
 ```
 
 The current implementation can execute candidate strategies across a shared
 example set, aggregate their results into evidence-backed scorecards, and rank
 the candidates deterministically.
 
-Prompt generation, model-provider integration, cost-aware arbitrage, and
-automatic strategy mutation remain future milestones.
+The current implementation includes provider abstractions, executable prompt strategies, context-aware prompt rendering, deterministic experiments, and evidence-backed strategy ranking. Cost-aware model selection and automatic strategy generation remain future milestones.
 
 ---
 
@@ -177,18 +200,21 @@ python examples/create_optimization_example.py
 
 ## Current Architecture
 
-The current implementation establishes the foundation for empirical optimization.
+The current implementation establishes a complete empirical optimization pipeline.
 
 Today, Azathoth can:
 
-- represent optimization examples as immutable domain models
-- execute strategies against immutable context
-- evaluate strategy outputs using pluggable evaluators
-- record complete optimization runs
-- replay executions deterministically
-- serialize every stage of the optimization pipeline
+- represent optimization examples as immutable domain models;
+- execute deterministic and language-model-backed strategies;
+- render prompts from immutable event-backed context;
+- evaluate outputs using pluggable evaluators;
+- record complete optimization runs;
+- aggregate runs into evidence-backed strategy scorecards;
+- rank candidate strategies deterministically;
+- record provider, model, token usage, latency, and estimated execution cost;
+- serialize every stage of the optimization pipeline.
 
-Optimization algorithms that compare and improve strategies will build on this foundation.
+Future work will build on this foundation by generating candidate strategies automatically and optimizing across quality, latency, and cost.
 
 ---
 
@@ -296,6 +322,58 @@ python examples/execute_strategy.py
 
 ---
 
+## Prompt Strategies
+
+Azathoth treats prompts as executable strategies rather than static strings.
+
+A prompt strategy consists of:
+
+- a prompt template;
+- structured bindings into immutable context;
+- a language model abstraction.
+
+At execution time the strategy renders a prompt from the current context before executing it through a provider-neutral language model interface.
+
+```text
+Context
+    │
+    ▼
+Prompt Template
+    │
+    ▼
+Rendered Prompt
+    │
+    ▼
+Language Model
+    │
+    ▼
+Strategy Output
+```
+
+This separation allows prompt rendering, provider selection, evaluation, and optimization to evolve independently.
+
+---
+
+## Language Model Abstractions
+
+Azathoth intentionally separates optimization from model providers.
+
+Every language model implements a common interface regardless of the underlying vendor.
+
+Current execution records include:
+
+- provider;
+- model;
+- prompt token count;
+- completion token count;
+- total token count;
+- execution latency;
+- estimated execution cost.
+
+These measurements become immutable execution evidence that future optimization algorithms can use to balance quality, latency, and cost.
+
+---
+
 ## Experiments and strategy ranking
 
 Azathoth can run multiple candidate strategies against the same collection of
@@ -375,7 +453,7 @@ Evaluation results become part of an `OptimizationRun`, allowing executions to b
 
 # Optimization Objectives
 
-Strategies can be optimized against combinations of:
+Strategies can be optimized across one or more objectives including:
 
 - Quality
 - Accuracy
@@ -383,8 +461,12 @@ Strategies can be optimized against combinations of:
 - Latency
 - Reliability
 - Complexity
+- Token usage
+- Provider selection
 
-The optimization objective is configurable depending on the application.
+Different applications may prioritize different tradeoffs.
+
+The optimization objective remains separate from experiment execution, allowing the same evidence to support multiple optimization policies.
 
 ---
 
@@ -420,20 +502,21 @@ These are intentionally outside the scope of the MVP.
 
 # Technology
 
-Currently used:
+Current architecture:
 
-- Python 3.11+
+- Python
 - Pydantic
+- AsyncIO
 - pytest
 - mypy
 - Ruff
 - GitHub Actions
 
-Planned infrastructure and integrations:
+Planned integrations:
 
+- LiteLLM
 - FastAPI
 - PostgreSQL
-- LiteLLM
 - Promptfoo
 - Braintrust
 - LangSmith
@@ -461,9 +544,16 @@ Implemented capabilities include:
 - end-to-end integration coverage;
 - strict type checking, automated tests, ADRs, and continuous integration.
 
-The next milestones will introduce real prompt and model-backed strategies,
-provider integrations, richer evaluation methods, and optimization across
-quality, cost, and latency.
+The next milestones include:
+
+- provider integrations;
+- automatic strategy generation;
+- cost-aware model arbitrage;
+- optimization across quality, latency, and cost;
+- richer evaluation methods;
+- workflow optimization across multiple execution steps.
+
+The current architecture intentionally separates execution, evaluation, experimentation, and optimization so these capabilities can be added incrementally.
 
 ---
 
