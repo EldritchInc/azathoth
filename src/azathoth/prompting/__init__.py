@@ -8,6 +8,7 @@ from azathoth.prompting.exceptions import (
     PromptingError,
 )
 from azathoth.prompting.models import PromptBinding, PromptTemplate
+from azathoth.prompting.specifications import PromptStrategySpec
 from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "PromptStrategy",
     "PromptTemplate",
     "PromptingError",
+    "PromptStrategySpec",
 ]
