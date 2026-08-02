@@ -6,6 +6,7 @@ from uuid import UUID
 from azathoth.context import Context, ContextEvent
 from azathoth.prompting import (
     ContextPromptStrategy,
+    ModelBinding,
     PromptBinding,
     PromptTemplate,
 )
@@ -185,3 +186,43 @@ def test_context_strategy_allows_omitted_model_requirements() -> None:
     )
 
     assert strategy.model_requirements is None
+
+
+def test_context_strategy_exposes_model_binding() -> None:
+    binding = ModelBinding(
+        identifier="provider-a/model-small",
+    )
+
+    strategy = ContextPromptStrategy(
+        metadata=StrategyMetadata(
+            name="Context-aware classification",
+            description="Classify a support request from context.",
+            version="1.0.0",
+        ),
+        template=PromptTemplate(
+            text="Classify: {message}",
+            bindings=(
+                PromptBinding(
+                    variable_name="message",
+                    event_type="customer.message.received",
+                    field_name="message",
+                ),
+            ),
+        ),
+        language_model=RecordingLanguageModel(
+            response_text="duplicate_charge",
+        ),
+        model_binding=binding,
+    )
+
+    assert strategy.model_binding == binding
+
+
+def test_context_strategy_allows_omitted_model_binding() -> None:
+    strategy = create_strategy(
+        RecordingLanguageModel(
+            response_text="duplicate_charge",
+        )
+    )
+
+    assert strategy.model_binding is None
