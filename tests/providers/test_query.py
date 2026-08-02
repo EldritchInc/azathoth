@@ -9,6 +9,7 @@ from azathoth.providers import (
     ModelModality,
     ModelPricing,
     ModelQuery,
+    ModelRequirements,
 )
 
 
@@ -243,3 +244,95 @@ def test_model_query_round_trips_through_json() -> None:
     restored = ModelQuery.model_validate_json(query.model_dump_json())
 
     assert restored == query
+
+
+def test_query_builds_from_model_requirements() -> None:
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+                ModelCapability.TOOL_USE,
+            }
+        ),
+        required_input_modalities=frozenset(
+            {
+                ModelModality.TEXT,
+                ModelModality.IMAGE,
+            }
+        ),
+        required_output_modalities=frozenset(
+            {
+                ModelModality.TEXT,
+            }
+        ),
+        minimum_context_window_tokens=100_000,
+        minimum_output_tokens=8_000,
+        maximum_input_usd_per_million_tokens=2.0,
+        maximum_output_usd_per_million_tokens=8.0,
+        require_known_pricing=True,
+    )
+
+    query = ModelQuery.from_requirements(requirements)
+
+    assert query.providers == frozenset()
+    assert query.required_capabilities == requirements.required_capabilities
+    assert query.required_input_modalities == requirements.required_input_modalities
+    assert query.required_output_modalities == requirements.required_output_modalities
+    assert query.minimum_context_window_tokens == requirements.minimum_context_window_tokens
+    assert query.minimum_output_tokens == requirements.minimum_output_tokens
+    assert (
+        query.maximum_input_usd_per_million_tokens
+        == requirements.maximum_input_usd_per_million_tokens
+    )
+    assert (
+        query.maximum_output_usd_per_million_tokens
+        == requirements.maximum_output_usd_per_million_tokens
+    )
+    assert query.require_known_pricing is True
+
+
+def test_query_from_requirements_accepts_provider_restrictions() -> None:
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.TOOL_USE,
+            }
+        ),
+    )
+
+    query = ModelQuery.from_requirements(
+        requirements,
+        providers=frozenset(
+            {
+                "provider-a",
+                "provider-b",
+            }
+        ),
+    )
+
+    assert query.providers == frozenset(
+        {
+            "provider-a",
+            "provider-b",
+        }
+    )
+    assert query.required_capabilities == frozenset(
+        {
+            ModelCapability.TOOL_USE,
+        }
+    )
+
+
+def test_query_from_default_requirements_preserves_text_modalities() -> None:
+    query = ModelQuery.from_requirements(ModelRequirements())
+
+    assert query.required_input_modalities == frozenset(
+        {
+            ModelModality.TEXT,
+        }
+    )
+    assert query.required_output_modalities == frozenset(
+        {
+            ModelModality.TEXT,
+        }
+    )
