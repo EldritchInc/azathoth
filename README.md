@@ -311,6 +311,76 @@ This separation allows provider integrations, capability discovery, and optimiza
 
 ---
 
+## Model Requirements
+
+Before a strategy can be executed, it declares the capabilities it requires from a language model.
+
+Requirements describe the workload rather than selecting a specific model.
+
+Examples include:
+
+- required capabilities (structured output, tool use, vision)
+- supported input and output modalities
+- minimum context window
+- minimum output size
+- optional pricing constraints
+
+These requirements are intentionally provider-neutral.
+
+```python
+requirements = ModelRequirements(
+    required_capabilities=frozenset(
+        {
+            ModelCapability.STRUCTURED_OUTPUT,
+            ModelCapability.TOOL_USE,
+        }
+    ),
+    minimum_context_window_tokens=100_000,
+)
+```
+
+Requirements do **not** choose a model.
+
+Instead, they describe the minimum characteristics needed to execute the strategy successfully.
+
+---
+
+## Candidate Strategy Generation
+
+Prompt strategy specifications describe **what** work should be performed without selecting a concrete language model.
+
+During optimization, Azathoth combines:
+
+- prompt strategy specifications
+- model requirements
+- model catalog
+- executable model registry
+
+to generate every executable candidate strategy that satisfies the workload requirements.
+
+```text
+Prompt Strategy Specification
+            │
+            ▼
+     Model Requirements
+            │
+            ▼
+        Model Query
+            │
+            ▼
+       Model Catalog
+            │
+            ▼
+Executable Model Registry
+            │
+            ▼
+Generated Prompt Strategies
+```
+
+Each generated strategy is then evaluated empirically rather than selected through heuristics.
+
+This separation allows workload definition, model discovery, execution, and optimization to evolve independently.
+
 ---
 
 # Model Requirements
