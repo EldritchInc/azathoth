@@ -77,17 +77,13 @@ The MVP intentionally does **not** attempt to build autonomous agents or AGI.
 
 # High-Level Architecture
 
+# High-Level Architecture
+
 ```text
 Optimization Examples
         │
         ▼
 Candidate Strategies
-        │
-        ▼
-Prompt Rendering
-        │
-        ▼
-Language Models
         │
         ▼
 Strategy Execution
@@ -118,23 +114,35 @@ Experiment Runner
             Strategy Ranking
                     │
                     ▼
-                 Winner
-        │
-        ▼
-Strategy Scorecards
-        │
-        ▼
-Strategy Ranking
-        │
-        ▼
-Best Candidate
+              Best Candidate
+
+Strategy
+    │
+    ▼
+Context Analysis
+    │
+    ├── Prompt Rendering
+    ├── Model Discovery
+    ├── Tool Execution
+    ├── Retrieval
+    ├── Clarification Questions
+    └── Multi-step Workflow
+    │
+    ▼
+Strategy Outcome
 ```
 
 The current implementation can execute candidate strategies across a shared
 example set, aggregate their results into evidence-backed scorecards, and rank
 the candidates deterministically.
 
-The current implementation includes provider abstractions, executable prompt strategies, context-aware prompt rendering, deterministic experiments, and evidence-backed strategy ranking. Cost-aware model selection and automatic strategy generation remain future milestones.
+The framework now includes immutable optimization examples, event-backed
+context, executable strategies, context-aware prompting, provider
+abstractions, model discovery, deterministic experiment execution, and
+evidence-backed strategy ranking.
+
+Future milestones include model arbitrage, adaptive strategy generation,
+workflow synthesis, and continual learning.
 
 ---
 
@@ -259,6 +267,42 @@ Strategies may consist of combinations of:
 
 Each candidate strategy is evaluated against user-defined success criteria.
 
+---
+
+# Model Discovery
+
+Before a strategy can be evaluated, Azathoth must determine which language models are capable of executing it.
+
+Rather than embedding provider-specific logic throughout the system, Azathoth represents available models using immutable metadata.
+
+Each model records information such as:
+
+- provider
+- model identifier
+- supported capabilities
+- supported modalities
+- context window
+- output limits
+- pricing information
+
+Available models are stored within a `ModelCatalog`.
+
+Optimization components use immutable `ModelQuery` objects to discover the set of eligible candidate models for a workload.
+
+Importantly, model discovery and model selection are separate concerns.
+
+The catalog answers:
+
+> "Which models satisfy these requirements?"
+
+Optimization later answers:
+
+> "Which eligible model consistently performs best for this workload?"
+
+This separation allows provider integrations, capability discovery, and optimization policies to evolve independently.
+
+---
+
 ## Strategy execution
 
 Azathoth strategies operate against immutable, event-backed context.
@@ -319,6 +363,31 @@ Run the complete example:
 ```bash
 python examples/execute_strategy.py
 ```
+
+---
+
+# Execution Metrics
+
+Every language model invocation produces operational evidence in addition to its output.
+
+Execution metrics currently include:
+
+- provider
+- model
+- token usage
+- latency
+- estimated execution cost
+
+These measurements are propagated through strategy execution into the optimization pipeline.
+
+This allows future optimization objectives to balance multiple competing concerns, including:
+
+- quality
+- latency
+- cost
+- reliability
+
+Rather than optimizing solely for correctness, Azathoth is designed to optimize across multiple measurable dimensions.
 
 ---
 
@@ -536,6 +605,9 @@ Implemented capabilities include:
 - immutable, event-backed context;
 - asynchronous executable strategies;
 - traceable strategy execution;
+- prompt-backed and context-aware prompt strategies;
+- provider abstractions and execution metrics;
+- immutable model metadata and capability-based discovery;
 - pluggable evaluators;
 - durable optimization runs;
 - experiments across multiple strategies and examples;
@@ -553,7 +625,7 @@ The next milestones include:
 - richer evaluation methods;
 - workflow optimization across multiple execution steps.
 
-The current architecture intentionally separates execution, evaluation, experimentation, and optimization so these capabilities can be added incrementally.
+The current architecture intentionally separates execution, evaluation, experimentation, provider discovery, and optimization so these capabilities can be added incrementally.
 
 ---
 
