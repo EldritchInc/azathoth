@@ -2,7 +2,7 @@
 
 from azathoth.context import Context
 from azathoth.prompting.models import PromptTemplate
-from azathoth.providers import LanguageModel
+from azathoth.providers import LanguageModel, ModelRequirements
 from azathoth.strategies import (
     StrategyExecutionMetrics,
     StrategyMetadata,
@@ -19,10 +19,12 @@ class ContextPromptStrategy:
         metadata: StrategyMetadata,
         template: PromptTemplate,
         language_model: LanguageModel,
+        model_requirements: ModelRequirements | None = None,
     ) -> None:
         self._metadata = metadata
         self._template = template
         self._language_model = language_model
+        self._model_requirements = model_requirements
 
     @property
     def metadata(self) -> StrategyMetadata:
@@ -35,6 +37,12 @@ class ContextPromptStrategy:
         """Return the context-aware prompt template."""
 
         return self._template
+    
+    @property
+    def model_requirements(self) -> ModelRequirements | None:
+        """Return the requirements declared for the backing model."""
+
+        return self._model_requirements
 
     async def run(self, context: Context) -> StrategyOutcome:
         """Render and execute the prompt against the supplied context."""
