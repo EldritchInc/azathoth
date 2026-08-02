@@ -1,6 +1,59 @@
-"""Language model request and response models."""
+"""Language model domain, request and response models."""
 
-from pydantic import BaseModel, ConfigDict
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ModelModality(StrEnum):
+    """An input or output modality supported by a model."""
+
+    TEXT = "text"
+    IMAGE = "image"
+    AUDIO = "audio"
+    VIDEO = "video"
+
+
+class ModelCapability(StrEnum):
+    """A discrete capability advertised by a language model."""
+
+    STRUCTURED_OUTPUT = "structured_output"
+    TOOL_USE = "tool_use"
+    VISION = "vision"
+    STREAMING = "streaming"
+
+
+class ModelPricing(BaseModel):
+    """Configured model pricing per million tokens."""
+
+    model_config = ConfigDict(frozen=True)
+
+    input_usd_per_million_tokens: float = Field(ge=0.0)
+    output_usd_per_million_tokens: float = Field(ge=0.0)
+
+
+class ModelMetadata(BaseModel):
+    """Configured identity and capabilities for an available model."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+
+    input_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
+    output_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
+    capabilities: frozenset[ModelCapability] = frozenset()
+
+    context_window_tokens: int = Field(gt=0)
+    maximum_output_tokens: int | None = Field(default=None, gt=0)
+    pricing: ModelPricing | None = None
+
+    @property
+    def identifier(self) -> str:
+        """Return the provider-qualified model identifier."""
+
+        return f"{self.provider}/{self.model}"
 
 
 class Prompt(BaseModel):
