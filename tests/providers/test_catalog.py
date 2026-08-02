@@ -9,6 +9,7 @@ from azathoth.providers import (
     ModelMetadata,
     ModelModality,
     ModelPricing,
+    ModelQuery,
 )
 
 
@@ -190,3 +191,52 @@ def test_catalog_round_trips_through_json() -> None:
     restored = ModelCatalog.model_validate_json(catalog.model_dump_json())
 
     assert restored == catalog
+
+
+def test_catalog_finds_models_matching_query() -> None:
+    catalog = create_catalog()
+
+    models = catalog.find(
+        ModelQuery(
+            providers=frozenset({"provider-a"}),
+            required_capabilities=frozenset(
+                {
+                    ModelCapability.STRUCTURED_OUTPUT,
+                }
+            ),
+            minimum_context_window_tokens=100_000,
+        )
+    )
+
+    assert tuple(model.identifier for model in models) == (
+        "provider-a/small",
+        "provider-a/large",
+    )
+
+
+def test_catalog_find_preserves_catalog_order() -> None:
+    catalog = create_catalog()
+
+    models = catalog.find(ModelQuery())
+
+    assert tuple(model.identifier for model in models) == (
+        "provider-a/small",
+        "provider-a/large",
+        "provider-b/reasoning",
+    )
+
+
+def test_catalog_find_returns_empty_tuple_when_nothing_matches() -> None:
+    catalog = create_catalog()
+
+    models = catalog.find(
+        ModelQuery(
+            required_capabilities=frozenset(
+                {
+                    ModelCapability.TOOL_USE,
+                }
+            )
+        )
+    )
+
+    assert models == ()

@@ -10,6 +10,7 @@ from azathoth.providers.models import (
     Prompt,
 )
 from azathoth.providers.protocol import LanguageModel
+from azathoth.providers.query import ModelQuery
 
 __all__ = [
     "LanguageModel",
@@ -18,6 +19,7 @@ __all__ = [
     "ModelMetadata",
     "ModelModality",
     "ModelPricing",
+    "ModelQuery",
     "ModelResponse",
     "Prompt",
 ]

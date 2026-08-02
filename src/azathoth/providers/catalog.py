@@ -3,6 +3,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from azathoth.providers.models import ModelMetadata
+from azathoth.providers.query import ModelQuery
 
 
 class ModelCatalog(BaseModel):
@@ -50,3 +51,11 @@ class ModelCatalog(BaseModel):
         """Return all models registered for one provider."""
 
         return tuple(model for model in self.models if model.provider == provider)
+
+    def find(
+        self,
+        query: ModelQuery,
+    ) -> tuple[ModelMetadata, ...]:
+        """Return models satisfying every query requirement."""
+
+        return tuple(model for model in self.models if query.matches(model))
