@@ -1,5 +1,6 @@
 """Language model provider abstractions."""
 
+from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.models import (
     ModelCapability,
     ModelMetadata,
@@ -13,6 +14,7 @@ from azathoth.providers.protocol import LanguageModel
 __all__ = [
     "LanguageModel",
     "ModelCapability",
+    "ModelCatalog",
     "ModelMetadata",
     "ModelModality",
     "ModelPricing",
