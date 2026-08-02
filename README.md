@@ -31,7 +31,7 @@ Most AI applications contain dozens of hidden decisions:
 
 These decisions are usually hard-coded by developers.
 
-Azathoth attempts to learn them.
+Azathoth attempts to discover them empirically.
 
 ---
 
@@ -77,8 +77,6 @@ The MVP intentionally does **not** attempt to build autonomous agents or AGI.
 
 # High-Level Architecture
 
-# High-Level Architecture
-
 ```text
 Optimization Examples
         │
@@ -117,6 +115,12 @@ Experiment Runner
               Best Candidate
 
 Strategy
+    │
+    ▼
+Model Requirements
+    │
+    ▼
+Model Discovery
     │
     ▼
 Context Analysis
@@ -215,6 +219,10 @@ Today, Azathoth can:
 - represent optimization examples as immutable domain models;
 - execute deterministic and language-model-backed strategies;
 - render prompts from immutable event-backed context;
+- abstract language model providers behind a common execution interface;
+- describe available models using immutable metadata;
+- declare provider-neutral model requirements for language-model-backed strategies;
+- discover eligible models through immutable catalogs and capability-based queries;
 - evaluate outputs using pluggable evaluators;
 - record complete optimization runs;
 - aggregate runs into evidence-backed strategy scorecards;
@@ -222,7 +230,7 @@ Today, Azathoth can:
 - record provider, model, token usage, latency, and estimated execution cost;
 - serialize every stage of the optimization pipeline.
 
-Future work will build on this foundation by generating candidate strategies automatically and optimizing across quality, latency, and cost.
+Future work will build on this foundation by generating candidate strategies automatically, selecting models empirically from eligible candidates, and optimizing across quality, latency, and cost.
 
 ---
 
@@ -300,6 +308,62 @@ Optimization later answers:
 > "Which eligible model consistently performs best for this workload?"
 
 This separation allows provider integrations, capability discovery, and optimization policies to evolve independently.
+
+---
+
+---
+
+# Model Requirements
+
+Strategies declare the capabilities they require from a language model without selecting a specific implementation.
+
+Model requirements describe the workload rather than the provider.
+
+Examples include:
+
+- required capabilities;
+- supported input and output modalities;
+- minimum context window;
+- minimum output size;
+- optional pricing constraints.
+
+```python
+requirements = ModelRequirements(
+    required_capabilities=frozenset(
+        {
+            ModelCapability.STRUCTURED_OUTPUT,
+            ModelCapability.TOOL_USE,
+        }
+    ),
+    minimum_context_window_tokens=100_000,
+)
+```
+
+Requirements intentionally do not identify a specific model.
+
+Instead, they describe the minimum characteristics needed to execute the strategy successfully.
+
+A `ModelQuery` can then be derived from those requirements to discover every eligible model within a `ModelCatalog`.
+
+```text
+Strategy
+      │
+      ▼
+Model Requirements
+      │
+      ▼
+Model Query
+      │
+      ▼
+Model Catalog
+      │
+      ▼
+Eligible Models
+```
+
+Empirical optimization later determines which eligible model performs best for a given workload.
+
+This separation allows workload definitions, provider integrations, and optimization policies to evolve independently.
 
 ---
 
@@ -399,7 +463,12 @@ A prompt strategy consists of:
 
 - a prompt template;
 - structured bindings into immutable context;
+- optional model requirements;
 - a language model abstraction.
+
+Today, prompt strategies execute against a concrete language model while optionally declaring provider-neutral model requirements.
+
+Future optimization components will use these requirements to discover eligible models automatically before empirical evaluation determines the most effective candidate.
 
 At execution time the strategy renders a prompt from the current context before executing it through a provider-neutral language model interface.
 
@@ -559,6 +628,7 @@ Possible future research areas include:
 
 - adaptive context modeling
 - automatic workflow discovery
+- adaptive model selection;
 - hierarchical planning
 - persistent episodic memory
 - continual learning
@@ -607,7 +677,7 @@ Implemented capabilities include:
 - traceable strategy execution;
 - prompt-backed and context-aware prompt strategies;
 - provider abstractions and execution metrics;
-- immutable model metadata and capability-based discovery;
+- immutable model metadata, provider-neutral requirements, and capability-based discovery;
 - pluggable evaluators;
 - durable optimization runs;
 - experiments across multiple strategies and examples;

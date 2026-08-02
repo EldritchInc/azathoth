@@ -5,7 +5,7 @@ from uuid import UUID
 
 from azathoth.context import Context
 from azathoth.prompting import PromptStrategy
-from azathoth.providers import ModelResponse, Prompt
+from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
 from azathoth.strategies import Strategy, StrategyMetadata
 
 
@@ -138,3 +138,69 @@ def test_prompt_strategy_satisfies_strategy_protocol() -> None:
     )
 
     assert output == "duplicate_charge"
+
+
+def test_prompt_strategy_exposes_model_requirements() -> None:
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+            }
+        ),
+        minimum_context_window_tokens=32_000,
+    )
+
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=Prompt(
+            text="Return structured JSON.",
+        ),
+        language_model=RecordingLanguageModel(
+            response_text='{"category":"duplicate_charge"}',
+        ),
+        model_requirements=requirements,
+    )
+
+    assert strategy.model_requirements == requirements
+
+
+def test_prompt_strategy_allows_omitted_model_requirements() -> None:
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=Prompt(
+            text="Classify the request.",
+        ),
+        language_model=RecordingLanguageModel(
+            response_text="duplicate_charge",
+        ),
+    )
+
+    assert strategy.model_requirements is None
+
+
+def test_model_requirements_do_not_change_prompt_execution() -> None:
+    model = RecordingLanguageModel(
+        response_text="duplicate_charge",
+    )
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+            }
+        ),
+    )
+    prompt = Prompt(
+        text="Classify the request.",
+    )
+
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=prompt,
+        language_model=model,
+        model_requirements=requirements,
+    )
+
+    outcome = asyncio.run(strategy.run(Context()))
+
+    assert model.received_prompt == prompt
+    assert outcome.output == "duplicate_charge"

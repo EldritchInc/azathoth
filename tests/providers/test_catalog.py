@@ -10,6 +10,7 @@ from azathoth.providers import (
     ModelModality,
     ModelPricing,
     ModelQuery,
+    ModelRequirements,
 )
 
 
@@ -240,3 +241,34 @@ def test_catalog_find_returns_empty_tuple_when_nothing_matches() -> None:
     )
 
     assert models == ()
+
+
+def test_catalog_finds_models_from_workload_requirements() -> None:
+    catalog = create_catalog()
+
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+            }
+        ),
+        minimum_context_window_tokens=100_000,
+        maximum_input_usd_per_million_tokens=2.0,
+        require_known_pricing=True,
+    )
+
+    models = catalog.find(
+        ModelQuery.from_requirements(
+            requirements,
+            providers=frozenset(
+                {
+                    "provider-a",
+                }
+            ),
+        )
+    )
+
+    assert tuple(model.identifier for model in models) == (
+        "provider-a/small",
+        "provider-a/large",
+    )
