@@ -9,7 +9,7 @@ from azathoth.prompting import (
     PromptBinding,
     PromptTemplate,
 )
-from azathoth.providers import ModelResponse, Prompt
+from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
 from azathoth.strategies import Strategy, StrategyMetadata
 
 
@@ -140,3 +140,48 @@ def test_context_strategy_satisfies_strategy_protocol() -> None:
     )
 
     assert output == "duplicate_charge"
+
+
+def test_context_strategy_exposes_model_requirements() -> None:
+    requirements = ModelRequirements(
+        required_capabilities=frozenset(
+            {
+                ModelCapability.TOOL_USE,
+            }
+        ),
+        minimum_context_window_tokens=100_000,
+    )
+
+    strategy = ContextPromptStrategy(
+        metadata=StrategyMetadata(
+            name="Context-aware support strategy",
+            description="Classify support messages from context.",
+            version="1.0.0",
+        ),
+        template=PromptTemplate(
+            text="Classify: {message}",
+            bindings=(
+                PromptBinding(
+                    variable_name="message",
+                    event_type="customer.message.received",
+                    field_name="message",
+                ),
+            ),
+        ),
+        language_model=RecordingLanguageModel(
+            response_text="duplicate_charge",
+        ),
+        model_requirements=requirements,
+    )
+
+    assert strategy.model_requirements == requirements
+
+
+def test_context_strategy_allows_omitted_model_requirements() -> None:
+    strategy = create_strategy(
+        RecordingLanguageModel(
+            response_text="duplicate_charge",
+        )
+    )
+
+    assert strategy.model_requirements is None
