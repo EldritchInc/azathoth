@@ -7,6 +7,7 @@ from azathoth.providers.models import (
     ModelMetadata,
     ModelModality,
 )
+from azathoth.providers.requirements import ModelRequirements
 
 
 class ModelQuery(BaseModel):
@@ -91,3 +92,28 @@ class ModelQuery(BaseModel):
                 return False
 
         return True
+
+    @classmethod
+    def from_requirements(
+        cls,
+        requirements: ModelRequirements,
+        *,
+        providers: frozenset[str] = frozenset(),
+    ) -> "ModelQuery":
+        """Build a catalog query from workload model requirements."""
+
+        return cls(
+            providers=providers,
+            required_capabilities=requirements.required_capabilities,
+            required_input_modalities=requirements.required_input_modalities,
+            required_output_modalities=requirements.required_output_modalities,
+            minimum_context_window_tokens=(requirements.minimum_context_window_tokens),
+            minimum_output_tokens=requirements.minimum_output_tokens,
+            maximum_input_usd_per_million_tokens=(
+                requirements.maximum_input_usd_per_million_tokens
+            ),
+            maximum_output_usd_per_million_tokens=(
+                requirements.maximum_output_usd_per_million_tokens
+            ),
+            require_known_pricing=requirements.require_known_pricing,
+        )
