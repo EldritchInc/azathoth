@@ -1,5 +1,6 @@
 """Prompt-based Azathoth strategies."""
 
+from azathoth.prompting.candidates import generate_prompt_candidates
 from azathoth.prompting.context_strategy import ContextPromptStrategy
 from azathoth.prompting.exceptions import (
     PromptBindingError,
@@ -8,6 +9,7 @@ from azathoth.prompting.exceptions import (
     PromptingError,
 )
 from azathoth.prompting.models import PromptBinding, PromptTemplate
+from azathoth.prompting.specifications import PromptStrategySpec
 from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "PromptStrategy",
     "PromptTemplate",
     "PromptingError",
+    "PromptStrategySpec",
+    "generate_prompt_candidates",
 ]

@@ -11,10 +11,12 @@ from azathoth.providers.models import (
 )
 from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.query import ModelQuery
+from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.requirements import ModelRequirements
 
 __all__ = [
     "LanguageModel",
+    "LanguageModelRegistry",
     "ModelCapability",
     "ModelCatalog",
     "ModelMetadata",
