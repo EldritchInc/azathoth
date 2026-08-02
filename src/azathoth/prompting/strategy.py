@@ -1,7 +1,11 @@
 """Language-model-backed prompt strategies."""
 
 from azathoth.context import Context
-from azathoth.providers import LanguageModel, Prompt
+from azathoth.providers import (
+    LanguageModel,
+    ModelRequirements,
+    Prompt,
+)
 from azathoth.strategies import (
     StrategyExecutionMetrics,
     StrategyMetadata,
@@ -18,10 +22,12 @@ class PromptStrategy:
         metadata: StrategyMetadata,
         prompt: Prompt,
         language_model: LanguageModel,
+        model_requirements: ModelRequirements | None = None,
     ) -> None:
         self._metadata = metadata
         self._prompt = prompt
         self._language_model = language_model
+        self._model_requirements = model_requirements
 
     @property
     def metadata(self) -> StrategyMetadata:
@@ -34,6 +40,12 @@ class PromptStrategy:
         """Return the rendered prompt executed by this strategy."""
 
         return self._prompt
+    
+    @property
+    def model_requirements(self) -> ModelRequirements | None:
+        """Return the requirements declared for the backing model."""
+
+        return self._model_requirements
 
     async def run(self, context: Context) -> StrategyOutcome:
         """Execute the prompt and return the model response text."""
