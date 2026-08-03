@@ -18,6 +18,16 @@ The goal is to build an optimization engine that can discover, evaluate, and con
 
 ---
 
+## Support the Project
+
+Azathoth is developed as an open-source project in public.
+
+If you'd like to support continued development, experiments, documentation, and model evaluation, you can become a patron here:
+
+**https://patreon.com/ErisDiscordiaM**
+
+---
+
 # Motivation
 
 Most AI applications contain dozens of hidden decisions:
