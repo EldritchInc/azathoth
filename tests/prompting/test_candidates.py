@@ -289,3 +289,93 @@ def test_generation_returns_empty_tuple_for_empty_registry() -> None:
     )
 
     assert candidates == ()
+
+
+def test_generated_candidates_have_model_bindings() -> None:
+    candidates = generate_prompt_candidates(
+        specification=create_specification(),
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert len(candidates) == 2
+
+    bindings = tuple(candidate.model_binding for candidate in candidates)
+
+    assert all(binding is not None for binding in bindings)
+    assert tuple(binding.identifier for binding in bindings if binding is not None) == (
+        "provider-a/small",
+        "provider-b/large",
+    )
+
+
+def test_candidate_identity_is_derived_from_specification_and_model() -> None:
+    specification = create_specification()
+
+    candidates = generate_prompt_candidates(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    for candidate in candidates:
+        binding = candidate.model_binding
+
+        assert binding is not None
+        assert candidate.metadata.id == uuid5(
+            specification.metadata.id,
+            binding.identifier,
+        )
+
+
+def test_different_model_bindings_get_distinct_candidate_ids() -> None:
+    candidates = generate_prompt_candidates(
+        specification=create_specification(),
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert len(candidates) == 2
+    assert candidates[0].metadata.id != candidates[1].metadata.id
+
+
+def test_different_specifications_get_distinct_candidate_ids() -> None:
+    first_specification = create_specification()
+    second_specification = first_specification.model_copy(
+        update={
+            "metadata": StrategyMetadata(
+                id=UUID("946d33fd-f74c-45af-b899-405b386d409f"),
+                name=first_specification.metadata.name,
+                description=first_specification.metadata.description,
+                version=first_specification.metadata.version,
+            )
+        }
+    )
+
+    first_candidate = generate_prompt_candidates(
+        specification=first_specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )[0]
+    second_candidate = generate_prompt_candidates(
+        specification=second_specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )[0]
+
+    assert first_candidate.metadata.id != second_candidate.metadata.id
+
+
+def test_generated_candidate_preserves_specification_configuration() -> None:
+    specification = create_specification()
+
+    candidate = generate_prompt_candidates(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )[0]
+
+    assert candidate.prompt == specification.prompt
+    assert candidate.model_requirements == specification.model_requirements
+    assert candidate.metadata.description == specification.metadata.description
+    assert candidate.metadata.version == specification.metadata.version
