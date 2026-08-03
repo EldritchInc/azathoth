@@ -1,7 +1,8 @@
-"""Generate executable prompt strategy candidates from specifications."""
+"""Generate executable prompt strategy candidates."""
 
 from uuid import uuid5
 
+from azathoth.prompting.models import ModelBinding
 from azathoth.prompting.specifications import PromptStrategySpec
 from azathoth.prompting.strategy import PromptStrategy
 from azathoth.providers import (
@@ -17,12 +18,13 @@ def generate_prompt_candidates(
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
 ) -> tuple[PromptStrategy, ...]:
-    """Generate one executable strategy for each eligible available model."""
+    """Generate executable candidates for eligible registered models."""
 
-    query = ModelQuery.from_requirements(
-        specification.model_requirements
+    eligible_models = catalog.find(
+        ModelQuery.from_requirements(
+            specification.model_requirements
+        )
     )
-    eligible_models = catalog.find(query)
 
     candidates: list[PromptStrategy] = []
 
@@ -41,10 +43,7 @@ def generate_prompt_candidates(
                 f"{specification.metadata.name} "
                 f"[{model_metadata.identifier}]"
             ),
-            description=(
-                f"{specification.metadata.description} "
-                f"Executed using {model_metadata.identifier}."
-            ),
+            description=specification.metadata.description,
             version=specification.metadata.version,
         )
 
@@ -54,6 +53,9 @@ def generate_prompt_candidates(
                 prompt=specification.prompt,
                 language_model=language_model,
                 model_requirements=specification.model_requirements,
+                model_binding=ModelBinding(
+                    identifier=model_metadata.identifier,
+                ),
             )
         )
 

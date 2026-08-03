@@ -311,6 +311,56 @@ This separation allows provider integrations, capability discovery, and optimiza
 
 ---
 
+# Candidate Generation
+
+Prompt strategy specifications describe workloads independently of any particular language model.
+
+During optimization, Azathoth combines:
+
+- a prompt strategy specification;
+- model requirements;
+- the model catalog; and
+- the executable model registry
+
+to generate executable strategy candidates.
+
+Each generated candidate:
+
+- is bound to exactly one executable language model;
+- has a deterministic identity derived from the specification and model binding;
+- can be executed, evaluated, and ranked independently.
+
+This allows one workload definition to be expanded into multiple empirical experiments without duplicating configuration.
+
+```text
+Prompt Strategy Specification
+            │
+            ▼
+     Model Requirements
+            │
+            ▼
+       Model Discovery
+            │
+            ▼
+ Executable Model Registry
+            │
+            ▼
+   Candidate Generation
+            │
+            ▼
+ Executable Strategies
+```
+
+Candidate generation intentionally separates workload definition from runtime execution.
+
+The specification describes *what* should be evaluated.
+
+The generated candidates describe *how* that workload will be executed using specific language models.
+
+This separation allows optimization to compare multiple executable strategies while preserving a single immutable workload definition.
+
+---
+
 ## Model Requirements
 
 Before a strategy can be executed, it declares the capabilities it requires from a language model.

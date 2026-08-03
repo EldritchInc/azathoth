@@ -10,6 +10,14 @@ from azathoth.prompting.exceptions import (
 from azathoth.providers import Prompt
 
 
+class ModelBinding(BaseModel):
+    """Identify the catalog model bound to an executable prompt strategy."""
+
+    model_config = ConfigDict(frozen=True)
+
+    identifier: str = Field(min_length=1)
+
+
 class PromptBinding(BaseModel):
     """Bind one prompt variable to a field in the latest matching event."""
 
@@ -57,3 +65,5 @@ class PromptTemplate(BaseModel):
         return Prompt(
             text=self.text.format_map(values),
         )
+
+
