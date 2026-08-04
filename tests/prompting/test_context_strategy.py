@@ -331,3 +331,27 @@ def test_context_strategy_executes_without_model_binding() -> None:
     outcome = asyncio.run(strategy.run(create_context()))
 
     assert outcome.output == "duplicate_charge"
+
+
+def test_context_strategy_renders_prompt_before_execution() -> None:
+    language_model = RecordingLanguageModel(
+        response_text="duplicate_charge",
+    )
+    strategy = create_strategy(
+        language_model=language_model,
+    )
+    context = Context(
+        events=(
+            ContextEvent(
+                event_type="customer.message.received",
+                payload={
+                    "message": "I was charged twice.",
+                },
+                producer="test-suite",
+            ),
+        )
+    )
+
+    asyncio.run(strategy.run(context))
+
+    assert language_model.received_prompt == Prompt(text="Classify: I was charged twice.")
