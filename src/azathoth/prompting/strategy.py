@@ -60,6 +60,9 @@ class PromptStrategy:
         """Execute the prompt and return the model response text."""
 
         response = await self._language_model.complete(self._prompt)
+        
+        if self._model_binding is not None:
+            self._model_binding.validate_response(response)
 
         return StrategyOutcome(
             output=response.text,

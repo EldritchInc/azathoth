@@ -58,6 +58,9 @@ class ContextPromptStrategy:
         prompt = self._template.render(context)
         prompt = self._template.render(context)
         response = await self._language_model.complete(prompt)
+        
+        if self._model_binding is not None:
+            self._model_binding.validate_response(response)
 
         return StrategyOutcome(
             output=response.text,
