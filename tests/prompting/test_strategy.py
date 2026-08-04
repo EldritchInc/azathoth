@@ -3,8 +3,10 @@
 import asyncio
 from uuid import UUID
 
+import pytest
+
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategy
+from azathoth.prompting import ModelBinding, ModelBindingMismatchError, PromptStrategy
 from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
 from azathoth.strategies import Strategy, StrategyMetadata
 
@@ -30,6 +32,23 @@ class RecordingLanguageModel:
             total_tokens=12,
             latency_ms=15,
             estimated_cost_usd=0.0001,
+        )
+
+
+class MismatchedLanguageModel:
+    async def complete(
+        self,
+        prompt: Prompt,
+    ) -> ModelResponse:
+        return ModelResponse(
+            text="wrong",
+            provider="provider-b",
+            model="large",
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+            latency_ms=1,
+            estimated_cost_usd=0,
         )
 
 
@@ -204,3 +223,17 @@ def test_model_requirements_do_not_change_prompt_execution() -> None:
 
     assert model.received_prompt == prompt
     assert outcome.output == "duplicate_charge"
+
+
+def test_prompt_strategy_rejects_mismatched_model_binding() -> None:
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=Prompt(text="Hello"),
+        language_model=MismatchedLanguageModel(),
+        model_binding=ModelBinding(
+            identifier="provider-a/small",
+        ),
+    )
+
+    with pytest.raises(ModelBindingMismatchError):
+        asyncio.run(strategy.run(Context()))

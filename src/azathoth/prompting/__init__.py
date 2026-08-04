@@ -6,6 +6,7 @@ from azathoth.prompting.exceptions import (
     PromptBindingError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
+    ModelBindingMismatchError,
     PromptingError,
 )
 from azathoth.prompting.models import (
@@ -23,6 +24,7 @@ __all__ = [
     "PromptBindingError",
     "PromptBindingEventNotFoundError",
     "PromptBindingFieldNotFoundError",
+    "ModelBindingMismatchError",
     "PromptStrategy",
     "PromptTemplate",
     "PromptingError",

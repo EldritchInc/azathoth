@@ -1,17 +1,14 @@
 """Language-model-backed prompt strategies."""
 
 from azathoth.context import Context
+from azathoth.prompting.execution import execute_prompt
 from azathoth.prompting.models import ModelBinding
 from azathoth.providers import (
     LanguageModel,
     ModelRequirements,
     Prompt,
 )
-from azathoth.strategies import (
-    StrategyExecutionMetrics,
-    StrategyMetadata,
-    StrategyOutcome
-)
+from azathoth.strategies import StrategyMetadata, StrategyOutcome
 
 
 class PromptStrategy:
@@ -43,33 +40,24 @@ class PromptStrategy:
         """Return the rendered prompt executed by this strategy."""
 
         return self._prompt
-    
+
     @property
     def model_requirements(self) -> ModelRequirements | None:
         """Return the requirements declared for the backing model."""
 
         return self._model_requirements
-    
+
     @property
     def model_binding(self) -> ModelBinding | None:
         """Return the catalog model bound to this strategy."""
 
         return self._model_binding
 
-    async def run(self, context: Context) -> StrategyOutcome:
-        """Execute the prompt and return the model response text."""
+    async def run(self, _context: Context) -> StrategyOutcome:
+        """Execute the prompt and return the model response."""
 
-        response = await self._language_model.complete(self._prompt)
-
-        return StrategyOutcome(
-            output=response.text,
-            metrics=StrategyExecutionMetrics(
-                provider=response.provider,
-                model=response.model,
-                prompt_tokens=response.prompt_tokens,
-                completion_tokens=response.completion_tokens,
-                total_tokens=response.total_tokens,
-                latency_ms=response.latency_ms,
-                estimated_cost_usd=response.estimated_cost_usd,
-            ),
+        return await execute_prompt(
+            prompt=self._prompt,
+            language_model=self._language_model,
+            model_binding=self._model_binding,
         )

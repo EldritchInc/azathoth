@@ -15,3 +15,7 @@ class PromptBindingEventNotFoundError(PromptBindingError):
 
 class PromptBindingFieldNotFoundError(PromptBindingError):
     """Raised when a required field is absent from a context event."""
+
+
+class ModelBindingMismatchError(PromptingError):
+    """Raised when a model response conflicts with its configured binding."""

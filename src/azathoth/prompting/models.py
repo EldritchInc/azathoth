@@ -6,8 +6,9 @@ from azathoth.context import Context
 from azathoth.prompting.exceptions import (
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
+    ModelBindingMismatchError,
 )
-from azathoth.providers import Prompt
+from azathoth.providers import ModelResponse, Prompt
 
 
 class ModelBinding(BaseModel):
@@ -16,6 +17,23 @@ class ModelBinding(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     identifier: str = Field(min_length=1)
+
+    def validate_response(
+        self,
+        response: ModelResponse,
+    ) -> None:
+        """Ensure a model response came from the configured model."""
+
+        reported_identifier = (
+            f"{response.provider}/{response.model}"
+        )
+
+        if reported_identifier != self.identifier:
+            raise ModelBindingMismatchError(
+                "Model response identifier "
+                f"{reported_identifier!r} does not match configured "
+                f"binding {self.identifier!r}."
+            )
 
 
 class PromptBinding(BaseModel):
