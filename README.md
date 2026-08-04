@@ -371,6 +371,25 @@ This separation allows optimization to compare multiple executable strategies wh
 
 ---
 
+## Model Binding
+
+Generated prompt strategy candidates are bound to a single executable language model.
+
+Before execution results become optimization evidence, Azathoth verifies that the responding model matches the strategy's configured binding.
+
+This guarantees that execution metrics, evaluation results, and scorecards are always attributed to the correct candidate strategy.
+
+Prompt-backed strategies share a common execution pipeline that performs:
+
+- language model invocation
+- model binding validation
+- execution metric collection
+- strategy outcome construction
+
+This shared implementation keeps prompt execution behavior consistent across different prompt strategy types.
+
+---
+
 ## Model Requirements
 
 Before a strategy can be executed, it declares the capabilities it requires from a language model.

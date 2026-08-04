@@ -1,6 +1,7 @@
 """Context-aware language-model-backed strategies."""
 
 from azathoth.context import Context
+from azathoth.prompting.execution import execute_prompt
 from azathoth.prompting.models import ModelBinding, PromptTemplate
 from azathoth.providers import LanguageModel, ModelRequirements
 from azathoth.strategies import (
@@ -56,18 +57,9 @@ class ContextPromptStrategy:
         """Render and execute the prompt against the supplied context."""
 
         prompt = self._template.render(context)
-        prompt = self._template.render(context)
-        response = await self._language_model.complete(prompt)
 
-        return StrategyOutcome(
-            output=response.text,
-            metrics=StrategyExecutionMetrics(
-                provider=response.provider,
-                model=response.model,
-                prompt_tokens=response.prompt_tokens,
-                completion_tokens=response.completion_tokens,
-                total_tokens=response.total_tokens,
-                latency_ms=response.latency_ms,
-                estimated_cost_usd=response.estimated_cost_usd,
-            ),
+        return await execute_prompt(
+            prompt=prompt,
+            language_model=self._language_model,
+            model_binding=self._model_binding,
         )
