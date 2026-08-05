@@ -15,6 +15,8 @@ from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import WorkflowStepSpecification
 
 STEP_ID = UUID("7f8cc955-8cbf-407e-a902-7d8c8465696b")
+DEPENDENCY_ONE_ID = UUID("aa2ff5c7-ac35-44e2-af83-caf0b88b95c1")
+DEPENDENCY_TWO_ID = UUID("7f496d81-759b-45a3-91cb-f412abf17613")
 
 
 def create_prompt_specification() -> PromptStrategySpec:
@@ -107,3 +109,74 @@ def test_workflow_step_round_trips_through_json() -> None:
     restored = WorkflowStepSpecification.model_validate_json(step.model_dump_json())
 
     assert restored == step
+
+
+def test_workflow_step_defaults_to_no_dependencies() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+    )
+
+    assert step.depends_on == ()
+
+
+def test_workflow_step_records_dependencies() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        depends_on=(
+            DEPENDENCY_ONE_ID,
+            DEPENDENCY_TWO_ID,
+        ),
+    )
+
+    assert step.depends_on == (
+        DEPENDENCY_ONE_ID,
+        DEPENDENCY_TWO_ID,
+    )
+
+
+def test_workflow_step_preserves_dependency_order() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        depends_on=(
+            DEPENDENCY_TWO_ID,
+            DEPENDENCY_ONE_ID,
+        ),
+    )
+
+    assert step.depends_on == (
+        DEPENDENCY_TWO_ID,
+        DEPENDENCY_ONE_ID,
+    )
+
+
+def test_workflow_step_dependencies_round_trip_through_json() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        depends_on=(
+            DEPENDENCY_ONE_ID,
+            DEPENDENCY_TWO_ID,
+        ),
+    )
+
+    restored = WorkflowStepSpecification.model_validate_json(step.model_dump_json())
+
+    assert restored == step
+    assert restored.depends_on == (
+        DEPENDENCY_ONE_ID,
+        DEPENDENCY_TWO_ID,
+    )
+
+
+def test_workflow_step_dependencies_are_immutable() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        depends_on=(DEPENDENCY_ONE_ID,),
+    )
+
+    with pytest.raises(ValidationError):
+        step.depends_on = (DEPENDENCY_TWO_ID,)
