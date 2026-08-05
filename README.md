@@ -1,10 +1,13 @@
 # Azathoth
 
-> An optimization engine for AI workflows that learns which strategies work best for different kinds of problems.
+> An optimization engine for AI workflows that learns which strategies
+> work best through empirical evaluation rather than intuition.
 
 ## Overview
 
-Azathoth is an experimental platform for optimizing AI systems through empirical evaluation rather than intuition.
+Azathoth is an experimental platform for optimizing AI systems by
+separating **specification**, **execution**, **evaluation**, and
+**optimization**.
 
 Instead of asking:
 
@@ -12,86 +15,69 @@ Instead of asking:
 
 Azathoth asks:
 
-> "Given this type of context, what combination of strategies, prompts, models, tools, retrieval, and workflow consistently produces the best outcome?"
+> "Given this kind of problem, which combination of workflows,
+> strategies, prompts, models, tools, retrieval, and evaluation
+> consistently produces the best outcome?"
 
-The goal is to build an optimization engine that can discover, evaluate, and continuously improve AI workflows using real-world examples.
+The project is intentionally built from durable domain models upward so
+every optimization experiment is reproducible, versionable, and
+evidence-backed.
 
----
+------------------------------------------------------------------------
 
 ## Support the Project
 
-Azathoth is developed as an open-source project in public.
+Azathoth is developed in public as an open-source project.
 
-If you'd like to support continued development, experiments, documentation, and model evaluation, you can become a patron here:
+Support ongoing development:
 
 **https://patreon.com/ErisDiscordiaM**
 
----
+------------------------------------------------------------------------
 
 # Motivation
 
-Most AI applications contain dozens of hidden decisions:
+Most AI systems embed important decisions directly into application
+code:
 
-- Which model should answer?
-- Which prompt should be used?
-- Should additional information be retrieved?
-- Should a tool be called instead?
-- Should another question be asked first?
-- Is this a single-step or multi-step problem?
+-   Which model should answer?
+-   Which prompt should be used?
+-   Should retrieval be performed?
+-   Should a tool be called?
+-   Should another question be asked first?
+-   Should this become a multi-step workflow?
 
-These decisions are usually hard-coded by developers.
+These choices are usually based on intuition.
 
-Azathoth attempts to discover them empirically.
+Azathoth treats them as optimization problems.
 
----
-
-# Core Idea
-
-Given:
-
-- a goal
-- example contexts
-- expected outcomes
-- evaluation criteria
-- available models and tools
-
-Azathoth searches for the workflow that produces the best results.
-
-That workflow may include:
-
-- prompt selection
-- model routing
-- retrieval
-- tool execution
-- clarification questions
-- multi-step reasoning
-
-Rather than producing a single "best prompt," Azathoth builds a collection of specialized strategies for different regions of the problem space.
-
----
-
-# MVP Goals
-
-The initial version focuses on:
-
-- Context-aware routing
-- Prompt optimization
-- Model arbitrage
-- Workflow evaluation
-- Strategy selection
-- Continuous regression testing
-
-The MVP intentionally does **not** attempt to build autonomous agents or AGI.
-
----
+------------------------------------------------------------------------
 
 # High-Level Architecture
 
-```text
+``` text
 Optimization Examples
         │
         ▼
-Candidate Strategies
+Workflow Specifications
+        │
+        ▼
+Workflow Step Specifications
+        │
+        ▼
+Prompt Strategy Specifications
+        │
+        ▼
+Model Requirements
+        │
+        ▼
+Model Discovery
+        │
+        ▼
+Candidate Generation
+        │
+        ▼
+Executable Strategies
         │
         ▼
 Strategy Execution
@@ -105,760 +91,290 @@ Optimization Runs
         ▼
 Experiment Runner
         │
-        ├── Strategy A × Every Example
-        ├── Strategy B × Every Example
-        └── Strategy N × Every Example
-                    │
-                    ▼
-            Optimization Runs
-                    │
-                    ▼
-           Strategy Scorecards
-                    │
-                    ▼
-             Strategy Ranker
-                    │
-                    ▼
-            Strategy Ranking
-                    │
-                    ▼
-              Best Candidate
-
-Strategy
-    │
-    ▼
-Model Requirements
-    │
-    ▼
-Model Discovery
-    │
-    ▼
-Context Analysis
-    │
-    ├── Prompt Rendering
-    ├── Model Discovery
-    ├── Tool Execution
-    ├── Retrieval
-    ├── Clarification Questions
-    └── Multi-step Workflow
-    │
-    ▼
-Strategy Outcome
+        ▼
+Strategy Scorecards
+        │
+        ▼
+Strategy Ranking
+        │
+        ▼
+Best Candidate
 ```
 
-The current implementation can execute candidate strategies across a shared
-example set, aggregate their results into evidence-backed scorecards, and rank
-the candidates deterministically.
+The architecture intentionally separates:
 
-The framework now includes immutable optimization examples, event-backed
-context, executable strategies, context-aware prompting, provider
-abstractions, model discovery, deterministic experiment execution, and
-evidence-backed strategy ranking.
+-   durable specifications
+-   runtime execution
+-   evaluation
+-   optimization
 
-Future milestones include model arbitrage, adaptive strategy generation,
-workflow synthesis, and continual learning.
+so each layer can evolve independently.
 
----
+------------------------------------------------------------------------
 
 # Core Domain Model
 
-The foundation of Azathoth is a reproducible optimization example.
+Every optimization example combines:
 
-Every optimization example consists of four core concepts:
+-   Goal
+-   Immutable Context
+-   Expected Outcome
+-   Comparison Method
 
-- **Goal** — What the system is trying to accomplish.
-- **Context** — An immutable, event-backed history describing everything currently known.
-- **Expected Outcome** — The result a successful strategy should produce.
-- **Comparison Method** — How that outcome should later be evaluated.
+These examples are durable, serializable, and replayable.
 
-This representation allows optimization jobs to be serialized, versioned, replayed, and evaluated consistently across different models and workflows.
-
-```python
-from azathoth.context import Context, ContextEvent
-from azathoth.evaluation import ExpectedOutcome, OutcomeComparison
-from azathoth.goals import Goal
-from azathoth.optimization import OptimizationExample
-
-example = OptimizationExample(
-    name="Duplicate billing charge",
-    goal=Goal(
-        name="Classify support requests",
-        description="Identify the correct category for each request.",
-        success_criteria=("The predicted category matches the expected category.",),
-    ),
-    context=Context().append(
-        ContextEvent(
-            event_type="customer.message.received",
-            payload={
-                "message": "I was charged twice for the same purchase.",
-            },
-            producer="example",
-        )
-    ),
-    expected_outcome=ExpectedOutcome(
-        description="The request is classified as a duplicate charge.",
-        value="duplicate_charge",
-        comparison=OutcomeComparison.EXACT,
-    ),
-)
-```
-
-Optimization examples can be serialized and restored without losing their structure.
-
-```python
-serialized = example.model_dump_json()
-restored = OptimizationExample.model_validate_json(serialized)
-
-assert restored == example
-```
-
-A runnable version of this example is included in the repository:
-
-```bash
-python examples/create_optimization_example.py
-```
-
----
-
-## Current Architecture
-
-The current implementation establishes a complete empirical optimization pipeline.
-
-Today, Azathoth can:
-
-- represent optimization examples as immutable domain models;
-- execute deterministic and language-model-backed strategies;
-- render prompts from immutable event-backed context;
-- abstract language model providers behind a common execution interface;
-- describe available models using immutable metadata;
-- declare provider-neutral model requirements for language-model-backed strategies;
-- discover eligible models through immutable catalogs and capability-based queries;
-- evaluate outputs using pluggable evaluators;
-- record complete optimization runs;
-- aggregate runs into evidence-backed strategy scorecards;
-- rank candidate strategies deterministically;
-- record provider, model, token usage, latency, and estimated execution cost;
-- serialize every stage of the optimization pipeline.
-
-Future work will build on this foundation by generating candidate strategies automatically, selecting models empirically from eligible candidates, and optimizing across quality, latency, and cost.
-
----
+------------------------------------------------------------------------
 
 # Context as Shared State
 
-Every workflow step can contribute information.
+Context is immutable and event-backed.
 
-Examples include:
-
-- retrieved documents
-- classifications
-- tool outputs
-- confidence scores
-- extracted entities
-- user responses
-- evaluation results
-
-Rather than mutating shared state, Azathoth records these as immutable context events.
-
-Subsequent workflow steps operate on the accumulated context rather than only the original request.
+Workflow steps append new events rather than mutating shared state.
 
 This provides:
 
-- reproducible executions
-- complete execution traces
-- provenance tracking
-- deterministic replay
-- a foundation for continual optimization
+-   deterministic replay
+-   execution provenance
+-   complete traces
+-   reproducible optimization
 
----
+------------------------------------------------------------------------
 
-# Strategy Optimization
+# Workflow Specifications
 
-Strategies may consist of combinations of:
+Workflows are durable descriptions of work.
 
-- Prompt templates
-- Language models
-- Retrieval steps
-- Tool invocations
-- Clarification questions
-- Multi-step workflows
+They contain:
 
-Each candidate strategy is evaluated against user-defined success criteria.
+-   workflow metadata
+-   ordered workflow step specifications
 
----
+Workflow specifications intentionally contain **no executable language
+models, tools, or runtime state**.
 
-# Model Discovery
+Each workflow step owns its own executable specification.
 
-Before a strategy can be evaluated, Azathoth must determine which language models are capable of executing it.
+This preserves the ability for different workflow steps to use
+different:
 
-Rather than embedding provider-specific logic throughout the system, Azathoth represents available models using immutable metadata.
+-   language models
+-   tools
+-   context requirements
+-   execution policies
 
-Each model records information such as:
+without coupling an entire workflow to a single runtime.
 
-- provider
-- model identifier
-- supported capabilities
-- supported modalities
-- context window
-- output limits
-- pricing information
+------------------------------------------------------------------------
 
-Available models are stored within a `ModelCatalog`.
+# Prompt Strategy Specifications
 
-Optimization components use immutable `ModelQuery` objects to discover the set of eligible candidate models for a workload.
+Prompt strategy specifications describe workloads independently of any
+concrete language model.
 
-Importantly, model discovery and model selection are separate concerns.
+They define:
 
-The catalog answers:
+-   prompt
+-   metadata
+-   model requirements
 
-> "Which models satisfy these requirements?"
+They do not select providers or implementations.
 
-Optimization later answers:
-
-> "Which eligible model consistently performs best for this workload?"
-
-This separation allows provider integrations, capability discovery, and optimization policies to evolve independently.
-
----
-
-# Candidate Generation
-
-Prompt strategy specifications describe workloads independently of any particular language model.
-
-During optimization, Azathoth combines:
-
-- a prompt strategy specification;
-- model requirements;
-- the model catalog; and
-- the executable model registry
-
-to generate executable strategy candidates.
-
-Each generated candidate:
-
-- is bound to exactly one executable language model;
-- has a deterministic identity derived from the specification and model binding;
-- can be executed, evaluated, and ranked independently.
-
-This allows one workload definition to be expanded into multiple empirical experiments without duplicating configuration.
-
-```text
-Prompt Strategy Specification
-            │
-            ▼
-     Model Requirements
-            │
-            ▼
-       Model Discovery
-            │
-            ▼
- Executable Model Registry
-            │
-            ▼
-   Candidate Generation
-            │
-            ▼
- Executable Strategies
-```
-
-Candidate generation intentionally separates workload definition from runtime execution.
-
-The specification describes *what* should be evaluated.
-
-The generated candidates describe *how* that workload will be executed using specific language models.
-
-This separation allows optimization to compare multiple executable strategies while preserving a single immutable workload definition.
-
----
-
-## Model Binding
-
-Generated prompt strategy candidates are bound to a single executable language model.
-
-Before execution results become optimization evidence, Azathoth verifies that the responding model matches the strategy's configured binding.
-
-This guarantees that execution metrics, evaluation results, and scorecards are always attributed to the correct candidate strategy.
-
-Prompt-backed strategies share a common execution pipeline that performs:
-
-- language model invocation
-- model binding validation
-- execution metric collection
-- strategy outcome construction
-
-This shared implementation keeps prompt execution behavior consistent across different prompt strategy types.
-
----
-
-## Model Requirements
-
-Before a strategy can be executed, it declares the capabilities it requires from a language model.
-
-Requirements describe the workload rather than selecting a specific model.
-
-Examples include:
-
-- required capabilities (structured output, tool use, vision)
-- supported input and output modalities
-- minimum context window
-- minimum output size
-- optional pricing constraints
-
-These requirements are intentionally provider-neutral.
-
-```python
-requirements = ModelRequirements(
-    required_capabilities=frozenset(
-        {
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.TOOL_USE,
-        }
-    ),
-    minimum_context_window_tokens=100_000,
-)
-```
-
-Requirements do **not** choose a model.
-
-Instead, they describe the minimum characteristics needed to execute the strategy successfully.
-
----
-
-## Candidate Strategy Generation
-
-Prompt strategy specifications describe **what** work should be performed without selecting a concrete language model.
-
-During optimization, Azathoth combines:
-
-- prompt strategy specifications
-- model requirements
-- model catalog
-- executable model registry
-
-to generate every executable candidate strategy that satisfies the workload requirements.
-
-```text
-Prompt Strategy Specification
-            │
-            ▼
-     Model Requirements
-            │
-            ▼
-        Model Query
-            │
-            ▼
-       Model Catalog
-            │
-            ▼
-Executable Model Registry
-            │
-            ▼
-Generated Prompt Strategies
-```
-
-Each generated strategy is then evaluated empirically rather than selected through heuristics.
-
-This separation allows workload definition, model discovery, execution, and optimization to evolve independently.
-
----
+------------------------------------------------------------------------
 
 # Model Requirements
 
-Strategies declare the capabilities they require from a language model without selecting a specific implementation.
-
-Model requirements describe the workload rather than the provider.
+Model requirements describe the workload, not the provider.
 
 Examples include:
 
-- required capabilities;
-- supported input and output modalities;
-- minimum context window;
-- minimum output size;
-- optional pricing constraints.
+-   required capabilities
+-   supported modalities
+-   minimum context window
+-   minimum output size
+-   optional pricing constraints
 
-```python
-requirements = ModelRequirements(
-    required_capabilities=frozenset(
-        {
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.TOOL_USE,
-        }
-    ),
-    minimum_context_window_tokens=100_000,
-)
-```
+Requirements remain provider-neutral.
 
-Requirements intentionally do not identify a specific model.
+------------------------------------------------------------------------
 
-Instead, they describe the minimum characteristics needed to execute the strategy successfully.
+# Model Discovery
 
-A `ModelQuery` can then be derived from those requirements to discover every eligible model within a `ModelCatalog`.
+Model requirements are converted into queries against a model catalog.
 
-```text
-Strategy
-      │
-      ▼
-Model Requirements
-      │
-      ▼
-Model Query
-      │
-      ▼
-Model Catalog
-      │
-      ▼
-Eligible Models
-```
+The catalog answers:
 
-Empirical optimization later determines which eligible model performs best for a given workload.
+> Which models are capable of executing this workload?
 
-This separation allows workload definitions, provider integrations, and optimization policies to evolve independently.
+Selection happens later through empirical optimization.
 
----
+------------------------------------------------------------------------
 
-## Strategy execution
+# Candidate Generation
 
-Azathoth strategies operate against immutable, event-backed context.
+Candidate generation combines:
 
-The execution engine records lifecycle events consistently around every
-strategy:
+-   prompt strategy specifications
+-   model requirements
+-   model catalog
+-   executable model registry
 
-```text
-context
-   |
-   v
-strategy.execution.started
-   |
-   v
-strategy output and domain events
-   |
-   v
-strategy.execution.completed
-```
+to produce executable prompt strategies.
 
-A strategy only implements its domain behavior. The executor is responsible for
-recording when and how that behavior ran.
+Each generated candidate has:
 
-```python
-import asyncio
+-   deterministic identity
+-   explicit model binding
+-   independent execution evidence
 
-from azathoth.context import Context, ContextEvent
-from azathoth.execution import StrategyExecutor
-from azathoth.strategies import EventFieldStrategy, StrategyMetadata
+------------------------------------------------------------------------
 
-context = Context().append(
-    ContextEvent(
-        event_type="customer.message.received",
-        payload={"message": "I was charged twice."},
-        producer="example",
-    )
-)
+# Model Binding
 
-strategy = EventFieldStrategy(
-    metadata=StrategyMetadata(
-        name="Extract customer message",
-        description="Extract the latest customer support message.",
-    ),
-    event_type="customer.message.received",
-    field_name="message",
-    output_event_type="customer.message.extracted",
-)
+Generated candidates are permanently bound to a single executable model.
 
-result = asyncio.run(StrategyExecutor().execute(strategy, context))
+During execution Azathoth validates that the responding model matches
+the configured binding before accepting execution evidence.
 
-assert result.output == "I was charged twice."
-assert result.initial_context == context
-assert result.final_context is not context
-```
+This guarantees that scorecards and optimization results are always
+attributed to the correct executable strategy.
 
-Run the complete example:
+------------------------------------------------------------------------
 
-```bash
-python examples/execute_strategy.py
-```
+# Strategy Execution
 
----
+Prompt-backed strategies share a common execution pipeline:
+
+1.  invoke language model
+2.  validate model binding
+3.  collect execution metrics
+4.  construct strategy outcome
+
+Execution remains provider-neutral.
+
+------------------------------------------------------------------------
 
 # Execution Metrics
 
-Every language model invocation produces operational evidence in addition to its output.
+Every execution records immutable operational evidence including:
 
-Execution metrics currently include:
+-   provider
+-   model
+-   token usage
+-   latency
+-   estimated cost
 
-- provider
-- model
-- token usage
-- latency
-- estimated execution cost
+These metrics become optimization evidence.
 
-These measurements are propagated through strategy execution into the optimization pipeline.
+------------------------------------------------------------------------
 
-This allows future optimization objectives to balance multiple competing concerns, including:
+# Experiments
 
-- quality
-- latency
-- cost
-- reliability
-
-Rather than optimizing solely for correctness, Azathoth is designed to optimize across multiple measurable dimensions.
-
----
-
-## Prompt Strategies
-
-Azathoth treats prompts as executable strategies rather than static strings.
-
-A prompt strategy consists of:
-
-- a prompt template;
-- structured bindings into immutable context;
-- optional model requirements;
-- a language model abstraction.
-
-Today, prompt strategies execute against a concrete language model while optionally declaring provider-neutral model requirements.
-
-Future optimization components will use these requirements to discover eligible models automatically before empirical evaluation determines the most effective candidate.
-
-At execution time the strategy renders a prompt from the current context before executing it through a provider-neutral language model interface.
-
-```text
-Context
-    │
-    ▼
-Prompt Template
-    │
-    ▼
-Rendered Prompt
-    │
-    ▼
-Language Model
-    │
-    ▼
-Strategy Output
-```
-
-This separation allows prompt rendering, provider selection, evaluation, and optimization to evolve independently.
-
----
-
-## Language Model Abstractions
-
-Azathoth intentionally separates optimization from model providers.
-
-Every language model implements a common interface regardless of the underlying vendor.
-
-Current execution records include:
-
-- provider;
-- model;
-- prompt token count;
-- completion token count;
-- total token count;
-- execution latency;
-- estimated execution cost.
-
-These measurements become immutable execution evidence that future optimization algorithms can use to balance quality, latency, and cost.
-
----
-
-## Experiments and strategy ranking
-
-Azathoth can run multiple candidate strategies against the same collection of
+Experiments execute many candidate strategies across the same
 optimization examples.
 
-```python
-scorecards = await ExperimentRunner().run(
-    examples=examples,
-    strategies=strategies,
-    evaluator=evaluator,
-)
+Each execution produces an OptimizationRun.
 
-ranking = StrategyRanker().rank(scorecards)
+Runs aggregate into StrategyScorecards.
 
-winner = ranking.winner
-```
+Scorecards are ranked deterministically.
 
-For each strategy, the experiment runner produces a `StrategyScorecard`
-containing every underlying optimization run.
+Execution, evaluation, and ranking remain separate architectural
+concerns.
 
-Scorecards derive their aggregate metrics directly from that evidence:
-
-- run count;
-- passed count;
-- pass rate;
-- mean evaluation score.
-
-The initial ranker uses a deterministic policy that prioritizes pass rate and
-mean evaluation score. Experiment execution and ranking are intentionally
-separate so future applications can introduce different optimization
-objectives without rerunning the experiment.
-
-# Information Acquisition
-
-Sometimes the best next action is not answering the question.
-
-Instead, the system may determine that acquiring one additional piece of information significantly improves expected performance.
-
-Information may come from:
-
-- the user
-- retrieval
-- external systems
-- classifiers
-- tools
-- previous workflow outputs
-
-Future versions may learn when acquiring information is worth the additional cost.
-
----
+------------------------------------------------------------------------
 
 # Evaluation
 
-Evaluation is a first-class component.
+Evaluators are pluggable.
 
-Possible evaluators include:
+Potential evaluators include:
 
-- exact matches
-- structured output validation
-- classifier scores
-- LLM judges
-- human review
+-   exact match
+-   structured validation
+-   classifier scoring
+-   LLM judges
+-   human review
 
-Multiple evaluators can be combined into a single optimization objective.
+Each evaluation produces immutable evidence.
 
-Each evaluation produces an immutable `EvaluationResult` containing:
+------------------------------------------------------------------------
 
-- evaluator identity
-- evaluator version
-- score
-- pass/fail status
-- supporting evidence
+# Current Implementation
 
-Evaluation results become part of an `OptimizationRun`, allowing executions to be reproduced, audited, and compared over time.
+Current capabilities include:
 
----
+-   immutable optimization examples
+-   immutable event-backed context
+-   workflow specifications
+-   workflow step specifications
+-   prompt strategy specifications
+-   provider-neutral model requirements
+-   capability-based model discovery
+-   deterministic candidate generation
+-   validated model binding
+-   shared prompt execution
+-   asynchronous strategy execution
+-   pluggable evaluators
+-   optimization runs
+-   experiment execution
+-   strategy scorecards
+-   deterministic ranking
+-   comprehensive tests
+-   strict typing
+-   continuous integration
 
-# Optimization Objectives
-
-Strategies can be optimized across one or more objectives including:
-
-- Quality
-- Accuracy
-- Cost
-- Latency
-- Reliability
-- Complexity
-- Token usage
-- Provider selection
-
-Different applications may prioritize different tradeoffs.
-
-The optimization objective remains separate from experiment execution, allowing the same evidence to support multiple optimization policies.
-
----
-
-# Learning
-
-Every workflow execution produces evidence.
-
-Successful strategies become reusable.
-
-Failures become regression tests.
-
-The objective is for the system to improve over time through empirical measurement rather than manual tuning.
-
----
+------------------------------------------------------------------------
 
 # Long-Term Direction
 
-The current project focuses on workflow optimization.
+Planned work includes:
 
-Possible future research areas include:
+-   provider integrations
+-   workflow candidate generation
+-   workflow orchestration
+-   adaptive model selection
+-   cost-aware optimization
+-   richer evaluation
+-   automatic strategy generation
+-   continual learning
 
-- adaptive context modeling
-- automatic workflow discovery
-- adaptive model selection;
-- hierarchical planning
-- persistent episodic memory
-- continual learning
-- autonomous tool creation
-- long-running goals
-
-These are intentionally outside the scope of the MVP.
-
----
-
-# Technology
-
-Current architecture:
-
-- Python
-- Pydantic
-- AsyncIO
-- pytest
-- mypy
-- Ruff
-- GitHub Actions
-
-Planned integrations:
-
-- LiteLLM
-- FastAPI
-- PostgreSQL
-- Promptfoo
-- Braintrust
-- LangSmith
-- DSPy
-
-The goal is to integrate existing tooling rather than recreate it.
-
----
-
-# Current Status
-
-Azathoth now has a working empirical strategy-comparison pipeline.
-
-Implemented capabilities include:
-
-- immutable goals and optimization examples;
-- immutable, event-backed context;
-- asynchronous executable strategies;
-- traceable strategy execution;
-- prompt-backed and context-aware prompt strategies;
-- provider abstractions and execution metrics;
-- immutable model metadata, provider-neutral requirements, and capability-based discovery;
-- pluggable evaluators;
-- durable optimization runs;
-- experiments across multiple strategies and examples;
-- evidence-backed strategy scorecards;
-- deterministic candidate ranking;
-- end-to-end integration coverage;
-- strict type checking, automated tests, ADRs, and continuous integration.
-
-The next milestones include:
-
-- provider integrations;
-- automatic strategy generation;
-- cost-aware model arbitrage;
-- optimization across quality, latency, and cost;
-- richer evaluation methods;
-- workflow optimization across multiple execution steps.
-
-The current architecture intentionally separates execution, evaluation, experimentation, provider discovery, and optimization so these capabilities can be added incrementally.
-
----
+------------------------------------------------------------------------
 
 # Guiding Principles
 
-- Optimize with evidence, not intuition.
-- Treat prompts as one strategy among many.
-- Keep context structured, immutable, and reproducible.
-- Separate optimization from execution.
-- Make every evaluation reproducible.
-- Learn from both success and failure.
-- Prefer modular components over framework lock-in.
+-   Optimize with evidence, not intuition.
+-   Separate specification from execution.
+-   Keep context immutable and reproducible.
+-   Keep providers behind abstractions.
+-   Treat prompts as one strategy among many.
+-   Allow different workflow steps to use different models and tools.
+-   Make optimization reproducible.
 
----
+------------------------------------------------------------------------
+
+# Technology
+
+Current:
+
+-   Python
+-   Pydantic
+-   AsyncIO
+-   pytest
+-   mypy
+-   Ruff
+-   GitHub Actions
+
+Planned:
+
+-   LiteLLM
+-   FastAPI
+-   PostgreSQL
+-   Promptfoo
+-   Braintrust
+-   LangSmith
+-   DSPy
+
+------------------------------------------------------------------------
 
 # License
 
