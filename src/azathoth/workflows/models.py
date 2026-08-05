@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from azathoth.workflows.steps import WorkflowStepSpecification
+
 
 class WorkflowMetadata(BaseModel):
     """Stable identifying information for a workflow specification."""
@@ -22,4 +24,4 @@ class WorkflowSpecification(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     metadata: WorkflowMetadata
-    step_ids: tuple[UUID, ...]
+    steps: tuple[WorkflowStepSpecification, ...]
