@@ -140,13 +140,58 @@ def test_workflow_specification_round_trips_through_json() -> None:
     assert restored == workflow
 
 
-def test_workflow_specification_can_be_created_before_steps_are_defined() -> None:
-    workflow = WorkflowSpecification(
-        metadata=WorkflowMetadata(
-            name="Draft workflow",
-            description="A workflow whose steps have not yet been defined.",
-        ),
-        steps=(),
+def test_workflow_specification_requires_at_least_one_step() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowSpecification(
+            metadata=WorkflowMetadata(
+                name="Empty workflow",
+                description="A workflow without any steps.",
+            ),
+            steps=(),
+        )
+
+
+def test_workflow_specification_rejects_duplicate_step_ids() -> None:
+    duplicate_step = create_step(
+        step_id=STEP_ONE_ID,
+        name="Classification",
     )
 
-    assert workflow.steps == ()
+    with pytest.raises(
+        ValidationError,
+        match="Workflow step identifiers must be unique",
+    ):
+        WorkflowSpecification(
+            metadata=WorkflowMetadata(
+                name="Invalid workflow",
+                description="A workflow containing duplicate step identifiers.",
+            ),
+            steps=(
+                duplicate_step,
+                duplicate_step.model_copy(),
+            ),
+        )
+
+
+def test_workflow_specification_accepts_distinct_step_ids() -> None:
+    workflow = WorkflowSpecification(
+        metadata=WorkflowMetadata(
+            name="Valid workflow",
+            description="A workflow containing distinct step identifiers.",
+        ),
+        steps=(
+            create_step(
+                step_id=STEP_ONE_ID,
+                name="Classification",
+            ),
+            create_step(
+                step_id=STEP_TWO_ID,
+                name="Response",
+            ),
+        ),
+    )
+
+    assert tuple(step.id for step in workflow.steps) == (
+        STEP_ONE_ID,
+        STEP_TWO_ID,
+    )

@@ -1,8 +1,9 @@
 """Domain models describing model-independent workflows."""
 
+from typing import Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from azathoth.workflows.steps import WorkflowStepSpecification
 
@@ -24,4 +25,18 @@ class WorkflowSpecification(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     metadata: WorkflowMetadata
-    steps: tuple[WorkflowStepSpecification, ...]
+
+    steps: tuple[WorkflowStepSpecification, ...] = Field(
+        min_length=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_step_ids(self) -> Self:
+        """Ensure every workflow step has a unique identifier."""
+
+        step_ids = tuple(step.id for step in self.steps)
+
+        if len(step_ids) != len(set(step_ids)):
+            raise ValueError("Workflow step identifiers must be unique.")
+
+        return self
