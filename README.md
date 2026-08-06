@@ -142,27 +142,78 @@ This provides:
 
 # Workflow Specifications
 
-Workflows are durable descriptions of work.
+Azathoth represents workflows as durable dependency graphs.
 
-They contain:
+A workflow describes *what* work should be performed without embedding runtime execution concerns.
 
--   workflow metadata
--   ordered workflow step specifications
+Each workflow consists of:
 
-Workflow specifications intentionally contain **no executable language
-models, tools, or runtime state**.
+- workflow metadata;
+- workflow step specifications; and
+- explicit dependency relationships between workflow steps.
+
+```text
+Workflow
+      │
+      ▼
+ Step A
+  │   │
+  ▼   ▼
+Step B Step C
+   \   /
+    ▼ ▼
+   Step D
+```
 
 Each workflow step owns its own executable specification.
 
-This preserves the ability for different workflow steps to use
-different:
+Today that specification is a prompt strategy specification.
 
--   language models
--   tools
--   context requirements
--   execution policies
+Future workflow step types may include:
 
-without coupling an entire workflow to a single runtime.
+- prompt strategies;
+- retrieval;
+- tool invocation;
+- deterministic computation;
+- conditional routing; and
+- human review.
+
+Importantly, execution requirements remain **step-scoped**.
+
+Different workflow steps may require different:
+
+- language models;
+- context windows;
+- model capabilities;
+- execution policies; and
+- tools.
+
+Workflow specifications intentionally contain no executable language models, runtime schedulers, or execution state.
+
+## Dependency Planning
+
+Workflow specifications expose deterministic execution layers.
+
+Each layer contains workflow steps whose dependencies have already been satisfied.
+
+```text
+Layer 1
+──────────────
+Classify Request
+Detect Question
+
+Layer 2
+──────────────
+Retrieve Documents
+
+Layer 3
+──────────────
+Reason About Answer
+```
+
+Execution layers preserve declared workflow order while exposing opportunities for future parallel execution.
+
+This separation allows workflow definitions to remain durable, serializable, and provider-neutral while providing a stable foundation for future workflow execution and optimization.
 
 ------------------------------------------------------------------------
 
