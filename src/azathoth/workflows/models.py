@@ -83,3 +83,30 @@ class WorkflowSpecification(BaseModel):
             visit(step.id)
 
         return self
+
+    def execution_layers(
+        self,
+    ) -> tuple[tuple[WorkflowStepSpecification, ...], ...]:
+        """Return dependency-safe workflow steps grouped into layers."""
+
+        remaining = list(self.steps)
+        completed_ids: set[UUID] = set()
+        layers: list[tuple[WorkflowStepSpecification, ...]] = []
+
+        while remaining:
+            ready = tuple(
+                step for step in remaining if set(step.depends_on).issubset(completed_ids)
+            )
+
+            if not ready:
+                raise RuntimeError(
+                    "Validated workflow dependency graph could not produce an execution layer."
+                )
+
+            layers.append(ready)
+
+            ready_ids = {step.id for step in ready}
+            completed_ids.update(ready_ids)
+            remaining = [step for step in remaining if step.id not in ready_ids]
+
+        return tuple(layers)
