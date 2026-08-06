@@ -25,7 +25,6 @@ class WorkflowSpecification(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     metadata: WorkflowMetadata
-
     steps: tuple[WorkflowStepSpecification, ...] = Field(
         min_length=1,
     )
@@ -38,5 +37,49 @@ class WorkflowSpecification(BaseModel):
 
         if len(step_ids) != len(set(step_ids)):
             raise ValueError("Workflow step identifiers must be unique.")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_dependency_graph(self) -> Self:
+        """Ensure workflow dependencies form a valid directed acyclic graph."""
+
+        steps_by_id = {step.id: step for step in self.steps}
+
+        for step in self.steps:
+            if len(step.depends_on) != len(set(step.depends_on)):
+                raise ValueError("Workflow step dependencies must be unique.")
+
+            if step.id in step.depends_on:
+                raise ValueError("Workflow steps cannot depend on themselves.")
+
+            for dependency_id in step.depends_on:
+                if dependency_id not in steps_by_id:
+                    raise ValueError(
+                        "Workflow step dependencies must reference steps in the same workflow."
+                    )
+
+        visiting: set[UUID] = set()
+        visited: set[UUID] = set()
+
+        def visit(step_id: UUID) -> None:
+            """Visit one workflow step while detecting dependency cycles."""
+
+            if step_id in visited:
+                return
+
+            if step_id in visiting:
+                raise ValueError("Workflow dependency graph must be acyclic.")
+
+            visiting.add(step_id)
+
+            for dependency_id in steps_by_id[step_id].depends_on:
+                visit(dependency_id)
+
+            visiting.remove(step_id)
+            visited.add(step_id)
+
+        for step in self.steps:
+            visit(step.id)
 
         return self
