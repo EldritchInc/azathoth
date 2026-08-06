@@ -8,10 +8,10 @@ from azathoth.prompting import PromptStrategySpec
 
 
 class WorkflowStepSpecification(BaseModel):
-    """Describe one step of a workflow."""
+    """Describe one independently configured step of a workflow."""
 
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
-
     specification: PromptStrategySpec
+    depends_on: tuple[UUID, ...] = ()
