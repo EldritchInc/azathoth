@@ -1,15 +1,12 @@
 """Tests for generating executable workflow candidates."""
 
 import asyncio
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import pytest
 
 from azathoth.context import Context
-from azathoth.prompting import (
-    PromptStrategy,
-    PromptStrategySpec,
-)
+from azathoth.prompting import PromptStrategy, PromptStrategySpec
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCapability,
@@ -19,11 +16,9 @@ from azathoth.providers import (
     ModelResponse,
     Prompt,
 )
-from azathoth.strategies import (
-    Strategy,
-    StrategyMetadata,
-)
+from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
+    WorkflowCandidate,
     WorkflowGenerationError,
     WorkflowMetadata,
     WorkflowSpecification,
@@ -31,15 +26,17 @@ from azathoth.workflows import (
     generate_workflow_candidate,
 )
 
-WORKFLOW_ID = UUID("6cecbfd6-2783-41d7-b868-a5ead037aeb2")
-CLASSIFICATION_STEP_ID = UUID("39e169cf-00a6-4728-bc97-ce1d95021470")
-REASONING_STEP_ID = UUID("b4ae6fa8-09df-41a7-94e6-c3eb94ad66a7")
-CLASSIFICATION_STRATEGY_ID = UUID("20cf4513-4206-413c-a377-d7c6c73d97c2")
-REASONING_STRATEGY_ID = UUID("efcc83d6-73e6-4d43-b00a-ccf73eac9297")
+WORKFLOW_ID = UUID("0dd90e7c-0fd2-4994-84fd-14dc1ac2f63d")
+
+CLASSIFICATION_STEP_ID = UUID("23546067-3fc4-47b4-95c4-2531c1f74db8")
+REASONING_STEP_ID = UUID("cc9de32b-58ea-4a5b-bf17-16d9524298e6")
+
+CLASSIFICATION_STRATEGY_ID = UUID("7f578d78-54bc-4dd1-a9fa-082bb5e0f1a7")
+REASONING_STRATEGY_ID = UUID("c8c79156-2b38-4438-98c6-d9b421844e6e")
 
 
 class StubLanguageModel:
-    """A deterministic language model with configured identity and output."""
+    """A deterministic executable language model."""
 
     def __init__(
         self,
@@ -53,7 +50,10 @@ class StubLanguageModel:
         self._response_text = response_text
         self.received_prompt: Prompt | None = None
 
-    async def complete(self, prompt: Prompt) -> ModelResponse:
+    async def complete(
+        self,
+        prompt: Prompt,
+    ) -> ModelResponse:
         """Record the prompt and return a deterministic response."""
 
         self.received_prompt = prompt
@@ -70,16 +70,6 @@ class StubLanguageModel:
         )
 
 
-def require_prompt_strategy(
-    strategy: Strategy,
-) -> PromptStrategy:
-    """Narrow a generic workflow strategy to a prompt strategy."""
-
-    assert isinstance(strategy, PromptStrategy)
-
-    return strategy
-
-
 def create_classification_step() -> WorkflowStepSpecification:
     """Create a structured-output classification step."""
 
@@ -89,11 +79,11 @@ def create_classification_step() -> WorkflowStepSpecification:
             metadata=StrategyMetadata(
                 id=CLASSIFICATION_STRATEGY_ID,
                 name="Classify request",
-                description="Classify the supplied support request.",
+                description="Determine the category of the request.",
                 version="1.0.0",
             ),
             prompt=Prompt(
-                text="Classify the supplied support request.",
+                text="Classify the supplied request.",
             ),
             model_requirements=ModelRequirements(
                 required_capabilities=frozenset(
@@ -117,11 +107,11 @@ def create_reasoning_step() -> WorkflowStepSpecification:
             metadata=StrategyMetadata(
                 id=REASONING_STRATEGY_ID,
                 name="Reason about request",
-                description="Reason about the request using tools when needed.",
+                description="Reason about the classified request.",
                 version="1.0.0",
             ),
             prompt=Prompt(
-                text="Reason about the request and use tools when needed.",
+                text="Reason about the classified request.",
             ),
             model_requirements=ModelRequirements(
                 required_capabilities=frozenset(
@@ -129,20 +119,20 @@ def create_reasoning_step() -> WorkflowStepSpecification:
                         ModelCapability.TOOL_USE,
                     }
                 ),
-                minimum_context_window_tokens=128_000,
+                minimum_context_window_tokens=64_000,
             ),
         ),
     )
 
 
-def create_workflow() -> WorkflowSpecification:
-    """Create a deterministic workflow specification."""
+def create_workflow_specification() -> WorkflowSpecification:
+    """Create a deterministic two-step workflow specification."""
 
     return WorkflowSpecification(
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
-            name="Classify and resolve request",
-            description=("Classify a request before running a tool-capable reasoning step."),
+            name="Classify and reason",
+            description=("Classify a request before reasoning about the result."),
             version="1.0.0",
         ),
         steps=(
@@ -153,7 +143,7 @@ def create_workflow() -> WorkflowSpecification:
 
 
 def create_catalog() -> ModelCatalog:
-    """Create a catalog with independently eligible step models."""
+    """Create models suitable for different workflow steps."""
 
     return ModelCatalog(
         models=(
@@ -166,7 +156,7 @@ def create_catalog() -> ModelCatalog:
                         ModelCapability.STRUCTURED_OUTPUT,
                     }
                 ),
-                context_window_tokens=64_000,
+                context_window_tokens=32_000,
             ),
             ModelMetadata(
                 provider="provider-b",
@@ -174,16 +164,17 @@ def create_catalog() -> ModelCatalog:
                 display_name="Provider B Reasoner",
                 capabilities=frozenset(
                     {
+                        ModelCapability.STRUCTURED_OUTPUT,
                         ModelCapability.TOOL_USE,
                     }
                 ),
-                context_window_tokens=200_000,
+                context_window_tokens=128_000,
             ),
             ModelMetadata(
                 provider="provider-c",
-                model="general",
-                display_name="Provider C General",
-                context_window_tokens=200_000,
+                model="basic",
+                display_name="Provider C Basic",
+                context_window_tokens=128_000,
             ),
         )
     )
@@ -197,24 +188,34 @@ def create_registry() -> LanguageModelRegistry:
             "provider-a/classifier": StubLanguageModel(
                 provider="provider-a",
                 model="classifier",
-                response_text="classification-result",
+                response_text="billing",
             ),
             "provider-b/reasoner": StubLanguageModel(
                 provider="provider-b",
                 model="reasoner",
-                response_text="reasoning-result",
+                response_text="resolved",
             ),
-            "provider-c/general": StubLanguageModel(
+            "provider-c/basic": StubLanguageModel(
                 provider="provider-c",
-                model="general",
-                response_text="general-result",
+                model="basic",
+                response_text="unused",
             ),
         }
     )
 
 
-def test_generate_workflow_candidate_preserves_workflow_metadata() -> None:
-    specification = create_workflow()
+def generate_candidate() -> WorkflowCandidate:
+    """Generate the standard deterministic workflow candidate."""
+
+    return generate_workflow_candidate(
+        specification=create_workflow_specification(),
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+
+def test_generation_preserves_workflow_metadata() -> None:
+    specification = create_workflow_specification()
 
     candidate = generate_workflow_candidate(
         specification=specification,
@@ -225,12 +226,10 @@ def test_generate_workflow_candidate_preserves_workflow_metadata() -> None:
     assert candidate.metadata == specification.metadata
 
 
-def test_generate_workflow_candidate_preserves_step_order() -> None:
-    candidate = generate_workflow_candidate(
-        specification=create_workflow(),
-        catalog=create_catalog(),
-        registry=create_registry(),
-    )
+def test_generation_preserves_workflow_step_order() -> None:
+    candidate = generate_candidate()
+
+    assert len(candidate.steps) == 2
 
     assert tuple(step.metadata.name for step in candidate.steps) == (
         "Classify request [provider-a/classifier]",
@@ -238,18 +237,45 @@ def test_generate_workflow_candidate_preserves_step_order() -> None:
     )
 
 
-def test_generate_workflow_candidate_binds_each_step_independently() -> None:
+def test_generation_produces_prompt_strategy_steps() -> None:
+    candidate = generate_candidate()
+
+    assert all(isinstance(step, PromptStrategy) for step in candidate.steps)
+
+
+def test_generation_preserves_step_scoped_model_requirements() -> None:
+    specification = create_workflow_specification()
     candidate = generate_workflow_candidate(
-        specification=create_workflow(),
+        specification=specification,
         catalog=create_catalog(),
         registry=create_registry(),
     )
 
-    classification_step = require_prompt_strategy(candidate.steps[0])
-    reasoning_step = require_prompt_strategy(candidate.steps[1])
+    classification = candidate.steps[0]
+    reasoning = candidate.steps[1]
 
-    classification_binding = classification_step.model_binding
-    reasoning_binding = reasoning_step.model_binding
+    assert isinstance(classification, PromptStrategy)
+    assert isinstance(reasoning, PromptStrategy)
+
+    assert (
+        classification.model_requirements == specification.steps[0].specification.model_requirements
+    )
+    assert reasoning.model_requirements == specification.steps[1].specification.model_requirements
+
+    assert classification.model_requirements != reasoning.model_requirements
+
+
+def test_generation_preserves_step_scoped_model_bindings() -> None:
+    candidate = generate_candidate()
+
+    classification = candidate.steps[0]
+    reasoning = candidate.steps[1]
+
+    assert isinstance(classification, PromptStrategy)
+    assert isinstance(reasoning, PromptStrategy)
+
+    classification_binding = classification.model_binding
+    reasoning_binding = reasoning.model_binding
 
     assert classification_binding is not None
     assert reasoning_binding is not None
@@ -257,40 +283,41 @@ def test_generate_workflow_candidate_binds_each_step_independently() -> None:
     assert classification_binding.identifier == "provider-a/classifier"
     assert reasoning_binding.identifier == "provider-b/reasoner"
 
+    assert classification_binding != reasoning_binding
 
-def test_generate_workflow_candidate_preserves_step_requirements() -> None:
-    specification = create_workflow()
 
-    candidate = generate_workflow_candidate(
-        specification=specification,
-        catalog=create_catalog(),
-        registry=create_registry(),
+def test_generation_derives_deterministic_step_identities() -> None:
+    first = generate_candidate()
+    second = generate_candidate()
+
+    assert tuple(step.metadata.id for step in first.steps) == tuple(
+        step.metadata.id for step in second.steps
     )
 
-    classification_step = require_prompt_strategy(candidate.steps[0])
-    reasoning_step = require_prompt_strategy(candidate.steps[1])
-
-    assert (
-        classification_step.model_requirements
-        == specification.steps[0].specification.model_requirements
+    assert first.steps[0].metadata.id == uuid5(
+        CLASSIFICATION_STRATEGY_ID,
+        "provider-a/classifier",
     )
-    assert (
-        reasoning_step.model_requirements == specification.steps[1].specification.model_requirements
+    assert first.steps[1].metadata.id == uuid5(
+        REASONING_STRATEGY_ID,
+        "provider-b/reasoner",
     )
 
 
-def test_generated_workflow_steps_are_executable() -> None:
-    candidate = generate_workflow_candidate(
-        specification=create_workflow(),
-        catalog=create_catalog(),
-        registry=create_registry(),
-    )
+def test_generated_steps_have_distinct_identities() -> None:
+    candidate = generate_candidate()
+
+    assert candidate.steps[0].metadata.id != candidate.steps[1].metadata.id
+
+
+def test_generated_steps_are_executable() -> None:
+    candidate = generate_candidate()
 
     outcomes = tuple(asyncio.run(step.run(Context())) for step in candidate.steps)
 
     assert tuple(outcome.output for outcome in outcomes) == (
-        "classification-result",
-        "reasoning-result",
+        "billing",
+        "resolved",
     )
 
     assert outcomes[0].metrics is not None
@@ -302,192 +329,59 @@ def test_generated_workflow_steps_are_executable() -> None:
     assert outcomes[1].metrics.model == "reasoner"
 
 
-def test_workflow_candidate_generation_is_deterministic() -> None:
-    specification = create_workflow()
+def test_generated_step_metrics_match_model_bindings() -> None:
+    candidate = generate_candidate()
 
-    first = generate_workflow_candidate(
-        specification=specification,
-        catalog=create_catalog(),
-        registry=create_registry(),
-    )
-    second = generate_workflow_candidate(
-        specification=specification,
-        catalog=create_catalog(),
-        registry=create_registry(),
-    )
+    for step in candidate.steps:
+        assert isinstance(step, PromptStrategy)
 
-    first_prompt_steps = tuple(require_prompt_strategy(step) for step in first.steps)
-    second_prompt_steps = tuple(require_prompt_strategy(step) for step in second.steps)
+        outcome = asyncio.run(step.run(Context()))
+        binding = step.model_binding
+        metrics = outcome.metrics
+
+        assert binding is not None
+        assert metrics is not None
+
+        assert binding.identifier == (f"{metrics.provider}/{metrics.model}")
+
+
+def test_generation_is_deterministic() -> None:
+    first = generate_candidate()
+    second = generate_candidate()
 
     assert first.metadata == second.metadata
-    assert tuple(step.metadata.id for step in first.steps) == tuple(
-        step.metadata.id for step in second.steps
-    )
-    assert tuple(step.model_binding for step in first_prompt_steps) == tuple(
-        step.model_binding for step in second_prompt_steps
+
+    assert tuple(step.metadata for step in first.steps) == tuple(
+        step.metadata for step in second.steps
     )
 
-
-def test_generation_selects_first_eligible_executable_model() -> None:
-    catalog = ModelCatalog(
-        models=(
-            ModelMetadata(
-                provider="provider-a",
-                model="classifier",
-                display_name="Provider A Classifier",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                context_window_tokens=64_000,
-            ),
-            ModelMetadata(
-                provider="provider-d",
-                model="classifier",
-                display_name="Provider D Classifier",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                context_window_tokens=64_000,
-            ),
-            ModelMetadata(
-                provider="provider-b",
-                model="reasoner",
-                display_name="Provider B Reasoner",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.TOOL_USE,
-                    }
-                ),
-                context_window_tokens=200_000,
-            ),
-        )
+    first_bindings = tuple(
+        step.model_binding for step in first.steps if isinstance(step, PromptStrategy)
     )
-    registry = LanguageModelRegistry(
-        models={
-            "provider-a/classifier": StubLanguageModel(
-                provider="provider-a",
-                model="classifier",
-                response_text="provider-a-result",
-            ),
-            "provider-d/classifier": StubLanguageModel(
-                provider="provider-d",
-                model="classifier",
-                response_text="provider-d-result",
-            ),
-            "provider-b/reasoner": StubLanguageModel(
-                provider="provider-b",
-                model="reasoner",
-                response_text="reasoning-result",
-            ),
-        }
+    second_bindings = tuple(
+        step.model_binding for step in second.steps if isinstance(step, PromptStrategy)
     )
 
-    candidate = generate_workflow_candidate(
-        specification=create_workflow(),
-        catalog=catalog,
-        registry=registry,
-    )
-
-    classification_step = require_prompt_strategy(candidate.steps[0])
-    classification_binding = classification_step.model_binding
-
-    assert classification_binding is not None
-    assert classification_binding.identifier == "provider-a/classifier"
-
-
-def test_generation_skips_eligible_model_missing_from_registry() -> None:
-    catalog = ModelCatalog(
-        models=(
-            ModelMetadata(
-                provider="provider-missing",
-                model="classifier",
-                display_name="Missing Classifier",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                context_window_tokens=64_000,
-            ),
-            ModelMetadata(
-                provider="provider-a",
-                model="classifier",
-                display_name="Provider A Classifier",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                context_window_tokens=64_000,
-            ),
-            ModelMetadata(
-                provider="provider-b",
-                model="reasoner",
-                display_name="Provider B Reasoner",
-                capabilities=frozenset(
-                    {
-                        ModelCapability.TOOL_USE,
-                    }
-                ),
-                context_window_tokens=200_000,
-            ),
-        )
-    )
-
-    candidate = generate_workflow_candidate(
-        specification=create_workflow(),
-        catalog=catalog,
-        registry=create_registry(),
-    )
-
-    classification_step = require_prompt_strategy(candidate.steps[0])
-    classification_binding = classification_step.model_binding
-
-    assert classification_binding is not None
-    assert classification_binding.identifier == "provider-a/classifier"
-
-
-def test_generation_fails_when_step_has_no_executable_candidate() -> None:
-    registry = LanguageModelRegistry(
-        models={
-            "provider-a/classifier": StubLanguageModel(
-                provider="provider-a",
-                model="classifier",
-                response_text="classification-result",
-            ),
-        }
-    )
-
-    with pytest.raises(
-        WorkflowGenerationError,
-        match="Reason about request",
-    ):
-        generate_workflow_candidate(
-            specification=create_workflow(),
-            catalog=create_catalog(),
-            registry=registry,
-        )
+    assert first_bindings == second_bindings
 
 
 def test_generation_fails_when_step_has_no_eligible_model() -> None:
-    workflow = WorkflowSpecification(
+    specification = WorkflowSpecification(
         metadata=WorkflowMetadata(
             name="Vision workflow",
             description="A workflow requiring an unavailable vision model.",
+            version="1.0.0",
         ),
         steps=(
             WorkflowStepSpecification(
                 specification=PromptStrategySpec(
                     metadata=StrategyMetadata(
-                        name="Inspect image",
-                        description="Inspect a supplied image.",
+                        name="Describe image",
+                        description="Describe an image.",
+                        version="1.0.0",
                     ),
                     prompt=Prompt(
-                        text="Inspect the supplied image.",
+                        text="Describe the supplied image.",
                     ),
                     model_requirements=ModelRequirements(
                         required_capabilities=frozenset(
@@ -501,12 +395,28 @@ def test_generation_fails_when_step_has_no_eligible_model() -> None:
         ),
     )
 
-    with pytest.raises(
-        WorkflowGenerationError,
-        match="Inspect image",
-    ):
+    with pytest.raises(WorkflowGenerationError):
         generate_workflow_candidate(
-            specification=workflow,
+            specification=specification,
             catalog=create_catalog(),
             registry=create_registry(),
+        )
+
+
+def test_generation_fails_when_eligible_model_is_not_executable() -> None:
+    registry = LanguageModelRegistry(
+        models={
+            "provider-a/classifier": StubLanguageModel(
+                provider="provider-a",
+                model="classifier",
+                response_text="billing",
+            ),
+        }
+    )
+
+    with pytest.raises(WorkflowGenerationError):
+        generate_workflow_candidate(
+            specification=create_workflow_specification(),
+            catalog=create_catalog(),
+            registry=registry,
         )
