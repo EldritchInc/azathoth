@@ -190,6 +190,59 @@ Different workflow steps may require different:
 
 Workflow specifications intentionally contain no executable language models, runtime schedulers, or execution state.
 
+## Workflow Candidates
+
+Workflow specifications describe *what* work should be performed.
+
+Before execution, Azathoth transforms a workflow specification into an executable workflow candidate.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+WorkflowCandidate
+        │
+        ▼
+WorkflowRunner (future)
+```
+
+Workflow candidate generation binds each workflow step independently.
+
+```text
+Workflow Specification
+
+Step A
+  Structured Output
+
+Step B
+  Tool Use
+
+        │
+        ▼
+
+Workflow Candidate
+
+Step A
+  provider-a/classifier
+
+Step B
+  provider-b/reasoner
+```
+
+Importantly, workflow candidate generation preserves:
+
+- workflow metadata;
+- dependency topology;
+- execution ordering;
+- step-scoped model requirements; and
+- deterministic workflow structure.
+
+Workflow candidates intentionally remain runtime objects.
+
+They contain executable strategies while preserving the dependency graph defined by the workflow specification.
+
+This separation allows durable workflow definitions to remain provider-neutral while enabling execution against concrete language model implementations.
+
 ## Dependency Planning
 
 Workflow specifications expose deterministic execution layers.
