@@ -230,8 +230,7 @@ def test_generation_preserves_workflow_step_order() -> None:
     candidate = generate_candidate()
 
     assert len(candidate.steps) == 2
-
-    assert tuple(step.metadata.name for step in candidate.steps) == (
+    assert tuple(step.strategy.metadata.name for step in candidate.steps) == (
         "Classify request [provider-a/classifier]",
         "Reason about request [provider-b/reasoner]",
     )
@@ -240,7 +239,7 @@ def test_generation_preserves_workflow_step_order() -> None:
 def test_generation_produces_prompt_strategy_steps() -> None:
     candidate = generate_candidate()
 
-    assert all(isinstance(step, PromptStrategy) for step in candidate.steps)
+    assert all(isinstance(step.strategy, PromptStrategy) for step in candidate.steps)
 
 
 def test_generation_preserves_step_scoped_model_requirements() -> None:
@@ -251,8 +250,8 @@ def test_generation_preserves_step_scoped_model_requirements() -> None:
         registry=create_registry(),
     )
 
-    classification = candidate.steps[0]
-    reasoning = candidate.steps[1]
+    classification = candidate.steps[0].strategy
+    reasoning = candidate.steps[1].strategy
 
     assert isinstance(classification, PromptStrategy)
     assert isinstance(reasoning, PromptStrategy)
@@ -261,15 +260,14 @@ def test_generation_preserves_step_scoped_model_requirements() -> None:
         classification.model_requirements == specification.steps[0].specification.model_requirements
     )
     assert reasoning.model_requirements == specification.steps[1].specification.model_requirements
-
     assert classification.model_requirements != reasoning.model_requirements
 
 
 def test_generation_preserves_step_scoped_model_bindings() -> None:
     candidate = generate_candidate()
 
-    classification = candidate.steps[0]
-    reasoning = candidate.steps[1]
+    classification = candidate.steps[0].strategy
+    reasoning = candidate.steps[1].strategy
 
     assert isinstance(classification, PromptStrategy)
     assert isinstance(reasoning, PromptStrategy)
@@ -279,10 +277,8 @@ def test_generation_preserves_step_scoped_model_bindings() -> None:
 
     assert classification_binding is not None
     assert reasoning_binding is not None
-
     assert classification_binding.identifier == "provider-a/classifier"
     assert reasoning_binding.identifier == "provider-b/reasoner"
-
     assert classification_binding != reasoning_binding
 
 
@@ -290,15 +286,15 @@ def test_generation_derives_deterministic_step_identities() -> None:
     first = generate_candidate()
     second = generate_candidate()
 
-    assert tuple(step.metadata.id for step in first.steps) == tuple(
-        step.metadata.id for step in second.steps
+    assert tuple(step.strategy.metadata.id for step in first.steps) == tuple(
+        step.strategy.metadata.id for step in second.steps
     )
 
-    assert first.steps[0].metadata.id == uuid5(
+    assert first.steps[0].strategy.metadata.id == uuid5(
         CLASSIFICATION_STRATEGY_ID,
         "provider-a/classifier",
     )
-    assert first.steps[1].metadata.id == uuid5(
+    assert first.steps[1].strategy.metadata.id == uuid5(
         REASONING_STRATEGY_ID,
         "provider-b/reasoner",
     )
@@ -307,13 +303,13 @@ def test_generation_derives_deterministic_step_identities() -> None:
 def test_generated_steps_have_distinct_identities() -> None:
     candidate = generate_candidate()
 
-    assert candidate.steps[0].metadata.id != candidate.steps[1].metadata.id
+    assert candidate.steps[0].strategy.metadata.id != candidate.steps[1].strategy.metadata.id
 
 
 def test_generated_steps_are_executable() -> None:
     candidate = generate_candidate()
 
-    outcomes = tuple(asyncio.run(step.run(Context())) for step in candidate.steps)
+    outcomes = tuple(asyncio.run(step.strategy.run(Context())) for step in candidate.steps)
 
     assert tuple(outcome.output for outcome in outcomes) == (
         "billing",
@@ -332,16 +328,17 @@ def test_generated_steps_are_executable() -> None:
 def test_generated_step_metrics_match_model_bindings() -> None:
     candidate = generate_candidate()
 
-    for step in candidate.steps:
-        assert isinstance(step, PromptStrategy)
+    for candidate_step in candidate.steps:
+        strategy = candidate_step.strategy
 
-        outcome = asyncio.run(step.run(Context()))
-        binding = step.model_binding
+        assert isinstance(strategy, PromptStrategy)
+
+        outcome = asyncio.run(strategy.run(Context()))
+        binding = strategy.model_binding
         metrics = outcome.metrics
 
         assert binding is not None
         assert metrics is not None
-
         assert binding.identifier == (f"{metrics.provider}/{metrics.model}")
 
 
@@ -351,15 +348,19 @@ def test_generation_is_deterministic() -> None:
 
     assert first.metadata == second.metadata
 
-    assert tuple(step.metadata for step in first.steps) == tuple(
-        step.metadata for step in second.steps
+    assert tuple(step.strategy.metadata for step in first.steps) == tuple(
+        step.strategy.metadata for step in second.steps
     )
 
     first_bindings = tuple(
-        step.model_binding for step in first.steps if isinstance(step, PromptStrategy)
+        step.strategy.model_binding
+        for step in first.steps
+        if isinstance(step.strategy, PromptStrategy)
     )
     second_bindings = tuple(
-        step.model_binding for step in second.steps if isinstance(step, PromptStrategy)
+        step.strategy.model_binding
+        for step in second.steps
+        if isinstance(step.strategy, PromptStrategy)
     )
 
     assert first_bindings == second_bindings
@@ -420,3 +421,64 @@ def test_generation_fails_when_eligible_model_is_not_executable() -> None:
             catalog=create_catalog(),
             registry=registry,
         )
+
+
+def test_generation_preserves_workflow_step_topology() -> None:
+    specification = create_workflow_specification()
+
+    candidate = generate_workflow_candidate(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert tuple(step.id for step in candidate.steps) == tuple(
+        step.id for step in specification.steps
+    )
+    assert tuple(step.depends_on for step in candidate.steps) == tuple(
+        step.depends_on for step in specification.steps
+    )
+
+
+def test_generated_candidate_preserves_execution_layers() -> None:
+    specification = create_workflow_specification()
+
+    candidate = generate_workflow_candidate(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    specification_layers = tuple(
+        tuple(step.id for step in layer) for layer in specification.execution_layers()
+    )
+    candidate_layers = tuple(
+        tuple(step.id for step in layer) for layer in candidate.execution_layers()
+    )
+
+    assert candidate_layers == specification_layers
+
+
+def test_generated_candidate_planning_is_deterministic() -> None:
+    specification = create_workflow_specification()
+    catalog = create_catalog()
+    registry = create_registry()
+
+    first = generate_workflow_candidate(
+        specification=specification,
+        catalog=catalog,
+        registry=registry,
+    )
+    second = generate_workflow_candidate(
+        specification=specification,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    assert tuple(tuple(step.id for step in layer) for layer in first.execution_layers()) == tuple(
+        tuple(step.id for step in layer) for layer in second.execution_layers()
+    )
+
+    assert tuple(step.strategy.metadata.id for step in first.steps) == tuple(
+        step.strategy.metadata.id for step in second.steps
+    )

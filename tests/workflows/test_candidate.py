@@ -13,12 +13,16 @@ from azathoth.strategies import (
 )
 from azathoth.workflows import (
     WorkflowCandidate,
+    WorkflowCandidateStep,
     WorkflowMetadata,
 )
 
 WORKFLOW_ID = UUID("7af83b9b-9dc2-4729-9165-7a3702f0d758")
 STEP_ONE_ID = UUID("3c903a80-2f48-45d2-8f1c-d67a13b6c96b")
 STEP_TWO_ID = UUID("c95c5d69-9f95-4dc5-b7e5-36bc2f2a6488")
+
+STEP_ONE_STRATEGY_ID = UUID("44e46227-c971-4f9a-b53e-2ef80173b9dc")
+STEP_TWO_STRATEGY_ID = UUID("18ad51c7-c213-49cc-8e71-ae85bbdbb262")
 
 
 class StubStrategy:
@@ -44,7 +48,7 @@ def create_strategy(
     identifier: UUID,
     name: str,
 ) -> Strategy:
-    """Create a deterministic executable workflow step."""
+    """Create a deterministic executable workflow strategy."""
 
     return StubStrategy(
         metadata=StrategyMetadata(
@@ -67,13 +71,20 @@ def create_candidate() -> WorkflowCandidate:
             version="1.0.0",
         ),
         steps=(
-            create_strategy(
-                identifier=STEP_ONE_ID,
-                name="Classifier",
+            WorkflowCandidateStep(
+                id=STEP_ONE_ID,
+                strategy=create_strategy(
+                    identifier=STEP_ONE_STRATEGY_ID,
+                    name="Classifier",
+                ),
             ),
-            create_strategy(
-                identifier=STEP_TWO_ID,
-                name="Reasoner",
+            WorkflowCandidateStep(
+                id=STEP_TWO_ID,
+                strategy=create_strategy(
+                    identifier=STEP_TWO_STRATEGY_ID,
+                    name="Reasoner",
+                ),
+                depends_on=(STEP_ONE_ID,),
             ),
         ),
     )
@@ -83,7 +94,7 @@ def test_workflow_candidate_records_metadata_and_steps() -> None:
     workflow = create_candidate()
 
     assert workflow.metadata.id == WORKFLOW_ID
-    assert tuple(step.metadata.name for step in workflow.steps) == (
+    assert tuple(step.strategy.metadata.name for step in workflow.steps) == (
         "Classifier",
         "Reasoner",
     )
@@ -92,10 +103,31 @@ def test_workflow_candidate_records_metadata_and_steps() -> None:
 def test_workflow_candidate_preserves_step_order() -> None:
     workflow = create_candidate()
 
-    assert workflow.steps[0].metadata.id == STEP_ONE_ID
-    assert workflow.steps[0].metadata.name == "Classifier"
-    assert workflow.steps[1].metadata.id == STEP_TWO_ID
-    assert workflow.steps[1].metadata.name == "Reasoner"
+    assert workflow.steps[0].id == STEP_ONE_ID
+    assert workflow.steps[0].strategy.metadata.id == (STEP_ONE_STRATEGY_ID)
+    assert workflow.steps[0].strategy.metadata.name == "Classifier"
+
+    assert workflow.steps[1].id == STEP_TWO_ID
+    assert workflow.steps[1].strategy.metadata.id == (STEP_TWO_STRATEGY_ID)
+    assert workflow.steps[1].strategy.metadata.name == "Reasoner"
+
+
+def test_workflow_candidate_preserves_dependency_topology() -> None:
+    workflow = create_candidate()
+
+    assert workflow.steps[0].depends_on == ()
+    assert workflow.steps[1].depends_on == (STEP_ONE_ID,)
+
+
+def test_workflow_candidate_derives_execution_layers() -> None:
+    workflow = create_candidate()
+
+    layers = workflow.execution_layers()
+
+    assert tuple(tuple(step.id for step in layer) for layer in layers) == (
+        (STEP_ONE_ID,),
+        (STEP_TWO_ID,),
+    )
 
 
 def test_workflow_candidate_is_immutable() -> None:
@@ -103,3 +135,10 @@ def test_workflow_candidate_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         workflow.steps = ()  # type: ignore[misc]
+
+
+def test_workflow_candidate_step_is_immutable() -> None:
+    workflow = create_candidate()
+
+    with pytest.raises(FrozenInstanceError):
+        workflow.steps[0].depends_on = (STEP_TWO_ID,)  # type: ignore[misc]
