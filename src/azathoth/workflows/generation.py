@@ -1,11 +1,14 @@
-"""Generate executable workflow candidates from durable specifications."""
+"""Generate executable workflow candidates."""
 
 from azathoth.prompting import generate_prompt_candidates
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
 )
-from azathoth.workflows.candidate import WorkflowCandidate
+from azathoth.workflows.candidate import (
+    WorkflowCandidate,
+    WorkflowCandidateStep,
+)
 from azathoth.workflows.models import WorkflowSpecification
 
 
@@ -18,32 +21,30 @@ def generate_workflow_candidate(
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
 ) -> WorkflowCandidate:
-    """Generate one executable workflow candidate.
+    """Generate one executable candidate from a workflow specification."""
 
-    Each workflow step is bound independently. The first eligible executable
-    prompt candidate is selected for each step while preserving workflow order.
-
-    Combinatorial expansion across all eligible models is intentionally left
-    for a future candidate-generation policy.
-    """
-
-    executable_steps = []
+    executable_steps: list[WorkflowCandidateStep] = []
 
     for workflow_step in specification.steps:
-        candidates = generate_prompt_candidates(
+        prompt_candidates = generate_prompt_candidates(
             specification=workflow_step.specification,
             catalog=catalog,
             registry=registry,
         )
 
-        if not candidates:
+        if not prompt_candidates:
             raise WorkflowGenerationError(
-                "Unable to generate an executable candidate for workflow "
-                f"step {workflow_step.id!s} "
-                f"({workflow_step.specification.metadata.name!r})."
+                "No executable prompt candidate could be generated for "
+                f"workflow step {workflow_step.id}."
             )
 
-        executable_steps.append(candidates[0])
+        executable_steps.append(
+            WorkflowCandidateStep(
+                id=workflow_step.id,
+                strategy=prompt_candidates[0],
+                depends_on=workflow_step.depends_on,
+            )
+        )
 
     return WorkflowCandidate(
         metadata=specification.metadata,
