@@ -14,6 +14,7 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowMetadata",
     "WorkflowRun",
+    "WorkflowRunner",
     "WorkflowSpecification",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
