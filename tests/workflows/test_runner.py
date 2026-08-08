@@ -22,9 +22,11 @@ WORKFLOW_ID = UUID("7af83b9b-9dc2-4729-9165-7a3702f0d758")
 
 STEP_ONE_ID = UUID("3c903a80-2f48-45d2-8f1c-d67a13b6c96b")
 STEP_TWO_ID = UUID("c95c5d69-9f95-4dc5-b7e5-36bc2f2a6488")
+STEP_THREE_ID = UUID("45c1b891-d098-4e42-9abc-e7422159f0f7")
 
 STRATEGY_ONE_ID = UUID("152bf0b4-3bbc-4aaa-9959-79fd09c41904")
 STRATEGY_TWO_ID = UUID("cb04e136-f865-4528-8651-8bbfdb6ec101")
+STRATEGY_THREE_ID = UUID("325ee8d4-3d92-4792-86ee-cba7169a36ed")
 
 
 class StubStrategy:
@@ -146,6 +148,46 @@ def create_candidate() -> WorkflowCandidate:
     )
 
 
+def create_layered_candidate() -> WorkflowCandidate:
+    """Create a workflow with two independent root steps."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Layered support workflow",
+            description="Classify independently before reasoning.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=STEP_ONE_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_ONE_ID,
+                    name="Classifier",
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=STEP_TWO_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_TWO_ID,
+                    name="Question detector",
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=STEP_THREE_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_THREE_ID,
+                    name="Reasoner",
+                ),
+                depends_on=(
+                    STEP_ONE_ID,
+                    STEP_TWO_ID,
+                ),
+            ),
+        ),
+    )
+
+
 def test_runner_returns_complete_workflow_run() -> None:
     candidate = create_candidate()
     context = Context()
@@ -208,7 +250,7 @@ def test_runner_executes_steps_in_candidate_order() -> None:
     )
 
 
-def test_runner_passes_each_step_the_previous_final_context() -> None:
+def test_runner_passes_next_layer_the_previous_layer_final_context() -> None:
     candidate = create_candidate()
     initial_context = Context()
     executor = RecordingExecutor()
@@ -296,4 +338,98 @@ def test_runner_records_sequential_layer_indexes() -> None:
     assert tuple(step.layer_index for step in run.steps) == (
         0,
         1,
+    )
+
+
+def test_steps_in_same_layer_receive_same_starting_context() -> None:
+    candidate = create_layered_candidate()
+    initial_context = Context()
+    executor = RecordingExecutor()
+
+    runner = WorkflowRunner(
+        executor=executor,
+    )
+
+    asyncio.run(
+        runner.run(
+            workflow=candidate,
+            context=initial_context,
+        )
+    )
+
+    classifier_context = executor.calls[0][1]
+    question_context = executor.calls[1][1]
+
+    assert classifier_context == initial_context
+    assert question_context == initial_context
+
+
+def test_next_layer_receives_merged_previous_layer_context() -> None:
+    candidate = create_layered_candidate()
+    executor = RecordingExecutor()
+
+    runner = WorkflowRunner(
+        executor=executor,
+    )
+
+    asyncio.run(
+        runner.run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    reasoning_context = executor.calls[2][1]
+
+    assert tuple(
+        event.payload["strategy_name"]
+        for event in reasoning_context.events
+        if event.event_type == "workflow.step.completed"
+    ) == (
+        "Classifier",
+        "Question detector",
+    )
+
+
+def test_runner_records_dependency_layer_indexes() -> None:
+    candidate = create_layered_candidate()
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=RecordingExecutor(),
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert tuple(step.layer_index for step in run.steps) == (
+        0,
+        0,
+        1,
+    )
+
+
+def test_runner_merges_layer_events_without_duplication() -> None:
+    candidate = create_layered_candidate()
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=RecordingExecutor(),
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    names = tuple(
+        event.payload["strategy_name"]
+        for event in run.final_context.events
+        if event.event_type == "workflow.step.completed"
+    )
+
+    assert names == (
+        "Classifier",
+        "Question detector",
+        "Reasoner",
     )
