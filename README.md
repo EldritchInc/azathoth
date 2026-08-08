@@ -243,6 +243,97 @@ They contain executable strategies while preserving the dependency graph defined
 
 This separation allows durable workflow definitions to remain provider-neutral while enabling execution against concrete language model implementations.
 
+# Workflow Execution
+
+Executable workflows are represented by `WorkflowCandidate`.
+
+A workflow candidate contains executable workflow steps while preserving the dependency graph defined by its originating workflow specification.
+
+Workflow execution is performed by `WorkflowRunner`.
+
+Workflow execution proceeds one dependency layer at a time.
+
+```text
+Layer 0
+──────────────
+Classifier
+
+        │
+
+Layer 1
+──────────────
+Question Detector
+Retrieve Context
+
+        │
+
+Layer 2
+──────────────
+Reason About Answer
+```
+
+## Dependency Layer Semantics
+
+Every workflow step within a dependency layer receives the same immutable starting context.
+
+```text
+Layer Context
+     │
+     ├── Step A
+     └── Step B
+```
+
+Workflow step outputs are merged only after every workflow step in the dependency layer completes successfully.
+
+Outputs are merged in declared workflow order to guarantee deterministic behavior.
+
+This allows future implementations to execute independent workflow steps concurrently without changing observable workflow behavior.
+
+## Failure Semantics
+
+Dependency layers form atomic execution boundaries.
+
+If any workflow step within a dependency layer fails:
+
+- workflow execution terminates immediately;
+- no outputs produced by that dependency layer are merged into workflow context;
+- previously completed dependency layers remain committed; and
+- the original workflow step exception propagates to the caller.
+
+These semantics provide deterministic behavior while avoiding rollback of previously completed workflow layers.
+
+## Separation of Responsibilities
+
+Workflow execution is intentionally decomposed into independent responsibilities.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+WorkflowCandidate
+        │
+        ▼
+WorkflowRunner
+        │
+        ▼
+StrategyExecutor
+        │
+        ▼
+Strategy
+```
+
+This separation allows workflow orchestration to remain independent of individual execution mechanisms.
+
+Individual workflow steps remain free to use different:
+
+- language models;
+- model capabilities;
+- context windows;
+- execution policies; and
+- tools.
+
+Future workflow step types may therefore execute prompt strategies, retrieval strategies, tool invocations, deterministic computation, or human review without changing workflow orchestration.
+
 ## Dependency Planning
 
 Workflow specifications expose deterministic execution layers.
