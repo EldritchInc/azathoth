@@ -3,8 +3,8 @@
 from datetime import UTC, datetime
 
 from azathoth.context import Context
-from azathoth.execution import StrategyExecutor
-from azathoth.workflows.candidate import WorkflowCandidate
+from azathoth.execution import ExecutionResult, StrategyExecutor
+from azathoth.workflows.candidate import WorkflowCandidate, WorkflowCandidateStep
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
@@ -21,33 +21,74 @@ class WorkflowRunner:
     ) -> None:
         self._executor = executor if executor is not None else StrategyExecutor()
 
+    @staticmethod
+    def _merge_execution_context(
+        *,
+        current_context: Context,
+        layer_context: Context,
+        execution: ExecutionResult,
+    ) -> Context:
+        """Append events produced by one layer execution."""
+
+        if execution.initial_context != layer_context:
+            raise RuntimeError(
+                "Workflow step execution did not preserve the expected layer-start context."
+            )
+
+        initial_event_count = len(layer_context.events)
+
+        produced_events = execution.final_context.events[initial_event_count:]
+
+        merged = current_context
+
+        for event in produced_events:
+            merged = merged.append(event)
+
+        return merged
+
     async def run(
         self,
         workflow: WorkflowCandidate,
         context: Context,
     ) -> WorkflowRun:
-        """Execute workflow candidate steps sequentially."""
+        """Execute a workflow candidate by dependency layer."""
 
         started_at = datetime.now(UTC)
 
         current_context = context
         completed_steps: list[WorkflowStepRun] = []
 
-        for layer_index, step in enumerate(workflow.steps):
-            execution = await self._executor.execute(
-                step.strategy,
-                current_context,
-            )
+        for layer_index, layer in enumerate(workflow.execution_layers()):
+            layer_context = current_context
+            layer_executions: list[tuple[WorkflowCandidateStep, ExecutionResult]] = []
 
-            current_context = execution.final_context
+            for step in layer:
+                execution = await self._executor.execute(
+                    step.strategy,
+                    layer_context,
+                )
 
-            completed_steps.append(
-                WorkflowStepRun(
-                    step_id=step.id,
-                    layer_index=layer_index,
+                layer_executions.append(
+                    (
+                        step,
+                        execution,
+                    )
+                )
+
+            for step, execution in layer_executions:
+                current_context = self._merge_execution_context(
+                    current_context=current_context,
+                    layer_context=layer_context,
                     execution=execution,
                 )
-            )
+
+                completed_steps.append(
+                    WorkflowStepRun(
+                        step_id=step.id,
+                        layer_index=layer_index,
+                        execution=execution,
+                    )
+                )
 
         completed_at = datetime.now(UTC)
 
