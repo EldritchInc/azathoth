@@ -18,6 +18,11 @@ from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
+from azathoth.workflows.value import (
+    WorkflowValue,
+    WorkflowValueBinding,
+    WorkflowValueResolutionError,
+)
 
 __all__ = [
     "WorkflowCandidate",
@@ -29,5 +34,8 @@ __all__ = [
     "WorkflowSpecification",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
+    "WorkflowValue",
+    "WorkflowValueBinding",
+    "WorkflowValueResolutionError",
     "generate_workflow_candidate",
 ]

@@ -8,11 +8,7 @@ from pydantic import ValidationError
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
-from azathoth.workflows import (
-    WorkflowMetadata,
-    WorkflowRun,
-    WorkflowStepRun,
-)
+from azathoth.workflows import WorkflowMetadata, WorkflowRun, WorkflowStepRun, WorkflowValue
 
 WORKFLOW_ID = UUID("9af3990b-a801-47f8-b9e4-733cbdf8b635")
 STEP_ONE_ID = UUID("ef169ce8-3eab-48ef-b6f3-d32be6c52f95")
@@ -81,6 +77,18 @@ def create_workflow_run() -> WorkflowRun:
                     strategy_name="Classifier",
                     context=context,
                 ),
+                values=(
+                    WorkflowValue(
+                        name="classification",
+                        value="math",
+                        producer_step_id=STEP_ONE_ID,
+                    ),
+                    WorkflowValue(
+                        name="confidence",
+                        value=0.97,
+                        producer_step_id=STEP_ONE_ID,
+                    ),
+                ),
             ),
             WorkflowStepRun(
                 step_id=STEP_TWO_ID,
@@ -89,6 +97,13 @@ def create_workflow_run() -> WorkflowRun:
                     strategy_id=STRATEGY_TWO_ID,
                     strategy_name="Reasoner",
                     context=context,
+                ),
+                values=(
+                    WorkflowValue(
+                        name="classification",
+                        value="question",
+                        producer_step_id=STEP_TWO_ID,
+                    ),
                 ),
             ),
         ),
@@ -233,3 +248,79 @@ def test_workflow_run_round_trips_through_json() -> None:
     restored = WorkflowRun.model_validate_json(run.model_dump_json())
 
     assert restored == run
+
+
+def test_workflow_step_run_records_workflow_values() -> None:
+    run = create_workflow_run()
+
+    assert tuple(value.name for value in run.steps[0].values) == (
+        "classification",
+        "confidence",
+    )
+
+    assert tuple(value.value for value in run.steps[0].values) == (
+        "math",
+        0.97,
+    )
+
+    assert tuple(value.name for value in run.steps[1].values) == ("classification",)
+
+    assert run.steps[1].values[0].value == "question"
+
+
+def test_workflow_run_exposes_all_recorded_values() -> None:
+    run = create_workflow_run()
+
+    assert tuple((value.name, value.value) for value in run.values) == (
+        ("classification", "math"),
+        ("confidence", 0.97),
+        ("classification", "question"),
+    )
+
+
+def test_workflow_run_returns_values_by_name() -> None:
+    run = create_workflow_run()
+
+    values = run.values_named("classification")
+
+    assert tuple(value.value for value in values) == (
+        "math",
+        "question",
+    )
+
+    assert tuple(value.producer_step_id for value in values) == (
+        STEP_ONE_ID,
+        STEP_TWO_ID,
+    )
+
+
+def test_workflow_run_returns_empty_tuple_for_unknown_value_name() -> None:
+    run = create_workflow_run()
+
+    assert run.values_named("missing") == ()
+
+
+def test_workflow_run_returns_values_by_producer_step() -> None:
+    run = create_workflow_run()
+
+    values = run.values_from(STEP_ONE_ID)
+
+    assert tuple((value.name, value.value) for value in values) == (
+        ("classification", "math"),
+        ("confidence", 0.97),
+    )
+
+
+def test_workflow_run_returns_empty_tuple_for_unknown_producer() -> None:
+    run = create_workflow_run()
+
+    assert run.values_from(UUID("dbe31dce-e82d-4aaa-a5ab-2ea6740b743f")) == ()
+
+
+def test_workflow_values_do_not_require_globally_unique_names() -> None:
+    run = create_workflow_run()
+
+    classifications = run.values_named("classification")
+
+    assert len(classifications) == 2
+    assert classifications[0].producer_step_id != classifications[1].producer_step_id

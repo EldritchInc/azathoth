@@ -18,6 +18,8 @@ from azathoth.workflows import (
     WorkflowCandidateStep,
     WorkflowMetadata,
     WorkflowRunner,
+    WorkflowValueBinding,
+    WorkflowValueResolutionError,
 )
 
 WORKFLOW_ID = UUID("7af83b9b-9dc2-4729-9165-7a3702f0d758")
@@ -130,6 +132,47 @@ class RecordingExecutor(StrategyExecutor):
         )
 
 
+class StructuredOutputExecutor(StrategyExecutor):
+    """Return deterministic structured workflow outputs."""
+
+    async def execute(
+        self,
+        strategy: Strategy,
+        context: Context,
+    ) -> ExecutionResult:
+        started_at = datetime(
+            2026,
+            8,
+            8,
+            21,
+            0,
+            tzinfo=UTC,
+        )
+        completed_at = datetime(
+            2026,
+            8,
+            8,
+            21,
+            0,
+            1,
+            tzinfo=UTC,
+        )
+
+        return ExecutionResult(
+            strategy_id=strategy.metadata.id,
+            strategy_name=strategy.metadata.name,
+            strategy_version=strategy.metadata.version,
+            output={
+                "classification": "math",
+                "confidence": 0.98,
+            },
+            initial_context=context,
+            final_context=context,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+
+
 def create_candidate() -> WorkflowCandidate:
     """Create a deterministic executable workflow candidate."""
 
@@ -155,6 +198,38 @@ def create_candidate() -> WorkflowCandidate:
                     name="Reasoner",
                 ),
                 depends_on=(STEP_ONE_ID,),
+            ),
+        ),
+    )
+
+
+def create_value_candidate() -> WorkflowCandidate:
+    """Create a candidate that exports structured workflow values."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Value workflow",
+            description="Export structured execution outputs.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=STEP_ONE_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_ONE_ID,
+                    name="Classifier",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="classification",
+                        path=("classification",),
+                    ),
+                    WorkflowValueBinding(
+                        name="confidence",
+                        path=("confidence",),
+                    ),
+                ),
             ),
         ),
     )
@@ -646,3 +721,94 @@ def test_failure_prevents_future_layers_from_executing() -> None:
     )
 
     assert all(strategy.metadata.name != "Reasoner" for strategy, _ in executor.calls)
+
+
+def test_runner_records_empty_workflow_values() -> None:
+    candidate = create_candidate()
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=RecordingExecutor(),
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert tuple(step.values for step in run.steps) == (
+        (),
+        (),
+    )
+
+
+def test_runner_populates_declared_workflow_values() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=StructuredOutputExecutor(),
+        ).run(
+            workflow=create_value_candidate(),
+            context=Context(),
+        )
+    )
+
+    assert tuple((value.name, value.value) for value in run.steps[0].values) == (
+        ("classification", "math"),
+        ("confidence", 0.98),
+    )
+
+    assert all(value.producer_step_id == STEP_ONE_ID for value in run.steps[0].values)
+
+
+def test_runner_values_are_exposed_by_workflow_run() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=StructuredOutputExecutor(),
+        ).run(
+            workflow=create_value_candidate(),
+            context=Context(),
+        )
+    )
+
+    classifications = run.values_named("classification")
+
+    assert len(classifications) == 1
+    assert classifications[0].value == "math"
+    assert classifications[0].producer_step_id == STEP_ONE_ID
+
+
+def test_runner_fails_when_declared_output_cannot_be_resolved() -> None:
+    candidate = WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Invalid value workflow",
+            description="Declare a missing output path.",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=STEP_ONE_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_ONE_ID,
+                    name="Classifier",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="missing",
+                        path=("does_not_exist",),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        WorkflowValueResolutionError,
+        match="does_not_exist",
+    ):
+        asyncio.run(
+            WorkflowRunner(
+                executor=StructuredOutputExecutor(),
+            ).run(
+                workflow=candidate,
+                context=Context(),
+            )
+        )
