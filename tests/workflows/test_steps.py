@@ -12,7 +12,7 @@ from azathoth.providers import (
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
-from azathoth.workflows import WorkflowStepSpecification
+from azathoth.workflows import WorkflowStepSpecification, WorkflowValueBinding
 
 STEP_ID = UUID("7f8cc955-8cbf-407e-a902-7d8c8465696b")
 DEPENDENCY_ONE_ID = UUID("aa2ff5c7-ac35-44e2-af83-caf0b88b95c1")
@@ -180,3 +180,34 @@ def test_workflow_step_dependencies_are_immutable() -> None:
 
     with pytest.raises(ValidationError):
         step.depends_on = (DEPENDENCY_TWO_ID,)
+
+
+def test_workflow_step_records_output_bindings() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        outputs=(
+            WorkflowValueBinding(
+                name="classification",
+                path=("category",),
+            ),
+            WorkflowValueBinding(
+                name="confidence",
+                path=("confidence",),
+            ),
+        ),
+    )
+
+    assert tuple(binding.name for binding in step.outputs) == (
+        "classification",
+        "confidence",
+    )
+
+
+def test_workflow_step_defaults_to_no_output_bindings() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+    )
+
+    assert step.outputs == ()
