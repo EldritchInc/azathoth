@@ -23,6 +23,7 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
     generate_workflow_candidate,
 )
 
@@ -94,6 +95,11 @@ def create_classification_step() -> WorkflowStepSpecification:
                 minimum_context_window_tokens=32_000,
             ),
         ),
+        outputs=(
+            WorkflowValueBinding(
+                name="classification",
+            ),
+        ),
     )
 
 
@@ -122,6 +128,11 @@ def create_reasoning_step() -> WorkflowStepSpecification:
                 minimum_context_window_tokens=64_000,
             ),
         ),
+        outputs=(
+            WorkflowValueBinding(
+                name="resolution",
+            ),
+        ),
     )
 
 
@@ -132,7 +143,7 @@ def create_workflow_specification() -> WorkflowSpecification:
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
             name="Classify and reason",
-            description=("Classify a request before reasoning about the result."),
+            description="Classify a request before reasoning about the result.",
             version="1.0.0",
         ),
         steps=(
@@ -282,6 +293,30 @@ def test_generation_preserves_step_scoped_model_bindings() -> None:
     assert classification_binding != reasoning_binding
 
 
+def test_generation_preserves_workflow_value_bindings() -> None:
+    specification = create_workflow_specification()
+
+    candidate = generate_workflow_candidate(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert candidate.steps[0].outputs == specification.steps[0].outputs
+    assert candidate.steps[1].outputs == specification.steps[1].outputs
+
+    assert candidate.steps[0].outputs == (
+        WorkflowValueBinding(
+            name="classification",
+        ),
+    )
+    assert candidate.steps[1].outputs == (
+        WorkflowValueBinding(
+            name="resolution",
+        ),
+    )
+
+
 def test_generation_derives_deterministic_step_identities() -> None:
     first = generate_candidate()
     second = generate_candidate()
@@ -364,6 +399,10 @@ def test_generation_is_deterministic() -> None:
     )
 
     assert first_bindings == second_bindings
+
+    assert tuple(step.outputs for step in first.steps) == tuple(
+        step.outputs for step in second.steps
+    )
 
 
 def test_generation_fails_when_step_has_no_eligible_model() -> None:

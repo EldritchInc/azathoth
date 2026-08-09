@@ -361,6 +361,87 @@ This separation allows workflow definitions to remain durable, serializable, and
 
 ------------------------------------------------------------------------
 
+# Workflow Values
+
+Workflow steps may export structured values for later workflow processing.
+
+Workflow values are declared explicitly using `WorkflowValueBinding`.
+
+```text
+Execution Output
+──────────────────────────────────────
+
+{
+    "classification": "math",
+    "confidence": 0.98
+}
+
+↓
+
+WorkflowValueBinding
+
+classification → ("classification")
+confidence     → ("confidence")
+
+↓
+
+WorkflowValue
+```
+
+Workflow value bindings are preserved from workflow specification through executable workflow candidates.
+
+During execution each binding resolves against the workflow step output.
+
+The resolved values are recorded as immutable `WorkflowValue` instances.
+
+## Querying Workflow Values
+
+Workflow runs expose deterministic query operations.
+
+```python
+run.values
+
+run.values_named("classification")
+
+run.values_from(step_id)
+```
+
+Workflow values preserve execution order.
+
+Multiple workflow steps may export workflow values with the same name.
+
+Workflow value names are therefore not globally unique.
+
+Queries return every matching value in deterministic workflow execution order.
+
+## Workflow Values vs Context
+
+Workflow values intentionally differ from workflow context.
+
+Workflow context records execution history and evidence.
+
+Workflow values record structured conclusions intentionally exported by workflow steps.
+
+```text
+Context
+──────────────
+Evidence
+History
+Observations
+
+Workflow Values
+──────────────
+Classification
+Confidence
+Retrieved Documents
+Tool Results
+Intermediate Reasoning
+```
+
+Keeping these concepts separate allows workflow orchestration, routing, and optimization to evolve independently from long-lived contextual reasoning.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any

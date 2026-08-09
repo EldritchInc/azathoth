@@ -43,6 +43,7 @@ def generate_workflow_candidate(
                 id=workflow_step.id,
                 strategy=prompt_candidates[0],
                 depends_on=workflow_step.depends_on,
+                outputs=workflow_step.outputs,
             )
         )
 
