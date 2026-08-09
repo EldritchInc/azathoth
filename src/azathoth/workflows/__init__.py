@@ -2,9 +2,11 @@ from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
+    WorkflowStepStatus,
 )
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
@@ -28,6 +30,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "WorkflowCandidate",
+    "WorkflowCondition",
     "WorkflowCandidateStep",
     "WorkflowGenerationError",
     "WorkflowInputBinding",
@@ -37,6 +40,7 @@ __all__ = [
     "WorkflowSpecification",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
+    "WorkflowStepStatus",
     "WorkflowValue",
     "WorkflowValueBinding",
     "WorkflowValueReference",

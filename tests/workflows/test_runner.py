@@ -20,6 +20,7 @@ from azathoth.workflows import (
     WorkflowInputBinding,
     WorkflowMetadata,
     WorkflowRunner,
+    WorkflowStepRun,
     WorkflowValueBinding,
     WorkflowValueReference,
     WorkflowValueResolutionError,
@@ -200,6 +201,15 @@ class WorkflowInputRecordingExecutor(StrategyExecutor):
             started_at=started_at,
             completed_at=completed_at,
         )
+
+
+def require_execution(
+    step: WorkflowStepRun,
+) -> ExecutionResult:
+    """Return execution evidence for a step expected to have executed."""
+
+    assert step.execution is not None
+    return step.execution
 
 
 class StructuredOutputExecutor(StrategyExecutor):
@@ -469,7 +479,7 @@ def test_runner_returns_complete_workflow_run() -> None:
         STEP_TWO_ID,
     )
 
-    assert tuple(step.execution.strategy_name for step in run.steps) == (
+    assert tuple(require_execution(step).strategy_name for step in run.steps) == (
         "Classifier",
         "Reasoner",
     )
@@ -545,12 +555,12 @@ def test_runner_records_workflow_step_and_strategy_identities() -> None:
         STEP_TWO_ID,
     )
 
-    assert tuple(step.execution.strategy_id for step in run.steps) == (
+    assert tuple(require_execution(step).strategy_id for step in run.steps) == (
         STRATEGY_ONE_ID,
         STRATEGY_TWO_ID,
     )
 
-    assert all(step.step_id != step.execution.strategy_id for step in run.steps)
+    assert all(step.step_id != require_execution(step).strategy_id for step in run.steps)
 
 
 def test_runner_records_each_strategy_execution() -> None:
@@ -566,7 +576,7 @@ def test_runner_records_each_strategy_execution() -> None:
         )
     )
 
-    assert tuple(step.execution.output for step in run.steps) == (
+    assert tuple(require_execution(step).output for step in run.steps) == (
         "Classifier",
         "Reasoner",
     )

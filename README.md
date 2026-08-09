@@ -513,6 +513,148 @@ This separation preserves the distinction between:
 
 ------------------------------------------------------------------------
 
+```markdown
+
+# Conditional Workflow Execution
+
+Workflow steps may conditionally execute based on values produced by upstream workflow steps.
+
+Conditions use the same producer-qualified workflow value references used by workflow input bindings.
+
+```text
+
+Classifier
+
+──────────────
+
+exports:
+
+classification = "math"
+
+        │
+
+        ▼
+
+WorkflowCondition
+
+classification == "math"
+
+        │
+
+        ▼
+
+Math Reasoner
+```
+
+A workflow condition identifies:
+
+* the workflow step that produced the value;
+* the exported workflow value name; and
+* the value required for the condition to match.
+
+For example:
+
+```text
+WorkflowCondition(
+    source=WorkflowValueReference(
+        producer_step_id=classifier_step_id,
+        name="classification",
+    ),
+    expected="math",
+)
+```
+
+Validation
+
+Conditional dataflow is validated as part of the workflow specification.
+
+Azathoth verifies that:
+
+* the referenced producer exists;
+* the producer exports the referenced workflow value; and
+* the producer executes upstream of the conditional step.
+
+Invalid conditional workflows therefore fail before candidate generation or execution.
+
+Execution Semantics
+
+A workflow step with no conditions executes normally.
+
+When conditions are present, every condition must be satisfied before the workflow step becomes eligible.
+
+```text
+No conditions
+        │
+        ▼
+     Execute
+
+
+Condition A ── true ──┐
+                      ├── Execute
+Condition B ── true ──┘
+
+
+Condition A ── true
+Condition B ── false
+        │
+        ▼
+       Skip
+```
+
+Conditions currently use equality comparison.
+
+Multiple conditions use logical AND semantics.
+
+A referenced workflow value that is unavailable is treated as an unsatisfied condition.
+
+This allows conditional branches to propagate naturally when an upstream branch was skipped.
+
+Executed and Skipped Steps
+
+Workflow runs explicitly distinguish between executed and skipped workflow steps.
+
+```text
+WorkflowStepStatus.EXECUTED
+
+WorkflowStepStatus.SKIPPED
+```
+
+Executed steps retain their complete execution evidence and exported workflow values.
+
+Skipped steps:
+
+* contain no execution result;
+* produce no workflow values; and
+* remain present in the workflow run.
+
+This preserves the complete workflow topology in execution traces without fabricating evidence for work that never occurred.
+
+Adaptive Workflows
+
+Conditional execution allows workflow topology, structured dataflow, and step-specific execution configuration to compose naturally.
+
+```text
+                    Classifier
+                        │
+                 classification
+                   /         \
+                  /           \
+             "math"         "general"
+                │               │
+                ▼               ▼
+         Math Reasoner    General Reasoner
+          Model A             Model B
+          Tool X              Tool Y
+```
+
+Each workflow step remains independently configured.
+
+A conditional workflow therefore does not require a workflow-wide language model, tool, or execution policy.
+
+This provides the foundation for adaptive routing while preserving Azathoth’s step-scoped execution architecture.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
