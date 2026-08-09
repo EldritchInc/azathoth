@@ -45,6 +45,7 @@ def generate_workflow_candidate(
                 depends_on=workflow_step.depends_on,
                 inputs=workflow_step.inputs,
                 outputs=workflow_step.outputs,
+                conditions=workflow_step.conditions,
             )
         )
 
