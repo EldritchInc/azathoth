@@ -19,6 +19,7 @@ from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
 from azathoth.workflows.value import (
+    WorkflowInputBinding,
     WorkflowValue,
     WorkflowValueBinding,
     WorkflowValueReference,
@@ -29,6 +30,7 @@ __all__ = [
     "WorkflowCandidate",
     "WorkflowCandidateStep",
     "WorkflowGenerationError",
+    "WorkflowInputBinding",
     "WorkflowMetadata",
     "WorkflowRun",
     "WorkflowRunner",

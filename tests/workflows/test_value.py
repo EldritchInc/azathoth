@@ -6,6 +6,7 @@ import pytest
 from pydantic import JsonValue, ValidationError
 
 from azathoth.workflows import (
+    WorkflowInputBinding,
     WorkflowValue,
     WorkflowValueBinding,
     WorkflowValueReference,
@@ -301,3 +302,70 @@ def test_workflow_value_references_distinguish_same_name_by_producer() -> None:
     )
 
     assert first != second
+
+
+def test_workflow_input_binding_records_name_and_source() -> None:
+    binding = WorkflowInputBinding(
+        name="classification",
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
+    )
+
+    assert binding.name == "classification"
+    assert binding.source == WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+
+
+def test_workflow_input_binding_can_alias_source_value() -> None:
+    binding = WorkflowInputBinding(
+        name="route",
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
+    )
+
+    assert binding.name == "route"
+    assert binding.source.name == "classification"
+
+
+def test_workflow_input_binding_rejects_empty_name() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowInputBinding(
+            name="",
+            source=WorkflowValueReference(
+                producer_step_id=STEP_ID,
+                name="classification",
+            ),
+        )
+
+
+def test_workflow_input_binding_is_immutable() -> None:
+    binding = WorkflowInputBinding(
+        name="classification",
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        binding.name = "route"
+
+
+def test_workflow_input_binding_round_trips_through_json() -> None:
+    binding = WorkflowInputBinding(
+        name="route",
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
+    )
+
+    restored = WorkflowInputBinding.model_validate_json(binding.model_dump_json())
+
+    assert restored == binding

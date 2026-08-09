@@ -67,3 +67,12 @@ class WorkflowValueBinding(BaseModel):
                 ) from error
 
         return value
+
+
+class WorkflowInputBinding(BaseModel):
+    """Bind a workflow value to a named downstream step input."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    source: WorkflowValueReference
