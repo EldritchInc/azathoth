@@ -19,6 +19,7 @@ from azathoth.providers import (
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowCandidate,
+    WorkflowCondition,
     WorkflowGenerationError,
     WorkflowInputBinding,
     WorkflowMetadata,
@@ -142,6 +143,15 @@ def create_reasoning_step() -> WorkflowStepSpecification:
         outputs=(
             WorkflowValueBinding(
                 name="resolution",
+            ),
+        ),
+        conditions=(
+            WorkflowCondition(
+                source=WorkflowValueReference(
+                    producer_step_id=CLASSIFICATION_STEP_ID,
+                    name="classification",
+                ),
+                expected="math",
             ),
         ),
     )
@@ -552,3 +562,15 @@ def test_generation_preserves_workflow_input_bindings() -> None:
             ),
         ),
     )
+
+
+def test_generation_preserves_workflow_conditions() -> None:
+    specification = create_workflow_specification()
+
+    candidate = generate_workflow_candidate(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert candidate.steps[1].conditions == specification.steps[1].conditions
