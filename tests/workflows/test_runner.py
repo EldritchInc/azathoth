@@ -646,3 +646,21 @@ def test_failure_prevents_future_layers_from_executing() -> None:
     )
 
     assert all(strategy.metadata.name != "Reasoner" for strategy, _ in executor.calls)
+
+
+def test_runner_records_empty_workflow_values() -> None:
+    candidate = create_candidate()
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=RecordingExecutor(),
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert tuple(step.values for step in run.steps) == (
+        (),
+        (),
+    )

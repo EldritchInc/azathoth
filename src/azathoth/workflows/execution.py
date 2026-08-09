@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
 from azathoth.workflows.models import WorkflowMetadata
+from azathoth.workflows.value import WorkflowValue
 
 
 class WorkflowStepRun(BaseModel):
@@ -18,6 +19,7 @@ class WorkflowStepRun(BaseModel):
     step_id: UUID
     layer_index: int = Field(ge=0)
     execution: ExecutionResult
+    values: tuple[WorkflowValue, ...] = ()
 
 
 class WorkflowRun(BaseModel):
