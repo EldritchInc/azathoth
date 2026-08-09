@@ -12,7 +12,12 @@ from azathoth.providers import (
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
-from azathoth.workflows import WorkflowStepSpecification, WorkflowValueBinding
+from azathoth.workflows import (
+    WorkflowInputBinding,
+    WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
+)
 
 STEP_ID = UUID("7f8cc955-8cbf-407e-a902-7d8c8465696b")
 DEPENDENCY_ONE_ID = UUID("aa2ff5c7-ac35-44e2-af83-caf0b88b95c1")
@@ -211,3 +216,31 @@ def test_workflow_step_defaults_to_no_output_bindings() -> None:
     )
 
     assert step.outputs == ()
+
+
+def test_workflow_step_records_input_bindings() -> None:
+    binding = WorkflowInputBinding(
+        name="classification",
+        source=WorkflowValueReference(
+            producer_step_id=DEPENDENCY_ONE_ID,
+            name="classification",
+        ),
+    )
+
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+        depends_on=(DEPENDENCY_ONE_ID,),
+        inputs=(binding,),
+    )
+
+    assert step.inputs == (binding,)
+
+
+def test_workflow_step_defaults_to_no_input_bindings() -> None:
+    step = WorkflowStepSpecification(
+        id=STEP_ID,
+        specification=create_prompt_specification(),
+    )
+
+    assert step.inputs == ()
