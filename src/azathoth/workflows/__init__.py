@@ -21,6 +21,7 @@ from azathoth.workflows.steps import (
 from azathoth.workflows.value import (
     WorkflowValue,
     WorkflowValueBinding,
+    WorkflowValueResolutionError,
 )
 
 __all__ = [
@@ -35,5 +36,6 @@ __all__ = [
     "WorkflowStepSpecification",
     "WorkflowValue",
     "WorkflowValueBinding",
+    "WorkflowValueResolutionError",
     "generate_workflow_candidate",
 ]

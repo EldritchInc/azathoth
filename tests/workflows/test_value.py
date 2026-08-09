@@ -3,9 +3,10 @@
 from uuid import UUID
 
 import pytest
-from pydantic import ValidationError
+from pydantic import JsonValue, ValidationError
 
 from azathoth.workflows import WorkflowValue, WorkflowValueBinding
+from azathoth.workflows.value import WorkflowValueResolutionError
 
 STEP_ID = UUID("44df6bdb-2d5e-4564-8ab3-d5c53abfd84d")
 
@@ -140,3 +141,105 @@ def test_workflow_value_round_trips_structured_json() -> None:
     restored = WorkflowValue.model_validate_json(workflow_value.model_dump_json())
 
     assert restored == workflow_value
+
+
+def test_workflow_value_binding_resolves_entire_output() -> None:
+    binding = WorkflowValueBinding(
+        name="result",
+    )
+
+    output: JsonValue = {
+        "category": "math",
+        "confidence": 0.98,
+    }
+
+    assert binding.resolve(output) == output
+
+
+def test_workflow_value_binding_resolves_object_field() -> None:
+    binding = WorkflowValueBinding(
+        name="classification",
+        path=("category",),
+    )
+
+    assert (
+        binding.resolve(
+            {
+                "category": "math",
+                "confidence": 0.98,
+            }
+        )
+        == "math"
+    )
+
+
+def test_workflow_value_binding_resolves_nested_path() -> None:
+    binding = WorkflowValueBinding(
+        name="label",
+        path=(
+            "predictions",
+            0,
+            "label",
+        ),
+    )
+
+    output: JsonValue = {
+        "predictions": [
+            {
+                "label": "math",
+            }
+        ]
+    }
+
+    assert binding.resolve(output) == "math"
+
+
+def test_workflow_value_binding_rejects_missing_object_key() -> None:
+    binding = WorkflowValueBinding(
+        name="classification",
+        path=("category",),
+    )
+
+    with pytest.raises(
+        WorkflowValueResolutionError,
+        match="missing object key",
+    ):
+        binding.resolve(
+            {
+                "confidence": 0.98,
+            }
+        )
+
+
+def test_workflow_value_binding_rejects_index_on_non_list() -> None:
+    binding = WorkflowValueBinding(
+        name="label",
+        path=(0,),
+    )
+
+    with pytest.raises(
+        WorkflowValueResolutionError,
+        match="expected a list",
+    ):
+        binding.resolve(
+            {
+                "label": "math",
+            }
+        )
+
+
+def test_workflow_value_binding_rejects_out_of_range_index() -> None:
+    binding = WorkflowValueBinding(
+        name="label",
+        path=(1,),
+    )
+
+    with pytest.raises(
+        WorkflowValueResolutionError,
+        match="out of range",
+    ):
+        binding.resolve(
+            [
+                "math",
+            ]
+        )
