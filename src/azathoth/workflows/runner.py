@@ -4,11 +4,15 @@ from datetime import UTC, datetime
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult, StrategyExecutor
-from azathoth.workflows.candidate import WorkflowCandidate, WorkflowCandidateStep
+from azathoth.workflows.candidate import (
+    WorkflowCandidate,
+    WorkflowCandidateStep,
+)
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
 )
+from azathoth.workflows.value import WorkflowValue
 
 
 class WorkflowRunner:
@@ -46,6 +50,23 @@ class WorkflowRunner:
 
         return merged
 
+    @staticmethod
+    def _resolve_workflow_values(
+        *,
+        step: WorkflowCandidateStep,
+        execution: ExecutionResult,
+    ) -> tuple[WorkflowValue, ...]:
+        """Resolve declared workflow values from a step execution."""
+
+        return tuple(
+            WorkflowValue(
+                name=binding.name,
+                value=binding.resolve(execution.output),
+                producer_step_id=step.id,
+            )
+            for binding in step.outputs
+        )
+
     async def run(
         self,
         workflow: WorkflowCandidate,
@@ -60,7 +81,13 @@ class WorkflowRunner:
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
-            layer_executions: list[tuple[WorkflowCandidateStep, ExecutionResult]] = []
+
+            layer_executions: list[
+                tuple[
+                    WorkflowCandidateStep,
+                    ExecutionResult,
+                ]
+            ] = []
 
             for step in layer:
                 execution = await self._executor.execute(
@@ -75,7 +102,29 @@ class WorkflowRunner:
                     )
                 )
 
+            resolved_layer: list[
+                tuple[
+                    WorkflowCandidateStep,
+                    ExecutionResult,
+                    tuple[WorkflowValue, ...],
+                ]
+            ] = []
+
             for step, execution in layer_executions:
+                values = self._resolve_workflow_values(
+                    step=step,
+                    execution=execution,
+                )
+
+                resolved_layer.append(
+                    (
+                        step,
+                        execution,
+                        values,
+                    )
+                )
+
+            for step, execution, _values in resolved_layer:
                 current_context = self._merge_execution_context(
                     current_context=current_context,
                     layer_context=layer_context,
@@ -87,7 +136,7 @@ class WorkflowRunner:
                         step_id=step.id,
                         layer_index=layer_index,
                         execution=execution,
-                        values=(),
+                        values=values,
                     )
                 )
 
