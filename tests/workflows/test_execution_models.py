@@ -8,11 +8,7 @@ from pydantic import ValidationError
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
-from azathoth.workflows import (
-    WorkflowMetadata,
-    WorkflowRun,
-    WorkflowStepRun,
-)
+from azathoth.workflows import WorkflowMetadata, WorkflowRun, WorkflowStepRun, WorkflowValue
 
 WORKFLOW_ID = UUID("9af3990b-a801-47f8-b9e4-733cbdf8b635")
 STEP_ONE_ID = UUID("ef169ce8-3eab-48ef-b6f3-d32be6c52f95")
@@ -80,6 +76,13 @@ def create_workflow_run() -> WorkflowRun:
                     strategy_id=STRATEGY_ONE_ID,
                     strategy_name="Classifier",
                     context=context,
+                ),
+                values=(
+                    WorkflowValue(
+                        name="classification",
+                        value="support",
+                        producer_step_id=STEP_ONE_ID,
+                    ),
                 ),
             ),
             WorkflowStepRun(
@@ -233,3 +236,13 @@ def test_workflow_run_round_trips_through_json() -> None:
     restored = WorkflowRun.model_validate_json(run.model_dump_json())
 
     assert restored == run
+
+
+def test_workflow_step_run_records_workflow_values() -> None:
+    run = create_workflow_run()
+
+    assert tuple(value.name for value in run.steps[0].values) == ("classification",)
+
+    assert run.steps[0].values[0].value == "support"
+
+    assert run.steps[1].values == ()

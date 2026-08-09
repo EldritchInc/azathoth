@@ -87,6 +87,7 @@ class WorkflowRunner:
                         step_id=step.id,
                         layer_index=layer_index,
                         execution=execution,
+                        values=(),
                     )
                 )
 
