@@ -442,6 +442,77 @@ Keeping these concepts separate allows workflow orchestration, routing, and opti
 
 ------------------------------------------------------------------------
 
+# Workflow Value Dataflow
+
+Workflow values are explicitly connected between workflow steps.
+
+Each producing workflow step declares exported values.
+
+Each consuming workflow step declares the workflow values it requires.
+
+```text
+Classifier
+──────────────
+
+exports
+
+classification
+
+        │
+        ▼
+
+Workflow Value
+
+        │
+        ▼
+
+Workflow Value Reference
+
+        │
+        ▼
+
+Reasoner
+
+input:
+route
+```
+
+Workflow value identity consists of:
+
+- producer workflow step; and
+- workflow value name.
+
+This allows multiple workflow steps to export values with identical names while remaining unambiguous.
+
+## Validation
+
+Workflow specifications validate workflow dataflow before execution.
+
+Validation ensures that:
+
+- producer workflow steps exist;
+- referenced workflow values exist;
+- producer workflow steps are upstream dependencies;
+- exported workflow value names are unique per workflow step; and
+- input names are unique per consuming workflow step.
+
+Invalid workflow graphs fail during specification validation rather than runtime execution.
+
+## Runtime Resolution
+
+Workflow input bindings resolve immediately before strategy execution.
+
+Resolved workflow inputs are added to the consuming workflow step's execution context.
+
+These temporary input bindings are intentionally excluded from the shared workflow context after execution.
+
+This separation preserves the distinction between:
+
+- workflow execution history; and
+- workflow dataflow.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
