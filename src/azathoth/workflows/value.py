@@ -15,6 +15,15 @@ class WorkflowValue(BaseModel):
     producer_step_id: UUID
 
 
+class WorkflowValueReference(BaseModel):
+    """Identify a workflow value produced by a specific workflow step."""
+
+    model_config = ConfigDict(frozen=True)
+
+    producer_step_id: UUID
+    name: str = Field(min_length=1)
+
+
 class WorkflowValueResolutionError(ValueError):
     """Raised when a workflow value binding cannot resolve an output path."""
 
@@ -58,3 +67,12 @@ class WorkflowValueBinding(BaseModel):
                 ) from error
 
         return value
+
+
+class WorkflowInputBinding(BaseModel):
+    """Bind a workflow value to a named downstream step input."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    source: WorkflowValueReference

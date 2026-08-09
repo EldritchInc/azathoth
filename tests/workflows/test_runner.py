@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
+from pydantic import JsonValue
 
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import ExecutionResult, StrategyExecutor
@@ -16,9 +17,11 @@ from azathoth.strategies import (
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateStep,
+    WorkflowInputBinding,
     WorkflowMetadata,
     WorkflowRunner,
     WorkflowValueBinding,
+    WorkflowValueReference,
     WorkflowValueResolutionError,
 )
 
@@ -127,6 +130,73 @@ class RecordingExecutor(StrategyExecutor):
             output=strategy.metadata.name,
             initial_context=context,
             final_context=final_context,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+
+
+class WorkflowInputRecordingExecutor(StrategyExecutor):
+    """Record resolved workflow inputs received by strategies."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[Strategy, Context]] = []
+
+    async def execute(
+        self,
+        strategy: Strategy,
+        context: Context,
+    ) -> ExecutionResult:
+        self.calls.append((strategy, context))
+
+        input_values: dict[str, JsonValue] = {}
+
+        for event in context.events:
+            if event.event_type != "workflow.input.bound":
+                continue
+
+            name = event.payload["name"]
+            value = event.payload["value"]
+
+            assert isinstance(name, str)
+
+            input_values[name] = value
+
+        started_at = datetime(
+            2026,
+            8,
+            9,
+            16,
+            0,
+            tzinfo=UTC,
+        )
+        completed_at = datetime(
+            2026,
+            8,
+            9,
+            16,
+            0,
+            1,
+            tzinfo=UTC,
+        )
+
+        output: JsonValue
+
+        if strategy.metadata.name == "Classifier":
+            output = {
+                "classification": "math",
+            }
+        else:
+            output = {
+                "received_inputs": input_values,
+            }
+
+        return ExecutionResult(
+            strategy_id=strategy.metadata.id,
+            strategy_name=strategy.metadata.name,
+            strategy_version=strategy.metadata.version,
+            output=output,
+            initial_context=context,
+            final_context=context,
             started_at=started_at,
             completed_at=completed_at,
         )
@@ -318,6 +388,50 @@ def create_three_layer_candidate() -> WorkflowCandidate:
                 depends_on=(
                     STEP_TWO_ID,
                     STEP_THREE_ID,
+                ),
+            ),
+        ),
+    )
+
+
+def create_value_flow_candidate() -> WorkflowCandidate:
+    """Create a workflow whose downstream step consumes an upstream value."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Workflow value flow",
+            description="Export and consume a workflow value.",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=STEP_ONE_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_ONE_ID,
+                    name="Classifier",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="classification",
+                        path=("classification",),
+                    ),
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=STEP_TWO_ID,
+                strategy=StubStrategy(
+                    strategy_id=STRATEGY_TWO_ID,
+                    name="Reasoner",
+                ),
+                depends_on=(STEP_ONE_ID,),
+                inputs=(
+                    WorkflowInputBinding(
+                        name="route",
+                        source=WorkflowValueReference(
+                            producer_step_id=STEP_ONE_ID,
+                            name="classification",
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -812,3 +926,59 @@ def test_runner_fails_when_declared_output_cannot_be_resolved() -> None:
                 context=Context(),
             )
         )
+
+
+def test_runner_resolves_workflow_inputs_from_upstream_values() -> None:
+    executor = WorkflowInputRecordingExecutor()
+
+    asyncio.run(
+        WorkflowRunner(
+            executor=executor,
+        ).run(
+            workflow=create_value_flow_candidate(),
+            context=Context(),
+        )
+    )
+
+    reasoner_context = executor.calls[1][1]
+
+    input_events = tuple(
+        event for event in reasoner_context.events if event.event_type == "workflow.input.bound"
+    )
+
+    assert len(input_events) == 1
+
+    assert input_events[0].payload["name"] == "route"
+    assert input_events[0].payload["value"] == "math"
+    assert input_events[0].payload["source_name"] == "classification"
+    assert input_events[0].payload["producer_step_id"] == str(STEP_ONE_ID)
+
+
+def test_workflow_input_events_are_not_committed_to_shared_context() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=WorkflowInputRecordingExecutor(),
+        ).run(
+            workflow=create_value_flow_candidate(),
+            context=Context(),
+        )
+    )
+
+    assert all(event.event_type != "workflow.input.bound" for event in run.final_context.events)
+
+
+def test_consumed_workflow_value_remains_in_workflow_run() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=WorkflowInputRecordingExecutor(),
+        ).run(
+            workflow=create_value_flow_candidate(),
+            context=Context(),
+        )
+    )
+
+    values = run.values_named("classification")
+
+    assert len(values) == 1
+    assert values[0].value == "math"
+    assert values[0].producer_step_id == STEP_ONE_ID

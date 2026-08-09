@@ -20,10 +20,12 @@ from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowGenerationError,
+    WorkflowInputBinding,
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
     generate_workflow_candidate,
 )
 
@@ -126,6 +128,15 @@ def create_reasoning_step() -> WorkflowStepSpecification:
                     }
                 ),
                 minimum_context_window_tokens=64_000,
+            ),
+        ),
+        inputs=(
+            WorkflowInputBinding(
+                name="classification",
+                source=WorkflowValueReference(
+                    producer_step_id=CLASSIFICATION_STEP_ID,
+                    name="classification",
+                ),
             ),
         ),
         outputs=(
@@ -520,4 +531,24 @@ def test_generated_candidate_planning_is_deterministic() -> None:
 
     assert tuple(step.strategy.metadata.id for step in first.steps) == tuple(
         step.strategy.metadata.id for step in second.steps
+    )
+
+
+def test_generation_preserves_workflow_input_bindings() -> None:
+    specification = create_workflow_specification()
+
+    candidate = generate_workflow_candidate(
+        specification=specification,
+        catalog=create_catalog(),
+        registry=create_registry(),
+    )
+
+    assert candidate.steps[1].inputs == (
+        WorkflowInputBinding(
+            name="classification",
+            source=WorkflowValueReference(
+                producer_step_id=CLASSIFICATION_STEP_ID,
+                name="classification",
+            ),
+        ),
     )

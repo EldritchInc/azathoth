@@ -5,7 +5,7 @@ from uuid import UUID
 
 from azathoth.strategies import Strategy
 from azathoth.workflows.models import WorkflowMetadata
-from azathoth.workflows.value import WorkflowValueBinding
+from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,7 @@ class WorkflowCandidateStep:
     id: UUID
     strategy: Strategy
     depends_on: tuple[UUID, ...] = ()
+    inputs: tuple[WorkflowInputBinding, ...] = ()
     outputs: tuple[WorkflowValueBinding, ...] = ()
 
 
