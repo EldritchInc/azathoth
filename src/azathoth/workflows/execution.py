@@ -44,3 +44,25 @@ class WorkflowRun(BaseModel):
             raise ValueError("Workflow completion time cannot precede its start time.")
 
         return self
+
+    @property
+    def values(self) -> tuple[WorkflowValue, ...]:
+        """Return all workflow values in recorded execution order."""
+
+        return tuple(value for step in self.steps for value in step.values)
+
+    def values_named(
+        self,
+        name: str,
+    ) -> tuple[WorkflowValue, ...]:
+        """Return all workflow values with the supplied name."""
+
+        return tuple(value for value in self.values if value.name == name)
+
+    def values_from(
+        self,
+        producer_step_id: UUID,
+    ) -> tuple[WorkflowValue, ...]:
+        """Return all values produced by one workflow step."""
+
+        return tuple(value for value in self.values if value.producer_step_id == producer_step_id)
