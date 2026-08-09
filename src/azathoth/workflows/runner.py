@@ -1,5 +1,6 @@
 """Workflow execution orchestration."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -15,6 +16,15 @@ from azathoth.workflows.execution import (
     WorkflowStepStatus,
 )
 from azathoth.workflows.value import WorkflowValue
+
+
+@dataclass(frozen=True)
+class _LayerStepResult:
+    """Temporary result produced while processing one workflow layer."""
+
+    step: WorkflowCandidateStep
+    step_context: Context | None
+    execution: ExecutionResult | None
 
 
 class WorkflowRunner:
@@ -158,22 +168,20 @@ class WorkflowRunner:
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
 
-            layer_executions: list[
-                tuple[
-                    WorkflowCandidateStep,
-                    Context,
-                    ExecutionResult,
-                ]
-            ] = []
-
-            skipped_steps: list[WorkflowCandidateStep] = []
+            layer_results: list[_LayerStepResult] = []
 
             for step in layer:
                 if not self._conditions_are_satisfied(
                     step=step,
                     completed_steps=completed_steps,
                 ):
-                    skipped_steps.append(step)
+                    layer_results.append(
+                        _LayerStepResult(
+                            step=step,
+                            step_context=None,
+                            execution=None,
+                        )
+                    )
                     continue
 
                 step_context = self._build_step_context(
@@ -187,26 +195,33 @@ class WorkflowRunner:
                     step_context,
                 )
 
-                layer_executions.append(
-                    (
-                        step,
-                        step_context,
-                        execution,
+                layer_results.append(
+                    _LayerStepResult(
+                        step=step,
+                        step_context=step_context,
+                        execution=execution,
                     )
                 )
 
-            for step in skipped_steps:
-                completed_steps.append(
-                    WorkflowStepRun(
-                        step_id=step.id,
-                        layer_index=layer_index,
-                        status=WorkflowStepStatus.SKIPPED,
-                        execution=None,
-                        values=(),
+            for result in layer_results:
+                if result.execution is None:
+                    completed_steps.append(
+                        WorkflowStepRun(
+                            step_id=result.step.id,
+                            layer_index=layer_index,
+                            status=WorkflowStepStatus.SKIPPED,
+                            execution=None,
+                            values=(),
+                        )
                     )
-                )
+                    continue
 
-            for step, step_context, execution in layer_executions:
+                if result.step_context is None:
+                    raise RuntimeError("Executed workflow step is missing its step-start context.")
+
+                execution = result.execution
+                step_context = result.step_context
+
                 current_context = self._merge_execution_context(
                     current_context=current_context,
                     execution_context=step_context,
@@ -217,14 +232,14 @@ class WorkflowRunner:
                     WorkflowValue(
                         name=binding.name,
                         value=binding.resolve(execution.output),
-                        producer_step_id=step.id,
+                        producer_step_id=result.step.id,
                     )
-                    for binding in step.outputs
+                    for binding in result.step.outputs
                 )
 
                 completed_steps.append(
                     WorkflowStepRun(
-                        step_id=step.id,
+                        step_id=result.step.id,
                         layer_index=layer_index,
                         status=WorkflowStepStatus.EXECUTED,
                         execution=execution,
