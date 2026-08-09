@@ -5,8 +5,12 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue, ValidationError
 
-from azathoth.workflows import WorkflowValue, WorkflowValueBinding
-from azathoth.workflows.value import WorkflowValueResolutionError
+from azathoth.workflows import (
+    WorkflowValue,
+    WorkflowValueBinding,
+    WorkflowValueReference,
+    WorkflowValueResolutionError,
+)
 
 STEP_ID = UUID("44df6bdb-2d5e-4564-8ab3-d5c53abfd84d")
 
@@ -243,3 +247,57 @@ def test_workflow_value_binding_rejects_out_of_range_index() -> None:
                 "math",
             ]
         )
+
+
+def test_workflow_value_reference_records_producer_and_name() -> None:
+    reference = WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+
+    assert reference.producer_step_id == STEP_ID
+    assert reference.name == "classification"
+
+
+def test_workflow_value_reference_rejects_empty_name() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="",
+        )
+
+
+def test_workflow_value_reference_is_immutable() -> None:
+    reference = WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+
+    with pytest.raises(ValidationError):
+        reference.name = "intent"
+
+
+def test_workflow_value_reference_round_trips_through_json() -> None:
+    reference = WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+
+    restored = WorkflowValueReference.model_validate_json(reference.model_dump_json())
+
+    assert restored == reference
+
+
+def test_workflow_value_references_distinguish_same_name_by_producer() -> None:
+    other_step_id = UUID("f95a21c2-3fcb-4ca5-bbbc-7192f5c3b1be")
+
+    first = WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+    second = WorkflowValueReference(
+        producer_step_id=other_step_id,
+        name="classification",
+    )
+
+    assert first != second
