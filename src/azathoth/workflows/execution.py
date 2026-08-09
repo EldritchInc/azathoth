@@ -1,6 +1,7 @@
 """Recorded results of executable workflow runs."""
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,15 +12,38 @@ from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.value import WorkflowValue
 
 
+class WorkflowStepStatus(StrEnum):
+    """The execution status of one workflow step."""
+
+    EXECUTED = "executed"
+    SKIPPED = "skipped"
+
+
 class WorkflowStepRun(BaseModel):
-    """The recorded execution of one workflow step."""
+    """The recorded result of one workflow step."""
 
     model_config = ConfigDict(frozen=True)
 
     step_id: UUID
     layer_index: int = Field(ge=0)
-    execution: ExecutionResult
+    status: WorkflowStepStatus = WorkflowStepStatus.EXECUTED
+    execution: ExecutionResult | None = None
     values: tuple[WorkflowValue, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_execution_status(self) -> "WorkflowStepRun":
+        """Ensure execution evidence matches the recorded step status."""
+
+        if self.status is WorkflowStepStatus.EXECUTED and self.execution is None:
+            raise ValueError("Executed workflow steps must include an execution result.")
+
+        if self.status is WorkflowStepStatus.SKIPPED and self.execution is not None:
+            raise ValueError("Skipped workflow steps cannot include an execution result.")
+
+        if self.status is WorkflowStepStatus.SKIPPED and self.values:
+            raise ValueError("Skipped workflow steps cannot produce workflow values.")
+
+        return self
 
 
 class WorkflowRun(BaseModel):
@@ -36,18 +60,9 @@ class WorkflowRun(BaseModel):
     started_at: datetime
     completed_at: datetime
 
-    @model_validator(mode="after")
-    def validate_timestamps(self) -> "WorkflowRun":
-        """Ensure workflow completion does not precede workflow start."""
-
-        if self.completed_at < self.started_at:
-            raise ValueError("Workflow completion time cannot precede its start time.")
-
-        return self
-
     @property
     def values(self) -> tuple[WorkflowValue, ...]:
-        """Return all workflow values in recorded execution order."""
+        """Return all workflow values in recorded step order."""
 
         return tuple(value for step in self.steps for value in step.values)
 
@@ -63,6 +78,15 @@ class WorkflowRun(BaseModel):
         self,
         producer_step_id: UUID,
     ) -> tuple[WorkflowValue, ...]:
-        """Return all values produced by one workflow step."""
+        """Return all workflow values produced by one workflow step."""
 
         return tuple(value for value in self.values if value.producer_step_id == producer_step_id)
+
+    @model_validator(mode="after")
+    def validate_timestamps(self) -> "WorkflowRun":
+        """Ensure workflow completion does not precede workflow start."""
+
+        if self.completed_at < self.started_at:
+            raise ValueError("Workflow completion time cannot precede its start time.")
+
+        return self

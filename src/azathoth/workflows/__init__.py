@@ -6,6 +6,7 @@ from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
+    WorkflowStepStatus,
 )
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
@@ -39,6 +40,7 @@ __all__ = [
     "WorkflowSpecification",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
+    "WorkflowStepStatus",
     "WorkflowValue",
     "WorkflowValueBinding",
     "WorkflowValueReference",
