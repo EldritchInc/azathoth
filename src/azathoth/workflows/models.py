@@ -42,7 +42,7 @@ class WorkflowSpecification(BaseModel):
 
     @model_validator(mode="after")
     def validate_dependency_graph(self) -> Self:
-        """Ensure workflow dependencies form a valid directed acyclic graph."""
+        """Ensure workflow dependencies and value references are valid."""
 
         steps_by_id = {step.id: step for step in self.steps}
 
@@ -82,6 +82,48 @@ class WorkflowSpecification(BaseModel):
         for step in self.steps:
             visit(step.id)
 
+        for step in self.steps:
+            output_names = tuple(binding.name for binding in step.outputs)
+
+            if len(output_names) != len(set(output_names)):
+                raise ValueError(
+                    "Workflow step output names must be unique within each producer step."
+                )
+
+            input_names = tuple(binding.name for binding in step.inputs)
+
+            if len(input_names) != len(set(input_names)):
+                raise ValueError(
+                    "Workflow step input names must be unique within each consumer step."
+                )
+
+            upstream_step_ids = self._upstream_step_ids(step)
+
+            for input_binding in step.inputs:
+                producer_step_id = input_binding.source.producer_step_id
+
+                if producer_step_id not in steps_by_id:
+                    raise ValueError(
+                        "Workflow input bindings must reference "
+                        "a producer step in the same workflow."
+                    )
+
+                producer = steps_by_id[producer_step_id]
+
+                producer_output_names = {output.name for output in producer.outputs}
+
+                if input_binding.source.name not in producer_output_names:
+                    raise ValueError(
+                        "Workflow input bindings must reference "
+                        "an output declared by the producer step."
+                    )
+
+                if producer_step_id not in upstream_step_ids:
+                    raise ValueError(
+                        "Workflow input bindings must reference "
+                        "values produced by upstream workflow steps."
+                    )
+
         return self
 
     def execution_layers(
@@ -110,3 +152,27 @@ class WorkflowSpecification(BaseModel):
             remaining = [step for step in remaining if step.id not in ready_ids]
 
         return tuple(layers)
+
+    def _upstream_step_ids(
+        self,
+        step: WorkflowStepSpecification,
+    ) -> set[UUID]:
+        """Return all transitive dependencies of a workflow step."""
+
+        steps_by_id = {workflow_step.id: workflow_step for workflow_step in self.steps}
+
+        upstream: set[UUID] = set()
+        pending = list(step.depends_on)
+
+        while pending:
+            dependency_id = pending.pop()
+
+            if dependency_id in upstream:
+                continue
+
+            upstream.add(dependency_id)
+
+            dependency = steps_by_id[dependency_id]
+            pending.extend(dependency.depends_on)
+
+        return upstream
