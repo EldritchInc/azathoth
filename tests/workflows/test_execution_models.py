@@ -8,7 +8,13 @@ from pydantic import ValidationError
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
-from azathoth.workflows import WorkflowMetadata, WorkflowRun, WorkflowStepRun, WorkflowValue
+from azathoth.workflows import (
+    WorkflowMetadata,
+    WorkflowRun,
+    WorkflowStepRun,
+    WorkflowStepStatus,
+    WorkflowValue,
+)
 
 WORKFLOW_ID = UUID("9af3990b-a801-47f8-b9e4-733cbdf8b635")
 STEP_ONE_ID = UUID("ef169ce8-3eab-48ef-b6f3-d32be6c52f95")
@@ -89,6 +95,7 @@ def create_workflow_run() -> WorkflowRun:
                         producer_step_id=STEP_ONE_ID,
                     ),
                 ),
+                status=WorkflowStepStatus.EXECUTED,
             ),
             WorkflowStepRun(
                 step_id=STEP_TWO_ID,
@@ -105,6 +112,7 @@ def create_workflow_run() -> WorkflowRun:
                         producer_step_id=STEP_TWO_ID,
                     ),
                 ),
+                status=WorkflowStepStatus.EXECUTED,
             ),
         ),
         initial_context=context,
@@ -141,7 +149,7 @@ def test_workflow_run_records_workflow_and_step_executions() -> None:
         0,
         1,
     )
-    assert tuple(step.execution.strategy_id for step in run.steps) == (
+    assert tuple(require_execution(step).strategy_id for step in run.steps) == (
         STRATEGY_ONE_ID,
         STRATEGY_TWO_ID,
     )
@@ -151,10 +159,11 @@ def test_workflow_step_identity_is_distinct_from_strategy_identity() -> None:
     run = create_workflow_run()
 
     first = run.steps[0]
+    execution = require_execution(first)
 
     assert first.step_id == STEP_ONE_ID
-    assert first.execution.strategy_id == STRATEGY_ONE_ID
-    assert first.step_id != first.execution.strategy_id
+    assert execution.strategy_id == STRATEGY_ONE_ID
+    assert first.step_id != execution.strategy_id
 
 
 def test_workflow_run_requires_at_least_one_step() -> None:
@@ -189,6 +198,15 @@ def test_workflow_run_requires_at_least_one_step() -> None:
         )
 
 
+def require_execution(
+    step: WorkflowStepRun,
+) -> ExecutionResult:
+    """Return execution evidence for a step expected to have executed."""
+
+    assert step.execution is not None
+    return step.execution
+
+
 def test_workflow_run_rejects_completion_before_start() -> None:
     context = Context()
 
@@ -211,6 +229,7 @@ def test_workflow_run_rejects_completion_before_start() -> None:
                         strategy_name="Classifier",
                         context=context,
                     ),
+                    status=WorkflowStepStatus.EXECUTED,
                 ),
             ),
             initial_context=context,

@@ -124,6 +124,30 @@ class WorkflowSpecification(BaseModel):
                         "values produced by upstream workflow steps."
                     )
 
+            for condition in step.conditions:
+                producer_step_id = condition.source.producer_step_id
+
+                if producer_step_id not in steps_by_id:
+                    raise ValueError(
+                        "Workflow conditions must reference a producer step in the same workflow."
+                    )
+
+                producer = steps_by_id[producer_step_id]
+
+                producer_output_names = {output.name for output in producer.outputs}
+
+                if condition.source.name not in producer_output_names:
+                    raise ValueError(
+                        "Workflow conditions must reference "
+                        "an output declared by the producer step."
+                    )
+
+                if producer_step_id not in upstream_step_ids:
+                    raise ValueError(
+                        "Workflow conditions must reference "
+                        "values produced by upstream workflow steps."
+                    )
+
         return self
 
     def execution_layers(
@@ -149,6 +173,7 @@ class WorkflowSpecification(BaseModel):
 
             ready_ids = {step.id for step in ready}
             completed_ids.update(ready_ids)
+
             remaining = [step for step in remaining if step.id not in ready_ids]
 
         return tuple(layers)

@@ -4,19 +4,21 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from azathoth.strategies import Strategy
+from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
 
 
 @dataclass(frozen=True)
 class WorkflowCandidateStep:
-    """One executable strategy placed within a workflow candidate."""
+    """An executable strategy bound to one workflow step."""
 
     id: UUID
     strategy: Strategy
     depends_on: tuple[UUID, ...] = ()
     inputs: tuple[WorkflowInputBinding, ...] = ()
     outputs: tuple[WorkflowValueBinding, ...] = ()
+    conditions: tuple[WorkflowCondition, ...] = ()
 
 
 @dataclass(frozen=True)
