@@ -90,6 +90,8 @@ class ConditionalExecutor(StrategyExecutor):
         if strategy.metadata.name == "Classifier":
             output = {
                 "classification": self.classification,
+                "confidence": 0.94,
+                "documents": 3,
             }
         else:
             output = {
@@ -569,3 +571,200 @@ def test_runner_evaluates_condition_operator(
         ]
         assert conditional_run.status is WorkflowStepStatus.SKIPPED
         assert conditional_run.execution is None
+
+
+def create_numeric_candidate(
+    *,
+    operator: WorkflowConditionOperator,
+    expected: float,
+) -> WorkflowCandidate:
+    """Create a workflow using a numeric workflow condition."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Confidence routing",
+            description="Route based on confidence.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=CLASSIFIER_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=CLASSIFIER_STRATEGY_ID,
+                    name="Classifier",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="confidence",
+                        path=("confidence",),
+                    ),
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=MATH_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=MATH_STRATEGY_ID,
+                    name="High confidence",
+                ),
+                depends_on=(CLASSIFIER_STEP_ID,),
+                conditions=(
+                    WorkflowCondition(
+                        source=WorkflowValueReference(
+                            producer_step_id=CLASSIFIER_STEP_ID,
+                            name="confidence",
+                        ),
+                        operator=operator,
+                        expected=expected,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def test_greater_than_operator_executes_matching_step() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=create_numeric_candidate(
+                operator=WorkflowConditionOperator.GREATER_THAN,
+                expected=0.90,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.EXECUTED
+
+
+def test_greater_than_operator_skips_non_matching_step() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=create_numeric_candidate(
+                operator=WorkflowConditionOperator.GREATER_THAN,
+                expected=0.95,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.SKIPPED
+
+
+def test_greater_than_or_equal_operator() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=create_numeric_candidate(
+                operator=WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+                expected=0.94,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.EXECUTED
+
+
+def test_less_than_operator() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=create_numeric_candidate(
+                operator=WorkflowConditionOperator.LESS_THAN,
+                expected=1.0,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.EXECUTED
+
+
+def test_less_than_or_equal_operator() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=create_numeric_candidate(
+                operator=WorkflowConditionOperator.LESS_THAN_OR_EQUAL,
+                expected=0.94,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.EXECUTED
+
+
+def test_not_equal_operator() -> None:
+    candidate = WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Not equal",
+            description="Route when values differ.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=CLASSIFIER_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=CLASSIFIER_STRATEGY_ID,
+                    name="Classifier",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="classification",
+                        path=("classification",),
+                    ),
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=MATH_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=MATH_STRATEGY_ID,
+                    name="Reasoner",
+                ),
+                depends_on=(CLASSIFIER_STEP_ID,),
+                conditions=(
+                    WorkflowCondition(
+                        source=WorkflowValueReference(
+                            producer_step_id=CLASSIFIER_STEP_ID,
+                            name="classification",
+                        ),
+                        operator=WorkflowConditionOperator.NOT_EQUAL,
+                        expected="general",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=ConditionalExecutor(
+                classification="math",
+            ),
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert run.steps[1].status is WorkflowStepStatus.EXECUTED
