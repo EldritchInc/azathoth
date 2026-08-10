@@ -84,7 +84,7 @@ class WorkflowRunner:
             if value is None:
                 return False
 
-            if value.value != condition.expected:
+            if not condition.matches(value.value):
                 return False
 
         return True
