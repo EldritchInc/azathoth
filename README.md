@@ -655,6 +655,65 @@ This provides the foundation for adaptive routing while preserving Azathoth’s 
 
 ------------------------------------------------------------------------
 
+# Workflow Condition Operators
+
+Workflow conditions compare workflow values using explicit comparison operators.
+
+```text
+Workflow Value
+        │
+        ▼
+WorkflowCondition
+        │
+        ▼
+comparison
+        │
+        ▼
+execute or skip
+```
+
+Supported operators include:
+
+| Operator | Meaning |
+|----------|---------|
+| `==` | Equal |
+| `!=` | Not Equal |
+| `>` | Greater Than |
+| `>=` | Greater Than or Equal |
+| `<` | Less Than |
+| `<=` | Less Than or Equal |
+
+For example:
+
+```python
+WorkflowCondition(
+    source=WorkflowValueReference(
+        producer_step_id=classifier_step_id,
+        name="confidence",
+    ),
+    operator=WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+    expected=0.90,
+)
+```
+
+Equality operators support any JSON value.
+
+Ordering operators require numeric operands.
+
+This allows workflows to naturally express routing decisions such as:
+
+- confidence thresholds;
+- document counts;
+- evaluation scores;
+- latency limits; and
+- optimization metrics.
+
+Workflow comparison semantics are implemented by `WorkflowCondition`.
+
+Workflow execution remains responsible only for resolving workflow values and evaluating workflow eligibility.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
