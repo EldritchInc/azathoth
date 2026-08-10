@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from azathoth.workflows import (
     WorkflowCondition,
+    WorkflowConditionOperator,
     WorkflowValueReference,
 )
 
@@ -33,6 +34,52 @@ def test_workflow_condition_records_source_and_expected_value() -> None:
         name="classification",
     )
     assert condition.expected == "math"
+
+
+def test_workflow_condition_defaults_to_equality() -> None:
+    condition = create_condition()
+
+    assert condition.operator is WorkflowConditionOperator.EQUAL
+
+
+def test_workflow_condition_records_explicit_operator() -> None:
+    condition = WorkflowCondition(
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
+        operator=WorkflowConditionOperator.NOT_EQUAL,
+        expected="general",
+    )
+
+    assert condition.operator is WorkflowConditionOperator.NOT_EQUAL
+    assert condition.expected == "general"
+
+
+@pytest.mark.parametrize(
+    "operator",
+    (
+        WorkflowConditionOperator.EQUAL,
+        WorkflowConditionOperator.NOT_EQUAL,
+        WorkflowConditionOperator.GREATER_THAN,
+        WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+        WorkflowConditionOperator.LESS_THAN,
+        WorkflowConditionOperator.LESS_THAN_OR_EQUAL,
+    ),
+)
+def test_workflow_condition_supports_comparison_operators(
+    operator: WorkflowConditionOperator,
+) -> None:
+    condition = WorkflowCondition(
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="confidence",
+        ),
+        operator=operator,
+        expected=0.95,
+    )
+
+    assert condition.operator is operator
 
 
 def test_workflow_condition_supports_structured_json_values() -> None:
@@ -104,12 +151,20 @@ def test_workflow_condition_is_immutable() -> None:
         condition.expected = "general"
 
 
+def test_workflow_condition_operator_is_immutable() -> None:
+    condition = create_condition()
+
+    with pytest.raises(ValidationError):
+        condition.operator = WorkflowConditionOperator.NOT_EQUAL
+
+
 def test_workflow_condition_round_trips_through_json() -> None:
     condition = WorkflowCondition(
         source=WorkflowValueReference(
             producer_step_id=STEP_ID,
             name="classification",
         ),
+        operator=WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
         expected={
             "category": "math",
             "confidence": 0.98,
@@ -119,6 +174,37 @@ def test_workflow_condition_round_trips_through_json() -> None:
     restored = WorkflowCondition.model_validate_json(condition.model_dump_json())
 
     assert restored == condition
+    assert restored.operator is WorkflowConditionOperator.GREATER_THAN_OR_EQUAL
+
+
+def test_workflow_condition_serialization_records_operator() -> None:
+    condition = WorkflowCondition(
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="latency_ms",
+        ),
+        operator=WorkflowConditionOperator.LESS_THAN,
+        expected=500,
+    )
+
+    serialized = condition.model_dump()
+
+    assert serialized["operator"] == WorkflowConditionOperator.LESS_THAN
+
+
+def test_existing_equality_condition_shape_remains_valid() -> None:
+    condition = WorkflowCondition.model_validate(
+        {
+            "source": {
+                "producer_step_id": str(STEP_ID),
+                "name": "classification",
+            },
+            "expected": "math",
+        }
+    )
+
+    assert condition.operator is WorkflowConditionOperator.EQUAL
+    assert condition.expected == "math"
 
 
 def test_equivalent_workflow_conditions_are_equal() -> None:
@@ -151,6 +237,27 @@ def test_workflow_conditions_with_different_expected_values_are_not_equal() -> N
             name="classification",
         ),
         expected="general",
+    )
+
+    assert first != second
+
+
+def test_workflow_conditions_with_different_operators_are_not_equal() -> None:
+    first = WorkflowCondition(
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="confidence",
+        ),
+        operator=WorkflowConditionOperator.GREATER_THAN,
+        expected=0.9,
+    )
+    second = WorkflowCondition(
+        source=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="confidence",
+        ),
+        operator=WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+        expected=0.9,
     )
 
     assert first != second
