@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
+import pytest
 from pydantic import JsonValue
 
 from azathoth.context import Context
@@ -17,6 +18,7 @@ from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateStep,
     WorkflowCondition,
+    WorkflowConditionOperator,
     WorkflowMetadata,
     WorkflowRunner,
     WorkflowStepStatus,
@@ -337,3 +339,233 @@ def test_all_conditions_must_match() -> None:
     math_run = next(step for step in run.steps if step.step_id == MATH_STEP_ID)
 
     assert math_run.status is WorkflowStepStatus.SKIPPED
+
+
+class NumericConditionalExecutor(StrategyExecutor):
+    """Return a numeric workflow value for condition evaluation."""
+
+    def __init__(
+        self,
+        *,
+        score: float,
+    ) -> None:
+        self.score = score
+        self.calls: list[str] = []
+
+    async def execute(
+        self,
+        strategy: Strategy,
+        context: Context,
+    ) -> ExecutionResult:
+        """Record execution and return deterministic structured output."""
+
+        self.calls.append(strategy.metadata.name)
+
+        output: JsonValue
+
+        if strategy.metadata.name == "Scorer":
+            output = {
+                "score": self.score,
+            }
+        else:
+            output = {
+                "result": strategy.metadata.name,
+            }
+
+        return ExecutionResult(
+            strategy_id=strategy.metadata.id,
+            strategy_name=strategy.metadata.name,
+            strategy_version=strategy.metadata.version,
+            output=output,
+            initial_context=context,
+            final_context=context,
+            started_at=datetime(
+                2026,
+                8,
+                9,
+                22,
+                0,
+                tzinfo=UTC,
+            ),
+            completed_at=datetime(
+                2026,
+                8,
+                9,
+                22,
+                0,
+                1,
+                tzinfo=UTC,
+            ),
+        )
+
+
+def create_numeric_condition_candidate(
+    *,
+    operator: WorkflowConditionOperator,
+    expected: JsonValue,
+) -> WorkflowCandidate:
+    """Create a workflow whose second step uses a numeric condition."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="Numeric conditional workflow",
+            description="Conditionally execute a step using a numeric value.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=CLASSIFIER_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=CLASSIFIER_STRATEGY_ID,
+                    name="Scorer",
+                ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="score",
+                        path=("score",),
+                    ),
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=MATH_STEP_ID,
+                strategy=StubStrategy(
+                    strategy_id=MATH_STRATEGY_ID,
+                    name="Conditional reasoner",
+                ),
+                depends_on=(CLASSIFIER_STEP_ID,),
+                conditions=(
+                    WorkflowCondition(
+                        source=WorkflowValueReference(
+                            producer_step_id=CLASSIFIER_STEP_ID,
+                            name="score",
+                        ),
+                        operator=operator,
+                        expected=expected,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "operator",
+        "expected",
+        "actual",
+        "should_execute",
+    ),
+    (
+        (
+            WorkflowConditionOperator.EQUAL,
+            0.9,
+            0.9,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.EQUAL,
+            0.9,
+            0.8,
+            False,
+        ),
+        (
+            WorkflowConditionOperator.NOT_EQUAL,
+            0.9,
+            0.8,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.NOT_EQUAL,
+            0.9,
+            0.9,
+            False,
+        ),
+        (
+            WorkflowConditionOperator.GREATER_THAN,
+            0.9,
+            0.95,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.GREATER_THAN,
+            0.9,
+            0.9,
+            False,
+        ),
+        (
+            WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+            0.9,
+            0.9,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.GREATER_THAN_OR_EQUAL,
+            0.9,
+            0.85,
+            False,
+        ),
+        (
+            WorkflowConditionOperator.LESS_THAN,
+            0.9,
+            0.85,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.LESS_THAN,
+            0.9,
+            0.9,
+            False,
+        ),
+        (
+            WorkflowConditionOperator.LESS_THAN_OR_EQUAL,
+            0.9,
+            0.9,
+            True,
+        ),
+        (
+            WorkflowConditionOperator.LESS_THAN_OR_EQUAL,
+            0.9,
+            0.95,
+            False,
+        ),
+    ),
+)
+def test_runner_evaluates_condition_operator(
+    operator: WorkflowConditionOperator,
+    expected: JsonValue,
+    actual: float,
+    should_execute: bool,
+) -> None:
+    candidate = create_numeric_condition_candidate(
+        operator=operator,
+        expected=expected,
+    )
+    executor = NumericConditionalExecutor(
+        score=actual,
+    )
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=executor,
+        ).run(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    conditional_run = next(step for step in run.steps if step.step_id == MATH_STEP_ID)
+
+    if should_execute:
+        assert executor.calls == [
+            "Scorer",
+            "Conditional reasoner",
+        ]
+        assert conditional_run.status is WorkflowStepStatus.EXECUTED
+        assert conditional_run.execution is not None
+    else:
+        assert executor.calls == [
+            "Scorer",
+        ]
+        assert conditional_run.status is WorkflowStepStatus.SKIPPED
+        assert conditional_run.execution is None
