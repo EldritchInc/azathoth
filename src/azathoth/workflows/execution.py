@@ -10,6 +10,7 @@ from azathoth.context import Context
 from azathoth.execution import ExecutionResult
 from azathoth.workflows.attempt import WorkflowStepAttempt
 from azathoth.workflows.models import WorkflowMetadata
+from azathoth.workflows.reliability import WorkflowReliabilityMetrics
 from azathoth.workflows.statistics import WorkflowRunStatistics
 from azathoth.workflows.value import WorkflowValue
 
@@ -142,6 +143,52 @@ class WorkflowRun(BaseModel):
             failed_attempts=failed_attempts,
             retry_count=retry_count,
             duration_seconds=duration_seconds,
+        )
+
+    @property
+    def reliability(self) -> WorkflowReliabilityMetrics:
+        """Return reliability metrics derived from workflow execution."""
+
+        statistics = self.statistics
+
+        completion_rate = (
+            statistics.executed_steps / statistics.total_steps
+            if statistics.total_steps > 0
+            else 0.0
+        )
+
+        attempted_steps = statistics.executed_steps + statistics.failed_steps
+
+        if attempted_steps == 0:
+            return WorkflowReliabilityMetrics(
+                completion_rate=completion_rate,
+                first_attempt_success_rate=0.0,
+                retry_rate=0.0,
+                failure_rate=0.0,
+            )
+
+        first_attempt_successes = sum(
+            step.status is WorkflowStepStatus.EXECUTED
+            and len(step.attempts) == 1
+            and step.attempts[0].succeeded
+            for step in self.steps
+        )
+
+        retried_steps = sum(
+            len(step.attempts) > 1
+            for step in self.steps
+            if step.status
+            in (
+                WorkflowStepStatus.EXECUTED,
+                WorkflowStepStatus.FAILED,
+            )
+        )
+
+        return WorkflowReliabilityMetrics(
+            completion_rate=completion_rate,
+            first_attempt_success_rate=(first_attempt_successes / attempted_steps),
+            retry_rate=(retried_steps / attempted_steps),
+            failure_rate=(statistics.failed_steps / attempted_steps),
         )
 
     @property
