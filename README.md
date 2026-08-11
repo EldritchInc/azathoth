@@ -714,6 +714,81 @@ Workflow execution remains responsible only for resolving workflow values and ev
 
 ------------------------------------------------------------------------
 
+# Workflow Retry Policies
+
+Workflow steps may define retry behavior independently.
+
+```text
+Workflow Step
+      │
+      ▼
+Retry Policy
+      │
+      ▼
+Workflow Runner
+      │
+      ▼
+attempt
+      │
+success? ─────► complete
+      │
+      ▼
+retry
+```
+
+Retry policies are configured per workflow step.
+
+```python
+WorkflowRetryPolicy(
+    max_attempts=3,
+    initial_delay_seconds=0.5,
+    backoff_multiplier=2.0,
+    maximum_delay_seconds=5.0,
+)
+```
+
+A retry policy specifies:
+
+- maximum execution attempts;
+- initial retry delay;
+- exponential backoff multiplier; and
+- optional maximum retry delay.
+
+`max_attempts` includes the initial execution.
+
+For example:
+
+```text
+max_attempts = 3
+
+Attempt 1
+↓
+
+Attempt 2
+↓
+
+Attempt 3
+```
+
+Retry behavior is implemented by `WorkflowRunner`.
+
+Strategies remain unaware of retries and simply succeed or fail.
+
+This separation keeps workflow orchestration responsible for execution policy while allowing individual workflow steps to configure retry behavior independently.
+
+Retry policies compose naturally with:
+
+- workflow dependency layers;
+- workflow values;
+- conditional execution; and
+- step-specific model and tool configuration.
+
+The current implementation computes retry delays but intentionally performs retries immediately.
+
+This preserves deterministic execution while establishing the durable retry architecture.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any

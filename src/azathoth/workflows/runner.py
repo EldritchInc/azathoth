@@ -6,6 +6,7 @@ from uuid import UUID
 
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import ExecutionResult, StrategyExecutor
+from azathoth.strategies import Strategy
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -15,6 +16,7 @@ from azathoth.workflows.execution import (
     WorkflowStepRun,
     WorkflowStepStatus,
 )
+from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowValue
 
 
@@ -128,6 +130,43 @@ class WorkflowRunner:
 
         return step_context
 
+    async def _execute_with_retry(
+        self,
+        *,
+        strategy: Strategy,
+        context: Context,
+        retry_policy: WorkflowRetryPolicy,
+    ) -> ExecutionResult:
+        """Execute a strategy according to its retry policy."""
+
+        last_exception: Exception | None = None
+
+        for attempt in range(
+            1,
+            retry_policy.max_attempts + 1,
+        ):
+            try:
+                return await self._executor.execute(
+                    strategy,
+                    context,
+                )
+
+            except Exception as error:
+                last_exception = error
+
+                if attempt == retry_policy.max_attempts:
+                    break
+
+                # Delay schedule intentionally computed but
+                # not yet slept to keep execution deterministic.
+                retry_policy.delay_for_attempt(
+                    attempt + 1,
+                )
+
+        assert last_exception is not None
+
+        raise last_exception
+
     @staticmethod
     def _merge_execution_context(
         *,
@@ -190,9 +229,10 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 )
 
-                execution = await self._executor.execute(
-                    step.strategy,
-                    step_context,
+                execution = await self._execute_with_retry(
+                    strategy=step.strategy,
+                    context=step_context,
+                    retry_policy=step.retry_policy,
                 )
 
                 layer_results.append(
