@@ -1,3 +1,7 @@
+from azathoth.workflows.attempt import (
+    WorkflowStepAttempt,
+    WorkflowStepFailure,
+)
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -46,6 +50,8 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunner",
     "WorkflowSpecification",
+    "WorkflowStepAttempt",
+    "WorkflowStepFailure",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
     "WorkflowStepStatus",
