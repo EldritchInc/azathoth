@@ -837,6 +837,98 @@ Execution history forms the foundation for future capabilities such as:
 
 ------------------------------------------------------------------------
 
+# Workflow Failure Policies
+
+Workflow steps independently define how permanent execution failures are handled.
+
+```text
+Workflow Step
+      │
+      ▼
+Retry Policy
+      │
+      ▼
+Retries Exhausted
+      │
+      ▼
+Failure Policy
+```
+
+Failure policies are configured per workflow step.
+
+```python
+WorkflowFailurePolicy.FAIL_WORKFLOW
+
+WorkflowFailurePolicy.CONTINUE
+
+WorkflowFailurePolicy.SKIP_DEPENDENTS
+```
+
+## FAIL_WORKFLOW
+
+Abort workflow execution immediately.
+
+The original exception is propagated after retry exhaustion.
+
+```text
+failure
+   │
+   ▼
+workflow aborts
+```
+
+## CONTINUE
+
+Record the failed workflow step while allowing remaining workflow execution to continue.
+
+Failed workflow steps do not produce workflow values.
+
+Independent workflow branches continue normally.
+
+```text
+failure
+   │
+   ▼
+FAILED
+   │
+   ├── remaining workflow continues
+   └── missing workflow values remain unavailable
+```
+
+## SKIP_DEPENDENTS
+
+Record the failed workflow step.
+
+Every transitive dependent workflow step is skipped.
+
+Independent workflow branches continue.
+
+```text
+failed
+   │
+   ├── dependent
+   │      │
+   │      ▼
+   │   skipped
+   │
+   └── independent
+          │
+          ▼
+      executed
+```
+
+Failure policies compose naturally with:
+
+- workflow dependency layers;
+- workflow values;
+- conditional execution;
+- retry policies; and
+- execution attempt history.
+
+Together these provide deterministic, fault-tolerant workflow orchestration while preserving immutable workflow execution records.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
