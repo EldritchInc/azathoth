@@ -997,6 +997,82 @@ These statistics provide the foundation for future capabilities including:
 
 ------------------------------------------------------------------------
 
+# Workflow Reliability Metrics
+
+Workflow runs expose normalized reliability metrics derived from recorded execution history.
+
+```text
+WorkflowRun
+      │
+      ▼
+WorkflowRunStatistics
+      │
+      ▼
+WorkflowReliabilityMetrics
+```
+
+Reliability metrics summarize execution quality independently of workflow size.
+
+```python
+metrics = run.reliability
+
+metrics.completion_rate
+
+metrics.first_attempt_success_rate
+
+metrics.retry_rate
+
+metrics.failure_rate
+```
+
+## Completion Rate
+
+Fraction of workflow steps that completed successfully.
+
+```text
+executed workflow steps
+────────────────────────
+total workflow steps
+```
+
+## First-Attempt Success Rate
+
+Fraction of attempted workflow steps that succeeded on their first execution attempt.
+
+```text
+first-attempt successes
+───────────────────────
+attempted workflow steps
+```
+
+## Retry Rate
+
+Fraction of attempted workflow steps requiring one or more retries.
+
+```text
+retried workflow steps
+──────────────────────
+attempted workflow steps
+```
+
+## Failure Rate
+
+Fraction of attempted workflow steps that permanently failed.
+
+```text
+failed workflow steps
+─────────────────────
+attempted workflow steps
+```
+
+Skipped workflow steps are excluded from attempt-based reliability metrics because they were never executed.
+
+Reliability metrics are computed rather than persisted, ensuring they always remain consistent with recorded workflow execution history.
+
+These metrics establish the foundation for future workflow evaluation, provider benchmarking, execution analytics, and automatic optimization.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
