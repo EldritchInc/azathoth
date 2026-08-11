@@ -144,6 +144,54 @@ class WorkflowRun(BaseModel):
             duration_seconds=duration_seconds,
         )
 
+    @property
+    def succeeded(self) -> bool:
+        """Return whether the workflow completed without failed steps."""
+
+        return self.statistics.failed_steps == 0
+
+    @property
+    def failed(self) -> bool:
+        """Return whether the workflow contains failed steps."""
+
+        return not self.succeeded
+
+    @property
+    def duration_seconds(self) -> float:
+        """Return the workflow execution duration in seconds."""
+
+        return self.statistics.duration_seconds
+
+    @property
+    def retry_count(self) -> int:
+        """Return the total retry count across the workflow."""
+
+        return self.statistics.retry_count
+
+    @property
+    def executed_step_count(self) -> int:
+        """Return the number of executed workflow steps."""
+
+        return self.statistics.executed_steps
+
+    @property
+    def failed_step_count(self) -> int:
+        """Return the number of failed workflow steps."""
+
+        return self.statistics.failed_steps
+
+    @property
+    def skipped_step_count(self) -> int:
+        """Return the number of skipped workflow steps."""
+
+        return self.statistics.skipped_steps
+
+    @property
+    def total_attempt_count(self) -> int:
+        """Return the total number of recorded execution attempts."""
+
+        return self.statistics.total_attempts
+
     def values_named(
         self,
         name: str,
