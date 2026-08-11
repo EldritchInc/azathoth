@@ -1,11 +1,12 @@
 """Executable workflow candidates."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from azathoth.strategies import Strategy
 from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.models import WorkflowMetadata
+from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
 
 
@@ -19,6 +20,9 @@ class WorkflowCandidateStep:
     inputs: tuple[WorkflowInputBinding, ...] = ()
     outputs: tuple[WorkflowValueBinding, ...] = ()
     conditions: tuple[WorkflowCondition, ...] = ()
+    retry_policy: WorkflowRetryPolicy = field(
+        default_factory=WorkflowRetryPolicy,
+    )
 
 
 @dataclass(frozen=True)
