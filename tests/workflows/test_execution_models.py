@@ -11,6 +11,7 @@ from azathoth.execution import ExecutionResult
 from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowRun,
+    WorkflowStepAttempt,
     WorkflowStepRun,
     WorkflowStepStatus,
     WorkflowValue,
@@ -62,10 +63,46 @@ def create_execution_result(
     )
 
 
+def create_step_attempt(
+    *,
+    execution: ExecutionResult,
+    attempt_number: int = 1,
+) -> WorkflowStepAttempt:
+    """Create a deterministic successful workflow step attempt."""
+
+    return WorkflowStepAttempt(
+        attempt_number=attempt_number,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        execution=execution,
+    )
+
+
+def require_execution(
+    step: WorkflowStepRun,
+) -> ExecutionResult:
+    """Return execution evidence for a step expected to have executed."""
+
+    assert step.execution is not None
+    return step.execution
+
+
 def create_workflow_run() -> WorkflowRun:
     """Create a deterministic recorded workflow run."""
 
     context = Context()
+
+    classifier_execution = create_execution_result(
+        strategy_id=STRATEGY_ONE_ID,
+        strategy_name="Classifier",
+        context=context,
+    )
+
+    reasoner_execution = create_execution_result(
+        strategy_id=STRATEGY_TWO_ID,
+        strategy_name="Reasoner",
+        context=context,
+    )
 
     return WorkflowRun(
         workflow=WorkflowMetadata(
@@ -78,10 +115,12 @@ def create_workflow_run() -> WorkflowRun:
             WorkflowStepRun(
                 step_id=STEP_ONE_ID,
                 layer_index=0,
-                execution=create_execution_result(
-                    strategy_id=STRATEGY_ONE_ID,
-                    strategy_name="Classifier",
-                    context=context,
+                status=WorkflowStepStatus.EXECUTED,
+                execution=classifier_execution,
+                attempts=(
+                    create_step_attempt(
+                        execution=classifier_execution,
+                    ),
                 ),
                 values=(
                     WorkflowValue(
@@ -95,15 +134,16 @@ def create_workflow_run() -> WorkflowRun:
                         producer_step_id=STEP_ONE_ID,
                     ),
                 ),
-                status=WorkflowStepStatus.EXECUTED,
             ),
             WorkflowStepRun(
                 step_id=STEP_TWO_ID,
                 layer_index=1,
-                execution=create_execution_result(
-                    strategy_id=STRATEGY_TWO_ID,
-                    strategy_name="Reasoner",
-                    context=context,
+                status=WorkflowStepStatus.EXECUTED,
+                execution=reasoner_execution,
+                attempts=(
+                    create_step_attempt(
+                        execution=reasoner_execution,
+                    ),
                 ),
                 values=(
                     WorkflowValue(
@@ -112,7 +152,6 @@ def create_workflow_run() -> WorkflowRun:
                         producer_step_id=STEP_TWO_ID,
                     ),
                 ),
-                status=WorkflowStepStatus.EXECUTED,
             ),
         ),
         initial_context=context,
@@ -198,17 +237,14 @@ def test_workflow_run_requires_at_least_one_step() -> None:
         )
 
 
-def require_execution(
-    step: WorkflowStepRun,
-) -> ExecutionResult:
-    """Return execution evidence for a step expected to have executed."""
-
-    assert step.execution is not None
-    return step.execution
-
-
 def test_workflow_run_rejects_completion_before_start() -> None:
     context = Context()
+
+    execution = create_execution_result(
+        strategy_id=STRATEGY_ONE_ID,
+        strategy_name="Classifier",
+        context=context,
+    )
 
     with pytest.raises(
         ValidationError,
@@ -224,12 +260,13 @@ def test_workflow_run_rejects_completion_before_start() -> None:
                 WorkflowStepRun(
                     step_id=STEP_ONE_ID,
                     layer_index=0,
-                    execution=create_execution_result(
-                        strategy_id=STRATEGY_ONE_ID,
-                        strategy_name="Classifier",
-                        context=context,
-                    ),
                     status=WorkflowStepStatus.EXECUTED,
+                    execution=execution,
+                    attempts=(
+                        create_step_attempt(
+                            execution=execution,
+                        ),
+                    ),
                 ),
             ),
             initial_context=context,
@@ -343,3 +380,18 @@ def test_workflow_values_do_not_require_globally_unique_names() -> None:
 
     assert len(classifications) == 2
     assert classifications[0].producer_step_id != classifications[1].producer_step_id
+
+
+def test_workflow_step_run_persists_successful_attempt() -> None:
+    run = create_workflow_run()
+
+    first = run.steps[0]
+
+    assert len(first.attempts) == 1
+
+    attempt = first.attempts[0]
+
+    assert attempt.attempt_number == 1
+    assert attempt.succeeded
+    assert attempt.execution == first.execution
+    assert attempt.failure is None
