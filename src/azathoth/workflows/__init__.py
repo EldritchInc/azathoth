@@ -20,6 +20,7 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.steps import (
     WorkflowStepSpecification,
@@ -41,6 +42,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunner",
     "WorkflowSpecification",
