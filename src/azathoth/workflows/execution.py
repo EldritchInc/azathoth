@@ -10,6 +10,7 @@ from azathoth.context import Context
 from azathoth.execution import ExecutionResult
 from azathoth.workflows.attempt import WorkflowStepAttempt
 from azathoth.workflows.models import WorkflowMetadata
+from azathoth.workflows.statistics import WorkflowRunStatistics
 from azathoth.workflows.value import WorkflowValue
 
 
@@ -107,6 +108,89 @@ class WorkflowRun(BaseModel):
         """Return all workflow values in recorded step order."""
 
         return tuple(value for step in self.steps for value in step.values)
+
+    @property
+    def statistics(self) -> WorkflowRunStatistics:
+        """Return statistics derived from the recorded workflow execution."""
+
+        executed_steps = sum(step.status is WorkflowStepStatus.EXECUTED for step in self.steps)
+        failed_steps = sum(step.status is WorkflowStepStatus.FAILED for step in self.steps)
+        skipped_steps = sum(step.status is WorkflowStepStatus.SKIPPED for step in self.steps)
+
+        attempts = tuple(attempt for step in self.steps for attempt in step.attempts)
+
+        successful_attempts = sum(attempt.succeeded for attempt in attempts)
+        failed_attempts = len(attempts) - successful_attempts
+
+        retry_count = sum(
+            max(
+                len(step.attempts) - 1,
+                0,
+            )
+            for step in self.steps
+        )
+
+        duration_seconds = (self.completed_at - self.started_at).total_seconds()
+
+        return WorkflowRunStatistics(
+            total_steps=len(self.steps),
+            executed_steps=executed_steps,
+            failed_steps=failed_steps,
+            skipped_steps=skipped_steps,
+            total_attempts=len(attempts),
+            successful_attempts=successful_attempts,
+            failed_attempts=failed_attempts,
+            retry_count=retry_count,
+            duration_seconds=duration_seconds,
+        )
+
+    @property
+    def succeeded(self) -> bool:
+        """Return whether the workflow completed without failed steps."""
+
+        return self.statistics.failed_steps == 0
+
+    @property
+    def failed(self) -> bool:
+        """Return whether the workflow contains failed steps."""
+
+        return not self.succeeded
+
+    @property
+    def duration_seconds(self) -> float:
+        """Return the workflow execution duration in seconds."""
+
+        return self.statistics.duration_seconds
+
+    @property
+    def retry_count(self) -> int:
+        """Return the total retry count across the workflow."""
+
+        return self.statistics.retry_count
+
+    @property
+    def executed_step_count(self) -> int:
+        """Return the number of executed workflow steps."""
+
+        return self.statistics.executed_steps
+
+    @property
+    def failed_step_count(self) -> int:
+        """Return the number of failed workflow steps."""
+
+        return self.statistics.failed_steps
+
+    @property
+    def skipped_step_count(self) -> int:
+        """Return the number of skipped workflow steps."""
+
+        return self.statistics.skipped_steps
+
+    @property
+    def total_attempt_count(self) -> int:
+        """Return the total number of recorded execution attempts."""
+
+        return self.statistics.total_attempts
 
     def values_named(
         self,

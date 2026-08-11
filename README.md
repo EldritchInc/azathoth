@@ -929,6 +929,74 @@ Together these provide deterministic, fault-tolerant workflow orchestration whil
 
 ------------------------------------------------------------------------
 
+# Workflow Execution Statistics
+
+Every recorded workflow execution exposes deterministic execution statistics.
+
+Statistics are computed directly from durable workflow execution records.
+
+```text
+WorkflowRun
+      │
+      ▼
+WorkflowRunStatistics
+```
+
+The statistics summarize:
+
+- workflow step counts;
+- execution attempt counts;
+- retry count; and
+- total execution duration.
+
+```python
+statistics = run.statistics
+
+statistics.total_steps
+statistics.executed_steps
+statistics.failed_steps
+statistics.skipped_steps
+
+statistics.total_attempts
+statistics.successful_attempts
+statistics.failed_attempts
+
+statistics.retry_count
+
+statistics.duration_seconds
+```
+
+`WorkflowRun` also exposes convenience properties for common queries.
+
+```python
+run.succeeded
+run.failed
+
+run.retry_count
+
+run.duration_seconds
+
+run.executed_step_count
+run.failed_step_count
+run.skipped_step_count
+
+run.total_attempt_count
+```
+
+Execution statistics are derived rather than persisted.
+
+This guarantees that execution summaries always remain consistent with the recorded workflow history while avoiding duplicated state.
+
+These statistics provide the foundation for future capabilities including:
+
+- execution dashboards;
+- provider comparisons;
+- workflow benchmarking;
+- optimization feedback; and
+- adaptive workflow planning.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
