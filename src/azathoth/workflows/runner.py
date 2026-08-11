@@ -7,6 +7,10 @@ from uuid import UUID
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import ExecutionResult, StrategyExecutor
 from azathoth.strategies import Strategy
+from azathoth.workflows.attempt import (
+    WorkflowStepAttempt,
+    WorkflowStepFailure,
+)
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -136,31 +140,68 @@ class WorkflowRunner:
         strategy: Strategy,
         context: Context,
         retry_policy: WorkflowRetryPolicy,
-    ) -> ExecutionResult:
+    ) -> tuple[
+        ExecutionResult,
+        tuple[WorkflowStepAttempt, ...],
+    ]:
         """Execute a strategy according to its retry policy."""
+
+        attempts: list[WorkflowStepAttempt] = []
 
         last_exception: Exception | None = None
 
-        for attempt in range(
+        for attempt_number in range(
             1,
             retry_policy.max_attempts + 1,
         ):
+            failure_started_at = datetime.now(
+                tz=UTC,
+            )
+
             try:
-                return await self._executor.execute(
+                execution = await self._executor.execute(
                     strategy,
                     context,
                 )
 
+                attempts.append(
+                    WorkflowStepAttempt(
+                        attempt_number=attempt_number,
+                        started_at=execution.started_at,
+                        completed_at=execution.completed_at,
+                        execution=execution,
+                    )
+                )
+
+                return (
+                    execution,
+                    tuple(attempts),
+                )
+
             except Exception as error:
+                failure_completed_at = datetime.now(
+                    tz=UTC,
+                )
+
+                attempts.append(
+                    WorkflowStepAttempt(
+                        attempt_number=attempt_number,
+                        started_at=failure_started_at,
+                        completed_at=failure_completed_at,
+                        failure=WorkflowStepFailure(
+                            exception_type=type(error).__name__,
+                            message=str(error),
+                        ),
+                    )
+                )
+
                 last_exception = error
 
-                if attempt == retry_policy.max_attempts:
+                if attempt_number == retry_policy.max_attempts:
                     break
 
-                # Delay schedule intentionally computed but
-                # not yet slept to keep execution deterministic.
                 retry_policy.delay_for_attempt(
-                    attempt + 1,
+                    attempt_number + 1,
                 )
 
         assert last_exception is not None
@@ -229,7 +270,7 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 )
 
-                execution = await self._execute_with_retry(
+                execution, _attempts = await self._execute_with_retry(
                     strategy=step.strategy,
                     context=step_context,
                     retry_policy=step.retry_policy,
