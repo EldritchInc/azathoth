@@ -789,6 +789,54 @@ This preserves deterministic execution while establishing the durable retry arch
 
 ------------------------------------------------------------------------
 
+# Workflow Step Attempt History
+
+Every workflow execution attempt is recorded.
+
+```text
+Workflow Step
+      │
+      ▼
+Attempt 1
+      │
+failure
+      ▼
+Attempt 2
+      │
+failure
+      ▼
+Attempt 3
+      │
+success
+      ▼
+Workflow Step Run
+```
+
+Each attempt records:
+
+- attempt number;
+- start time;
+- completion time;
+- either:
+  - a successful execution result; or
+  - a recorded failure.
+
+Successful executions continue to be exposed directly through the workflow step.
+
+Attempt history provides the complete execution history that produced the final result.
+
+This enables durable execution auditing while preserving a simple interface for successful workflow execution.
+
+Execution history forms the foundation for future capabilities such as:
+
+- reliability metrics;
+- provider comparisons;
+- optimization feedback;
+- execution analytics; and
+- adaptive workflow selection.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
