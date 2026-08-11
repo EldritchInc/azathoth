@@ -4,8 +4,6 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
-import pytest
-
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult, StrategyExecutor
 from azathoth.strategies import (
@@ -18,7 +16,7 @@ from azathoth.workflows import (
     WorkflowRunner,
 )
 
-STRATEGY_ID = UUID("ba6e8918-5ec7-4af4-a851-4bd70838853d")
+STRATEGY_ID = UUID("f4638acb-ec75-42fb-a5d1-f94734b51b77")
 
 
 class StubStrategy:
@@ -34,7 +32,7 @@ class StubStrategy:
 
     @property
     def metadata(self) -> StrategyMetadata:
-        """Return stable strategy metadata."""
+        """Return strategy metadata."""
 
         return self._metadata
 
@@ -42,7 +40,7 @@ class StubStrategy:
         self,
         context: Context,
     ) -> StrategyOutcome:
-        """Return a deterministic placeholder outcome."""
+        """Return a placeholder outcome."""
 
         return StrategyOutcome(
             output="unused",
@@ -65,12 +63,13 @@ class FlakyExecutor(StrategyExecutor):
         strategy: Strategy,
         context: Context,
     ) -> ExecutionResult:
-        """Fail until the configured number of failures is exhausted."""
+        """Fail until the configured failures are exhausted."""
 
         self.calls += 1
 
         if self.remaining_failures > 0:
             self.remaining_failures -= 1
+
             raise RuntimeError("boom")
 
         now = datetime(
@@ -94,8 +93,11 @@ class FlakyExecutor(StrategyExecutor):
 
 def create_runner(
     failures: int,
-) -> tuple[WorkflowRunner, FlakyExecutor]:
-    """Create a workflow runner backed by a flaky executor."""
+) -> tuple[
+    WorkflowRunner,
+    FlakyExecutor,
+]:
+    """Create a runner with a flaky executor."""
 
     executor = FlakyExecutor(
         failures=failures,
@@ -112,7 +114,7 @@ def create_runner(
 def test_retry_succeeds_after_second_attempt() -> None:
     runner, executor = create_runner(1)
 
-    result, _attempts = asyncio.run(
+    execution, attempts, error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -122,14 +124,18 @@ def test_retry_succeeds_after_second_attempt() -> None:
         )
     )
 
-    assert result.output == "ok"
+    assert error is None
+    assert execution is not None
+    assert execution.output == "ok"
+
     assert executor.calls == 2
+    assert len(attempts) == 2
 
 
 def test_retry_succeeds_after_third_attempt() -> None:
     runner, executor = create_runner(2)
 
-    result, _attempts = asyncio.run(
+    execution, attempts, error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -139,34 +145,49 @@ def test_retry_succeeds_after_third_attempt() -> None:
         )
     )
 
-    assert result.output == "ok"
+    assert error is None
+    assert execution is not None
+
     assert executor.calls == 3
 
+    assert tuple(attempt.succeeded for attempt in attempts) == (
+        False,
+        False,
+        True,
+    )
 
-def test_retry_exhausts_attempts() -> None:
+
+def test_retry_exhaustion_returns_failure_and_attempt_history() -> None:
     runner, executor = create_runner(3)
 
-    with pytest.raises(
-        RuntimeError,
-        match="boom",
-    ):
-        asyncio.run(
-            runner._execute_with_retry(
-                strategy=StubStrategy(),
-                context=Context(),
-                retry_policy=WorkflowRetryPolicy(
-                    max_attempts=3,
-                ),
-            )
+    execution, attempts, error = asyncio.run(
+        runner._execute_with_retry(
+            strategy=StubStrategy(),
+            context=Context(),
+            retry_policy=WorkflowRetryPolicy(
+                max_attempts=3,
+            ),
         )
+    )
+
+    assert execution is None
+
+    assert isinstance(
+        error,
+        RuntimeError,
+    )
+    assert str(error) == "boom"
 
     assert executor.calls == 3
+    assert len(attempts) == 3
+
+    assert all(not attempt.succeeded for attempt in attempts)
 
 
-def test_single_attempt_does_not_retry() -> None:
+def test_single_attempt_success_does_not_retry() -> None:
     runner, executor = create_runner(0)
 
-    result, _attempts = asyncio.run(
+    execution, attempts, error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -174,23 +195,8 @@ def test_single_attempt_does_not_retry() -> None:
         )
     )
 
-    assert result.output == "ok"
-    assert executor.calls == 1
-
-
-def test_single_attempt_failure_is_propagated() -> None:
-    runner, executor = create_runner(1)
-
-    with pytest.raises(
-        RuntimeError,
-        match="boom",
-    ):
-        asyncio.run(
-            runner._execute_with_retry(
-                strategy=StubStrategy(),
-                context=Context(),
-                retry_policy=WorkflowRetryPolicy(),
-            )
-        )
+    assert error is None
+    assert execution is not None
 
     assert executor.calls == 1
+    assert len(attempts) == 1
