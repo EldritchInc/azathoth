@@ -248,7 +248,14 @@ class WorkflowRunner:
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
 
-            layer_results: list[_LayerStepResult] = []
+            layer_results: list[
+                tuple[
+                    WorkflowCandidateStep,
+                    Context | None,
+                    ExecutionResult | None,
+                    tuple[WorkflowStepAttempt, ...],
+                ]
+            ] = []
 
             for step in layer:
                 if not self._conditions_are_satisfied(
@@ -256,10 +263,11 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 ):
                     layer_results.append(
-                        _LayerStepResult(
-                            step=step,
-                            step_context=None,
-                            execution=None,
+                        (
+                            step,
+                            None,
+                            None,
+                            (),
                         )
                     )
                     continue
@@ -270,60 +278,65 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 )
 
-                execution, _attempts = await self._execute_with_retry(
+                execution, attempts = await self._execute_with_retry(
                     strategy=step.strategy,
                     context=step_context,
                     retry_policy=step.retry_policy,
                 )
 
                 layer_results.append(
-                    _LayerStepResult(
-                        step=step,
-                        step_context=step_context,
-                        execution=execution,
+                    (
+                        step,
+                        step_context,
+                        execution,
+                        attempts,
                     )
                 )
 
-            for result in layer_results:
-                if result.execution is None:
+            for (
+                result_step,
+                result_context,
+                result_execution,
+                result_attempts,
+            ) in layer_results:
+                if result_execution is None:
                     completed_steps.append(
                         WorkflowStepRun(
-                            step_id=result.step.id,
+                            step_id=result_step.id,
                             layer_index=layer_index,
                             status=WorkflowStepStatus.SKIPPED,
                             execution=None,
+                            attempts=(),
                             values=(),
                         )
                     )
                     continue
 
-                if result.step_context is None:
-                    raise RuntimeError("Executed workflow step is missing its step-start context.")
-
-                execution = result.execution
-                step_context = result.step_context
+                if result_context is None:
+                    raise RuntimeError("Executed workflow step is missing its execution context.")
 
                 current_context = self._merge_execution_context(
                     current_context=current_context,
-                    execution_context=step_context,
-                    execution=execution,
+                    execution_context=result_context,
+                    execution=result_execution,
                 )
 
                 values = tuple(
                     WorkflowValue(
                         name=binding.name,
-                        value=binding.resolve(execution.output),
-                        producer_step_id=result.step.id,
+                        value=binding.resolve(result_execution.output),
+                        producer_step_id=result_step.id,
                     )
-                    for binding in result.step.outputs
+                    for binding in result_step.outputs
                 )
 
                 completed_steps.append(
                     WorkflowStepRun(
-                        step_id=result.step.id,
+                        step_id=result_step.id,
                         layer_index=layer_index,
                         status=WorkflowStepStatus.EXECUTED,
-                        execution=execution,
+                        execution=result_execution,
+                        attempts=result_attempts,
                         values=values,
                     )
                 )
