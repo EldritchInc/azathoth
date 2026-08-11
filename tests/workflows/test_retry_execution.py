@@ -112,7 +112,7 @@ def create_runner(
 def test_retry_succeeds_after_second_attempt() -> None:
     runner, executor = create_runner(1)
 
-    result = asyncio.run(
+    result, _attempts = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -129,7 +129,7 @@ def test_retry_succeeds_after_second_attempt() -> None:
 def test_retry_succeeds_after_third_attempt() -> None:
     runner, executor = create_runner(2)
 
-    result = asyncio.run(
+    result, _attempts = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -166,7 +166,7 @@ def test_retry_exhausts_attempts() -> None:
 def test_single_attempt_does_not_retry() -> None:
     runner, executor = create_runner(0)
 
-    result = asyncio.run(
+    result, _attempts = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
