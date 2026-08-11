@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
+from azathoth.workflows.attempt import WorkflowStepAttempt
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.value import WorkflowValue
 
@@ -28,20 +29,43 @@ class WorkflowStepRun(BaseModel):
     layer_index: int = Field(ge=0)
     status: WorkflowStepStatus = WorkflowStepStatus.EXECUTED
     execution: ExecutionResult | None = None
+    attempts: tuple[WorkflowStepAttempt, ...] = ()
     values: tuple[WorkflowValue, ...] = ()
 
     @model_validator(mode="after")
     def validate_execution_status(self) -> "WorkflowStepRun":
         """Ensure execution evidence matches the recorded step status."""
 
-        if self.status is WorkflowStepStatus.EXECUTED and self.execution is None:
-            raise ValueError("Executed workflow steps must include an execution result.")
+        if self.status is WorkflowStepStatus.EXECUTED:
+            if self.execution is None:
+                raise ValueError("Executed workflow steps must include an execution result.")
 
-        if self.status is WorkflowStepStatus.SKIPPED and self.execution is not None:
-            raise ValueError("Skipped workflow steps cannot include an execution result.")
+            if not self.attempts:
+                raise ValueError(
+                    "Executed workflow steps must include at least one execution attempt."
+                )
 
-        if self.status is WorkflowStepStatus.SKIPPED and self.values:
-            raise ValueError("Skipped workflow steps cannot produce workflow values.")
+            final_attempt = self.attempts[-1]
+
+            if not final_attempt.succeeded:
+                raise ValueError(
+                    "Executed workflow steps must end with a successful execution attempt."
+                )
+
+            if final_attempt.execution != self.execution:
+                raise ValueError(
+                    "Executed workflow step result must match the final successful attempt."
+                )
+
+        if self.status is WorkflowStepStatus.SKIPPED:
+            if self.execution is not None:
+                raise ValueError("Skipped workflow steps cannot include an execution result.")
+
+            if self.attempts:
+                raise ValueError("Skipped workflow steps cannot include execution attempts.")
+
+            if self.values:
+                raise ValueError("Skipped workflow steps cannot produce workflow values.")
 
         return self
 
