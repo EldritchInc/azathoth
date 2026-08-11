@@ -19,7 +19,7 @@ def test_successful_execution_records_single_attempt() -> None:
         ),
     )
 
-    execution, attempts = asyncio.run(
+    execution, attempts, error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -27,6 +27,8 @@ def test_successful_execution_records_single_attempt() -> None:
         )
     )
 
+    assert error is None
+    assert execution is not None
     assert execution.output == "ok"
 
     assert len(attempts) == 1
@@ -46,7 +48,7 @@ def test_retry_records_failure_then_success() -> None:
         ),
     )
 
-    _, attempts = asyncio.run(
+    _, attempts, error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),
@@ -60,6 +62,7 @@ def test_retry_records_failure_then_success() -> None:
 
     assert not attempts[0].succeeded
     assert attempts[0].failure is not None
+    assert error is None
 
     assert attempts[1].succeeded
     assert attempts[1].execution is not None
@@ -72,7 +75,7 @@ def test_retry_numbers_attempts_sequentially() -> None:
         ),
     )
 
-    _, attempts = asyncio.run(
+    _, attempts, _error = asyncio.run(
         runner._execute_with_retry(
             strategy=StubStrategy(),
             context=Context(),

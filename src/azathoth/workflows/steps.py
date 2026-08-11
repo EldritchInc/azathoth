@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.prompting import PromptStrategySpec
 from azathoth.workflows.condition import WorkflowCondition
+from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
 
@@ -24,3 +25,4 @@ class WorkflowStepSpecification(BaseModel):
     retry_policy: WorkflowRetryPolicy = Field(
         default_factory=WorkflowRetryPolicy,
     )
+    failure_policy: WorkflowFailurePolicy = WorkflowFailurePolicy.FAIL_WORKFLOW

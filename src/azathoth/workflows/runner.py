@@ -20,6 +20,7 @@ from azathoth.workflows.execution import (
     WorkflowStepRun,
     WorkflowStepStatus,
 )
+from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowValue
 
@@ -141,20 +142,19 @@ class WorkflowRunner:
         context: Context,
         retry_policy: WorkflowRetryPolicy,
     ) -> tuple[
-        ExecutionResult,
+        ExecutionResult | None,
         tuple[WorkflowStepAttempt, ...],
+        Exception | None,
     ]:
         """Execute a strategy according to its retry policy."""
 
         attempts: list[WorkflowStepAttempt] = []
 
-        last_exception: Exception | None = None
-
         for attempt_number in range(
             1,
             retry_policy.max_attempts + 1,
         ):
-            failure_started_at = datetime.now(
+            started_at = datetime.now(
                 tz=UTC,
             )
 
@@ -164,11 +164,15 @@ class WorkflowRunner:
                     context,
                 )
 
+                completed_at = datetime.now(
+                    tz=UTC,
+                )
+
                 attempts.append(
                     WorkflowStepAttempt(
                         attempt_number=attempt_number,
-                        started_at=execution.started_at,
-                        completed_at=execution.completed_at,
+                        started_at=started_at,
+                        completed_at=completed_at,
                         execution=execution,
                     )
                 )
@@ -176,18 +180,19 @@ class WorkflowRunner:
                 return (
                     execution,
                     tuple(attempts),
+                    None,
                 )
 
             except Exception as error:
-                failure_completed_at = datetime.now(
+                completed_at = datetime.now(
                     tz=UTC,
                 )
 
                 attempts.append(
                     WorkflowStepAttempt(
                         attempt_number=attempt_number,
-                        started_at=failure_started_at,
-                        completed_at=failure_completed_at,
+                        started_at=started_at,
+                        completed_at=completed_at,
                         failure=WorkflowStepFailure(
                             exception_type=type(error).__name__,
                             message=str(error),
@@ -195,18 +200,18 @@ class WorkflowRunner:
                     )
                 )
 
-                last_exception = error
-
                 if attempt_number == retry_policy.max_attempts:
-                    break
+                    return (
+                        None,
+                        tuple(attempts),
+                        error,
+                    )
 
                 retry_policy.delay_for_attempt(
                     attempt_number + 1,
                 )
 
-        assert last_exception is not None
-
-        raise last_exception
+        raise AssertionError("Workflow retry execution completed without producing an outcome.")
 
     @staticmethod
     def _merge_execution_context(
@@ -240,10 +245,14 @@ class WorkflowRunner:
     ) -> WorkflowRun:
         """Execute a workflow candidate by dependency layer."""
 
-        started_at = datetime.now(UTC)
+        started_at = datetime.now(
+            tz=UTC,
+        )
 
         current_context = context
         completed_steps: list[WorkflowStepRun] = []
+
+        blocked_step_ids: set[UUID] = set()
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
@@ -254,10 +263,35 @@ class WorkflowRunner:
                     Context | None,
                     ExecutionResult | None,
                     tuple[WorkflowStepAttempt, ...],
+                    Exception | None,
+                    WorkflowStepStatus,
                 ]
             ] = []
 
             for step in layer:
+                #
+                # A dependency skipped because of SKIP_DEPENDENTS
+                # blocks this step transitively.
+                #
+                if any(dependency_id in blocked_step_ids for dependency_id in step.depends_on):
+                    blocked_step_ids.add(step.id)
+
+                    layer_results.append(
+                        (
+                            step,
+                            None,
+                            None,
+                            (),
+                            None,
+                            WorkflowStepStatus.SKIPPED,
+                        )
+                    )
+
+                    continue
+
+                #
+                # Normal conditional eligibility.
+                #
                 if not self._conditions_are_satisfied(
                     step=step,
                     completed_steps=completed_steps,
@@ -268,8 +302,11 @@ class WorkflowRunner:
                             None,
                             None,
                             (),
+                            None,
+                            WorkflowStepStatus.SKIPPED,
                         )
                     )
+
                     continue
 
                 step_context = self._build_step_context(
@@ -278,11 +315,36 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 )
 
-                execution, attempts = await self._execute_with_retry(
+                execution, attempts, error = await self._execute_with_retry(
                     strategy=step.strategy,
                     context=step_context,
                     retry_policy=step.retry_policy,
                 )
+
+                if error is not None:
+                    if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
+                        raise error
+
+                    if step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
+                        blocked_step_ids.add(step.id)
+
+                    layer_results.append(
+                        (
+                            step,
+                            step_context,
+                            None,
+                            attempts,
+                            error,
+                            WorkflowStepStatus.FAILED,
+                        )
+                    )
+
+                    continue
+
+                if execution is None:
+                    raise RuntimeError(
+                        "Successful workflow step execution did not produce an execution result."
+                    )
 
                 layer_results.append(
                     (
@@ -290,19 +352,26 @@ class WorkflowRunner:
                         step_context,
                         execution,
                         attempts,
+                        None,
+                        WorkflowStepStatus.EXECUTED,
                     )
                 )
 
+            #
+            # Commit the layer in declared workflow order.
+            #
             for (
-                result_step,
+                step,
                 result_context,
-                result_execution,
-                result_attempts,
+                execution,
+                attempts,
+                error,
+                status,
             ) in layer_results:
-                if result_execution is None:
+                if status is WorkflowStepStatus.SKIPPED:
                     completed_steps.append(
                         WorkflowStepRun(
-                            step_id=result_step.id,
+                            step_id=step.id,
                             layer_index=layer_index,
                             status=WorkflowStepStatus.SKIPPED,
                             execution=None,
@@ -310,7 +379,28 @@ class WorkflowRunner:
                             values=(),
                         )
                     )
+
                     continue
+
+                if status is WorkflowStepStatus.FAILED:
+                    if error is None:
+                        raise RuntimeError("Failed workflow step is missing its failure.")
+
+                    completed_steps.append(
+                        WorkflowStepRun(
+                            step_id=step.id,
+                            layer_index=layer_index,
+                            status=WorkflowStepStatus.FAILED,
+                            execution=None,
+                            attempts=attempts,
+                            values=(),
+                        )
+                    )
+
+                    continue
+
+                if execution is None:
+                    raise RuntimeError("Executed workflow step is missing its execution result.")
 
                 if result_context is None:
                     raise RuntimeError("Executed workflow step is missing its execution context.")
@@ -318,30 +408,31 @@ class WorkflowRunner:
                 current_context = self._merge_execution_context(
                     current_context=current_context,
                     execution_context=result_context,
-                    execution=result_execution,
+                    execution=execution,
                 )
 
                 values = tuple(
                     WorkflowValue(
                         name=binding.name,
-                        value=binding.resolve(result_execution.output),
-                        producer_step_id=result_step.id,
+                        value=binding.resolve(execution.output),
+                        producer_step_id=step.id,
                     )
-                    for binding in result_step.outputs
+                    for binding in step.outputs
                 )
 
                 completed_steps.append(
                     WorkflowStepRun(
-                        step_id=result_step.id,
+                        step_id=step.id,
                         layer_index=layer_index,
                         status=WorkflowStepStatus.EXECUTED,
-                        execution=result_execution,
-                        attempts=result_attempts,
+                        execution=execution,
+                        attempts=attempts,
                         values=values,
                     )
                 )
-
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(
+            tz=UTC,
+        )
 
         return WorkflowRun(
             workflow=workflow.metadata,
