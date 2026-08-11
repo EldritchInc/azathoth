@@ -1073,6 +1073,50 @@ These metrics establish the foundation for future workflow evaluation, provider 
 
 ------------------------------------------------------------------------
 
+# Workflow Evaluation
+
+Workflow runs expose immutable evaluation objects.
+
+Evaluations provide a stable interface between workflow execution and higher-level analysis.
+
+```text
+WorkflowRun
+      │
+      ▼
+WorkflowEvaluation
+      ├── WorkflowRunStatistics
+      └── WorkflowReliabilityMetrics
+```
+
+```python
+evaluation = run.evaluation
+
+evaluation.workflow_id
+
+evaluation.statistics
+
+evaluation.reliability
+
+evaluation.evaluated_at
+```
+
+Workflow evaluations intentionally contain objective execution observations.
+
+They do not include optimization scores or ranking heuristics.
+
+This separation allows optimization systems to evolve independently while preserving deterministic workflow execution.
+
+Workflow evaluations establish the foundation for future capabilities including:
+
+- workflow benchmarking;
+- provider comparison;
+- execution dashboards;
+- optimization pipelines;
+- candidate ranking; and
+- adaptive workflow selection.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
