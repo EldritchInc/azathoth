@@ -1,9 +1,7 @@
 """Executable workflow candidates."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
-
-from pydantic import Field
 
 from azathoth.strategies import Strategy
 from azathoth.workflows.condition import WorkflowCondition
@@ -22,7 +20,7 @@ class WorkflowCandidateStep:
     inputs: tuple[WorkflowInputBinding, ...] = ()
     outputs: tuple[WorkflowValueBinding, ...] = ()
     conditions: tuple[WorkflowCondition, ...] = ()
-    retry_policy: WorkflowRetryPolicy = Field(
+    retry_policy: WorkflowRetryPolicy = field(
         default_factory=WorkflowRetryPolicy,
     )
 

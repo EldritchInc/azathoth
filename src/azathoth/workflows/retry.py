@@ -27,3 +27,22 @@ class WorkflowRetryPolicy(BaseModel):
             raise ValueError("Workflow retry maximum delay cannot be less than the initial delay.")
 
         return self
+
+    def delay_for_attempt(
+        self,
+        attempt: int,
+    ) -> float:
+        """Return the delay before the given retry attempt."""
+
+        if attempt <= 1:
+            return 0.0
+
+        delay = self.initial_delay_seconds * (self.backoff_multiplier ** (attempt - 2))
+
+        if self.maximum_delay_seconds is not None:
+            delay = min(
+                delay,
+                self.maximum_delay_seconds,
+            )
+
+        return delay
