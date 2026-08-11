@@ -17,6 +17,7 @@ class WorkflowStepStatus(StrEnum):
     """The execution status of one workflow step."""
 
     EXECUTED = "executed"
+    FAILED = "failed"
     SKIPPED = "skipped"
 
 
@@ -56,6 +57,23 @@ class WorkflowStepRun(BaseModel):
                 raise ValueError(
                     "Executed workflow step result must match the final successful attempt."
                 )
+
+        if self.status is WorkflowStepStatus.FAILED:
+            if self.execution is not None:
+                raise ValueError(
+                    "Failed workflow steps cannot include a successful execution result."
+                )
+
+            if not self.attempts:
+                raise ValueError(
+                    "Failed workflow steps must include at least one execution attempt."
+                )
+
+            if self.attempts[-1].succeeded:
+                raise ValueError("Failed workflow steps must end with a failed execution attempt.")
+
+            if self.values:
+                raise ValueError("Failed workflow steps cannot produce workflow values.")
 
         if self.status is WorkflowStepStatus.SKIPPED:
             if self.execution is not None:

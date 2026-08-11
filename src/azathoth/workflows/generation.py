@@ -47,6 +47,7 @@ def generate_workflow_candidate(
                 outputs=workflow_step.outputs,
                 conditions=workflow_step.conditions,
                 retry_policy=workflow_step.retry_policy,
+                failure_policy=workflow_step.failure_policy,
             )
         )
 

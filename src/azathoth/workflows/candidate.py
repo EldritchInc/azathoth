@@ -5,6 +5,7 @@ from uuid import UUID
 
 from azathoth.strategies import Strategy
 from azathoth.workflows.condition import WorkflowCondition
+from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
@@ -23,6 +24,7 @@ class WorkflowCandidateStep:
     retry_policy: WorkflowRetryPolicy = field(
         default_factory=WorkflowRetryPolicy,
     )
+    failure_policy: WorkflowFailurePolicy = WorkflowFailurePolicy.FAIL_WORKFLOW
 
 
 @dataclass(frozen=True)
