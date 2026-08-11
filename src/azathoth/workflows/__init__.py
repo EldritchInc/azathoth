@@ -25,6 +25,7 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.reliability import WorkflowReliabilityMetrics
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.statistics import WorkflowRunStatistics
@@ -49,6 +50,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowReliabilityMetrics",
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunner",
