@@ -28,6 +28,7 @@ from azathoth.workflows.models import (
 from azathoth.workflows.reliability import WorkflowReliabilityMetrics
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.runner import WorkflowRunner
+from azathoth.workflows.scorecard import WorkflowScorecard
 from azathoth.workflows.statistics import WorkflowRunStatistics
 from azathoth.workflows.steps import (
     WorkflowStepSpecification,
@@ -55,6 +56,7 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunner",
     "WorkflowRunStatistics",
+    "WorkflowScorecard",
     "WorkflowSpecification",
     "WorkflowStepAttempt",
     "WorkflowStepFailure",
