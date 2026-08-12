@@ -1173,6 +1173,66 @@ This establishes the foundation for future capabilities including:
 
 ------------------------------------------------------------------------
 
+# Workflow Ranking
+
+Workflow scorecards can be deterministically ranked.
+
+Rankings establish an objective ordering of workflow executions according to a canonical comparison policy.
+
+```text
+WorkflowRun
+      │
+      ▼
+WorkflowEvaluation
+      │
+      ▼
+WorkflowScorecard
+      │
+      ▼
+WorkflowRanker
+      │
+      ▼
+WorkflowRanking
+      ├── RankedWorkflow
+      ├── RankedWorkflow
+      ├── RankedWorkflow
+      └── winner
+```
+
+```python
+ranking = WorkflowRanker().rank(
+    (
+        scorecard_a,
+        scorecard_b,
+        scorecard_c,
+    )
+)
+
+winner = ranking.winner
+```
+
+Workflow rankings compare workflow scorecards without modifying them.
+
+The canonical ranking policy orders workflows by:
+
+1. overall score;
+2. quality;
+3. reliability;
+4. latency;
+5. cost; and
+6. original input order for exact ties.
+
+Workflow ranking establishes the comparison layer required for future capabilities including:
+
+- workflow selection;
+- provider benchmarking;
+- optimization tournaments;
+- evolutionary search;
+- candidate elimination; and
+- adaptive workflow optimization.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
