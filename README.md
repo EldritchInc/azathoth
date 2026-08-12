@@ -1233,6 +1233,57 @@ Workflow ranking establishes the comparison layer required for future capabiliti
 
 ------------------------------------------------------------------------
 
+# Workflow Experiments
+
+Workflow experiments execute and compare multiple workflow candidates.
+
+Experiments orchestrate workflow execution, evaluation, scoring, and ranking while remaining independent of optimization algorithms.
+
+```text
+Workflow Candidates
+        │
+        ▼
+WorkflowExperimentRunner
+        ├── WorkflowRunner
+        ├── Evaluator
+        ├── WorkflowScorer
+        └── WorkflowRanker
+                │
+                ▼
+    WorkflowExperimentResult
+        ├── scorecards
+        ├── ranking
+        └── winner
+```
+
+```python
+result = await WorkflowExperimentRunner(
+    scorer=scorer,
+).run(
+    workflows=workflows,
+    context=context,
+    evaluator=evaluator,
+    expected_outcome=expected_outcome,
+)
+
+winner = result.winner
+```
+
+Workflow experiments intentionally contain no optimization logic.
+
+They provide a deterministic tournament over workflow candidates, establishing the execution boundary required for future optimization systems.
+
+Future optimization capabilities can build upon workflow experiments to support:
+
+- candidate tournaments;
+- provider comparisons;
+- benchmark suites;
+- evolutionary optimization;
+- adaptive workflow selection; and
+- automatic workflow improvement.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
