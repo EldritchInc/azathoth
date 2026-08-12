@@ -1,6 +1,9 @@
 """Tests for deterministic workflow scorecard ranking."""
 
+from itertools import permutations
+
 import pytest
+from pydantic import ValidationError
 
 from azathoth.workflows import (
     WorkflowRanker,
@@ -239,3 +242,204 @@ def test_ranker_rejects_empty_scorecards() -> None:
         match="At least one workflow scorecard is required for ranking.",
     ):
         WorkflowRanker().rank(())
+
+
+def test_ranker_is_independent_of_input_order_when_scores_differ() -> None:
+    """Distinct scorecards should rank identically across all permutations."""
+
+    strongest = create_scorecard(
+        overall_score=0.9,
+        rationale="strongest",
+    )
+
+    middle = create_scorecard(
+        overall_score=0.7,
+        rationale="middle",
+    )
+
+    weakest = create_scorecard(
+        overall_score=0.5,
+        rationale="weakest",
+    )
+
+    expected = (
+        "strongest",
+        "middle",
+        "weakest",
+    )
+
+    for candidate_order in permutations(
+        (
+            strongest,
+            middle,
+            weakest,
+        )
+    ):
+        ranking = WorkflowRanker().rank(candidate_order)
+
+        assert tuple(entry.scorecard.rationale for entry in ranking.entries) == expected
+
+
+def test_ranker_applies_complete_tiebreaker_chain() -> None:
+    """Ranking should use every score dimension in declared order."""
+
+    overall_winner = create_scorecard(
+        overall_score=0.9,
+        quality_score=0.1,
+        reliability_score=0.1,
+        latency_score=0.1,
+        cost_score=0.1,
+        rationale="overall",
+    )
+
+    quality_winner = create_scorecard(
+        overall_score=0.8,
+        quality_score=0.9,
+        reliability_score=0.1,
+        latency_score=0.1,
+        cost_score=0.1,
+        rationale="quality",
+    )
+
+    reliability_winner = create_scorecard(
+        overall_score=0.8,
+        quality_score=0.8,
+        reliability_score=0.9,
+        latency_score=0.1,
+        cost_score=0.1,
+        rationale="reliability",
+    )
+
+    latency_winner = create_scorecard(
+        overall_score=0.8,
+        quality_score=0.8,
+        reliability_score=0.8,
+        latency_score=0.9,
+        cost_score=0.1,
+        rationale="latency",
+    )
+
+    cost_winner = create_scorecard(
+        overall_score=0.8,
+        quality_score=0.8,
+        reliability_score=0.8,
+        latency_score=0.8,
+        cost_score=0.9,
+        rationale="cost",
+    )
+
+    ranking = WorkflowRanker().rank(
+        (
+            cost_winner,
+            latency_winner,
+            reliability_winner,
+            quality_winner,
+            overall_winner,
+        )
+    )
+
+    assert tuple(entry.scorecard.rationale for entry in ranking.entries) == (
+        "overall",
+        "quality",
+        "reliability",
+        "latency",
+        "cost",
+    )
+
+
+def test_ranker_does_not_use_rationale_as_ranking_evidence() -> None:
+    """Descriptive rationale should not affect exact score ties."""
+
+    first = create_scorecard(
+        rationale="zeta",
+    )
+
+    second = create_scorecard(
+        rationale="alpha",
+    )
+
+    ranking = WorkflowRanker().rank(
+        (
+            first,
+            second,
+        )
+    )
+
+    assert ranking.entries[0].scorecard == first
+    assert ranking.entries[1].scorecard == second
+
+
+def test_ranker_handles_boundary_scores() -> None:
+    """Ranking should correctly order normalized boundary scores."""
+
+    worst = create_scorecard(
+        quality_score=0.0,
+        reliability_score=0.0,
+        latency_score=0.0,
+        cost_score=0.0,
+        overall_score=0.0,
+    )
+
+    best = create_scorecard(
+        quality_score=1.0,
+        reliability_score=1.0,
+        latency_score=1.0,
+        cost_score=1.0,
+        overall_score=1.0,
+    )
+
+    ranking = WorkflowRanker().rank(
+        (
+            worst,
+            best,
+        )
+    )
+
+    assert ranking.winner == best
+
+    assert tuple(entry.scorecard for entry in ranking.entries) == (
+        best,
+        worst,
+    )
+
+
+def test_ranker_returns_immutable_ranking() -> None:
+    """Rankings produced by the ranker should remain immutable."""
+
+    ranking = WorkflowRanker().rank(
+        (
+            create_scorecard(
+                overall_score=0.9,
+            ),
+            create_scorecard(
+                overall_score=0.5,
+            ),
+        )
+    )
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        ranking.entries = ()
+
+
+def test_ranker_result_round_trips_through_json() -> None:
+    """Rankings produced by the ranker should survive JSON serialization."""
+
+    ranking = WorkflowRanker().rank(
+        (
+            create_scorecard(
+                overall_score=0.9,
+                rationale="winner",
+            ),
+            create_scorecard(
+                overall_score=0.5,
+                rationale="runner-up",
+            ),
+        )
+    )
+
+    restored = type(ranking).model_validate_json(ranking.model_dump_json())
+
+    assert restored == ranking
+    assert restored.winner == ranking.winner
