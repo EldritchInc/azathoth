@@ -28,6 +28,10 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.ranking import (
+    RankedWorkflow,
+    WorkflowRanking,
+)
 from azathoth.workflows.reliability import (
     WorkflowReliabilityMetrics,
 )
@@ -59,6 +63,7 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "RankedWorkflow",
     "WorkflowCandidate",
     "WorkflowCandidateStep",
     "WorkflowCondition",
@@ -70,6 +75,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowRanking",
     "WorkflowReliabilityMetrics",
     "WorkflowRetryPolicy",
     "WorkflowRun",
