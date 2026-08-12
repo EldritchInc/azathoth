@@ -17,7 +17,9 @@ from azathoth.workflows.execution import (
     WorkflowStepRun,
     WorkflowStepStatus,
 )
-from azathoth.workflows.failure import WorkflowFailurePolicy
+from azathoth.workflows.failure import (
+    WorkflowFailurePolicy,
+)
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
     generate_workflow_candidate,
@@ -26,10 +28,25 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
-from azathoth.workflows.reliability import WorkflowReliabilityMetrics
-from azathoth.workflows.retry import WorkflowRetryPolicy
-from azathoth.workflows.runner import WorkflowRunner
-from azathoth.workflows.statistics import WorkflowRunStatistics
+from azathoth.workflows.reliability import (
+    WorkflowReliabilityMetrics,
+)
+from azathoth.workflows.retry import (
+    WorkflowRetryPolicy,
+)
+from azathoth.workflows.runner import (
+    WorkflowRunner,
+)
+from azathoth.workflows.scorecard import (
+    WorkflowScorecard,
+)
+from azathoth.workflows.scoring import (
+    WorkflowScorer,
+    WorkflowScoringPolicy,
+)
+from azathoth.workflows.statistics import (
+    WorkflowRunStatistics,
+)
 from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
@@ -43,6 +60,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "WorkflowCandidate",
+    "WorkflowCandidateStep",
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
@@ -57,6 +75,9 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunner",
     "WorkflowRunStatistics",
+    "WorkflowScorecard",
+    "WorkflowScorer",
+    "WorkflowScoringPolicy",
     "WorkflowSpecification",
     "WorkflowStepAttempt",
     "WorkflowStepFailure",
