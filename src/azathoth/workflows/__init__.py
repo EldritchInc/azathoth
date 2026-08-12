@@ -11,6 +11,7 @@ from azathoth.workflows.condition import (
     WorkflowConditionEvaluationError,
     WorkflowConditionOperator,
 )
+from azathoth.workflows.evaluation import WorkflowEvaluation
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
@@ -46,6 +47,7 @@ __all__ = [
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
     "WorkflowCandidateStep",
+    "WorkflowEvaluation",
     "WorkflowFailurePolicy",
     "WorkflowGenerationError",
     "WorkflowInputBinding",

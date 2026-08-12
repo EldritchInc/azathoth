@@ -1,6 +1,6 @@
 """Recorded results of executable workflow runs."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
 from azathoth.workflows.attempt import WorkflowStepAttempt
+from azathoth.workflows.evaluation import WorkflowEvaluation
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.reliability import WorkflowReliabilityMetrics
 from azathoth.workflows.statistics import WorkflowRunStatistics
@@ -189,6 +190,19 @@ class WorkflowRun(BaseModel):
             first_attempt_success_rate=(first_attempt_successes / attempted_steps),
             retry_rate=(retried_steps / attempted_steps),
             failure_rate=(statistics.failed_steps / attempted_steps),
+        )
+
+    @property
+    def evaluation(self) -> WorkflowEvaluation:
+        """Return an evaluation derived from this workflow run."""
+
+        return WorkflowEvaluation(
+            workflow_id=self.workflow.id,
+            statistics=self.statistics,
+            reliability=self.reliability,
+            evaluated_at=datetime.now(
+                tz=UTC,
+            ),
         )
 
     @property
