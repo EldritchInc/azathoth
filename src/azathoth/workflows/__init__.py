@@ -17,6 +17,9 @@ from azathoth.workflows.execution import (
     WorkflowStepRun,
     WorkflowStepStatus,
 )
+from azathoth.workflows.experiment import (
+    WorkflowExperimentResult,
+)
 from azathoth.workflows.failure import (
     WorkflowFailurePolicy,
 )
@@ -72,6 +75,7 @@ __all__ = [
     "WorkflowConditionOperator",
     "WorkflowCandidateStep",
     "WorkflowEvaluation",
+    "WorkflowExperimentResult",
     "WorkflowFailurePolicy",
     "WorkflowGenerationError",
     "WorkflowInputBinding",
