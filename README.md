@@ -1117,6 +1117,62 @@ Workflow evaluations establish the foundation for future capabilities including:
 
 ------------------------------------------------------------------------
 
+# Workflow Scorecards
+
+Workflow evaluations can be converted into immutable workflow scorecards.
+
+Scorecards represent a deterministic interpretation of workflow execution using a scoring policy.
+
+```text
+WorkflowRun
+      │
+      ▼
+WorkflowEvaluation
+      │
+      ▼
+WorkflowScorer
+      │
+      ▼
+WorkflowScorecard
+      ├── quality_score
+      ├── reliability_score
+      ├── latency_score
+      ├── cost_score
+      └── overall_score
+```
+
+```python
+scorecard = WorkflowScorer().score(
+    run=run,
+    evaluation=evaluation,
+)
+
+scorecard.quality_score
+scorecard.reliability_score
+scorecard.latency_score
+scorecard.cost_score
+scorecard.overall_score
+```
+
+Workflow scorecards intentionally separate objective execution evidence from optimization policy.
+
+Execution records facts.
+
+Evaluations summarize those facts.
+
+Scorecards interpret them according to a deterministic scoring policy.
+
+This establishes the foundation for future capabilities including:
+
+- workflow ranking;
+- provider comparison;
+- optimization loops;
+- candidate selection;
+- evolutionary search; and
+- adaptive workflow generation.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
