@@ -1337,6 +1337,63 @@ Future optimizers can build upon this interface to support:
 
 ------------------------------------------------------------------------
 
+# Workflow Optimization Sessions
+
+Optimization proceeds through immutable generations.
+
+```text
+Initial Candidates
+        │
+        ▼
+Experiment
+        │
+        ▼
+Optimizer
+        │
+        ▼
+Generation 1
+        │
+        ▼
+Experiment
+        │
+        ▼
+Optimizer
+        │
+        ▼
+Generation 2
+        │
+        ▼
+...
+```
+
+```python
+session = await WorkflowOptimizationSessionRunner(
+    experiment_runner=experiment_runner,
+    optimizer=optimizer,
+).run(
+    initial_candidates=candidates,
+    context=context,
+    evaluator=evaluator,
+    expected_outcome=expected,
+    max_generations=5,
+)
+
+session.initial_candidates
+session.generations
+```
+
+Each optimization generation records:
+
+- the generation number;
+- the experiment that guided optimization; and
+- the candidate workflows produced for the next generation.
+
+Optimization sessions intentionally preserve the complete optimization history.
+
+This enables deterministic replay, benchmarking, visualization, and future adaptive optimization strategies while keeping optimization algorithms independent from session orchestration.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
