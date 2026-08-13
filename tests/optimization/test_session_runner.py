@@ -4,17 +4,20 @@ import asyncio
 from uuid import UUID
 
 import pytest
+from pydantic import JsonValue
 
 from azathoth.context import Context
 from azathoth.evaluation import (
     EvaluationResult,
     EvaluationStatus,
+    Evaluator,
     EvaluatorMetadata,
     ExpectedOutcome,
     OutcomeComparison,
 )
 from azathoth.optimization import (
     ReplayWorkflowOptimizer,
+    WorkflowOptimizationResult,
     WorkflowOptimizationSessionRunner,
 )
 from azathoth.strategies import (
@@ -81,7 +84,7 @@ class RecordingExperimentRunner:
         *,
         workflows: tuple[WorkflowCandidate, ...],
         context: Context,
-        evaluator: object,
+        evaluator: Evaluator,
         expected_outcome: ExpectedOutcome,
     ) -> WorkflowExperimentResult:
         """Record a population and return deterministic experiment evidence."""
@@ -119,8 +122,34 @@ class RecordingExperimentRunner:
         )
 
 
+class RecordingOptimizer:
+    """Record optimizer calls while reversing each candidate population."""
+
+    def __init__(self) -> None:
+        self.generations: list[int] = []
+        self.candidate_populations: list[tuple[WorkflowCandidate, ...]] = []
+
+    def optimize(
+        self,
+        *,
+        experiment: WorkflowExperimentResult,
+        candidates: tuple[WorkflowCandidate, ...],
+        generation: int,
+    ) -> WorkflowOptimizationResult:
+        """Record the call and return the reversed population."""
+
+        self.generations.append(generation)
+        self.candidate_populations.append(candidates)
+
+        return WorkflowOptimizationResult(
+            generation=generation,
+            previous_experiment=experiment,
+            candidates=tuple(reversed(candidates)),
+        )
+
+
 class StubEvaluator:
-    """Provide evaluator metadata for session orchestration tests."""
+    """Provide deterministic evaluator behavior for session tests."""
 
     @property
     def metadata(self) -> EvaluatorMetadata:
@@ -134,7 +163,7 @@ class StubEvaluator:
     async def evaluate(
         self,
         expected: ExpectedOutcome,
-        actual: object,
+        actual: JsonValue,
     ) -> EvaluationResult:
         """Return a deterministic passing evaluation."""
 
@@ -282,7 +311,6 @@ def test_session_runner_experiments_on_each_generation_population() -> None:
     )
 
     assert len(experiment_runner.candidate_populations) == 3
-
     assert experiment_runner.candidate_populations[0] == candidates
     assert experiment_runner.candidate_populations[1] == session.generations[0].candidates
     assert experiment_runner.candidate_populations[2] == session.generations[1].candidates
@@ -305,7 +333,6 @@ def test_session_runner_records_experiment_for_each_generation() -> None:
     )
 
     assert len(session.generations) == 2
-
     assert session.generations[0].previous_experiment.winner.overall_score == 0.9
     assert session.generations[1].previous_experiment.winner.overall_score == 0.9
 
@@ -350,3 +377,151 @@ def test_session_runner_rejects_negative_generations() -> None:
                 max_generations=-1,
             )
         )
+
+
+def test_session_runner_calls_optimizer_for_each_generation() -> None:
+    """Every experiment should be followed by one optimizer invocation."""
+
+    optimizer = RecordingOptimizer()
+
+    asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=RecordingExperimentRunner(),
+            optimizer=optimizer,
+        ).run(
+            initial_candidates=create_candidates(),
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=3,
+        )
+    )
+
+    assert optimizer.generations == [
+        1,
+        2,
+        3,
+    ]
+    assert len(optimizer.candidate_populations) == 3
+
+
+def test_session_runner_propagates_transformed_candidate_populations() -> None:
+    """Optimizer output should become the next experiment population."""
+
+    candidates = create_candidates()
+    experiment_runner = RecordingExperimentRunner()
+    optimizer = RecordingOptimizer()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=optimizer,
+        ).run(
+            initial_candidates=candidates,
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=3,
+        )
+    )
+
+    reversed_candidates = tuple(reversed(candidates))
+
+    assert experiment_runner.candidate_populations == [
+        candidates,
+        reversed_candidates,
+        candidates,
+    ]
+
+    assert session.generations[0].candidates == reversed_candidates
+    assert session.generations[1].candidates == candidates
+    assert session.generations[2].candidates == reversed_candidates
+
+
+def test_session_runner_passes_current_population_to_optimizer() -> None:
+    """Optimizer input should match the population that was just experimented on."""
+
+    candidates = create_candidates()
+    optimizer = RecordingOptimizer()
+
+    asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=RecordingExperimentRunner(),
+            optimizer=optimizer,
+        ).run(
+            initial_candidates=candidates,
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=3,
+        )
+    )
+
+    assert optimizer.candidate_populations == [
+        candidates,
+        tuple(reversed(candidates)),
+        candidates,
+    ]
+
+
+def test_session_runner_stops_at_requested_generation_limit() -> None:
+    """Session orchestration should stop exactly at the configured limit."""
+
+    experiment_runner = RecordingExperimentRunner()
+    optimizer = RecordingOptimizer()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=optimizer,
+        ).run(
+            initial_candidates=create_candidates(),
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=4,
+        )
+    )
+
+    assert len(session.generations) == 4
+    assert len(experiment_runner.candidate_populations) == 4
+    assert optimizer.generations == [
+        1,
+        2,
+        3,
+        4,
+    ]
+
+
+def test_session_runner_is_deterministic() -> None:
+    """Equivalent runs should produce equivalent optimization histories."""
+
+    candidates = create_candidates()
+
+    first = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=RecordingExperimentRunner(),
+            optimizer=ReplayWorkflowOptimizer(),
+        ).run(
+            initial_candidates=candidates,
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=3,
+        )
+    )
+
+    second = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=RecordingExperimentRunner(),
+            optimizer=ReplayWorkflowOptimizer(),
+        ).run(
+            initial_candidates=candidates,
+            context=Context(),
+            evaluator=StubEvaluator(),
+            expected_outcome=create_expected_outcome(),
+            max_generations=3,
+        )
+    )
+
+    assert first == second
