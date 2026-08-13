@@ -3,10 +3,10 @@
 from azathoth.prompting.candidates import generate_prompt_candidates
 from azathoth.prompting.context_strategy import ContextPromptStrategy
 from azathoth.prompting.exceptions import (
+    ModelBindingMismatchError,
     PromptBindingError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
-    ModelBindingMismatchError,
     PromptingError,
 )
 from azathoth.prompting.models import (
@@ -20,11 +20,11 @@ from azathoth.prompting.strategy import PromptStrategy
 __all__ = [
     "ContextPromptStrategy",
     "ModelBinding",
+    "ModelBindingMismatchError",
     "PromptBinding",
     "PromptBindingError",
     "PromptBindingEventNotFoundError",
     "PromptBindingFieldNotFoundError",
-    "ModelBindingMismatchError",
     "PromptStrategy",
     "PromptTemplate",
     "PromptingError",

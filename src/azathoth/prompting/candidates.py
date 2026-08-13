@@ -20,11 +20,7 @@ def generate_prompt_candidates(
 ) -> tuple[PromptStrategy, ...]:
     """Generate executable candidates for eligible registered models."""
 
-    eligible_models = catalog.find(
-        ModelQuery.from_requirements(
-            specification.model_requirements
-        )
-    )
+    eligible_models = catalog.find(ModelQuery.from_requirements(specification.model_requirements))
 
     candidates: list[PromptStrategy] = []
 
@@ -39,10 +35,7 @@ def generate_prompt_candidates(
                 specification.metadata.id,
                 model_metadata.identifier,
             ),
-            name=(
-                f"{specification.metadata.name} "
-                f"[{model_metadata.identifier}]"
-            ),
+            name=(f"{specification.metadata.name} [{model_metadata.identifier}]"),
             description=specification.metadata.description,
             version=specification.metadata.version,
         )
