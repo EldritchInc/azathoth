@@ -4,9 +4,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.context import Context
 from azathoth.prompting.exceptions import (
+    ModelBindingMismatchError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
-    ModelBindingMismatchError,
 )
 from azathoth.providers import ModelResponse, Prompt
 
@@ -24,9 +24,7 @@ class ModelBinding(BaseModel):
     ) -> None:
         """Ensure a model response came from the configured model."""
 
-        reported_identifier = (
-            f"{response.provider}/{response.model}"
-        )
+        reported_identifier = f"{response.provider}/{response.model}"
 
         if reported_identifier != self.identifier:
             raise ModelBindingMismatchError(
@@ -76,12 +74,8 @@ class PromptTemplate(BaseModel):
                     f"prompt variable {binding.variable_name!r}."
                 )
 
-            values[binding.variable_name] = event.payload[
-                binding.field_name
-            ]
+            values[binding.variable_name] = event.payload[binding.field_name]
 
         return Prompt(
             text=self.text.format_map(values),
         )
-
-
