@@ -10,6 +10,10 @@ from azathoth.optimization.models import (
 )
 from azathoth.optimization.ranking import StrategyRanker
 from azathoth.optimization.runner import OptimizationRunner
+from azathoth.optimization.workflow import (
+    WorkflowOptimizationResult,
+    WorkflowOptimizer,
+)
 
 __all__ = [
     "ExperimentRunner",
@@ -20,4 +24,6 @@ __all__ = [
     "StrategyRanker",
     "StrategyRanking",
     "StrategyScorecard",
+    "WorkflowOptimizationResult",
+    "WorkflowOptimizer",
 ]
