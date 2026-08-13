@@ -1,14 +1,38 @@
-/*/
-!/.github/
-!/src/
-!/src/azathoth/
-!/src/prompt-ui/
-!/azathoth.egg-info/
-!/build/
-!/tests/
-!/docs/
-!/examples/
-!/old_tests/
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Editors
+.vscode/
+.idea/
+
+# macOS
 .DS_Store
+
+# Local configuration
 config.json
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
