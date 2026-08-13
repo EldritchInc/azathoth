@@ -2,6 +2,9 @@
 
 from uuid import UUID
 
+import pytest
+from pydantic import ValidationError
+
 from azathoth.context import Context
 from azathoth.optimization import (
     ReplayWorkflowOptimizer,
@@ -22,15 +25,10 @@ from azathoth.workflows import (
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
-
 SECOND_WORKFLOW_ID = UUID("22222222-2222-2222-2222-222222222222")
-
 STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
-
 SECOND_STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
-
 STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
-
 SECOND_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
 
 
@@ -128,7 +126,6 @@ def create_experiment() -> WorkflowExperimentResult:
     winner = create_scorecard(
         overall_score=0.9,
     )
-
     runner_up = create_scorecard(
         overall_score=0.7,
     )
@@ -223,3 +220,120 @@ def test_replay_optimizer_preserves_candidate_order() -> None:
         WORKFLOW_ID,
         SECOND_WORKFLOW_ID,
     )
+
+
+def test_replay_optimizer_preserves_candidate_instances() -> None:
+    """Replay optimization should not replace executable candidate objects."""
+
+    candidates = create_candidates()
+
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert result.candidates[0] is candidates[0]
+    assert result.candidates[1] is candidates[1]
+
+
+def test_replay_optimizer_supports_subsequent_generations() -> None:
+    """Replay optimization should support generations beyond the first."""
+
+    candidates = create_candidates()
+    experiment = create_experiment()
+    optimizer = ReplayWorkflowOptimizer()
+
+    first = optimizer.optimize(
+        experiment=experiment,
+        candidates=candidates,
+        generation=1,
+    )
+
+    second = optimizer.optimize(
+        experiment=experiment,
+        candidates=first.candidates,
+        generation=2,
+    )
+
+    assert first.generation == 1
+    assert second.generation == 2
+    assert second.candidates == candidates
+
+
+def test_replay_optimizer_is_deterministic() -> None:
+    """Repeated optimization should produce equivalent results."""
+
+    candidates = create_candidates()
+    experiment = create_experiment()
+    optimizer = ReplayWorkflowOptimizer()
+
+    first = optimizer.optimize(
+        experiment=experiment,
+        candidates=candidates,
+        generation=3,
+    )
+
+    second = optimizer.optimize(
+        experiment=experiment,
+        candidates=candidates,
+        generation=3,
+    )
+
+    assert first.generation == second.generation
+    assert first.previous_experiment == second.previous_experiment
+    assert first.candidates == second.candidates
+
+
+def test_replay_optimizer_does_not_depend_on_experiment_winner() -> None:
+    """Replay optimization should preserve all candidates regardless of ranking."""
+
+    candidates = create_candidates()
+
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert len(result.candidates) == 2
+    assert result.candidates == candidates
+
+
+def test_replay_optimizer_rejects_zero_generation() -> None:
+    """Replay optimization should preserve result generation validation."""
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        ReplayWorkflowOptimizer().optimize(
+            experiment=create_experiment(),
+            candidates=create_candidates(),
+            generation=0,
+        )
+
+
+def test_replay_optimizer_rejects_negative_generation() -> None:
+    """Replay optimization should reject negative generations."""
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        ReplayWorkflowOptimizer().optimize(
+            experiment=create_experiment(),
+            candidates=create_candidates(),
+            generation=-1,
+        )
+
+
+def test_replay_optimizer_rejects_empty_candidate_population() -> None:
+    """Replay optimization should reject an empty next generation."""
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        ReplayWorkflowOptimizer().optimize(
+            experiment=create_experiment(),
+            candidates=(),
+            generation=1,
+        )
