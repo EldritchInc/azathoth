@@ -5,7 +5,6 @@ from azathoth.prompting.execution import execute_prompt
 from azathoth.prompting.models import ModelBinding, PromptTemplate
 from azathoth.providers import LanguageModel, ModelRequirements
 from azathoth.strategies import (
-    StrategyExecutionMetrics,
     StrategyMetadata,
     StrategyOutcome,
 )
@@ -40,13 +39,13 @@ class ContextPromptStrategy:
         """Return the context-aware prompt template."""
 
         return self._template
-    
+
     @property
     def model_requirements(self) -> ModelRequirements | None:
         """Return the requirements declared for the backing model."""
 
         return self._model_requirements
-    
+
     @property
     def model_binding(self) -> ModelBinding | None:
         """Return the catalog model bound to this strategy."""
