@@ -11,6 +11,8 @@ from azathoth.optimization.models import (
 from azathoth.optimization.ranking import StrategyRanker
 from azathoth.optimization.replay import ReplayWorkflowOptimizer
 from azathoth.optimization.runner import OptimizationRunner
+from azathoth.optimization.session import WorkflowOptimizationSession
+from azathoth.optimization.session_runner import WorkflowOptimizationSessionRunner
 from azathoth.optimization.workflow import (
     WorkflowOptimizationResult,
     WorkflowOptimizer,
@@ -27,5 +29,7 @@ __all__ = [
     "StrategyRanking",
     "StrategyScorecard",
     "WorkflowOptimizationResult",
+    "WorkflowOptimizationSession",
+    "WorkflowOptimizationSessionRunner",
     "WorkflowOptimizer",
 ]
