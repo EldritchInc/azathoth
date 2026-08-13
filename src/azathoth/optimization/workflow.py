@@ -49,5 +49,4 @@ class WorkflowOptimizer(Protocol):
         generation: int,
     ) -> WorkflowOptimizationResult:
         """Produce the next workflow optimization generation."""
-
         ...

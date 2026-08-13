@@ -1,12 +1,10 @@
-"""Tests for workflow optimization models."""
+"""Tests for replay workflow optimization."""
 
 from uuid import UUID
 
-import pytest
-from pydantic import ValidationError
-
 from azathoth.context import Context
 from azathoth.optimization import (
+    ReplayWorkflowOptimizer,
     WorkflowOptimizationResult,
 )
 from azathoth.strategies import (
@@ -47,7 +45,7 @@ class StaticStrategy:
         self._metadata = StrategyMetadata(
             id=strategy_id,
             name=f"strategy-{strategy_id}",
-            description="Deterministic optimization test strategy.",
+            description="Deterministic replay optimization strategy.",
         )
 
     @property
@@ -69,9 +67,9 @@ class StaticStrategy:
 
 def create_candidate(
     *,
-    workflow_id: UUID = WORKFLOW_ID,
-    step_id: UUID = STEP_ID,
-    strategy_id: UUID = STRATEGY_ID,
+    workflow_id: UUID,
+    step_id: UUID,
+    strategy_id: UUID,
 ) -> WorkflowCandidate:
     """Create a deterministic workflow candidate."""
 
@@ -79,7 +77,7 @@ def create_candidate(
         metadata=WorkflowMetadata(
             id=workflow_id,
             name=f"workflow-{workflow_id}",
-            description="Workflow optimization test candidate.",
+            description="Replay workflow optimization candidate.",
         ),
         steps=(
             WorkflowCandidateStep(
@@ -88,6 +86,23 @@ def create_candidate(
                     strategy_id=strategy_id,
                 ),
             ),
+        ),
+    )
+
+
+def create_candidates() -> tuple[WorkflowCandidate, ...]:
+    """Create a deterministic candidate population."""
+
+    return (
+        create_candidate(
+            workflow_id=WORKFLOW_ID,
+            step_id=STEP_ID,
+            strategy_id=STRATEGY_ID,
+        ),
+        create_candidate(
+            workflow_id=SECOND_WORKFLOW_ID,
+            step_id=SECOND_STEP_ID,
+            strategy_id=SECOND_STRATEGY_ID,
         ),
     )
 
@@ -138,83 +153,73 @@ def create_experiment() -> WorkflowExperimentResult:
     )
 
 
-def create_result() -> WorkflowOptimizationResult:
-    """Create a deterministic workflow optimization result."""
+def test_replay_optimizer_returns_optimization_result() -> None:
+    """Replay optimization should produce a workflow optimization result."""
 
-    return WorkflowOptimizationResult(
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=create_candidates(),
         generation=1,
-        previous_experiment=create_experiment(),
-        candidates=(
-            create_candidate(),
-            create_candidate(
-                workflow_id=SECOND_WORKFLOW_ID,
-                step_id=SECOND_STEP_ID,
-                strategy_id=SECOND_STRATEGY_ID,
-            ),
-        ),
+    )
+
+    assert isinstance(
+        result,
+        WorkflowOptimizationResult,
     )
 
 
-def test_optimization_result_records_generation() -> None:
-    result = create_result()
+def test_replay_optimizer_records_generation() -> None:
+    """Replay optimization should preserve the requested generation."""
 
-    assert result.generation == 1
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=create_candidates(),
+        generation=2,
+    )
+
+    assert result.generation == 2
 
 
-def test_optimization_result_records_previous_experiment() -> None:
-    result = create_result()
+def test_replay_optimizer_preserves_previous_experiment() -> None:
+    """Replay optimization should preserve experiment evidence."""
 
-    assert result.previous_experiment.winner.overall_score == 0.9
+    experiment = create_experiment()
+
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=experiment,
+        candidates=create_candidates(),
+        generation=1,
+    )
+
+    assert result.previous_experiment == experiment
 
 
-def test_optimization_result_records_candidates() -> None:
-    result = create_result()
+def test_replay_optimizer_preserves_candidates() -> None:
+    """Replay optimization should return the supplied candidate population."""
 
-    assert len(result.candidates) == 2
+    candidates = create_candidates()
+
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert result.candidates == candidates
+
+
+def test_replay_optimizer_preserves_candidate_order() -> None:
+    """Replay optimization should preserve candidate population order."""
+
+    candidates = create_candidates()
+
+    result = ReplayWorkflowOptimizer().optimize(
+        experiment=create_experiment(),
+        candidates=candidates,
+        generation=1,
+    )
 
     assert tuple(candidate.metadata.id for candidate in result.candidates) == (
         WORKFLOW_ID,
         SECOND_WORKFLOW_ID,
     )
-
-
-def test_optimization_result_rejects_zero_generation() -> None:
-    with pytest.raises(
-        ValidationError,
-    ):
-        WorkflowOptimizationResult(
-            generation=0,
-            previous_experiment=create_experiment(),
-            candidates=(create_candidate(),),
-        )
-
-
-def test_optimization_result_rejects_negative_generation() -> None:
-    with pytest.raises(
-        ValidationError,
-    ):
-        WorkflowOptimizationResult(
-            generation=-1,
-            previous_experiment=create_experiment(),
-            candidates=(create_candidate(),),
-        )
-
-
-def test_optimization_result_rejects_empty_candidates() -> None:
-    with pytest.raises(
-        ValidationError,
-    ):
-        WorkflowOptimizationResult(
-            generation=1,
-            previous_experiment=create_experiment(),
-            candidates=(),
-        )
-
-
-def test_optimization_result_is_immutable() -> None:
-    result = create_result()
-
-    with pytest.raises(
-        ValidationError,
-    ):
-        result.generation = 2
