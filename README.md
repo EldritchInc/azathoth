@@ -1284,6 +1284,59 @@ Future optimization capabilities can build upon workflow experiments to support:
 
 ------------------------------------------------------------------------
 
+# Workflow Optimization
+
+Workflow optimization consumes workflow experiment evidence and produces the next workflow generation.
+
+Optimization is intentionally separated from workflow execution.
+
+```text
+WorkflowExperimentResult
+          │
+          ▼
+WorkflowOptimizer
+          │
+          ▼
+WorkflowOptimizationResult
+    ├── generation
+    ├── previous_experiment
+    └── candidates
+```
+
+```python
+result = ReplayWorkflowOptimizer().optimize(
+    experiment=experiment,
+    candidates=candidates,
+    generation=1,
+)
+
+next_generation = result.candidates
+```
+
+Workflow optimizers are responsible for proposing future workflow populations.
+
+They are not responsible for:
+
+- executing workflows;
+- evaluating workflow outputs;
+- scoring workflow quality; or
+- ranking workflow candidates.
+
+The initial replay optimizer performs no optimization.
+
+It exists as a deterministic reference implementation of the workflow optimization contract.
+
+Future optimizers can build upon this interface to support:
+
+- evolutionary optimization;
+- provider exploration;
+- prompt mutation;
+- workflow synthesis;
+- adaptive candidate generation; and
+- empirical self-improvement.
+
+------------------------------------------------------------------------
+
 # Prompt Strategy Specifications
 
 Prompt strategy specifications describe workloads independently of any
