@@ -1,3 +1,0 @@
-requests
-openai
-boto3
