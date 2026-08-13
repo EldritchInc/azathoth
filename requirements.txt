@@ -1,7 +1,0 @@
-CouchDB
-boto3
-openai
-requests
-jsonschema
-Flask
-Flask-CORS
