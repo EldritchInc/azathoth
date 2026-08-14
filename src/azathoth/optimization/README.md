@@ -102,9 +102,7 @@ example = OptimizationExample(
     goal=Goal(
         name="Return the expected result",
         description="Produce the required deterministic output.",
-        success_criteria=(
-            "The output matches the expected value.",
-        ),
+        success_criteria=("The output matches the expected value.",),
     ),
     context=Context(),
     expected_outcome=ExpectedOutcome(
@@ -263,9 +261,7 @@ This prevents evidence from different strategies from being accidentally mixed.
 ```python
 from azathoth.optimization import StrategyRanker
 
-ranking = StrategyRanker().rank(
-    scorecards
-)
+ranking = StrategyRanker().rank(scorecards)
 ```
 
 The canonical ranking currently considers:
@@ -412,8 +408,7 @@ class WorkflowOptimizer(Protocol):
         experiment: WorkflowExperimentResult,
         candidates: tuple[WorkflowCandidate, ...],
         generation: int,
-    ) -> WorkflowOptimizationResult:
-        ...
+    ) -> WorkflowOptimizationResult: ...
 ```
 
 An optimizer receives:

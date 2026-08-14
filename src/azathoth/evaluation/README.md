@@ -95,8 +95,7 @@ from azathoth.evaluation import (
 async def evaluate(
     expected: ExpectedOutcome,
     actual: JsonValue,
-) -> EvaluationResult:
-    ...
+) -> EvaluationResult: ...
 ```
 
 This common protocol allows deterministic evaluators, semantic evaluators, schema validators, and future model-assisted evaluators to coexist behind one interface.
