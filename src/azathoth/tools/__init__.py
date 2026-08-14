@@ -15,6 +15,8 @@ from azathoth.tools.execution import PythonToolExecutor
 from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.protocols import ToolExecutor
 from azathoth.tools.testing import ToolTestCase
+from azathoth.tools.verification import ToolTestResult, ToolVerification
+from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
     "PythonToolExecutor",
@@ -27,5 +29,8 @@ __all__ = [
     "ToolInputSchema",
     "ToolOutputSchema",
     "ToolTestCase",
+    "ToolTestResult",
+    "ToolVerification",
+    "ToolVerifier",
     "UnsupportedToolRuntimeError",
 ]
