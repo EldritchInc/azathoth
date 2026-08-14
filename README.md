@@ -197,6 +197,7 @@ Detailed documentation lives with each major package.
 | [`azathoth.evaluation`](src/azathoth/evaluation/README.md) | Expected outcomes, evaluators, and evaluation evidence |
 | [`azathoth.prompting`](src/azathoth/prompting/README.md) | Prompt strategies, templates, bindings, and candidate generation |
 | [`azathoth.providers`](src/azathoth/providers/README.md) | Provider-neutral model metadata, requirements, discovery, and registries |
+| [`azathoth.tools`](src/azathoth/tools/README.md) | executable tools callable from workflow steps. |
 | [`azathoth.workflows`](src/azathoth/workflows/README.md) | Multi-step workflow specification, execution, scoring, ranking, and experiments |
 | [`azathoth.optimization`](src/azathoth/optimization/README.md) | Empirical experiments, workflow optimization, and optimization sessions |
 
@@ -298,6 +299,44 @@ executable model
 This keeps workload requirements independent from provider implementations.
 
 See [`azathoth.providers`](src/azathoth/providers/README.md).
+
+# Tools
+
+The tools package models executable capabilities independently of language,
+runtime, and persistence.
+
+```text
+                 ToolCatalog
+                      │
+                      ▼
+               ToolDefinition
+                /           \
+               ▼             ▼
+ ToolImplementation     ToolTestCase
+               │             │
+               ▼             │
+        ToolExecutor         │
+               │             │
+               └──────┬──────┘
+                      ▼
+                ToolVerifier
+                      │
+                      ▼
+             ToolVerification
+```
+
+Tools are represented as immutable capability contracts.
+
+Executable implementations remain independent of capability definitions.
+
+Deterministic verification produces durable evidence that implementations satisfy
+their contracts.
+
+This architecture establishes the foundation for future persistent registries,
+multiple execution runtimes, synthesized tools, capability discovery, adaptive
+tool routing, and tool optimization.
+
+See [`azathoth.tools`](src/azathoth/tools/README.md).
 
 ### Workflows
 
