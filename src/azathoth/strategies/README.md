@@ -34,14 +34,12 @@ from azathoth.strategies import (
 
 class Strategy(Protocol):
     @property
-    def metadata(self) -> StrategyMetadata:
-        ...
+    def metadata(self) -> StrategyMetadata: ...
 
     async def run(
         self,
         context: Context,
-    ) -> StrategyOutcome:
-        ...
+    ) -> StrategyOutcome: ...
 ```
 
 This protocol intentionally says nothing about prompts, providers, tools, or models.

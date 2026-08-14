@@ -706,17 +706,13 @@ values = run.values
 Values can also be queried by name:
 
 ```python
-answers = run.values_named(
-    "answer"
-)
+answers = run.values_named("answer")
 ```
 
 or by producer step:
 
 ```python
-values = run.values_from(
-    step_id
-)
+values = run.values_from(step_id)
 ```
 
 This provides structured access to workflow outputs without reconstructing execution state.
@@ -906,9 +902,7 @@ Ranks are consecutive and begin at one.
 `WorkflowRanking` contains the complete ordered comparison.
 
 ```python
-ranking = WorkflowRanker().rank(
-    scorecards
-)
+ranking = WorkflowRanker().rank(scorecards)
 
 winner = ranking.winner
 ```

@@ -40,12 +40,8 @@ from azathoth.goals import Goal
 goal = Goal(
     name="Answer accurately",
     description="Produce the correct answer for the supplied request.",
-    success_criteria=(
-        "The answer matches the expected result.",
-    ),
-    constraints=(
-        "Do not rely on unavailable external state.",
-    ),
+    success_criteria=("The answer matches the expected result.",),
+    constraints=("Do not rely on unavailable external state.",),
 )
 ```
 

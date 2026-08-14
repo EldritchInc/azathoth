@@ -66,8 +66,7 @@ class LanguageModel:
     async def complete(
         self,
         prompt: Prompt,
-    ) -> ModelResponse:
-        ...
+    ) -> ModelResponse: ...
 ```
 
 A concrete implementation may call:
@@ -328,9 +327,7 @@ The catalog supports:
 - requirement-based filtering.
 
 ```python
-eligible_models = catalog.find(
-    query
-)
+eligible_models = catalog.find(query)
 ```
 
 Catalog order is preserved.
@@ -382,9 +379,7 @@ registry = LanguageModelRegistry(
 Models are resolved using the same identifier exposed by `ModelMetadata`.
 
 ```python
-language_model = registry.get(
-    "example-provider/example-model"
-)
+language_model = registry.get("example-provider/example-model")
 ```
 
 A catalog entry without a corresponding registry entry is valid configuration, but it cannot become an executable candidate.
