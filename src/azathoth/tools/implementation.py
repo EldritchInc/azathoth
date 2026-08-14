@@ -15,4 +15,5 @@ class ToolImplementation(BaseModel):
     tool_version: str = Field(min_length=1)
     version: str = Field(default="1.0.0", min_length=1)
     runtime: str = Field(min_length=1)
+    entrypoint: str = Field(default="run", min_length=1)
     source: str = Field(min_length=1)

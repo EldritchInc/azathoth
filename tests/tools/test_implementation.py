@@ -21,7 +21,8 @@ def create_implementation() -> ToolImplementation:
         tool_version="1.0.0",
         version="1.0.0",
         runtime="python",
-        source=("def word_count(text: str) -> int:\n    return len(text.split())\n"),
+        entrypoint="run",
+        source=("def run(text: str) -> dict[str, int]:\n    return {'count': len(text.split())}\n"),
     )
 
 
@@ -33,8 +34,9 @@ def test_tool_implementation_records_metadata() -> None:
     assert implementation.tool_version == "1.0.0"
     assert implementation.version == "1.0.0"
     assert implementation.runtime == "python"
+    assert implementation.entrypoint == "run"
     assert implementation.source == (
-        "def word_count(text: str) -> int:\n    return len(text.split())\n"
+        "def run(text: str) -> dict[str, int]:\n    return {'count': len(text.split())}\n"
     )
 
 
@@ -43,7 +45,7 @@ def test_tool_implementation_generates_identifier() -> None:
         tool_id=TOOL_ID,
         tool_version="1.0.0",
         runtime="python",
-        source="return 1",
+        source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
     )
 
     assert isinstance(implementation.id, UUID)
@@ -54,10 +56,36 @@ def test_tool_implementation_defaults_version() -> None:
         tool_id=TOOL_ID,
         tool_version="1.0.0",
         runtime="python",
-        source="return 1",
+        source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
     )
 
     assert implementation.version == "1.0.0"
+
+
+def test_tool_implementation_defaults_entrypoint() -> None:
+    implementation = ToolImplementation(
+        tool_id=TOOL_ID,
+        tool_version="1.0.0",
+        runtime="python",
+        source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
+    )
+
+    assert implementation.entrypoint == "run"
+
+
+def test_tool_implementation_records_custom_entrypoint() -> None:
+    implementation = ToolImplementation(
+        tool_id=TOOL_ID,
+        tool_version="1.0.0",
+        runtime="python",
+        entrypoint="word_count",
+        source=(
+            "def word_count(text: str) -> dict[str, int]:\n"
+            "    return {'count': len(text.split())}\n"
+        ),
+    )
+
+    assert implementation.entrypoint == "word_count"
 
 
 def test_tool_implementation_rejects_empty_tool_version() -> None:
@@ -66,7 +94,7 @@ def test_tool_implementation_rejects_empty_tool_version() -> None:
             tool_id=TOOL_ID,
             tool_version="",
             runtime="python",
-            source="return 1",
+            source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
         )
 
 
@@ -77,7 +105,7 @@ def test_tool_implementation_rejects_empty_version() -> None:
             tool_version="1.0.0",
             version="",
             runtime="python",
-            source="return 1",
+            source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
         )
 
 
@@ -87,7 +115,18 @@ def test_tool_implementation_rejects_empty_runtime() -> None:
             tool_id=TOOL_ID,
             tool_version="1.0.0",
             runtime="",
-            source="return 1",
+            source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
+        )
+
+
+def test_tool_implementation_rejects_empty_entrypoint() -> None:
+    with pytest.raises(ValidationError):
+        ToolImplementation(
+            tool_id=TOOL_ID,
+            tool_version="1.0.0",
+            runtime="python",
+            entrypoint="",
+            source="def run() -> dict[str, int]:\n    return {'value': 1}\n",
         )
 
 
@@ -126,6 +165,7 @@ def test_tool_can_have_multiple_implementations() -> None:
         tool_version="1.0.0",
         version="1.0.0",
         runtime="javascript",
+        entrypoint="wordCount",
         source="const wordCount = text => text.trim().split(/\\s+/).length;\n",
     )
 
@@ -144,8 +184,10 @@ def test_tool_implementation_can_evolve_without_changing_tool_version() -> None:
         version="1.1.0",
         runtime="python",
         source=(
-            "def word_count(text: str) -> int:\n"
-            "    return len(text.strip().split()) if text.strip() else 0\n"
+            "def run(text: str) -> dict[str, int]:\n"
+            "    return {\n"
+            "        'count': len(text.strip().split()) if text.strip() else 0,\n"
+            "    }\n"
         ),
     )
 
