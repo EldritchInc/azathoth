@@ -1,4 +1,4 @@
-"""Durable tool definitions, implementations, catalogs, and verification."""
+"""Durable tool definitions, implementations, execution, and verification."""
 
 from azathoth.tools.catalog import ToolCatalog
 from azathoth.tools.definition import (
@@ -6,16 +6,26 @@ from azathoth.tools.definition import (
     ToolInputSchema,
     ToolOutputSchema,
 )
+from azathoth.tools.exceptions import (
+    ToolEntrypointError,
+    ToolExecutionError,
+    UnsupportedToolRuntimeError,
+)
+from azathoth.tools.execution import PythonToolExecutor
 from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.protocols import ToolExecutor
 from azathoth.tools.testing import ToolTestCase
 
 __all__ = [
+    "PythonToolExecutor",
     "ToolCatalog",
     "ToolDefinition",
+    "ToolEntrypointError",
+    "ToolExecutionError",
     "ToolExecutor",
     "ToolImplementation",
     "ToolInputSchema",
     "ToolOutputSchema",
     "ToolTestCase",
+    "UnsupportedToolRuntimeError",
 ]
