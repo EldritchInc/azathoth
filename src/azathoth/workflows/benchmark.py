@@ -1,9 +1,9 @@
-"""Execution and results for workflow benchmarks."""
+"""Execution, results, and comparison for workflow benchmarks."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from azathoth.context import Context
 from azathoth.evaluation import (
@@ -96,6 +96,50 @@ class WorkflowBenchmarkResult(BaseModel):
         )
 
 
+class WorkflowBenchmarkComparisonEntry(BaseModel):
+    """Benchmark evidence recorded for one named workflow candidate."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    result: WorkflowBenchmarkResult
+
+
+class WorkflowBenchmarkComparison(BaseModel):
+    """Side-by-side benchmark evidence for multiple workflow candidates."""
+
+    model_config = ConfigDict(frozen=True)
+
+    dataset_id: UUID
+    candidates: tuple[WorkflowBenchmarkComparisonEntry, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_unique_candidate_names(
+        self,
+    ) -> "WorkflowBenchmarkComparison":
+        """Reject duplicate benchmark candidate names."""
+
+        names = tuple(candidate.name for candidate in self.candidates)
+
+        if len(names) != len(set(names)):
+            raise ValueError(
+                "Workflow benchmark comparison cannot contain duplicate candidate names."
+            )
+
+        return self
+
+    def get(
+        self,
+        name: str,
+    ) -> WorkflowBenchmarkResult | None:
+        """Return benchmark evidence for one named candidate."""
+
+        return next(
+            (candidate.result for candidate in self.candidates if candidate.name == name),
+            None,
+        )
+
+
 class WorkflowBenchmarkRunner:
     """Execute workflow candidates across durable benchmark datasets."""
 
@@ -149,4 +193,47 @@ class WorkflowBenchmarkRunner:
         return WorkflowBenchmarkResult(
             dataset_id=dataset.id,
             cases=tuple(results),
+        )
+
+
+class WorkflowBenchmarkComparator:
+    """Compare named workflow candidates against one benchmark dataset."""
+
+    def __init__(
+        self,
+        runner: WorkflowBenchmarkRunner | None = None,
+    ) -> None:
+        self._runner = runner if runner is not None else WorkflowBenchmarkRunner()
+
+    async def compare(
+        self,
+        dataset: BenchmarkDataset,
+        candidate_factories: Mapping[
+            str,
+            Callable[[BenchmarkCase], WorkflowCandidate],
+        ],
+        *,
+        output_name: str,
+    ) -> WorkflowBenchmarkComparison:
+        """Execute every named candidate factory against one dataset."""
+
+        candidates: list[WorkflowBenchmarkComparisonEntry] = []
+
+        for name, candidate_factory in candidate_factories.items():
+            result = await self._runner.run(
+                dataset,
+                candidate_factory,
+                output_name=output_name,
+            )
+
+            candidates.append(
+                WorkflowBenchmarkComparisonEntry(
+                    name=name,
+                    result=result,
+                )
+            )
+
+        return WorkflowBenchmarkComparison(
+            dataset_id=dataset.id,
+            candidates=tuple(candidates),
         )
