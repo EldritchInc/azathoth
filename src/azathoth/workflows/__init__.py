@@ -4,6 +4,9 @@ from azathoth.workflows.attempt import (
 )
 from azathoth.workflows.benchmark import (
     WorkflowBenchmarkCaseResult,
+    WorkflowBenchmarkComparator,
+    WorkflowBenchmarkComparison,
+    WorkflowBenchmarkComparisonEntry,
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
 )
@@ -75,6 +78,9 @@ from azathoth.workflows.value import (
 __all__ = [
     "RankedWorkflow",
     "WorkflowBenchmarkCaseResult",
+    "WorkflowBenchmarkComparator",
+    "WorkflowBenchmarkComparison",
+    "WorkflowBenchmarkComparisonEntry",
     "WorkflowBenchmarkResult",
     "WorkflowBenchmarkRunner",
     "WorkflowCandidate",
