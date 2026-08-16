@@ -6,6 +6,7 @@ from azathoth.providers.models import (
     ModelMetadata,
     ModelModality,
     ModelPricing,
+    ModelRequest,
     ModelResponse,
     Prompt,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "ModelModality",
     "ModelPricing",
     "ModelQuery",
+    "ModelRequest",
     "ModelRequirements",
     "ModelResponse",
     "Prompt",

@@ -44,7 +44,6 @@ class ModelMetadata(BaseModel):
     input_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
     output_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
     capabilities: frozenset[ModelCapability] = frozenset()
-
     context_window_tokens: int = Field(gt=0)
     maximum_output_tokens: int | None = Field(default=None, gt=0)
     pricing: ModelPricing | None = None
@@ -62,6 +61,16 @@ class Prompt(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     text: str
+
+
+class ModelRequest(BaseModel):
+    """A provider-neutral request for a language model completion."""
+
+    model_config = ConfigDict(frozen=True)
+
+    prompt: Prompt
+    temperature: float | None = Field(default=None, ge=0.0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
 
 
 class ModelResponse(BaseModel):
