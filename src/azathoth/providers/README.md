@@ -79,6 +79,30 @@ A concrete implementation may call:
 
 Higher-level Azathoth code only depends on the protocol.
 
+## OpenRouterLanguageModel
+
+`OpenRouterLanguageModel` is the first production implementation of the
+`LanguageModel` protocol.
+
+```text
+Prompt
+   │
+   ▼
+OpenRouterLanguageModel
+   │
+   ▼
+OpenRouter
+   │
+   ▼
+ModelResponse
+```
+
+The implementation maps provider-neutral prompts onto the OpenRouter chat
+completion API.
+
+Responses are translated into immutable `ModelResponse` objects so higher-level
+execution, evaluation, and optimization remain provider independent.
+
 ## ModelExecutor
 
 `ModelExecutor` executes durable model requests through executable language
@@ -122,6 +146,29 @@ Prompts are immutable.
 Prompt construction belongs to the prompting package.
 
 The provider layer only receives rendered prompts ready for execution.
+
+## Model Request Execution
+
+Provider-neutral execution now proceeds through a `ModelExecutor`.
+
+```text
+ModelRequest
+      │
+      ▼
+ModelExecutor
+      │
+      ▼
+LanguageModel
+      │
+      ▼
+ModelResponse
+```
+
+The executor bridges durable request models to executable language model
+implementations.
+
+Current language model implementations continue to execute rendered prompts,
+preserving compatibility with the existing provider protocol.
 
 ## ModelRequest
 
@@ -447,6 +494,20 @@ This allows Azathoth to distinguish:
 - eligible models; and
 - executable models.
 
+## OpenRouter Configuration
+
+`OpenRouterConfiguration` records the immutable configuration required to
+communicate with the OpenRouter API.
+
+Configuration includes:
+
+- API key;
+- base URL; and
+- request timeout.
+
+Sensitive credentials are represented using `SecretStr` to reduce accidental
+exposure through logging or serialization.
+
 ## DeterministicLanguageModel
 
 The provider package includes a deterministic language model implementation for
@@ -500,18 +561,21 @@ LanguageModelRegistry
         │
         ▼
 LanguageModel
+   ┌───────────────┐
+   ▼               ▼
+Deterministic   OpenRouter
         ▲
         │
-ModelExecutor
+ ModelExecutor
         ▲
         │
-ModelRequest
+ ModelRequest
         │
         ▼
-Prompt
+     Prompt
         │
         ▼
-ModelResponse
+ ModelResponse
 ```
 
 Each stage has one responsibility.
