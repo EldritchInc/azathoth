@@ -1,4 +1,4 @@
-"""Durable tool definitions, implementations, execution, and verification."""
+"""Durable tool capabilities, execution, resolution, and verification."""
 
 from azathoth.tools.catalog import ToolCatalog
 from azathoth.tools.definition import (
@@ -20,6 +20,7 @@ from azathoth.tools.requirements import (
     ToolRequirementMatch,
     ToolRequirements,
 )
+from azathoth.tools.resolution import ToolResolver
 from azathoth.tools.testing import ToolTestCase
 from azathoth.tools.verification import ToolTestResult, ToolVerification
 from azathoth.tools.verifier import ToolVerifier
@@ -38,6 +39,7 @@ __all__ = [
     "ToolRequirement",
     "ToolRequirementMatch",
     "ToolRequirements",
+    "ToolResolver",
     "ToolTestCase",
     "ToolTestResult",
     "ToolVerification",
