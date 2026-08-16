@@ -1,9 +1,9 @@
-"""Execution, results, and comparison for workflow benchmarks."""
+"""Execution, scoring, comparison, and ranking for workflow benchmarks."""
 
 from collections.abc import Callable, Mapping
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from azathoth.context import Context
 from azathoth.evaluation import (
@@ -14,7 +14,13 @@ from azathoth.evaluation import (
 )
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
+from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.runner import WorkflowRunner
+from azathoth.workflows.scorecard import WorkflowScorecard
+from azathoth.workflows.scoring import (
+    WorkflowScorer,
+    WorkflowScoringPolicy,
+)
 
 
 class WorkflowBenchmarkCaseResult(BaseModel):
@@ -101,7 +107,7 @@ class WorkflowBenchmarkComparisonEntry(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: str = Field(min_length=1)
     result: WorkflowBenchmarkResult
 
 
@@ -138,6 +144,41 @@ class WorkflowBenchmarkComparison(BaseModel):
             (candidate.result for candidate in self.candidates if candidate.name == name),
             None,
         )
+
+
+class WorkflowBenchmarkCandidateScorecard(BaseModel):
+    """Aggregate workflow scorecard for one benchmark candidate."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    scorecard: WorkflowScorecard
+
+
+class WorkflowBenchmarkRankedCandidate(BaseModel):
+    """A named benchmark candidate assigned a deterministic rank."""
+
+    model_config = ConfigDict(frozen=True)
+
+    rank: int = Field(ge=1)
+    name: str = Field(min_length=1)
+    scorecard: WorkflowScorecard
+
+
+class WorkflowBenchmarkRanking(BaseModel):
+    """Ordered benchmark ranking using workflow scorecard evidence."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entries: tuple[WorkflowBenchmarkRankedCandidate, ...] = Field(
+        min_length=1,
+    )
+
+    @property
+    def winner(self) -> WorkflowBenchmarkRankedCandidate:
+        """Return the highest-ranked benchmark candidate."""
+
+        return self.entries[0]
 
 
 class WorkflowBenchmarkRunner:
@@ -236,4 +277,101 @@ class WorkflowBenchmarkComparator:
         return WorkflowBenchmarkComparison(
             dataset_id=dataset.id,
             candidates=tuple(candidates),
+        )
+
+
+class WorkflowBenchmarkScorer:
+    """Aggregate workflow scorecards across benchmark cases."""
+
+    def __init__(
+        self,
+        *,
+        policy: WorkflowScoringPolicy,
+    ) -> None:
+        self._scorer = WorkflowScorer(
+            policy=policy,
+        )
+
+    def score(
+        self,
+        candidate: WorkflowBenchmarkComparisonEntry,
+    ) -> WorkflowBenchmarkCandidateScorecard:
+        """Score one benchmark candidate across all executed cases."""
+
+        if not candidate.result.cases:
+            raise ValueError("Cannot score a benchmark candidate with no executed cases.")
+
+        case_scorecards = tuple(
+            self._scorer.score(
+                run=case.run,
+                evaluation=case.evaluation,
+            )
+            for case in candidate.result.cases
+        )
+
+        count = len(case_scorecards)
+
+        scorecard = WorkflowScorecard(
+            quality_score=sum(item.quality_score for item in case_scorecards) / count,
+            reliability_score=sum(item.reliability_score for item in case_scorecards) / count,
+            latency_score=sum(item.latency_score for item in case_scorecards) / count,
+            cost_score=sum(item.cost_score for item in case_scorecards) / count,
+            overall_score=sum(item.overall_score for item in case_scorecards) / count,
+            rationale=(
+                f"Benchmark aggregate for candidate {candidate.name!r} across {count} cases."
+            ),
+        )
+
+        return WorkflowBenchmarkCandidateScorecard(
+            name=candidate.name,
+            scorecard=scorecard,
+        )
+
+
+class WorkflowBenchmarkRanker:
+    """Rank benchmark candidates using the canonical workflow ranker."""
+
+    def __init__(
+        self,
+        *,
+        scorer: WorkflowBenchmarkScorer,
+        ranker: WorkflowRanker | None = None,
+    ) -> None:
+        self._scorer = scorer
+        self._ranker = ranker if ranker is not None else WorkflowRanker()
+
+    def rank(
+        self,
+        comparison: WorkflowBenchmarkComparison,
+    ) -> WorkflowBenchmarkRanking:
+        """Score and rank benchmark candidates deterministically."""
+
+        if not comparison.candidates:
+            raise ValueError("At least one benchmark candidate is required for ranking.")
+
+        scored_candidates = tuple(
+            self._scorer.score(candidate) for candidate in comparison.candidates
+        )
+
+        ranking = self._ranker.rank(tuple(candidate.scorecard for candidate in scored_candidates))
+
+        entries: list[WorkflowBenchmarkRankedCandidate] = []
+
+        for ranked in ranking.entries:
+            candidate = next(
+                candidate
+                for candidate in scored_candidates
+                if candidate.scorecard == ranked.scorecard
+            )
+
+            entries.append(
+                WorkflowBenchmarkRankedCandidate(
+                    rank=ranked.rank,
+                    name=candidate.name,
+                    scorecard=ranked.scorecard,
+                )
+            )
+
+        return WorkflowBenchmarkRanking(
+            entries=tuple(entries),
         )
