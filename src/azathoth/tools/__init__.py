@@ -13,6 +13,7 @@ from azathoth.tools.exceptions import (
 )
 from azathoth.tools.execution import PythonToolExecutor
 from azathoth.tools.implementation import ToolImplementation
+from azathoth.tools.matching import ToolMatcher
 from azathoth.tools.protocols import ToolExecutor
 from azathoth.tools.requirements import (
     ToolRequirement,
@@ -32,6 +33,7 @@ __all__ = [
     "ToolExecutor",
     "ToolImplementation",
     "ToolInputSchema",
+    "ToolMatcher",
     "ToolOutputSchema",
     "ToolRequirement",
     "ToolRequirementMatch",
