@@ -211,6 +211,30 @@ Workflow scoring asks:
 
 Keeping these responsibilities separate allows multiple scoring policies to reuse the same evaluation evidence.
 
+## Benchmark Datasets
+
+Evaluation benchmarks define reusable workloads.
+
+```text
+BenchmarkDataset
+├── BenchmarkCase
+├── BenchmarkCase
+└── BenchmarkCase
+```
+
+Each benchmark case contains:
+
+- input;
+- expected outcome; and
+- optional metadata.
+
+Benchmark datasets are immutable.
+
+Evaluation infrastructure remains responsible only for determining whether
+workflow outputs satisfy expected outcomes.
+
+Benchmark execution belongs to the workflow layer.
+
 ## Design Principles
 
 Evaluation is intentionally:

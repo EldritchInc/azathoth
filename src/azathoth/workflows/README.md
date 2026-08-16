@@ -816,6 +816,35 @@ A workflow may contain skipped steps and still be considered successful.
 
 This distinction is important because conditional branches may legitimately skip execution.
 
+## Workflow Benchmarks
+
+Workflow benchmarks evaluate workflow candidates across representative
+workloads.
+
+```text
+Benchmark Dataset
+        │
+        ▼
+Workflow Candidate
+        │
+        ▼
+Workflow Runner
+        │
+        ▼
+Workflow Evaluation
+        │
+        ▼
+Workflow Scorecard
+```
+
+Benchmark datasets reuse existing workflow execution.
+
+They introduce no provider-specific behavior and no alternative evaluation
+pipeline.
+
+Each benchmark case executes independently using the same workflow
+infrastructure used elsewhere throughout Azathoth.
+
 ## Workflow Scorecards
 
 Workflow execution and output evaluation can be combined into a normalized `WorkflowScorecard`.
@@ -847,6 +876,33 @@ A scorecard contains:
 - rationale.
 
 All scores are normalized between `0.0` and `1.0`.
+
+## Benchmark Ranking
+
+Workflow benchmarks compare multiple workflow candidates using the existing
+workflow scoring and ranking system.
+
+```text
+Workflow Benchmark
+        │
+        ▼
+Workflow Scorecards
+        │
+        ▼
+Workflow Ranker
+        │
+        ▼
+Ranked Candidates
+```
+
+Benchmark execution produces evidence.
+
+Workflow scoring interprets that evidence.
+
+Workflow ranking determines candidate ordering.
+
+Benchmark infrastructure intentionally does not define its own optimization
+policy.
 
 ## WorkflowScoringPolicy
 
