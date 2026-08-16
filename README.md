@@ -302,47 +302,44 @@ See [`azathoth.providers`](src/azathoth/providers/README.md).
 
 # Tools
 
-The tools package models durable capabilities independently of execution,
-verification, and optimization.
+The tools package separates capability contracts from executable
+implementations.
 
 ```text
-                 ToolRequirements
-                        │
-                        ▼
-                 ToolRequirement
-                        │
-                        ▼
-                   ToolResolver
-                  /            \
-                 ▼              ▼
-          ToolCatalog      ToolMatcher
-                 \              /
-                  ▼            ▼
-                 ToolDefinition
-                  /           \
-                 ▼             ▼
-      ToolImplementation   ToolTestCase
-                 │             │
-                 ▼             │
-          ToolExecutor         │
-                 │             │
-                 └──────┬──────┘
-                        ▼
-                  ToolVerifier
-                        │
-                        ▼
-                ToolVerification
+ToolRequirement
+       │
+       ▼
+ ToolResolver
+       │
+       ▼
+ToolDefinition
+       │
+       ▼
+ToolImplementationResolver
+       │
+       ▼
+ToolImplementation
+       │
+       ▼
+PythonToolExecutor
+       │
+       ▼
+ ToolVerifier
+       │
+       ▼
+ToolVerification
 ```
 
-Workflows describe required capabilities rather than executable implementations.
+Capability resolution identifies *what* satisfies a required capability.
 
-Deterministic requirement resolution produces candidate capability definitions.
+Implementation resolution identifies *how* that capability can be executed.
 
-Execution and verification remain independent of capability discovery.
+Execution and verification remain deterministic and independent of
+optimization.
 
 This architecture establishes the foundation for future runtime selection,
-persistent registries, adaptive capability routing, synthesized tools, and
-optimization.
+persistent registries, synthesized implementations, implementation ranking,
+and adaptive execution.
 
 See [`azathoth.tools`](src/azathoth/tools/README.md).
 

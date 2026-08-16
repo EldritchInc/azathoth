@@ -1,89 +1,84 @@
 # Tools
 
-The `azathoth.tools` package provides durable capability definitions,
-implementations, deterministic execution, verification, and capability
+The `azathoth.tools` package models durable capabilities, executable
+implementations, deterministic execution, verification, and implementation
 resolution.
 
 ```text
-                 ToolRequirements
-                        │
-                        ▼
-                 ToolRequirement
-                        │
-                        ▼
-                   ToolResolver
-                  /            \
-                 ▼              ▼
-          ToolCatalog      ToolMatcher
-                 \              /
-                  ▼            ▼
-                 ToolDefinition
-                  /           \
-                 ▼             ▼
-      ToolImplementation   ToolTestCase
-                 │             │
-                 ▼             │
-          ToolExecutor         │
-                 │             │
-                 └──────┬──────┘
-                        ▼
-                  ToolVerifier
-                        │
-                        ▼
-                ToolVerification
+              ToolRequirements
+                     │
+                     ▼
+              ToolRequirement
+                     │
+                     ▼
+                ToolResolver
+                     │
+                     ▼
+               ToolDefinition
+                     │
+                     ▼
+      ToolImplementationResolver
+                     │
+                     ▼
+      ToolImplementationCatalog
+                     │
+                     ▼
+            ToolImplementation
+               /            \
+              ▼              ▼
+      ToolExecutor      ToolTestCase
+              │              │
+              ▼              │
+      PythonToolExecutor     │
+              │              │
+              └──────┬───────┘
+                     ▼
+               ToolVerifier
+                     │
+                     ▼
+             ToolVerification
 ```
 
-## Tool Requirements
+## Capability Resolution
 
-Tool requirements describe capabilities required by higher-level systems.
+Capability resolution maps durable capability requirements to matching tool
+definitions.
 
-Requirements intentionally describe *what* capability is needed rather than
-*which* implementation should execute.
+Resolution depends only on capability identity and version.
 
-## Tool Resolution
+## Implementation Resolution
 
-Tool resolution converts durable requirements into candidate tool definitions.
+Implementation resolution maps capability definitions to executable tool
+implementations.
 
-Resolution combines immutable catalogs with deterministic matching.
+Runtime constraints are evaluated during implementation resolution.
 
-Resolution introduces no ranking or optimization policy.
-
-## Tool Definitions
-
-Tool definitions describe immutable capability contracts.
-
-Definitions remain independent of implementation language, execution
-environment, and persistence.
-
-## Tool Implementations
-
-Tool implementations provide executable realizations of capability definitions.
-
-Multiple implementations may satisfy the same capability.
+Implementation resolution introduces no optimization or ranking policy.
 
 ## Tool Execution
 
-Tool executors execute implementations using structured inputs and structured
-outputs.
+Tool executors execute deterministic implementations using structured inputs
+and structured outputs.
 
-Execution remains independent of verification.
+Execution remains independent of capability discovery and implementation
+selection.
 
 ## Tool Verification
 
-Tool verification executes durable test cases and compares expected outputs with
-actual outputs.
+Tool verification executes durable test cases and compares expected outputs
+against actual outputs.
 
 Verification provides objective evidence describing implementation correctness.
 
 ## Future Direction
 
-The tools subsystem establishes the foundation for future capabilities
+The implementation subsystem establishes the foundation for future capabilities
 including:
 
-- implementation resolution;
-- runtime selection;
-- persistent tool registries;
-- synthesized tool implementations;
-- adaptive capability routing;
-- capability optimization; and
-- workflow capability planning.
+- isolated execution environments;
+- multiple runtime backends;
+- synthesized implementations;
+- implementation benchmarking;
+- implementation ranking;
+- adaptive runtime selection; and
+- implementation optimization.
