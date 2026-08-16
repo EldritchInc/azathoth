@@ -331,6 +331,41 @@ credits.
 
 See [`azathoth.providers`](src/azathoth/providers/README.md).
 
+## Workflow Execution
+
+Azathoth workflows now execute against production language models through the
+provider abstraction.
+
+```text
+Workflow Specification
+          │
+          ▼
+Workflow Candidate
+          │
+          ▼
+Workflow Runner
+          │
+          ▼
+Prompt Strategy
+          │
+          ▼
+Language Model
+          │
+          ▼
+OpenRouter
+          │
+          ▼
+Workflow Run
+```
+
+Provider-backed workflow execution preserves the same deterministic execution,
+evaluation, and scorecard infrastructure already used by deterministic language
+models.
+
+Normal automated tests remain fully deterministic.
+
+Production execution is verified through explicit opt-in smoke tests.
+
 # Tools
 
 The tools package separates capability contracts from executable
