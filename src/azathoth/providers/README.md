@@ -79,6 +79,32 @@ A concrete implementation may call:
 
 Higher-level Azathoth code only depends on the protocol.
 
+## ModelExecutor
+
+`ModelExecutor` executes durable model requests through executable language
+models.
+
+```text
+ModelRequest
+      │
+      ▼
+ModelExecutor
+      │
+      ▼
+LanguageModel
+      │
+      ▼
+ModelResponse
+```
+
+The executor bridges durable request models to the existing prompt-based
+provider protocol.
+
+This allows request models to evolve independently from provider
+implementations.
+
+Unsupported execution controls are rejected explicitly rather than ignored.
+
 ## Prompt
 
 `Prompt` represents the rendered request supplied to a language model.
@@ -96,6 +122,37 @@ Prompts are immutable.
 Prompt construction belongs to the prompting package.
 
 The provider layer only receives rendered prompts ready for execution.
+
+## ModelRequest
+
+`ModelRequest` represents a durable execution request for a rendered prompt.
+
+```python
+from azathoth.providers import (
+    ModelRequest,
+    Prompt,
+)
+
+request = ModelRequest(
+    prompt=Prompt(
+        text="Return exactly success.",
+    ),
+)
+```
+
+A model request packages:
+
+- the rendered prompt; and
+- optional provider-neutral execution parameters.
+
+Current execution supports prompt-only requests.
+
+Advanced generation controls are intentionally rejected until supported by
+provider implementations.
+
+Model requests establish a stable execution boundary for future provider
+integrations while preserving compatibility with the existing language model
+protocol.
 
 ## ModelResponse
 
@@ -390,6 +447,35 @@ This allows Azathoth to distinguish:
 - eligible models; and
 - executable models.
 
+## DeterministicLanguageModel
+
+The provider package includes a deterministic language model implementation for
+testing and local execution.
+
+```python
+from azathoth.providers import (
+    DeterministicLanguageModel,
+    Prompt,
+)
+
+model = DeterministicLanguageModel()
+
+response = await model.complete(
+    Prompt(
+        text="Hello",
+    )
+)
+```
+
+The deterministic implementation satisfies the `LanguageModel` protocol without
+performing any network communication.
+
+It provides repeatable execution for unit tests, integration tests, and
+end-to-end workflow verification.
+
+Future provider implementations, including OpenRouter, will satisfy the same
+protocol.
+
 ## Discovery and Execution
 
 The complete provider flow looks like this:
@@ -413,13 +499,19 @@ provider/model identifier
 LanguageModelRegistry
         │
         ▼
-  LanguageModel
+LanguageModel
+        ▲
+        │
+ModelExecutor
+        ▲
+        │
+ModelRequest
         │
         ▼
-   complete()
+Prompt
         │
         ▼
-  ModelResponse
+ModelResponse
 ```
 
 Each stage has one responsibility.

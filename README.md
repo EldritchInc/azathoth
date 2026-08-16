@@ -269,34 +269,36 @@ It is separate from workflow scoring, which interprets broader execution evidenc
 
 See [`azathoth.evaluation`](src/azathoth/evaluation/README.md).
 
-### Providers
+# Providers
 
-Model-backed workloads declare `ModelRequirements`.
-
-Configured models are described by `ModelMetadata` and discovered through `ModelCatalog`.
-
-Executable implementations are resolved separately through `LanguageModelRegistry`.
+The providers package separates durable execution requests from provider
+implementations.
 
 ```text
-ModelRequirements
-        │
-        ▼
-    ModelQuery
-        │
-        ▼
-   ModelCatalog
-        │
-        ▼
-eligible models
-        │
-        ▼
-LanguageModelRegistry
-        │
-        ▼
-executable model
+Prompt
+   │
+   ▼
+ModelRequest
+   │
+   ▼
+ModelExecutor
+   │
+   ▼
+LanguageModel
+   ├──────────────┐
+   ▼              ▼
+Deterministic  Future OpenRouter
+   │
+   ▼
+ModelResponse
 ```
 
-This keeps workload requirements independent from provider implementations.
+Model requests establish a stable execution boundary for future provider
+integrations.
+
+Execution remains deterministic while allowing future providers to introduce
+additional execution capabilities without changing higher-level workflow
+execution.
 
 See [`azathoth.providers`](src/azathoth/providers/README.md).
 

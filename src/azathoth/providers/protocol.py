@@ -1,20 +1,17 @@
-"""Protocols for language model providers."""
+"""Protocols implemented by language model providers."""
 
 from typing import Protocol
 
-from azathoth.providers.models import (
-    ModelResponse,
-    Prompt,
-)
+from azathoth.providers.models import ModelResponse, Prompt
 
 
 class LanguageModel(Protocol):
-    """A service capable of producing language model completions."""
+    """A service capable of completing language model prompts."""
 
     async def complete(
         self,
         prompt: Prompt,
     ) -> ModelResponse:
-        """Generate a completion for a rendered prompt."""
+        """Complete a rendered prompt."""
 
         ...
