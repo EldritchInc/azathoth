@@ -1,80 +1,89 @@
 # Tools
 
-The `azathoth.tools` package provides durable capability contracts, executable
-implementations, deterministic execution, and objective verification.
+The `azathoth.tools` package provides durable capability definitions,
+implementations, deterministic execution, verification, and capability
+resolution.
 
 ```text
-                 ToolCatalog
-                      │
-                      ▼
-               ToolDefinition
-                /           \
-               ▼             ▼
- ToolImplementation     ToolTestCase
-               │             │
-               ▼             │
-        ToolExecutor         │
-               │             │
-               └──────┬──────┘
-                      ▼
-                ToolVerifier
-                      │
-                      ▼
-             ToolVerification
+                 ToolRequirements
+                        │
+                        ▼
+                 ToolRequirement
+                        │
+                        ▼
+                   ToolResolver
+                  /            \
+                 ▼              ▼
+          ToolCatalog      ToolMatcher
+                 \              /
+                  ▼            ▼
+                 ToolDefinition
+                  /           \
+                 ▼             ▼
+      ToolImplementation   ToolTestCase
+                 │             │
+                 ▼             │
+          ToolExecutor         │
+                 │             │
+                 └──────┬──────┘
+                        ▼
+                  ToolVerifier
+                        │
+                        ▼
+                ToolVerification
 ```
+
+## Tool Requirements
+
+Tool requirements describe capabilities required by higher-level systems.
+
+Requirements intentionally describe *what* capability is needed rather than
+*which* implementation should execute.
+
+## Tool Resolution
+
+Tool resolution converts durable requirements into candidate tool definitions.
+
+Resolution combines immutable catalogs with deterministic matching.
+
+Resolution introduces no ranking or optimization policy.
 
 ## Tool Definitions
 
 Tool definitions describe immutable capability contracts.
 
-Definitions establish stable interfaces independently of execution environments,
-implementation languages, or persistence mechanisms.
+Definitions remain independent of implementation language, execution
+environment, and persistence.
 
 ## Tool Implementations
 
-Tool implementations describe executable realizations of tool definitions.
+Tool implementations provide executable realizations of capability definitions.
 
-Multiple implementations may satisfy the same capability contract.
-
-Implementations identify:
-
-- runtime;
-- executable entrypoint; and
-- implementation source.
+Multiple implementations may satisfy the same capability.
 
 ## Tool Execution
 
-Tool executors execute durable tool implementations.
-
-Execution accepts structured inputs and produces structured JSON outputs.
+Tool executors execute implementations using structured inputs and structured
+outputs.
 
 Execution remains independent of verification.
 
 ## Tool Verification
 
-Tool verification executes deterministic tool test cases and compares expected
-outputs with actual outputs.
+Tool verification executes durable test cases and compares expected outputs with
+actual outputs.
 
-Verification produces immutable evidence describing implementation correctness.
-
-Verification remains deterministic and introduces no optimization or heuristic
-behavior.
-
-## Tool Catalogs
-
-Tool catalogs provide deterministic discovery of tool definitions.
-
-Catalogs intentionally remain independent of execution, persistence, and
-optimization policy.
+Verification provides objective evidence describing implementation correctness.
 
 ## Future Direction
 
-The tools subsystem establishes the foundation for future capabilities including:
+The tools subsystem establishes the foundation for future capabilities
+including:
 
+- implementation resolution;
+- runtime selection;
 - persistent tool registries;
-- isolated execution environments;
 - synthesized tool implementations;
-- automatic regression testing;
-- capability discovery;
-- adaptive tool selection; and
-- tool optimization.
+- adaptive capability routing;
+- capability optimization; and
+- workflow capability planning.
