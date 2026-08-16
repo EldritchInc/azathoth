@@ -1,6 +1,9 @@
 """Language model provider abstractions."""
 
 from azathoth.providers.catalog import ModelCatalog
+from azathoth.providers.deterministic import (
+    DeterministicLanguageModel,
+)
 from azathoth.providers.models import (
     ModelCapability,
     ModelMetadata,
@@ -16,6 +19,7 @@ from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.requirements import ModelRequirements
 
 __all__ = [
+    "DeterministicLanguageModel",
     "LanguageModel",
     "LanguageModelRegistry",
     "ModelCapability",
