@@ -3,12 +3,17 @@ from azathoth.workflows.attempt import (
     WorkflowStepFailure,
 )
 from azathoth.workflows.benchmark import (
+    WorkflowBenchmarkCandidateScorecard,
     WorkflowBenchmarkCaseResult,
     WorkflowBenchmarkComparator,
     WorkflowBenchmarkComparison,
     WorkflowBenchmarkComparisonEntry,
+    WorkflowBenchmarkRankedCandidate,
+    WorkflowBenchmarkRanker,
+    WorkflowBenchmarkRanking,
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
+    WorkflowBenchmarkScorer,
 )
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
@@ -77,12 +82,17 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "RankedWorkflow",
+    "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
     "WorkflowBenchmarkComparator",
     "WorkflowBenchmarkComparison",
     "WorkflowBenchmarkComparisonEntry",
+    "WorkflowBenchmarkRankedCandidate",
+    "WorkflowBenchmarkRanker",
+    "WorkflowBenchmarkRanking",
     "WorkflowBenchmarkResult",
     "WorkflowBenchmarkRunner",
+    "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
     "WorkflowCandidateStep",
     "WorkflowCondition",
