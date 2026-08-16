@@ -92,7 +92,8 @@ class OpenRouterLanguageModel:
         return ModelResponse(
             text=payload.choices[0].message.content,
             provider="openrouter",
-            model=payload.model,
+            model=self._model,
+            resolved_model=payload.model,
             prompt_tokens=payload.usage.prompt_tokens,
             completion_tokens=payload.usage.completion_tokens,
             total_tokens=payload.usage.total_tokens,

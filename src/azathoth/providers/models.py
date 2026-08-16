@@ -82,6 +82,7 @@ class ModelResponse(BaseModel):
 
     provider: str
     model: str
+    resolved_model: str | None = None
 
     prompt_tokens: int
     completion_tokens: int
