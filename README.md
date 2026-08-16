@@ -269,6 +269,37 @@ It is separate from workflow scoring, which interprets broader execution evidenc
 
 See [`azathoth.evaluation`](src/azathoth/evaluation/README.md).
 
+## Workflow Benchmarks
+
+Azathoth can execute reusable benchmark datasets against multiple workflow
+candidates.
+
+```text
+Benchmark Dataset
+        │
+        ▼
+Workflow Candidates
+        │
+        ▼
+Workflow Execution
+        │
+        ▼
+Workflow Evaluation
+        │
+        ▼
+Workflow Scorecards
+        │
+        ▼
+Workflow Ranking
+```
+
+Benchmark execution reuses the same deterministic workflow execution,
+evaluation, and ranking infrastructure already used elsewhere throughout the
+system.
+
+This provides the objective evidence required for provider comparison, routing,
+and future optimization.
+
 # Providers
 
 The providers package separates durable execution requests from provider
