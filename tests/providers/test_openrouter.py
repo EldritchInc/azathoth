@@ -74,6 +74,7 @@ def test_openrouter_language_model_returns_completion() -> None:
     assert response.text == "positive"
     assert response.provider == "openrouter"
     assert response.model == "openai/gpt-test"
+    assert response.resolved_model == "openai/gpt-test"
 
 
 def test_openrouter_language_model_records_usage() -> None:
@@ -219,3 +220,32 @@ def test_openrouter_language_model_maps_invalid_response() -> None:
                 )
             )
         )
+
+
+def test_openrouter_language_model_preserves_resolved_model() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = create_response()
+        payload["model"] = "deepseek/deepseek-v4-flash-0731"
+
+        return httpx.Response(
+            200,
+            json=payload,
+            request=request,
+        )
+
+    model = OpenRouterLanguageModel(
+        create_configuration(),
+        "~deepseek/deepseek-v4-flash-latest",
+        transport=httpx.MockTransport(handler),
+    )
+
+    response = asyncio.run(
+        model.complete(
+            Prompt(
+                text="Return exactly positive.",
+            )
+        )
+    )
+
+    assert response.model == "~deepseek/deepseek-v4-flash-latest"
+    assert response.resolved_model == "deepseek/deepseek-v4-flash-0731"
