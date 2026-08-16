@@ -1,9 +1,12 @@
 """Language model provider abstractions."""
 
 from azathoth.providers.catalog import ModelCatalog
-from azathoth.providers.deterministic import (
-    DeterministicLanguageModel,
+from azathoth.providers.deterministic import DeterministicLanguageModel
+from azathoth.providers.exceptions import (
+    ModelExecutionError,
+    UnsupportedModelRequestError,
 )
+from azathoth.providers.execution import ModelExecutor
 from azathoth.providers.models import (
     ModelCapability,
     ModelMetadata,
@@ -24,6 +27,8 @@ __all__ = [
     "LanguageModelRegistry",
     "ModelCapability",
     "ModelCatalog",
+    "ModelExecutionError",
+    "ModelExecutor",
     "ModelMetadata",
     "ModelModality",
     "ModelPricing",
@@ -32,4 +37,5 @@ __all__ = [
     "ModelRequirements",
     "ModelResponse",
     "Prompt",
+    "UnsupportedModelRequestError",
 ]
