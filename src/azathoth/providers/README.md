@@ -103,6 +103,31 @@ completion API.
 Responses are translated into immutable `ModelResponse` objects so higher-level
 execution, evaluation, and optimization remain provider independent.
 
+## Workflow Integration
+
+OpenRouter integrates through the existing provider abstraction.
+
+```text
+WorkflowRunner
+       │
+       ▼
+PromptStrategy
+       │
+       ▼
+LanguageModel
+       │
+       ▼
+OpenRouterLanguageModel
+       │
+       ▼
+OpenRouter
+```
+
+The provider package remains responsible only for model execution.
+
+Workflow orchestration, execution history, evaluation, and optimization remain
+outside the provider layer.
+
 ## ModelExecutor
 
 `ModelExecutor` executes durable model requests through executable language

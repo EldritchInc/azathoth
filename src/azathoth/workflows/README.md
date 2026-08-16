@@ -598,6 +598,38 @@ The runner coordinates:
 
 The runner does not evaluate correctness or rank workflows.
 
+## Provider-backed Workflow Execution
+
+Workflow execution remains provider neutral.
+
+```text
+WorkflowSpecification
+          │
+          ▼
+generate_workflow_candidate()
+          │
+          ▼
+WorkflowCandidate
+          │
+          ▼
+WorkflowRunner
+          │
+          ▼
+PromptStrategy
+          │
+          ▼
+LanguageModel
+          │
+          ▼
+ModelResponse
+```
+
+The workflow layer never communicates directly with provider-specific APIs.
+
+Language model execution is delegated through the provider abstraction, allowing
+the same workflow to execute against deterministic models, OpenRouter, or future
+providers without changing workflow definitions.
+
 ## Layer Execution
 
 The runner processes dependency-safe layers.
@@ -959,6 +991,38 @@ winner = result.winner
 ```
 
 Experiment results are immutable.
+
+## Deterministic and Live Testing
+
+Workflow execution is verified at two levels.
+
+Deterministic tests execute workflows using mocked language model
+implementations and mocked HTTP transports.
+
+```text
+Workflow
+    │
+    ▼
+Mock Language Model
+```
+
+Live workflow verification is available through an explicit opt-in smoke test.
+
+```text
+Workflow
+    │
+    ▼
+OpenRouter
+```
+
+Normal development and continuous integration remain deterministic and consume
+no provider credits.
+
+Live execution is enabled only by explicitly setting:
+
+```text
+AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
+```
 
 ## Experiments Are Not Optimization
 
