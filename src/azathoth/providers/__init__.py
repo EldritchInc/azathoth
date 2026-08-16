@@ -16,6 +16,8 @@ from azathoth.providers.models import (
     ModelResponse,
     Prompt,
 )
+from azathoth.providers.openrouter import OpenRouterLanguageModel
+from azathoth.providers.openrouter_models import OpenRouterConfiguration
 from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
@@ -36,6 +38,8 @@ __all__ = [
     "ModelRequest",
     "ModelRequirements",
     "ModelResponse",
+    "OpenRouterConfiguration",
+    "OpenRouterLanguageModel",
     "Prompt",
     "UnsupportedModelRequestError",
 ]

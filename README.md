@@ -300,6 +300,35 @@ Execution remains deterministic while allowing future providers to introduce
 additional execution capabilities without changing higher-level workflow
 execution.
 
+## OpenRouter
+
+Azathoth's first production language model provider is OpenRouter.
+
+```text
+Prompt
+   │
+   ▼
+ModelRequest
+   │
+   ▼
+ModelExecutor
+   │
+   ▼
+OpenRouterLanguageModel
+   │
+   ▼
+OpenRouter
+   │
+   ▼
+ModelResponse
+```
+
+Normal automated tests remain deterministic through mocked HTTP transports.
+
+Live OpenRouter verification is available through an explicit opt-in smoke test,
+allowing development and continuous integration to execute without consuming API
+credits.
+
 See [`azathoth.providers`](src/azathoth/providers/README.md).
 
 # Tools
