@@ -18,7 +18,12 @@ from azathoth.tools.implementation_resolution import (
     ToolImplementationResolver,
 )
 from azathoth.tools.matching import ToolMatcher
+from azathoth.tools.memory_repository import (
+    InMemoryToolRepository,
+    require_tool_repository,
+)
 from azathoth.tools.protocols import ToolExecutor
+from azathoth.tools.repository import ToolRepository
 from azathoth.tools.requirements import (
     ToolRequirement,
     ToolRequirementMatch,
@@ -30,6 +35,7 @@ from azathoth.tools.verification import ToolTestResult, ToolVerification
 from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
+    "InMemoryToolRepository",
     "PythonToolExecutor",
     "ToolCatalog",
     "ToolDefinition",
@@ -42,6 +48,7 @@ __all__ = [
     "ToolInputSchema",
     "ToolMatcher",
     "ToolOutputSchema",
+    "ToolRepository",
     "ToolRequirement",
     "ToolRequirementMatch",
     "ToolRequirements",
@@ -51,4 +58,5 @@ __all__ = [
     "ToolVerification",
     "ToolVerifier",
     "UnsupportedToolRuntimeError",
+    "require_tool_repository",
 ]
