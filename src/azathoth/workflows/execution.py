@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -95,6 +95,8 @@ class WorkflowRun(BaseModel):
     """The complete recorded result of executing one workflow candidate."""
 
     model_config = ConfigDict(frozen=True)
+
+    id: UUID = Field(default_factory=uuid4)
 
     workflow: WorkflowMetadata
     steps: tuple[WorkflowStepRun, ...] = Field(min_length=1)
