@@ -462,7 +462,8 @@ Optimization policy remains outside the prompting package.
 
 ## Prompting and Workflows
 
-Workflow step specifications currently use `PromptStrategySpec` as their model-independent executable specification.
+Prompt-backed workflow steps use `PromptStrategySpec` as their
+model-independent executable specification.
 
 ```text
 WorkflowStepSpecification
@@ -480,9 +481,15 @@ PromptStrategy
 WorkflowCandidateStep
 ```
 
-This allows workflows to describe prompt-backed steps without embedding live provider implementations.
+Workflow steps may also be backed by other specification types, including
+durable tool requirements.
 
-Workflow generation later binds those specifications to executable models.
+The prompting package remains responsible only for prompt-backed candidate
+generation and execution.
+
+This allows workflows to compose language-model-backed strategies with other
+strategy implementations without making the prompting package responsible for
+workflow orchestration.
 
 ## Design Principles
 
