@@ -1,6 +1,7 @@
 """Durable tool capabilities, execution, resolution, and verification."""
 
 from azathoth.tools.catalog import ToolCatalog
+from azathoth.tools.catalog_loader import ToolCatalogLoader
 from azathoth.tools.definition import (
     ToolDefinition,
     ToolInputSchema,
@@ -40,6 +41,7 @@ __all__ = [
     "PythonToolExecutor",
     "SQLiteToolRepository",
     "ToolCatalog",
+    "ToolCatalogLoader",
     "ToolDefinition",
     "ToolEntrypointError",
     "ToolExecutionError",
