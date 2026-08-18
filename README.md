@@ -582,6 +582,48 @@ specification becomes a workflow candidate.
 This keeps durable workflow configuration independent from runtime provider and
 tool objects.
 
+### Durable Execution Evidence
+
+Completed workflow executions can be persisted independently from workflow
+definitions.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+WorkflowRunner
+        │
+        ▼
+WorkflowRun
+        │
+        ▼
+WorkflowRunRepository
+        │
+        ▼
+Persistent Evidence
+```
+
+Each `WorkflowRun` has a stable identifier and retains step execution results,
+attempts, values, contexts, and timing.
+
+Later human or application feedback is stored separately.
+
+```text
+WorkflowRun
+    │
+    │ run_id
+    ▼
+WorkflowRunFeedback
+├── good / bad
+├── reason
+└── corrected output
+```
+
+Feedback does not modify the original execution record.
+
+This keeps observed runtime behavior separate from later judgments about that
+behavior.
+
 ### Workflow Experiments
 
 Workflow experiments compose execution, evaluation, scoring, and ranking.

@@ -999,6 +999,173 @@ values = run.values_from(step_id)
 
 This provides structured access to workflow outputs without reconstructing execution state.
 
+## Workflow Run Persistence
+
+`WorkflowRun` is the durable record of one completed workflow execution.
+
+Each run has its own stable identifier.
+
+```text
+Workflow
+   │
+   ▼
+WorkflowRunner
+   │
+   ▼
+WorkflowRun
+├── id
+├── workflow metadata
+├── step runs
+├── execution attempts
+├── workflow values
+├── initial context
+├── final context
+└── timestamps
+```
+
+The workflow identifier identifies the workflow definition.
+
+The run identifier identifies one particular execution of that workflow.
+
+`WorkflowRunRepository` provides a storage-neutral persistence boundary.
+
+Current implementations include:
+
+- `InMemoryWorkflowRunRepository`; and
+- `SQLiteWorkflowRunRepository`.
+
+```text
+WorkflowRun
+    │
+    ▼
+WorkflowRunRepository
+    │
+    ├── InMemoryWorkflowRunRepository
+    │
+    └── SQLiteWorkflowRunRepository
+```
+
+Workflow run evidence is append-only.
+
+Persisting another run with the same run identifier is rejected.
+
+## Reconstructed Run Evidence
+
+SQLite persistence serializes the complete immutable `WorkflowRun`.
+
+```text
+WorkflowRun
+    │
+    ▼
+SQLite
+    │
+    │ process restart
+    ▼
+WorkflowRun
+```
+
+Reconstructed runs preserve:
+
+- workflow identity;
+- step status;
+- strategy execution results;
+- execution attempts;
+- failures;
+- workflow values;
+- contexts; and
+- timestamps.
+
+Statistics and reliability remain derived from the reconstructed raw evidence
+rather than being separately persisted.
+
+```text
+WorkflowRun
+    │
+    ├── WorkflowRunStatistics
+    └── WorkflowReliabilityMetrics
+```
+
+This keeps the persisted execution record canonical.
+
+## Workflow Run Feedback
+
+Judgment about a completed run is stored separately from the run itself.
+
+`WorkflowRunFeedback` records one human or application judgment.
+
+```text
+WorkflowRunFeedback
+├── id
+├── run_id
+├── disposition
+├── reason
+├── corrected_output
+└── created_at
+```
+
+A disposition is either:
+
+- `good`; or
+- `bad`.
+
+Bad feedback requires a reason.
+
+A corrected output may optionally record what the caller expected instead.
+
+```python
+feedback = WorkflowRunFeedback(
+    run_id=run.id,
+    disposition=WorkflowRunFeedbackDisposition.BAD,
+    reason="The classification was incorrect.",
+    corrected_output="negative",
+)
+```
+
+Feedback never modifies the original `WorkflowRun`.
+
+```text
+WorkflowRun
+actual output = "positive"
+        │
+        │ run_id
+        ▼
+WorkflowRunFeedback
+disposition = "bad"
+reason = "The classification was incorrect."
+corrected_output = "negative"
+```
+
+The recorded output remains `"positive"` because that is what actually
+happened.
+
+## Feedback Persistence
+
+`WorkflowRunFeedbackRepository` provides the persistence boundary for these
+later judgments.
+
+Current implementations include:
+
+- `InMemoryWorkflowRunFeedbackRepository`; and
+- `SQLiteWorkflowRunFeedbackRepository`.
+
+```text
+WorkflowRun
+    │
+    │ id
+    ▼
+WorkflowRunFeedback
+    │
+    ▼
+WorkflowRunFeedbackRepository
+```
+
+Feedback records are append-only.
+
+Multiple feedback records may reference the same workflow run.
+
+This preserves judgment history instead of treating feedback as one mutable
+field on the execution record.
+
 ## Workflow Statistics
 
 Every workflow run exposes derived `WorkflowRunStatistics`.
@@ -1222,6 +1389,27 @@ The canonical ordering compares:
 4. latency score;
 5. cost score; and
 6. original input order for exact ties.
+
+## Observation Versus Judgment
+
+Azathoth distinguishes execution evidence from judgments about execution.
+
+```text
+WorkflowRun
+"What happened?"
+
+EvaluationResult
+"Did an evaluator consider it correct?"
+
+WorkflowRunFeedback
+"Did a human or application consider it good?"
+```
+
+These artifacts may disagree.
+
+That disagreement is preserved rather than normalized away.
+
+Evaluation and feedback do not rewrite raw workflow execution evidence.
 
 ## RankedWorkflow
 
