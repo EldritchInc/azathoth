@@ -19,6 +19,8 @@ from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.catalog import WorkflowCatalog
+from azathoth.workflows.catalog_loader import WorkflowCatalogLoader
 from azathoth.workflows.condition import (
     WorkflowCondition,
     WorkflowConditionEvaluationError,
@@ -41,6 +43,10 @@ from azathoth.workflows.generation import (
     WorkflowGenerationError,
     generate_workflow_candidate,
 )
+from azathoth.workflows.memory_repository import (
+    InMemoryWorkflowRepository,
+    require_workflow_repository,
+)
 from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
@@ -53,6 +59,7 @@ from azathoth.workflows.ranking import (
 from azathoth.workflows.reliability import (
     WorkflowReliabilityMetrics,
 )
+from azathoth.workflows.repository import WorkflowRepository
 from azathoth.workflows.retry import (
     WorkflowRetryPolicy,
 )
@@ -66,6 +73,7 @@ from azathoth.workflows.scoring import (
     WorkflowScorer,
     WorkflowScoringPolicy,
 )
+from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
 from azathoth.workflows.statistics import (
     WorkflowRunStatistics,
 )
@@ -82,7 +90,9 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "InMemoryWorkflowRepository",
     "RankedWorkflow",
+    "SQLiteWorkflowRepository",
     "ToolStepSpecification",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
@@ -97,6 +107,8 @@ __all__ = [
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
     "WorkflowCandidateStep",
+    "WorkflowCatalog",
+    "WorkflowCatalogLoader",
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
@@ -111,6 +123,7 @@ __all__ = [
     "WorkflowRanker",
     "WorkflowRanking",
     "WorkflowReliabilityMetrics",
+    "WorkflowRepository",
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunner",
@@ -129,4 +142,5 @@ __all__ = [
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
     "generate_workflow_candidate",
+    "require_workflow_repository",
 ]

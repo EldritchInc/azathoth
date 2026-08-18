@@ -118,6 +118,120 @@ Specifications are immutable.
 
 They represent the model-independent description of a workflow.
 
+## Workflow Persistence
+
+Workflow specifications may be stored outside the Azathoth source tree.
+
+`WorkflowRepository` provides a storage-neutral persistence boundary.
+
+Current repository implementations include:
+
+- in-memory persistence; and
+- SQLite persistence.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+WorkflowRepository
+        │
+        ├── InMemoryWorkflowRepository
+        │
+        └── SQLiteWorkflowRepository
+```
+
+Repositories persist `WorkflowSpecification`, not `WorkflowCandidate`.
+
+A workflow specification is the durable, model-independent recipe for a
+workflow.
+
+A workflow candidate contains resolved runtime strategies and remains an
+executable runtime artifact.
+
+## Workflow Catalogs
+
+`WorkflowCatalogLoader` reconstructs an immutable `WorkflowCatalog` from
+repository state.
+
+```text
+WorkflowRepository
+        │
+        ▼
+WorkflowCatalogLoader
+        │
+        ▼
+WorkflowCatalog
+        │
+        ▼
+WorkflowSpecification
+```
+
+The catalog preserves repository order and supports deterministic lookup by
+workflow identifier.
+
+Persistence remains below candidate generation.
+
+```text
+SQLite
+  │
+  ▼
+WorkflowRepository
+  │
+  ▼
+WorkflowCatalogLoader
+  │
+  ▼
+WorkflowSpecification
+  │
+  ▼
+generate_workflow_candidate()
+  │
+  ▼
+WorkflowCandidate
+  │
+  ▼
+WorkflowRunner
+```
+
+Candidate generation does not know whether a specification originated from
+SQLite, memory, application configuration, or another repository
+implementation.
+
+## Reconstructed Execution
+
+Persisted workflow specifications can be reconstructed and executed using the
+same runtime infrastructure as directly constructed specifications.
+
+A persisted workflow may reference persisted tool capabilities.
+
+```text
+Persisted WorkflowSpecification
+              +
+Persisted Tool Definition / Implementation
+              │
+              ▼
+     Reconstructed Catalogs
+              │
+              ▼
+       Candidate Generation
+              │
+              ▼
+         WorkflowRunner
+```
+
+Workflow persistence introduces no separate execution path.
+
+Reconstructed workflows retain their:
+
+- metadata;
+- step specifications;
+- dependency graph;
+- input bindings;
+- output bindings;
+- conditions;
+- retry policies; and
+- failure policies.
+
 ## WorkflowMetadata
 
 Every workflow has stable metadata.
