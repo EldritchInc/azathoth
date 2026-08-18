@@ -552,6 +552,36 @@ Execution proceeds in dependency-safe layers while preserving deterministic comm
 
 See [`azathoth.workflows`](src/azathoth/workflows/README.md).
 
+### Durable Workflows
+
+Workflow specifications can be persisted independently from executable runtime
+objects.
+
+```text
+SQLite
+  │
+  ▼
+WorkflowSpecification
+  │
+  ▼
+WorkflowCatalog
+  │
+  ▼
+Candidate Generation
+  │
+  ▼
+WorkflowRunner
+```
+
+Persisted workflows retain their dependency graph, bindings, conditions,
+retries, failure policies, prompt requirements, and tool requirements.
+
+Executable model and tool implementations are resolved only when a persisted
+specification becomes a workflow candidate.
+
+This keeps durable workflow configuration independent from runtime provider and
+tool objects.
+
 ### Workflow Experiments
 
 Workflow experiments compose execution, evaluation, scoring, and ranking.
