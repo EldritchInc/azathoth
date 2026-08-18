@@ -47,6 +47,10 @@ from azathoth.workflows.memory_repository import (
     InMemoryWorkflowRepository,
     require_workflow_repository,
 )
+from azathoth.workflows.memory_run_repository import (
+    InMemoryWorkflowRunRepository,
+    require_workflow_run_repository,
+)
 from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
@@ -63,6 +67,7 @@ from azathoth.workflows.repository import WorkflowRepository
 from azathoth.workflows.retry import (
     WorkflowRetryPolicy,
 )
+from azathoth.workflows.run_repository import WorkflowRunRepository
 from azathoth.workflows.runner import (
     WorkflowRunner,
 )
@@ -91,6 +96,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "InMemoryWorkflowRepository",
+    "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowRepository",
     "ToolStepSpecification",
@@ -127,6 +133,7 @@ __all__ = [
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunner",
+    "WorkflowRunRepository",
     "WorkflowRunStatistics",
     "WorkflowScorecard",
     "WorkflowScorer",
@@ -143,4 +150,5 @@ __all__ = [
     "WorkflowValueResolutionError",
     "generate_workflow_candidate",
     "require_workflow_repository",
+    "require_workflow_run_repository",
 ]
