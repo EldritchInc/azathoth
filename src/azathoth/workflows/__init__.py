@@ -39,9 +39,20 @@ from azathoth.workflows.experiment_runner import WorkflowExperimentRunner
 from azathoth.workflows.failure import (
     WorkflowFailurePolicy,
 )
+from azathoth.workflows.feedback import (
+    WorkflowRunFeedback,
+    WorkflowRunFeedbackDisposition,
+)
+from azathoth.workflows.feedback_repository import (
+    WorkflowRunFeedbackRepository,
+)
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
     generate_workflow_candidate,
+)
+from azathoth.workflows.memory_feedback_repository import (
+    InMemoryWorkflowRunFeedbackRepository,
+    require_workflow_run_feedback_repository,
 )
 from azathoth.workflows.memory_repository import (
     InMemoryWorkflowRepository,
@@ -78,6 +89,9 @@ from azathoth.workflows.scoring import (
     WorkflowScorer,
     WorkflowScoringPolicy,
 )
+from azathoth.workflows.sqlite_feedback_repository import (
+    SQLiteWorkflowRunFeedbackRepository,
+)
 from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
 from azathoth.workflows.sqlite_run_repository import (
     SQLiteWorkflowRunRepository,
@@ -98,10 +112,12 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowRepository",
+    "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
     "WorkflowBenchmarkCandidateScorecard",
@@ -136,6 +152,9 @@ __all__ = [
     "WorkflowRepository",
     "WorkflowRetryPolicy",
     "WorkflowRun",
+    "WorkflowRunFeedback",
+    "WorkflowRunFeedbackDisposition",
+    "WorkflowRunFeedbackRepository",
     "WorkflowRunner",
     "WorkflowRunRepository",
     "WorkflowRunStatistics",
@@ -154,5 +173,6 @@ __all__ = [
     "WorkflowValueResolutionError",
     "generate_workflow_candidate",
     "require_workflow_repository",
+    "require_workflow_run_feedback_repository",
     "require_workflow_run_repository",
 ]
