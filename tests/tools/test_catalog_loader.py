@@ -8,9 +8,12 @@ from azathoth.tools import (
 )
 
 from .test_sqlite_repository import (
+    SECOND_TEST_CASE_ID,
     SECOND_TOOL_ID,
+    TOOL_ID,
     create_definition,
     create_implementation,
+    create_test_case,
 )
 
 
@@ -90,3 +93,44 @@ def test_loader_returns_empty_catalogs(
 
     assert loader.load_catalog().definitions == ()
     assert loader.load_implementation_catalog().implementations == ()
+
+
+def test_loads_persisted_test_cases(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(tmp_path)
+
+    first = create_test_case()
+    second = create_test_case(
+        test_case_id=SECOND_TEST_CASE_ID,
+        tool_id=SECOND_TOOL_ID,
+    )
+
+    repository.save_test_case(first)
+    repository.save_test_case(second)
+
+    loader = ToolCatalogLoader(repository)
+
+    assert loader.load_test_cases() == (
+        first,
+        second,
+    )
+
+
+def test_loads_test_cases_for_one_tool(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(tmp_path)
+
+    first = create_test_case()
+    second = create_test_case(
+        test_case_id=SECOND_TEST_CASE_ID,
+        tool_id=SECOND_TOOL_ID,
+    )
+
+    repository.save_test_case(first)
+    repository.save_test_case(second)
+
+    loader = ToolCatalogLoader(repository)
+
+    assert loader.load_test_cases(TOOL_ID) == (first,)

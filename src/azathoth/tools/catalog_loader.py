@@ -1,14 +1,17 @@
-"""Hydrate immutable tool catalogs from a repository."""
+"""Hydrate immutable tool artifacts from a repository."""
+
+from uuid import UUID
 
 from azathoth.tools.catalog import ToolCatalog
 from azathoth.tools.implementation_catalog import (
     ToolImplementationCatalog,
 )
 from azathoth.tools.repository import ToolRepository
+from azathoth.tools.testing import ToolTestCase
 
 
 class ToolCatalogLoader:
-    """Build immutable catalogs from persisted tool artifacts."""
+    """Build immutable tool artifacts from persisted repository state."""
 
     def __init__(
         self,
@@ -33,3 +36,16 @@ class ToolCatalogLoader:
         return ToolImplementationCatalog(
             implementations=self._repository.implementations(),
         )
+
+    def load_test_cases(
+        self,
+        tool_id: UUID | None = None,
+    ) -> tuple[ToolTestCase, ...]:
+        """Load persisted tool test cases, optionally filtered by tool."""
+
+        test_cases = self._repository.test_cases()
+
+        if tool_id is None:
+            return test_cases
+
+        return tuple(test_case for test_case in test_cases if test_case.tool_id == tool_id)
