@@ -12,8 +12,6 @@ Prompt-backed strategies originally combined two separate concerns:
 
 This coupling made it difficult to automatically generate candidate strategies for empirical optimization because every strategy was already bound to a concrete model implementation.
 
-As Azathoth evolves toward automatic model selection and model arbitrage, workload definitions must remain independent of the models that eventually execute them.
-
 ## Decision
 
 Introduce an immutable `PromptStrategySpec` domain model representing a prompt-backed workload independently of any executable language model.
@@ -43,7 +41,6 @@ This separates durable optimization definitions from runtime execution.
 - Strategy specifications remain provider-independent.
 - Multiple executable strategies can be generated automatically from a single workload definition.
 - Candidate generation becomes deterministic and testable.
-- Future model arbitrage can compare eligible models without changing workload definitions.
 - Runtime execution remains isolated from optimization metadata.
 
 ### Negative
@@ -67,6 +64,5 @@ This decision establishes the foundation for:
 
 - automatic generation of prompt strategy candidates;
 - empirical comparison across multiple language models;
-- cost-aware model arbitrage;
 - automatic strategy synthesis; and
 - optimization over quality, latency, and cost without changing workload specifications.

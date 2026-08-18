@@ -45,7 +45,6 @@ Positive:
 - one specification can generate multiple empirical candidates;
 - candidate identities remain stable across repeated generation;
 - experimental evidence can be attributed to specific model-bound strategies;
-- future model arbitrage and automatic strategy generation build naturally on this architecture.
 
 Negative:
 

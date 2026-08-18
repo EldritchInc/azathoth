@@ -15,7 +15,7 @@ system to determine which concrete models are eligible for evaluation.
 
 Conflating workload requirements with provider discovery would tightly couple
 optimization logic to infrastructure concerns and make future provider
-integrations, model arbitrage, and capability discovery more difficult.
+integrations more difficult.
 
 ## Decision
 
@@ -45,7 +45,6 @@ optimization policies.
 - Workload definitions become reusable across providers.
 - Provider integrations remain isolated from optimization logic.
 - Model discovery and model selection evolve independently.
-- Capability-based discovery naturally supports future model arbitrage.
 - Experiments can compare multiple eligible models without changing
   strategy definitions.
 - Workload requirements remain immutable, serializable, and reproducible.

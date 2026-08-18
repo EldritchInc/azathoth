@@ -58,7 +58,6 @@ The catalog is intentionally limited to discovery and does not perform routing, 
 - Model discovery becomes deterministic and reproducible.
 - Capability filtering is implemented independently of optimization policy.
 - Experiments can operate over well-defined candidate model sets.
-- The architecture naturally supports future model arbitrage.
 - Model metadata can evolve independently of execution metrics.
 - The catalog can later be populated from configuration files, provider APIs, or external registries without changing optimization components.
 
@@ -89,8 +88,6 @@ This would duplicate discovery logic across providers and prevent a uniform opti
 Rejected.
 
 ## Future Direction
-
-The model catalog establishes the foundation for future model arbitrage.
 
 Future optimization components may use the catalog to:
 
