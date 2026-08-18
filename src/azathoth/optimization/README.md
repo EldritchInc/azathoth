@@ -777,65 +777,6 @@ This is deliberate.
 
 The current infrastructure proves that the full iterative empirical loop works before introducing adaptive behavior.
 
-## Future Optimizers
-
-The `WorkflowOptimizer` protocol allows very different optimization algorithms to reuse the same experiment and session infrastructure.
-
-Potential implementations include:
-
-```text
-WorkflowOptimizer
-├── ReplayWorkflowOptimizer
-├── PromptMutationOptimizer
-├── ModelExplorationOptimizer
-├── EvolutionaryWorkflowOptimizer
-├── BeamSearchWorkflowOptimizer
-├── LLMWorkflowOptimizer
-└── Future Optimizers
-```
-
-Each optimizer can transform candidates differently while satisfying the same contract.
-
-## Prompt Evolution
-
-A future optimizer may mutate prompt-backed strategies.
-
-```text
-Prompt A
-   │
-   ├── Prompt B
-   ├── Prompt C
-   └── Prompt D
-        │
-        ▼
-Experiment
-        │
-        ▼
-Ranking
-        │
-        ▼
-Next Generation
-```
-
-The existing experiment and session infrastructure would require no changes.
-
-## Model Exploration
-
-Candidate generations may also vary model bindings.
-
-```text
-Prompt
-  │
-  ├── Model A
-  ├── Model B
-  └── Model C
-        │
-        ▼
-Empirical Comparison
-```
-
-Provider-neutral model metadata and metrics allow model choice to become an optimization dimension rather than a hard-coded configuration decision.
-
 ## Cost-Aware Optimization
 
 Execution evidence already records estimated cost.
@@ -858,116 +799,22 @@ A cheaper candidate does not automatically win.
 
 Optimization can compare empirical tradeoffs according to scoring policy.
 
-## Structural Workflow Optimization
+## Replaceable Optimizers
 
-Future optimizers may eventually change workflow topology itself.
-
-```text
-Generation 0
-
-A → B
-```
-
-could become:
+`WorkflowOptimizer` is the extension boundary for application-defined
+optimization behavior.
 
 ```text
-Generation 1
-
-A → C → B
-```
-
-and later:
-
-```text
-Generation 2
-
-       ┌→ C ─┐
-A ─────┤     ├→ D
-       └→ B ─┘
-```
-
-The current workflow specification, candidate generation, experiment, and session boundaries are designed so structural optimization can eventually fit without rewriting the execution substrate.
-
-## Candidate Lineage
-
-Once optimizers begin producing genuinely different candidates, lineage and provenance become increasingly important.
-
-Future optimization artifacts may record:
-
-- parent candidate;
-- mutation type;
-- mutation parameters;
-- optimizer identity;
-- generation;
-- ancestry; and
-- observed improvement.
-
-This will make questions such as the following answerable:
-
-> Which mutations consistently improve performance?
-
-and:
-
-> How did this candidate evolve?
-
-The current generation history provides the foundation for that future provenance layer.
-
-## Multi-Objective Optimization
-
-Workflow scorecards expose several independent dimensions:
-
-- quality;
-- reliability;
-- latency;
-- cost; and
-- overall score.
-
-Current canonical ranking reduces these dimensions to deterministic ordering.
-
-Future optimization systems may introduce richer approaches such as:
-
-- configurable weighting;
-- Pareto frontiers;
-- constrained optimization;
-- budget-aware search; and
-- workload-specific policies.
-
-Those capabilities can evolve above the existing execution evidence.
-
-## Optimization and Intelligence
-
-Azathoth deliberately places adaptive intelligence above deterministic infrastructure.
-
-The substrate remains responsible for:
-
-- execution;
-- evidence;
-- evaluation;
-- scoring;
-- ranking;
-- experiments;
-- generation tracking; and
-- orchestration.
-
-Future LLM-driven optimizers can then focus entirely on proposing changes.
-
-```text
-Deterministic Substrate
-        │
-        ▼
 Experiment Evidence
+        +
+Current Population
         │
         ▼
-Adaptive Optimizer
+WorkflowOptimizer
         │
         ▼
-Candidate Proposal
-        │
-        ▼
-Deterministic Substrate
+Next Population
 ```
-
-This keeps claims of improvement grounded in measurable evidence.
 
 ## Design Principles
 
@@ -1068,7 +915,7 @@ That loop is the foundation for Azathoth's long-term goal of iterative empirical
 
 [`azathoth.evaluation`](../evaluation/README.md) determines whether candidate outputs satisfy expected outcomes.
 
-[`azathoth.prompting`](../prompting/README.md) provides prompt-backed strategies that can participate in optimization and future prompt evolution.
+[`azathoth.prompting`](../prompting/README.md) provides prompt-backed strategies that can participate in optimization.
 
 [`azathoth.providers`](../providers/README.md) provides model metadata, requirements, pricing, discovery, and executable models that future optimizers can explore.
 

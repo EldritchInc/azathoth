@@ -74,9 +74,13 @@ Execution, evaluation, scoring, ranking, experimentation, and optimization are s
 
 The optimization substrate should remain deterministic even when the models being evaluated are not.
 
-### Intelligence above the substrate
+### Replaceable optimization
 
-LLM-driven mutation, planning, and synthesis belong on top of a testable execution and optimization foundation rather than inside it.
+Optimization policy remains separate from deterministic execution,
+evaluation, scoring, ranking, and experimentation.
+
+Applications may provide their own optimization implementations through
+Azathoth's public optimization interfaces.
 
 ## Architecture
 
@@ -434,9 +438,9 @@ Implementation resolution identifies *how* that capability can be executed.
 Execution and verification remain deterministic and independent of
 optimization.
 
-This architecture establishes the foundation for future runtime selection,
-persistent registries, synthesized implementations, implementation ranking,
-and adaptive execution.
+This architecture keeps capability identity, implementation resolution,
+execution, and verification independent so applications can extend tool
+behavior without coupling it to workflow execution.
 
 See [`azathoth.tools`](src/azathoth/tools/README.md).
 
@@ -618,40 +622,29 @@ Development emphasizes:
 
 Azathoth is under active development.
 
-The deterministic execution and optimization substrate is established.
+The deterministic execution, evaluation, benchmarking, and optimization
+substrate is established.
 
-Current development is moving toward optimizers that can produce genuinely different candidate populations while preserving the same experiment and session infrastructure.
+Current public development focuses on completing the reusable runtime and its
+extension boundaries, including:
 
-Near-term areas include:
+- durable specifications and empirical evidence;
+- tool-backed workflow execution;
+- production-oriented persistence;
+- provider and evaluator integrations;
+- command-line interfaces; and
+- reproducible end-to-end examples.
 
-- candidate mutation;
-- candidate lineage and provenance;
-- prompt evolution;
-- model exploration and arbitrage;
-- multi-objective optimization;
-- structural workflow mutation; and
-- LLM-guided candidate generation.
-
-Longer-term areas include:
-
-- retrieval strategies;
-- tool strategies;
-- planner and verifier strategies;
-- episodic memory;
-- automatic benchmark generation;
-- adaptive routing;
-- workflow synthesis; and
-- empirical self-improvement.
+Optimization algorithms remain replaceable application-level components.
 
 ## Architectural Decisions
 
-Significant architectural decisions are recorded as ADRs under [`docs/adr`](docs/adr).
+Significant architectural decisions are recorded as ADRs under
+[`docs/adrs`](docs/adrs).
 
-ADRs explain why important boundaries and behaviors exist.
+ADRs document public contracts, invariants, and subsystem boundaries.
 
-Package READMEs document how each subsystem works.
-
-The root README provides the system-level map.
+Package READMEs document the behavior of the open-source runtime.
 
 ## Support the Project
 

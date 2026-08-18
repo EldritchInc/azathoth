@@ -92,17 +92,14 @@ against actual outputs.
 
 Verification provides objective evidence describing implementation correctness.
 
-## Future Direction
+## Extension Boundary
 
-The tools subsystem establishes the foundation for future capabilities
-including:
+Tool capability resolution, implementation resolution, execution, and
 
-- persistent tool registries;
-- isolated execution environments;
-- multiple runtime backends;
-- synthesized implementations;
-- implementation benchmarking;
-- implementation ranking;
-- adaptive runtime selection;
-- implementation optimization; and
-- optimizer-generated tools.
+verification are intentionally separate responsibilities.
+
+Applications may provide additional repositories, runtimes, implementations,
+
+and selection policies without changing the durable tool domain.
+
+The tools package does not define optimization policy.
