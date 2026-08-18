@@ -204,7 +204,7 @@ def test_workflow_with_tool_step_round_trips_through_json() -> None:
     )
 
 
-def test_tool_step_cannot_generate_before_tool_resolution_is_configured() -> None:
+def test_tool_step_requires_tool_resolution_configuration() -> None:
     workflow = WorkflowSpecification(
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
@@ -217,7 +217,7 @@ def test_tool_step_cannot_generate_before_tool_resolution_is_configured() -> Non
 
     with pytest.raises(
         WorkflowGenerationError,
-        match="Tool-backed workflow steps cannot become executable",
+        match="Tool-backed workflow steps require a tool resolver",
     ):
         generate_workflow_candidate(
             specification=workflow,

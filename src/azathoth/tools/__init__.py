@@ -32,6 +32,7 @@ from azathoth.tools.requirements import (
 )
 from azathoth.tools.resolution import ToolResolver
 from azathoth.tools.sqlite_repository import SQLiteToolRepository
+from azathoth.tools.strategy import ToolStrategy
 from azathoth.tools.testing import ToolTestCase
 from azathoth.tools.verification import ToolTestResult, ToolVerification
 from azathoth.tools.verifier import ToolVerifier
@@ -57,6 +58,7 @@ __all__ = [
     "ToolRequirementMatch",
     "ToolRequirements",
     "ToolResolver",
+    "ToolStrategy",
     "ToolTestCase",
     "ToolTestResult",
     "ToolVerification",
