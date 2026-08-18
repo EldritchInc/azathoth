@@ -53,7 +53,7 @@ It exists solely to establish and validate the optimization boundary independent
 
 Rejected because experiments observe workflow behavior while optimization generates future candidates.
 
-### Implement evolutionary optimization immediately
+### Introduce optimization heuristics immediately
 
 Rejected because architectural boundaries should be established before introducing optimization heuristics.
 
