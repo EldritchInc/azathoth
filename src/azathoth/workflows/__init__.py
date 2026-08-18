@@ -79,6 +79,9 @@ from azathoth.workflows.scoring import (
     WorkflowScoringPolicy,
 )
 from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
+from azathoth.workflows.sqlite_run_repository import (
+    SQLiteWorkflowRunRepository,
+)
 from azathoth.workflows.statistics import (
     WorkflowRunStatistics,
 )
@@ -99,6 +102,7 @@ __all__ = [
     "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowRepository",
+    "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
