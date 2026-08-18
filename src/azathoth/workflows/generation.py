@@ -10,6 +10,7 @@ from azathoth.workflows.candidate import (
     WorkflowCandidateStep,
 )
 from azathoth.workflows.models import WorkflowSpecification
+from azathoth.workflows.steps import ToolStepSpecification
 
 
 class WorkflowGenerationError(Exception):
@@ -26,8 +27,16 @@ def generate_workflow_candidate(
     executable_steps: list[WorkflowCandidateStep] = []
 
     for workflow_step in specification.steps:
+        step_specification = workflow_step.specification
+
+        if isinstance(step_specification, ToolStepSpecification):
+            raise WorkflowGenerationError(
+                "Tool-backed workflow steps cannot become executable "
+                "until tool resolution is configured."
+            )
+
         prompt_candidates = generate_prompt_candidates(
-            specification=workflow_step.specification,
+            specification=step_specification,
             catalog=catalog,
             registry=registry,
         )

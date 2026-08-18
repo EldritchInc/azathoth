@@ -46,6 +46,21 @@ def create_step(
     )
 
 
+def require_prompt_specification(
+    step: WorkflowStepSpecification,
+) -> PromptStrategySpec:
+    """Return a prompt specification from a prompt-backed workflow step."""
+
+    specification = step.specification
+
+    assert isinstance(
+        specification,
+        PromptStrategySpec,
+    )
+
+    return specification
+
+
 def create_workflow() -> WorkflowSpecification:
     """Create a deterministic workflow specification."""
 
@@ -90,7 +105,7 @@ def test_workflow_specification_records_metadata_and_steps() -> None:
 def test_workflow_specification_preserves_step_order() -> None:
     workflow = create_workflow()
 
-    assert tuple(step.specification.metadata.name for step in workflow.steps) == (
+    assert tuple(require_prompt_specification(step).metadata.name for step in workflow.steps) == (
         "Classification",
         "Response",
         "Safety check",
@@ -168,7 +183,7 @@ def test_workflow_specification_rejects_duplicate_step_ids() -> None:
         WorkflowSpecification(
             metadata=WorkflowMetadata(
                 name="Invalid workflow",
-                description="A workflow containing duplicate step identifiers.",
+                description=("A workflow containing duplicate step identifiers."),
             ),
             steps=(
                 duplicate_step,
@@ -221,7 +236,7 @@ def test_workflow_rejects_dependency_outside_workflow() -> None:
         WorkflowSpecification(
             metadata=WorkflowMetadata(
                 name="Invalid dependency workflow",
-                description=("A workflow containing an unknown dependency."),
+                description="A workflow containing an unknown dependency.",
             ),
             steps=(
                 first_step,
@@ -246,7 +261,7 @@ def test_workflow_rejects_self_dependency() -> None:
         WorkflowSpecification(
             metadata=WorkflowMetadata(
                 name="Self-dependent workflow",
-                description=("A workflow containing a self-dependent step."),
+                description="A workflow containing a self-dependent step.",
             ),
             steps=(step,),
         )
@@ -275,7 +290,7 @@ def test_workflow_rejects_duplicate_step_dependencies() -> None:
         WorkflowSpecification(
             metadata=WorkflowMetadata(
                 name="Duplicate dependency workflow",
-                description=("A workflow containing a repeated dependency."),
+                description="A workflow containing a repeated dependency.",
             ),
             steps=(
                 first_step,
@@ -457,7 +472,7 @@ def test_workflow_accepts_multiple_root_steps() -> None:
     workflow = WorkflowSpecification(
         metadata=WorkflowMetadata(
             name="Multiple root workflow",
-            description=("A workflow whose final step depends on two roots."),
+            description="A workflow whose final step depends on two roots.",
         ),
         steps=(
             first_root,
@@ -498,7 +513,7 @@ def test_workflow_dependency_graph_round_trips_through_json() -> None:
     workflow = WorkflowSpecification(
         metadata=WorkflowMetadata(
             name="Serializable dependency workflow",
-            description=("A workflow used to verify graph serialization."),
+            description="A workflow used to verify graph serialization.",
         ),
         steps=(
             first_step,

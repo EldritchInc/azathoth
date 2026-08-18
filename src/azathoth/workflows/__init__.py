@@ -70,6 +70,7 @@ from azathoth.workflows.statistics import (
     WorkflowRunStatistics,
 )
 from azathoth.workflows.steps import (
+    ToolStepSpecification,
     WorkflowStepSpecification,
 )
 from azathoth.workflows.value import (
@@ -82,6 +83,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "RankedWorkflow",
+    "ToolStepSpecification",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
     "WorkflowBenchmarkComparator",

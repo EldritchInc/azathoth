@@ -56,6 +56,21 @@ def create_classification_step() -> WorkflowStepSpecification:
     )
 
 
+def require_prompt_specification(
+    step: WorkflowStepSpecification,
+) -> PromptStrategySpec:
+    """Return a prompt specification from a prompt-backed workflow step."""
+
+    specification = step.specification
+
+    assert isinstance(
+        specification,
+        PromptStrategySpec,
+    )
+
+    return specification
+
+
 def create_reasoning_step() -> WorkflowStepSpecification:
     """Create a larger-context tool-capable reasoning step."""
 
@@ -111,8 +126,8 @@ def create_workflow() -> WorkflowSpecification:
 def test_workflow_steps_preserve_independent_model_requirements() -> None:
     workflow = create_workflow()
 
-    classification_requirements = workflow.steps[0].specification.model_requirements
-    reasoning_requirements = workflow.steps[1].specification.model_requirements
+    classification_requirements = require_prompt_specification(workflow.steps[0]).model_requirements
+    reasoning_requirements = require_prompt_specification(workflow.steps[1]).model_requirements
 
     assert classification_requirements == ModelRequirements(
         required_capabilities=frozenset(
@@ -147,8 +162,8 @@ def test_workflow_does_not_define_global_model_requirements() -> None:
 def test_workflow_steps_preserve_independent_specifications() -> None:
     workflow = create_workflow()
 
-    classification = workflow.steps[0].specification
-    reasoning = workflow.steps[1].specification
+    classification = require_prompt_specification(workflow.steps[0])
+    reasoning = require_prompt_specification(workflow.steps[1])
 
     assert classification.metadata.name == "Classify request"
     assert reasoning.metadata.name == "Reason about request"
@@ -164,20 +179,16 @@ def test_workflow_round_trip_preserves_step_scoped_requirements() -> None:
 
     assert restored == workflow
 
-    assert (
-        restored.steps[0].specification.model_requirements
-        != restored.steps[1].specification.model_requirements
-    )
+    classification = require_prompt_specification(restored.steps[0])
+    reasoning = require_prompt_specification(restored.steps[1])
+
+    assert classification.model_requirements != reasoning.model_requirements
 
     assert (
-        ModelCapability.STRUCTURED_OUTPUT
-        in restored.steps[0].specification.model_requirements.required_capabilities
+        ModelCapability.STRUCTURED_OUTPUT in classification.model_requirements.required_capabilities
     )
 
-    assert (
-        ModelCapability.TOOL_USE
-        in restored.steps[1].specification.model_requirements.required_capabilities
-    )
+    assert ModelCapability.TOOL_USE in reasoning.model_requirements.required_capabilities
 
 
 def test_each_workflow_step_can_discover_different_eligible_models() -> None:
@@ -216,8 +227,8 @@ def test_each_workflow_step_can_discover_different_eligible_models() -> None:
         )
     )
 
-    classification_requirements = workflow.steps[0].specification.model_requirements
-    reasoning_requirements = workflow.steps[1].specification.model_requirements
+    classification_requirements = require_prompt_specification(workflow.steps[0]).model_requirements
+    reasoning_requirements = require_prompt_specification(workflow.steps[1]).model_requirements
 
     classification_models = catalog.find(ModelQuery.from_requirements(classification_requirements))
     reasoning_models = catalog.find(ModelQuery.from_requirements(reasoning_requirements))

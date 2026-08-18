@@ -52,6 +52,21 @@ def create_prompt_step(
     )
 
 
+def require_prompt_specification(
+    step: WorkflowStepSpecification,
+) -> PromptStrategySpec:
+    """Return a prompt specification from a prompt-backed workflow step."""
+
+    specification = step.specification
+
+    assert isinstance(
+        specification,
+        PromptStrategySpec,
+    )
+
+    return specification
+
+
 def create_workflow() -> WorkflowSpecification:
     """Create a workflow with independently configured model-backed steps."""
 
@@ -130,9 +145,9 @@ def test_execution_layers_preserve_step_scoped_model_requirements() -> None:
 
     layers = workflow.execution_layers()
 
-    classifier_requirements = layers[0][0].specification.model_requirements
-    question_requirements = layers[0][1].specification.model_requirements
-    reasoning_requirements = layers[1][0].specification.model_requirements
+    classifier_requirements = require_prompt_specification(layers[0][0]).model_requirements
+    question_requirements = require_prompt_specification(layers[0][1]).model_requirements
+    reasoning_requirements = require_prompt_specification(layers[1][0]).model_requirements
 
     assert classifier_requirements == ModelRequirements(
         required_capabilities=frozenset(
@@ -175,8 +190,8 @@ def test_steps_in_same_layer_keep_independent_requirements() -> None:
 
     first_layer = workflow.execution_layers()[0]
 
-    first_requirements = first_layer[0].specification.model_requirements
-    second_requirements = first_layer[1].specification.model_requirements
+    first_requirements = require_prompt_specification(first_layer[0]).model_requirements
+    second_requirements = require_prompt_specification(first_layer[1]).model_requirements
 
     assert first_requirements != second_requirements
     assert first_requirements.minimum_context_window_tokens == 8_000
@@ -187,16 +202,16 @@ def test_planned_downstream_step_preserves_dependencies_and_requirements() -> No
     workflow = create_workflow()
 
     reasoning_step = workflow.execution_layers()[1][0]
+    reasoning_specification = require_prompt_specification(reasoning_step)
 
     assert reasoning_step.depends_on == (
         CLASSIFIER_STEP_ID,
         QUESTION_STEP_ID,
     )
     assert (
-        ModelCapability.TOOL_USE
-        in reasoning_step.specification.model_requirements.required_capabilities
+        ModelCapability.TOOL_USE in reasoning_specification.model_requirements.required_capabilities
     )
-    assert reasoning_step.specification.model_requirements.minimum_context_window_tokens == 128_000
+    assert reasoning_specification.model_requirements.minimum_context_window_tokens == 128_000
 
 
 def test_restored_workflow_produces_equivalent_execution_layers() -> None:
@@ -213,7 +228,7 @@ def test_restored_workflow_produces_equivalent_execution_layers() -> None:
 
     assert restored_layers == original_layers
 
-    assert (
-        restored.execution_layers()[1][0].specification.model_requirements
-        == workflow.execution_layers()[1][0].specification.model_requirements
-    )
+    restored_reasoning = require_prompt_specification(restored.execution_layers()[1][0])
+    original_reasoning = require_prompt_specification(workflow.execution_layers()[1][0])
+
+    assert restored_reasoning.model_requirements == original_reasoning.model_requirements
