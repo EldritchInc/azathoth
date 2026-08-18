@@ -62,16 +62,22 @@ def test_workflow_step_records_identifier() -> None:
     assert step.id == STEP_ID
 
 
-def test_workflow_step_wraps_prompt_strategy_specification() -> None:
+def test_workflow_step_preserves_strategy_specification() -> None:
     step = create_step()
 
-    assert step.specification.metadata.name == "Classification"
-    assert step.specification.prompt.text == ("Classify the supplied support request.")
-    assert (
-        ModelCapability.STRUCTURED_OUTPUT
-        in step.specification.model_requirements.required_capabilities
+    specification = step.specification
+
+    assert isinstance(
+        specification,
+        PromptStrategySpec,
     )
-    assert step.specification.model_requirements.minimum_context_window_tokens == 32_000
+
+    assert specification.metadata.name == "Classification"
+    assert specification.prompt.text == ("Classify the supplied support request.")
+    assert (
+        ModelCapability.STRUCTURED_OUTPUT in specification.model_requirements.required_capabilities
+    )
+    assert specification.model_requirements.minimum_context_window_tokens == 32_000
 
 
 def test_workflow_step_preserves_specification() -> None:

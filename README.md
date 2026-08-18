@@ -401,6 +401,41 @@ Normal automated tests remain fully deterministic.
 
 Production execution is verified through explicit opt-in smoke tests.
 
+### Tool-Backed Workflows
+
+Durable tools can execute as normal workflow steps.
+
+```text
+ToolRequirement
+      │
+      ▼
+Persisted Tool Definition
+      │
+      ▼
+Resolved Implementation
+      │
+      ▼
+ToolStrategy
+      │
+      ▼
+WorkflowValue
+      │
+      ▼
+WorkflowCondition
+```
+
+Workflow specifications reference tool capabilities rather than concrete
+implementations.
+
+Candidate generation resolves executable implementations before runtime.
+
+Tool-backed steps then participate in the same dependency, input-binding,
+output-binding, retry, failure, and conditional-execution infrastructure as
+other workflow strategies.
+
+This allows deterministic persisted capabilities to participate in workflows
+without baking their implementation source into Azathoth.
+
 # Tools
 
 The tools package separates capability contracts from executable

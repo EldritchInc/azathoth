@@ -146,7 +146,7 @@ A `WorkflowStepSpecification` describes one step in a workflow.
 
 A step may declare:
 
-- a prompt strategy specification;
+- a prompt-backed or tool-backed executable specification;
 - dependencies;
 - input bindings;
 - output bindings;
@@ -157,6 +157,8 @@ A step may declare:
 ```text
 WorkflowStepSpecification
 ├── specification
+│   ├── PromptStrategySpec
+│   └── ToolStepSpecification
 ├── depends_on
 ├── inputs
 ├── outputs
@@ -165,7 +167,23 @@ WorkflowStepSpecification
 └── failure_policy
 ```
 
-The step specification remains model-independent.
+The outer workflow step owns workflow behavior.
+
+The nested specification describes the capability that must become executable.
+
+Prompt-backed steps declare model requirements through `PromptStrategySpec`.
+
+Tool-backed steps declare durable capability requirements through
+`ToolStepSpecification`.
+
+```text
+ToolStepSpecification
+        │
+        ▼
+ToolRequirement
+```
+
+Neither specification embeds a live runtime implementation.
 
 Executable strategies are attached later during workflow candidate generation.
 
@@ -232,20 +250,18 @@ from azathoth.workflows import generate_workflow_candidate
 
 candidate = generate_workflow_candidate(
     specification=workflow,
-    catalog=catalog,
-    registry=registry,
+    catalog=model_catalog,
+    registry=model_registry,
+    tool_resolver=tool_resolver,
+    tool_implementation_resolver=tool_implementation_resolver,
 )
 ```
 
-Generation resolves each model-independent prompt strategy specification into an executable prompt strategy.
+Candidate generation resolves each step according to its specification type.
+
+Prompt-backed steps use the provider subsystem:
 
 ```text
-WorkflowSpecification
-        │
-        ▼
-WorkflowStepSpecification
-        │
-        ▼
 PromptStrategySpec
         │
         ▼
@@ -255,12 +271,55 @@ LanguageModelRegistry
         │
         ▼
 PromptStrategy
-        │
-        ▼
-WorkflowCandidateStep
 ```
 
-If any workflow step cannot produce an executable prompt candidate, generation fails with `WorkflowGenerationError`.
+Tool-backed steps use the tool subsystem:
+
+```text
+ToolStepSpecification
+        │
+        ▼
+ToolRequirement
+        │
+        ▼
+ToolResolver
+        │
+        ▼
+ToolDefinition
+        │
+        ▼
+ToolImplementationResolver
+        │
+        ▼
+ToolImplementation
+        │
+        ▼
+ToolStrategy
+```
+
+Both become ordinary executable workflow candidate steps.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+Candidate Generation
+       / \
+      /   \
+     ▼     ▼
+ Prompt   Tool
+Strategy Strategy
+      \   /
+       \ /
+        ▼
+WorkflowCandidate
+```
+
+Tool resolution introduces no workflow optimization or implementation ranking
+policy.
+
+If a required executable strategy cannot be produced, candidate generation
+fails with `WorkflowGenerationError`.
 
 ## WorkflowCandidate
 
@@ -399,6 +458,44 @@ Before executing a downstream step, the runner resolves each binding and appends
 
 This keeps workflow data propagation compatible with Azathoth's event-backed context model.
 
+## Tool Input Binding
+
+Tool-backed steps consume workflow inputs through the same event-backed
+mechanism used by other context-driven strategies.
+
+Before a downstream step executes, `WorkflowRunner` resolves its
+`WorkflowInputBinding` objects and appends step-local:
+
+```text
+workflow.input.bound
+```
+
+events.
+
+`ToolStrategy` converts those events into the structured input mapping supplied
+to its `ToolExecutor`.
+
+```text
+Upstream WorkflowValue
+          │
+          ▼
+ WorkflowInputBinding
+          │
+          ▼
+ workflow.input.bound
+          │
+          ▼
+     ToolStrategy
+          │
+          ▼
+      ToolExecutor
+```
+
+Workflow-bound input events remain local to the consuming step.
+
+They are not committed into the workflow's shared final context merely because
+a step consumed them.
+
 ## Value Reference Validation
 
 Workflow specifications validate value references before execution.
@@ -440,6 +537,45 @@ Current condition operators include:
 Ordering comparisons require numeric values.
 
 Invalid numeric comparisons raise `WorkflowConditionEvaluationError`.
+
+## Tool-Driven Conditional Routing
+
+Tool-backed steps produce normal workflow values.
+
+Those values can therefore participate in existing workflow conditions without
+any tool-specific routing behavior.
+
+```text
+Persisted Tool
+      │
+      ▼
+ToolStrategy
+      │
+      ▼
+{"word_count": 4}
+      │
+      ▼
+WorkflowValue
+      │
+      ▼
+WorkflowCondition
+     / \
+    /   \
+   ▼     ▼
+execute skip
+```
+
+For example, a numeric tool output can drive the existing ordering condition
+operators:
+
+```text
+word_count >= 4
+```
+
+The condition system does not know or care whether its source value originated
+from a prompt-backed strategy, a deterministic tool, or another strategy.
+
+Routing remains a workflow concern.
 
 ## Conditional Execution
 

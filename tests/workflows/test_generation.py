@@ -106,6 +106,21 @@ def create_classification_step() -> WorkflowStepSpecification:
     )
 
 
+def require_prompt_specification(
+    step: WorkflowStepSpecification,
+) -> PromptStrategySpec:
+    """Return a prompt specification from a prompt-backed workflow step."""
+
+    specification = step.specification
+
+    assert isinstance(
+        specification,
+        PromptStrategySpec,
+    )
+
+    return specification
+
+
 def create_reasoning_step() -> WorkflowStepSpecification:
     """Create a tool-capable reasoning step."""
 
@@ -288,10 +303,11 @@ def test_generation_preserves_step_scoped_model_requirements() -> None:
     assert isinstance(classification, PromptStrategy)
     assert isinstance(reasoning, PromptStrategy)
 
-    assert (
-        classification.model_requirements == specification.steps[0].specification.model_requirements
-    )
-    assert reasoning.model_requirements == specification.steps[1].specification.model_requirements
+    classification_specification = require_prompt_specification(specification.steps[0])
+    reasoning_specification = require_prompt_specification(specification.steps[1])
+
+    assert classification.model_requirements == classification_specification.model_requirements
+    assert reasoning.model_requirements == reasoning_specification.model_requirements
     assert classification.model_requirements != reasoning.model_requirements
 
 
@@ -387,7 +403,10 @@ def test_generated_step_metrics_match_model_bindings() -> None:
     for candidate_step in candidate.steps:
         strategy = candidate_step.strategy
 
-        assert isinstance(strategy, PromptStrategy)
+        assert isinstance(
+            strategy,
+            PromptStrategy,
+        )
 
         outcome = asyncio.run(strategy.run(Context()))
         binding = strategy.model_binding
@@ -411,12 +430,18 @@ def test_generation_is_deterministic() -> None:
     first_bindings = tuple(
         step.strategy.model_binding
         for step in first.steps
-        if isinstance(step.strategy, PromptStrategy)
+        if isinstance(
+            step.strategy,
+            PromptStrategy,
+        )
     )
     second_bindings = tuple(
         step.strategy.model_binding
         for step in second.steps
-        if isinstance(step.strategy, PromptStrategy)
+        if isinstance(
+            step.strategy,
+            PromptStrategy,
+        )
     )
 
     assert first_bindings == second_bindings

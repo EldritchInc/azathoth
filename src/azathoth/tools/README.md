@@ -85,6 +85,84 @@ and structured outputs.
 Execution remains independent of capability discovery and implementation
 selection.
 
+## ToolStrategy
+
+`ToolStrategy` adapts a resolved durable tool implementation to Azathoth's
+common `Strategy` protocol.
+
+```text
+ToolImplementation
+        +
+ToolExecutor
+        │
+        ▼
+   ToolStrategy
+        │
+        ▼
+     Strategy
+```
+
+A tool strategy:
+
+- exposes stable strategy metadata;
+- retains the resolved `ToolImplementation`;
+- receives normal Azathoth `Context`;
+- extracts workflow-bound structured inputs when present;
+- delegates execution to `ToolExecutor`; and
+- returns structured output through `StrategyOutcome`.
+
+Tool strategies do not implement workflow orchestration.
+
+Retries, failure policies, dependency ordering, value propagation, and
+conditional execution remain responsibilities of the workflow package.
+
+## Tools in Workflows
+
+Workflow specifications can declare durable tool requirements using
+`ToolStepSpecification`.
+
+```text
+WorkflowStepSpecification
+        │
+        ▼
+ToolStepSpecification
+        │
+        ▼
+ToolRequirement
+```
+
+Candidate generation resolves that requirement through the existing tool
+subsystem.
+
+```text
+ToolRequirement
+      │
+      ▼
+ToolResolver
+      │
+      ▼
+ToolDefinition
+      │
+      ▼
+ToolImplementationResolver
+      │
+      ▼
+ToolImplementation
+      │
+      ▼
+ToolStrategy
+```
+
+Because `ToolStrategy` satisfies the common strategy contract, workflows do not
+require a separate tool execution path.
+
+Persisted tool definitions and implementations can therefore be loaded from a
+repository, resolved into a workflow candidate, and executed using the existing
+workflow runner.
+
+Tool outputs remain structured JSON-compatible values and can be exported as
+normal `WorkflowValue` objects.
+
 ## Tool Verification
 
 Tool verification executes durable test cases and compares expected outputs
