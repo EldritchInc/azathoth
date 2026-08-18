@@ -5,7 +5,7 @@ implementations, deterministic execution, verification, and implementation
 resolution.
 
 ```text
-              ToolRequirements
+                            ToolRequirements
                      │
                      ▼
               ToolRequirement
@@ -17,26 +17,30 @@ resolution.
                ToolDefinition
                      │
                      ▼
-      ToolImplementationResolver
+             ToolRepository
                      │
-                     ▼
-      ToolImplementationCatalog
-                     │
-                     ▼
-            ToolImplementation
-               /            \
-              ▼              ▼
-      ToolExecutor      ToolTestCase
-              │              │
-              ▼              │
-      PythonToolExecutor     │
-              │              │
-              └──────┬───────┘
-                     ▼
-               ToolVerifier
-                     │
-                     ▼
-             ToolVerification
+         ┌───────────┴───────────┐
+         ▼                       ▼
+ ToolCatalogLoader    ToolImplementationResolver
+         │                       │
+         ▼                       ▼
+  ToolCatalog      ToolImplementationCatalog
+                                 │
+                                 ▼
+                      ToolImplementation
+                         /            \
+                        ▼              ▼
+                ToolExecutor     ToolTestCase
+                        │              │
+                        ▼              │
+              PythonToolExecutor      │
+                        │              │
+                        └──────┬───────┘
+                               ▼
+                         ToolVerifier
+                               │
+                               ▼
+                       ToolVerification
 ```
 
 ## Capability Resolution
@@ -55,6 +59,24 @@ Runtime constraints are evaluated during implementation resolution.
 
 Implementation resolution introduces no optimization or ranking policy.
 
+## Persistence
+
+Tool definitions, implementations, and deterministic test cases may be stored
+outside the Azathoth source tree.
+
+`ToolRepository` provides a storage-neutral persistence boundary.
+
+Current repository implementations include:
+
+- in-memory persistence; and
+- SQLite persistence.
+
+Repositories reconstruct immutable tool catalogs used by the existing
+resolution and execution infrastructure.
+
+Persistence remains independent of capability resolution, implementation
+selection, execution, and verification.
+
 ## Tool Execution
 
 Tool executors execute deterministic implementations using structured inputs
@@ -72,13 +94,15 @@ Verification provides objective evidence describing implementation correctness.
 
 ## Future Direction
 
-The implementation subsystem establishes the foundation for future capabilities
+The tools subsystem establishes the foundation for future capabilities
 including:
 
+- persistent tool registries;
 - isolated execution environments;
 - multiple runtime backends;
 - synthesized implementations;
 - implementation benchmarking;
 - implementation ranking;
-- adaptive runtime selection; and
-- implementation optimization.
+- adaptive runtime selection;
+- implementation optimization; and
+- optimizer-generated tools.

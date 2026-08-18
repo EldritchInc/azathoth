@@ -440,6 +440,46 @@ and adaptive execution.
 
 See [`azathoth.tools`](src/azathoth/tools/README.md).
 
+## Persistent Tools
+
+Azathoth tools can exist as durable data rather than application-specific source
+files.
+
+```text
+Tool Definition
+      +
+Implementation Source
+      +
+Test Cases
+      │
+      ▼
+Persistent Repository
+      │
+      ▼
+Immutable Tool Catalogs
+      │
+      ▼
+Resolution
+      │
+      ▼
+Execution and Verification
+```
+
+The current repository implementations include in-memory storage and SQLite.
+
+Persisted tools retain:
+
+- capability identity and schemas;
+- executable runtime and source;
+- implementation version;
+- deterministic verification cases.
+
+Tool catalogs and resolvers remain storage independent.
+
+This establishes the foundation for dynamically registered, synthesized, and
+eventually optimizer-generated tools without requiring those tools to be baked
+into the Azathoth codebase.
+
 ### Workflows
 
 A workflow specification describes a dependency graph without embedding executable model instances.
