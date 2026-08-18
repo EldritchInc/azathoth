@@ -19,6 +19,8 @@ from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.catalog import WorkflowCatalog
+from azathoth.workflows.catalog_loader import WorkflowCatalogLoader
 from azathoth.workflows.condition import (
     WorkflowCondition,
     WorkflowConditionEvaluationError,
@@ -105,6 +107,8 @@ __all__ = [
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
     "WorkflowCandidateStep",
+    "WorkflowCatalog",
+    "WorkflowCatalogLoader",
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
