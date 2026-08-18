@@ -1,0 +1,3174 @@
+AZATHOTH ADR SNAPSHOT
+Generated: 2026-08-18T13:42:46Z
+Commit: d4aec57b5e9f2668b056d46a46ab63aabb72cb44
+Branch: chore/cleanup-again-again
+
+
+================================================================================
+FILE: docs/adrs/0001-structured-context-events.md
+================================================================================
+
+# ADR 0001: Represent context changes as events
+
+## Status
+
+Accepted
+
+## Context
+
+AI workflows frequently accumulate information across multiple steps.
+
+Examples include:
+
+- retrieved records;
+
+- classifications;
+
+- user answers;
+
+- tool outputs;
+
+- confidence estimates;
+
+- evaluation results.
+
+Representing context as an untracked mutable dictionary would make it difficult
+
+to reconstruct why a strategy was selected or what information was available at
+
+the time.
+
+## Decision
+
+Azathoth will represent context updates as typed, append-only events.
+
+The current context will be derived from the ordered event history.
+
+Each event should eventually support:
+
+- a type;
+
+- a payload;
+
+- a producer;
+
+- provenance;
+
+- confidence;
+
+- creation time.
+
+## Consequences
+
+Benefits:
+
+- reproducible execution;
+
+- causal debugging;
+
+- regression replay;
+
+- provenance tracking;
+
+- future hierarchical oversight.
+
+Costs:
+
+- more domain modeling;
+
+- materialization logic;
+
+- additional storage;
+
+- explicit conflict-handling requirements.
+
+================================================================================
+FILE: docs/adrs/0002-immutable-domain-models.md
+================================================================================
+
+# ADR 0002: Use immutable domain models
+
+## Status
+
+Accepted
+
+## Context
+
+Azathoth must be able to reproduce optimization experiments and explain which
+information was available at each execution step.
+
+Mutable domain objects can change after they have been recorded or passed to
+another component. This makes historical traces difficult to trust and can
+produce subtle differences during replay.
+
+## Decision
+
+Core domain models will be immutable by default.
+
+Context updates will return a new `Context` value containing the appended event
+rather than modifying an existing context in place.
+
+## Consequences
+
+Benefits:
+
+- state transitions are explicit;
+- historical values remain trustworthy;
+- tests can compare before and after states;
+- replay behavior is easier to reason about;
+- concurrent execution has fewer shared-mutation hazards.
+
+Costs:
+
+- updates create new model values;
+- deeply nested payload values require separate discipline;
+- developers must intentionally retain the returned updated context.
+
+================================================================================
+FILE: docs/adrs/0003-separate-strategy-execution.md
+================================================================================
+
+# ADR 0003: Separate strategy behavior from execution orchestration
+
+## Status
+
+Accepted
+
+## Context
+
+Every Azathoth strategy must eventually support consistent operational
+behavior, including:
+
+- lifecycle tracing;
+- timing;
+- failure recording;
+- retries;
+- cost measurement;
+- cancellation;
+- provider telemetry.
+
+Embedding those concerns inside every strategy would duplicate logic and make
+execution traces inconsistent.
+
+## Decision
+
+Strategies will implement only their domain operation through the `Strategy`
+protocol.
+
+A separate `StrategyExecutor` will manage execution concerns and return a
+complete `ExecutionResult`.
+
+Strategies return a `StrategyOutcome` containing:
+
+- their direct output;
+- any domain events they produced.
+
+The executor records:
+
+- the initial context;
+- strategy execution start;
+- strategy-produced events;
+- strategy execution completion;
+- the final context;
+- execution timestamps.
+
+## Consequences
+
+Benefits:
+
+- strategy implementations remain focused;
+- lifecycle behavior is consistent;
+- deterministic and model-backed strategies share one interface;
+- tracing can evolve without changing every strategy;
+- execution services can later add retries and telemetry.
+
+Costs:
+
+- direct strategy calls bypass executor tracing;
+- additional models exist between strategy and caller;
+- failure behavior must be designed explicitly in a later increment.
+
+================================================================================
+FILE: docs/adrs/0004–nake-evaluation-a-first-class-domain-concept.md
+================================================================================
+
+Title:
+Make Evaluation a First-Class Domain Concept
+
+Decision
+
+Introduce EvaluationResult and Evaluator abstractions instead of embedding
+evaluation logic directly into optimization code.
+
+Rationale
+
+Execution and evaluation are different concerns.
+
+The same strategy may be evaluated using:
+
+- exact matching
+- LLM judges
+- human review
+- classifier confidence
+- business rules
+
+Treating evaluation as a domain concept allows multiple evaluation
+implementations while preserving identical execution behavior.
+
+Consequences
+
+- evaluation is pluggable
+- evaluation is reproducible
+- evaluation can evolve independently
+- optimization algorithms consume EvaluationResult rather than evaluator implementations
+
+================================================================================
+FILE: docs/adrs/0005–separate-orchestration-from-execution.md
+================================================================================
+
+Title:
+Separate Optimization Orchestration from Execution
+
+Decision
+
+Introduce OptimizationRunner as an orchestration layer.
+
+StrategyExecutor executes strategies.
+
+Evaluators score outputs.
+
+OptimizationRunner coordinates both.
+
+Rationale
+
+Execution should not know how results are evaluated.
+
+Evaluation should not know how strategies execute.
+
+Optimization should consume both without coupling.
+
+Consequences
+
+- easier testing
+- dependency injection
+- future optimizer implementations
+- cleaner separation of concerns
+
+================================================================================
+FILE: docs/adrs/0006-aggregate-experiment-evidence-by-strategy.md
+================================================================================
+
+# ADR 0006: Aggregate experiment evidence by strategy
+
+## Status
+
+Accepted
+
+## Context
+
+A single optimization run describes how one strategy performed against one
+example.
+
+Azathoth must compare candidate strategies across collections of examples.
+Comparing isolated runs would require callers to repeatedly reconstruct
+aggregate metrics and could allow summaries to diverge from their underlying
+evidence.
+
+## Decision
+
+Introduce `StrategyScorecard` as the aggregate result for one exact strategy
+version across multiple optimization runs.
+
+A scorecard contains the underlying runs and derives:
+
+- run count;
+- passed count;
+- pass rate;
+- mean evaluation score.
+
+Summary metrics are computed from the recorded runs rather than supplied by
+callers.
+
+Every run must match the scorecard's strategy identity, name, and version.
+
+## Consequences
+
+Benefits:
+
+- experiment evidence remains the source of truth;
+- aggregate metrics cannot become stale independently;
+- exact strategy versions can be compared reproducibly;
+- scorecards remain serializable and auditable;
+- future optimizers can consume a stable aggregate model.
+
+Costs:
+
+- scorecards require at least one completed run;
+- large experiments may create substantial nested records;
+- additional metrics will require explicit model evolution.
+
+================================================================================
+FILE: docs/adrs/0007-separate-experiment-execution-from-ranking.md
+================================================================================
+
+# ADR 0007: Separate experiment execution from strategy ranking
+
+## Status
+
+Accepted
+
+## Context
+
+Azathoth must both collect evidence about candidate strategies and interpret
+that evidence to select preferred candidates.
+
+Combining experiment execution and ranking would couple the process of
+generating evidence to one particular selection policy.
+
+Different applications may eventually rank candidates using different
+objectives, including:
+
+- quality;
+- pass rate;
+- cost;
+- latency;
+- reliability;
+- complexity;
+- or multi-objective tradeoffs.
+
+## Decision
+
+Separate these responsibilities.
+
+`ExperimentRunner` executes every candidate strategy against every supplied
+example and produces one `StrategyScorecard` per candidate.
+
+`StrategyRanker` consumes completed scorecards and returns a deterministic
+`StrategyRanking`.
+
+The initial ranking policy prefers:
+
+1. higher pass rate;
+2. higher mean evaluation score;
+3. larger evidence sets;
+4. deterministic strategy identity ordering.
+
+## Consequences
+
+Benefits:
+
+- experiments can be reused with different ranking policies;
+- evidence collection remains independent of optimization objectives;
+- ranking behavior is deterministic and directly testable;
+- future cost- and latency-aware rankers can be added without changing
+  experiment execution;
+- callers can inspect scorecards without accepting a selected winner.
+
+Costs:
+
+- callers coordinate two services instead of one;
+- the initial ranking policy is intentionally simple;
+- future ranking policies will require explicit configuration or new
+  implementations.
+
+================================================================================
+FILE: docs/adrs/0008-separate-provider-responses-from-execution-metrics.md
+================================================================================
+
+# ADR 0008: Separate provider responses from execution metrics
+
+## Status
+
+Accepted
+
+## Context
+
+Azathoth executes AI workflows using language model providers, but the
+optimization engine should remain independent of any specific provider API.
+
+Different providers expose different response formats and metadata.
+Some report token usage, some report latency, some report estimated cost,
+and others expose provider-specific information that has no meaning outside
+their own SDK.
+
+Execution, evaluation, and optimization should reason about execution
+evidence rather than provider implementations.
+
+Coupling execution records directly to provider response models would make
+the optimization pipeline dependent on vendor-specific interfaces and make
+future provider integrations more difficult.
+
+## Decision
+
+Introduce provider-neutral execution metrics.
+
+Language model providers return provider-specific responses that are
+translated into a generic `StrategyExecutionMetrics` model before leaving
+the prompting layer.
+
+`StrategyOutcome` carries these metrics through strategy execution.
+
+`StrategyExecutor` records them in `ExecutionResult` without interpreting
+their meaning.
+
+Optimization components consume execution metrics rather than provider
+responses.
+
+The initial metrics include:
+
+- provider;
+- model;
+- prompt token count;
+- completion token count;
+- total token count;
+- execution latency;
+- estimated execution cost.
+
+## Consequences
+
+Benefits:
+
+- execution remains independent of provider SDKs;
+- optimization operates on a stable, provider-neutral representation;
+- additional providers can be integrated without modifying execution or
+  optimization components;
+- future optimization algorithms can compare strategies across quality,
+  latency, cost, and token usage using a common data model;
+- provider-specific implementation details remain isolated to integration
+  layers.
+
+Costs:
+
+- provider responses require an additional translation step;
+- provider-specific metadata not represented by
+  `StrategyExecutionMetrics` is intentionally discarded unless promoted
+  into the common model;
+- expanding the common metrics model requires explicit architectural
+  evolution.
+
+## Alternatives Considered
+
+### Store provider responses directly in `ExecutionResult`
+
+Rejected.
+
+This would couple execution and optimization to provider-specific response
+types, making the core architecture dependent on vendor APIs.
+
+### Preserve only strategy output
+
+Rejected.
+
+Optimization across latency, token usage, provider selection, and execution
+cost requires operational measurements in addition to strategy outputs.
+
+================================================================================
+FILE: docs/adrs/0009-model-catalog.md
+================================================================================
+
+# ADR 0009: Introduce an Immutable Model Catalog
+
+- **Status:** Accepted
+- **Date:** 2026-08-01
+
+## Context
+
+Azathoth's purpose is to empirically optimize AI workflows rather than hard-code decisions about prompts, models, tools, or execution paths.
+
+As support for language models was introduced, the system required a provider-neutral way to represent the available models before any optimization could occur.
+
+Without a dedicated abstraction, strategies or optimization logic would need to embed provider-specific knowledge, creating tight coupling between workflow optimization and the underlying AI providers.
+
+Additionally, future optimization will need to answer questions such as:
+
+- Which models support structured output?
+- Which models have sufficient context windows?
+- Which models support tool use?
+- Which models meet a particular pricing constraint?
+- Which models are even eligible for a particular workflow?
+
+These are discovery questions, not optimization questions.
+
+The architecture therefore requires an explicit separation between:
+
+- discovering candidate models
+- executing those models
+- evaluating their performance
+- selecting the optimal strategy
+
+## Decision
+
+Azathoth represents available language models using immutable metadata stored within a `ModelCatalog`.
+
+Each model is represented by a `ModelMetadata` object describing characteristics such as:
+
+- provider
+- model identifier
+- supported capabilities
+- supported modalities
+- context window
+- output limits
+- pricing information
+
+The `ModelCatalog` provides a reproducible inventory of configured models and supports deterministic lookup and discovery.
+
+Model discovery requirements are represented independently using immutable `ModelQuery` objects.
+
+A `ModelQuery` describes the capabilities and constraints required for a workload and is evaluated against catalog entries to determine the eligible candidate models.
+
+The catalog is intentionally limited to discovery and does not perform routing, ranking, or optimization.
+
+## Consequences
+
+### Positive
+
+- Provider-specific knowledge remains isolated from optimization logic.
+- Model discovery becomes deterministic and reproducible.
+- Capability filtering is implemented independently of optimization policy.
+- Experiments can operate over well-defined candidate model sets.
+- Model metadata can evolve independently of execution metrics.
+- The catalog can later be populated from configuration files, provider APIs, or external registries without changing optimization components.
+
+### Negative
+
+- Additional domain models are required before execution can occur.
+- Discovery introduces another architectural layer that must be maintained.
+- Provider integrations must translate provider-specific information into `ModelMetadata`.
+
+## Alternatives Considered
+
+### Strategies reference provider implementations directly
+
+This would tightly couple optimization logic to provider-specific implementations and make adding or replacing providers increasingly difficult.
+
+Rejected.
+
+### Perform capability filtering inside optimization
+
+This mixes model discovery with optimization policy and makes the optimization engine responsible for provider-specific concerns.
+
+Rejected.
+
+### Maintain provider-specific catalogs
+
+This would duplicate discovery logic across providers and prevent a uniform optimization pipeline.
+
+Rejected.
+
+## Future Direction
+
+Future optimization components may use the catalog to:
+
+- discover eligible candidate models
+- generate experiment candidates
+- compare providers
+- optimize for quality, latency, and cost
+- automatically evaluate newly available models
+
+The catalog intentionally does not decide which model should be selected.
+
+Selection remains the responsibility of the optimization engine, allowing discovery and optimization to evolve independently.
+
+================================================================================
+FILE: docs/adrs/0010-model-requirements.md
+================================================================================
+
+# ADR 0010: Separate Model Requirements from Model Discovery
+
+- Status: Accepted
+- Date: 2026-08-02
+
+## Context
+
+Azathoth optimizes AI workflows by evaluating candidate strategies across
+multiple language models.
+
+As the system evolves, strategies should not be tightly coupled to specific
+providers or model identifiers. Instead, a strategy should describe the
+capabilities required to execute successfully, allowing the optimization
+system to determine which concrete models are eligible for evaluation.
+
+Conflating workload requirements with provider discovery would tightly couple
+optimization logic to infrastructure concerns and make future provider
+integrations more difficult.
+
+## Decision
+
+Language-model-backed strategies declare provider-neutral
+`ModelRequirements`.
+
+`ModelRequirements` describe the characteristics required from a language
+model, including capabilities, supported modalities, context limits, and
+optional pricing constraints.
+
+These requirements are translated into immutable `ModelQuery` objects.
+
+`ModelQuery` instances are evaluated against a `ModelCatalog`, which
+contains immutable metadata describing the language models available to
+Azathoth.
+
+The catalog is responsible only for discovering eligible models.
+
+Selection among eligible models remains the responsibility of future
+optimization policies.
+
+## Consequences
+
+### Positive
+
+- Strategies remain independent of specific providers.
+- Workload definitions become reusable across providers.
+- Provider integrations remain isolated from optimization logic.
+- Model discovery and model selection evolve independently.
+- Experiments can compare multiple eligible models without changing
+  strategy definitions.
+- Workload requirements remain immutable, serializable, and reproducible.
+
+### Negative
+
+- Introduces additional domain models (`ModelRequirements` and
+  `ModelQuery`) with intentionally similar structure.
+- Requires an explicit translation step from workload requirements to
+  catalog queries.
+
+## Alternatives Considered
+
+### Strategies directly reference model identifiers
+
+Rejected because strategy definitions become tightly coupled to provider
+implementations, making experimentation and provider replacement more
+difficult.
+
+### Combine `ModelRequirements` and `ModelQuery`
+
+Rejected because they represent different concepts.
+
+`ModelRequirements` describe what a workload needs.
+
+`ModelQuery` describes how a catalog is searched.
+
+Keeping these concepts separate preserves a clear boundary between workload
+definition and infrastructure.
+
+================================================================================
+FILE: docs/adrs/0011-separate-strategy-specifications-from-executable-strategies.md
+================================================================================
+
+# ADR 0011: Separate Strategy Specifications from Executable Strategies
+
+- **Status:** Accepted
+- **Date:** 2026-08-02
+
+## Context
+
+Prompt-backed strategies originally combined two separate concerns:
+
+- describing a workload to be optimized; and
+- executing that workload using a specific language model.
+
+This coupling made it difficult to automatically generate candidate strategies for empirical optimization because every strategy was already bound to a concrete model implementation.
+
+## Decision
+
+Introduce an immutable `PromptStrategySpec` domain model representing a prompt-backed workload independently of any executable language model.
+
+A strategy specification contains:
+
+- strategy metadata;
+- prompt definition; and
+- provider-neutral model requirements.
+
+Executable `PromptStrategy` instances continue to encapsulate a concrete `LanguageModel`.
+
+Candidate strategies are generated by combining:
+
+- a `PromptStrategySpec`;
+- a `ModelCatalog`;
+- a `LanguageModelRegistry`; and
+- the declared `ModelRequirements`.
+
+This separates durable optimization definitions from runtime execution.
+
+## Consequences
+
+### Positive
+
+- Workloads become reproducible and serializable.
+- Strategy specifications remain provider-independent.
+- Multiple executable strategies can be generated automatically from a single workload definition.
+- Candidate generation becomes deterministic and testable.
+- Runtime execution remains isolated from optimization metadata.
+
+### Negative
+
+- An additional abstraction (`PromptStrategySpec`) must be maintained.
+- Candidate generation introduces another step between workload definition and execution.
+
+## Alternatives Considered
+
+### Continue binding strategies directly to language models
+
+This approach tightly couples workload definitions to specific providers and prevents automatic generation of executable candidates across multiple eligible models.
+
+### Store executable language models inside strategy specifications
+
+Rejected because executable models are runtime infrastructure rather than durable optimization data. Specifications should remain immutable, serializable, and independent of provider implementations.
+
+## Future Work
+
+This decision establishes the foundation for:
+
+- automatic generation of prompt strategy candidates;
+- empirical comparison across multiple language models;
+- automatic strategy synthesis; and
+- optimization over quality, latency, and cost without changing workload specifications.
+
+================================================================================
+FILE: docs/adrs/0012-separate-strategy-specifications-from-executable-candidates.md
+================================================================================
+
+# ADR 0012: Separate Strategy Specifications from Executable Candidates
+
+## Status
+
+Accepted
+
+## Context
+
+Prompt strategies originally represented executable workloads because they contained a concrete language model implementation.
+
+As Azathoth evolved toward empirical optimization, a single workload needed to be evaluated across multiple language models without duplicating workload definitions.
+
+The architecture therefore required a distinction between:
+
+- describing a workload; and
+- executing that workload with a specific language model.
+
+Additionally, generated candidates require stable identities so experimental evidence can be attributed to the correct executable strategy.
+
+## Decision
+
+Introduce immutable `PromptStrategySpec` objects that describe a prompt-backed workload independently of any executable language model.
+
+Candidate generation combines:
+
+- a prompt strategy specification;
+- model requirements;
+- a model catalog; and
+- an executable language model registry
+
+to produce executable `PromptStrategy` instances.
+
+Each generated candidate:
+
+- is bound to exactly one executable language model;
+- receives a deterministic identity derived from the specification identifier and model identifier;
+- preserves the workload definition while representing an independently executable strategy.
+
+## Consequences
+
+Positive:
+
+- workload definitions become reusable and serializable;
+- executable strategies become runtime artifacts;
+- one specification can generate multiple empirical candidates;
+- candidate identities remain stable across repeated generation;
+- experimental evidence can be attributed to specific model-bound strategies;
+
+Negative:
+
+- candidate generation introduces an additional translation step between specification and execution;
+- executable strategies no longer share the same identity as their originating specification.
+
+## Alternatives Considered
+
+### Bind language models directly to specifications
+
+Rejected because specifications would become runtime objects rather than durable workload definitions.
+
+### Reuse specification identities for generated candidates
+
+Rejected because multiple executable strategies would share the same identity, preventing reliable attribution of experimental evidence.
+
+## Result
+
+Azathoth now cleanly separates workload definition from executable strategy generation, allowing a single specification to produce multiple deterministic, model-bound candidates suitable for empirical optimization.
+
+================================================================================
+FILE: docs/adrs/0013-centralized-prompt-execution.md
+================================================================================
+
+# ADR 0013: Centralize Validated Prompt Execution
+
+- Status: Accepted
+- Date: 2026-08-03
+
+## Context
+
+Azathoth supports multiple prompt-backed strategy types.
+
+Some strategies execute an already-rendered prompt, while others first render a prompt from context before execution.
+
+Although these strategies differ in how prompts are produced, they share identical execution responsibilities:
+
+- invoke a language model
+- validate the configured model binding
+- collect execution metrics
+- produce a strategy outcome
+
+Duplicating this execution logic across multiple strategy implementations risks behavioral drift as new capabilities such as retries, streaming, tracing, or tool invocation are introduced.
+
+## Decision
+
+Prompt-backed strategies will share a centralized execution implementation.
+
+Each strategy remains responsible for producing the prompt it wishes to execute.
+
+Once a prompt has been produced, a shared execution path is responsible for:
+
+- invoking the configured language model
+- validating the configured model binding
+- collecting execution metrics
+- constructing the resulting `StrategyOutcome`
+
+Model binding validation is performed before execution evidence is returned.
+
+If the responding model does not match the configured binding, execution fails immediately.
+
+## Consequences
+
+### Positive
+
+- Prompt execution behavior is consistent across all prompt-backed strategies.
+- Execution evidence is guaranteed to correspond to the configured model binding.
+- Future execution features can be implemented in a single location.
+- The execution pipeline remains provider-neutral.
+- Workflow steps can reuse the same execution implementation regardless of how prompts are generated.
+
+### Negative
+
+- Prompt-backed strategies now share a common execution implementation, increasing coupling between those strategy types.
+
+## Alternatives Considered
+
+### Duplicate execution logic
+
+Maintain separate implementations for each prompt strategy type.
+
+Rejected because behavior would inevitably diverge as execution capabilities evolve.
+
+### Validate model bindings after execution
+
+Perform binding validation after constructing execution results.
+
+Rejected because invalid execution evidence could enter the optimization pipeline before validation occurred.
+
+================================================================================
+FILE: docs/adrs/0014-workflow-specifications.md
+================================================================================
+
+# ADR 0014: Represent Workflows as Durable Specifications
+
+- Status: Accepted
+- Date: 2026-08-04
+
+## Context
+
+Azathoth optimizes AI behavior by generating, executing, and evaluating candidate strategies.
+
+As optimization expands beyond individual prompt strategies, the system requires a durable representation of complete workflows.
+
+A workflow must describe *what* work should be performed without embedding runtime concerns such as language model implementations, tool instances, or execution state.
+
+Future workflows may contain heterogeneous steps including:
+
+- prompt-based reasoning
+- tool invocation
+- retrieval
+- deterministic computation
+- conditional routing
+- human review
+
+Different workflow steps may require different language models, different tools, and different execution policies.
+
+## Decision
+
+Workflows are represented as immutable specifications.
+
+A workflow consists of:
+
+- workflow metadata
+- an ordered collection of workflow step specifications
+
+Each workflow step owns its own executable specification.
+
+Initially, workflow steps contain prompt strategy specifications.
+
+Future step types will be introduced without changing the overall workflow representation.
+
+Model requirements remain step-scoped rather than workflow-scoped.
+
+Workflow specifications intentionally contain no runtime execution dependencies.
+
+## Consequences
+
+### Positive
+
+- Workflows are durable, serializable configuration.
+- Workflow definitions remain independent of runtime providers.
+- Individual steps can evolve independently.
+- Different workflow steps may use different language models.
+- Future tool, retrieval, and routing steps can be introduced without redesigning the workflow model.
+- Workflow specifications can be generated, versioned, optimized, and replayed.
+
+### Negative
+
+- Workflow specifications describe structure only and cannot yet be executed.
+
+## Alternatives Considered
+
+### Bind one language model to an entire workflow
+
+Rejected because different workflow steps frequently benefit from different models, tools, and execution policies.
+
+### Couple workflow specifications to executable implementations
+
+Rejected because durable specifications should remain independent of runtime dependencies and provider implementations.
+
+================================================================================
+FILE: docs/adrs/0015-workflow-dependency-graphs.md
+================================================================================
+
+# ADR 0015: Represent Workflows as Dependency Graphs
+
+- Status: Accepted
+- Date: 2026-08-06
+
+## Context
+
+Azathoth represents AI systems as workflows composed of independently configured workflow steps.
+
+As workflows become more sophisticated, simple sequential ordering is no longer sufficient.
+
+Many AI systems naturally contain independent work that can execute concurrently, while other steps must wait until prerequisite work has completed.
+
+The workflow model therefore requires an explicit representation of dependency relationships without introducing runtime execution behavior.
+
+## Decision
+
+Workflow step specifications may declare dependencies on other workflow steps.
+
+A workflow therefore represents a directed acyclic graph (DAG) rather than a simple ordered list.
+
+Workflow specifications validate that:
+
+- every dependency references another step in the same workflow;
+- workflow steps cannot depend on themselves;
+- dependency declarations are unique; and
+- dependency graphs are acyclic.
+
+Workflow specifications expose deterministic execution layers derived from the dependency graph.
+
+Each execution layer contains workflow steps whose dependencies have already been satisfied.
+
+Execution layers preserve the declared ordering of independent workflow steps while exposing opportunities for future concurrent execution.
+
+Workflow specifications remain durable configuration and contain no runtime scheduling or execution behavior.
+
+## Consequences
+
+### Positive
+
+- Workflow topology is represented explicitly.
+- Independent workflow steps can be identified deterministically.
+- Future workflow runners can execute dependency layers without redefining workflow structure.
+- Parallel execution opportunities are preserved.
+- Workflow planning remains deterministic and reproducible.
+- Individual workflow steps continue to own their own model requirements and execution configuration.
+
+### Negative
+
+- Workflow planning introduces additional validation complexity during construction.
+
+## Alternatives Considered
+
+### Represent workflows as ordered lists
+
+Rejected because ordering alone cannot represent independent work or synchronization points.
+
+### Perform dependency validation during execution
+
+Rejected because invalid workflow topology should be rejected before execution begins.
+
+### Introduce a workflow scheduler
+
+Rejected because scheduling is a runtime concern.
+
+Workflow specifications intentionally remain execution-independent.
+
+================================================================================
+FILE: docs/adrs/0016-workflow-candidates.md
+================================================================================
+
+# ADR 0016: Generate Executable Workflow Candidates
+
+- Status: Accepted
+- Date: 2026-08-06
+
+## Context
+
+Workflow specifications describe durable, provider-neutral AI workflows.
+
+Before a workflow can execute, each workflow step must be transformed into an executable strategy by binding it to an appropriate language model.
+
+This transformation should preserve the workflow's structure while introducing runtime execution objects.
+
+## Decision
+
+Azathoth introduces `WorkflowCandidate` as the executable counterpart to `WorkflowSpecification`.
+
+Workflow candidate generation transforms each workflow step specification into an executable strategy using the existing prompt candidate generation pipeline.
+
+A workflow candidate preserves:
+
+- workflow metadata;
+- workflow step ordering;
+- workflow dependency relationships; and
+- step-scoped model requirements.
+
+Each executable workflow step contains:
+
+- the workflow step identifier;
+- dependency relationships; and
+- an executable strategy.
+
+Workflow candidates are runtime objects rather than durable configuration.
+
+Accordingly, workflow candidates are implemented as immutable dataclasses rather than serializable Pydantic models.
+
+## Consequences
+
+### Positive
+
+- Workflow specifications remain provider-neutral.
+- Runtime execution concerns remain separate from durable configuration.
+- Existing prompt candidate generation is reused.
+- Workflow topology is preserved during candidate generation.
+- Different workflow steps may bind to different language models.
+- Future workflow runners operate on executable workflow candidates rather than specifications.
+
+### Negative
+
+- Workflow candidate generation introduces an additional transformation step before execution.
+
+## Alternatives Considered
+
+### Execute workflow specifications directly
+
+Rejected because durable specifications should remain independent of runtime provider implementations.
+
+### Bind one language model to an entire workflow
+
+Rejected because different workflow steps frequently require different language models, context windows, capabilities, and execution policies.
+
+### Represent workflow candidates as serializable models
+
+Rejected because executable strategies contain runtime objects that should not become part of durable workflow configuration.
+
+================================================================================
+FILE: docs/adrs/0017-execute-workflows-by-dependency-layers.md
+================================================================================
+
+# ADR 0016: Execute Workflows by Dependency Layers
+
+- Status: Accepted
+- Date: 2026-08-07
+
+## Context
+
+Workflow specifications represent directed acyclic graphs (DAGs) of independently configured workflow steps.
+
+Executing workflow steps sequentially according to declaration order would introduce behavior that depends on implementation details rather than workflow topology.
+
+Independent workflow steps should execute as though they were evaluated concurrently, even if the initial implementation executes them sequentially.
+
+Workflow execution therefore requires deterministic semantics that remain valid as future implementations introduce parallel execution.
+
+## Decision
+
+Workflow candidates are executed one dependency layer at a time.
+
+Each workflow step within a dependency layer receives the same immutable layer-start context.
+
+Workflow step outputs are merged only after every workflow step in the layer has completed successfully.
+
+Workflow step outputs are merged in declared workflow order to ensure deterministic execution.
+
+If any workflow step within a dependency layer fails, workflow execution terminates immediately.
+
+No outputs produced by the failed dependency layer are merged into workflow context.
+
+Previously completed dependency layers remain committed.
+
+Workflow execution records every successfully executed workflow step together with its execution result and dependency layer.
+
+## Consequences
+
+### Positive
+
+- Workflow execution semantics are independent of execution order.
+- Future parallel execution does not change workflow behavior.
+- Context propagation is deterministic.
+- Workflow execution remains reproducible.
+- Dependency layers provide natural transaction boundaries.
+- Workflow orchestration remains independent from strategy execution.
+
+### Negative
+
+- Independent workflow steps currently execute sequentially even though they are semantically concurrent.
+- Failed dependency layers discard successful sibling results.
+
+## Alternatives Considered
+
+### Execute workflow steps sequentially
+
+Rejected because sequential execution allows sibling workflow steps to observe one another's outputs.
+
+### Merge workflow outputs immediately
+
+Rejected because workflow behavior would depend on execution ordering rather than dependency topology.
+
+### Execute all workflow steps concurrently
+
+Rejected because dependency relationships define explicit execution ordering.
+
+Parallel execution should only occur within dependency layers while preserving deterministic context propagation.
+
+================================================================================
+FILE: docs/adrs/0018-declare-and-record-workflow-values.md
+================================================================================
+
+# ADR 0018: Declare and Record Workflow Values
+
+- Status: Accepted
+- Date: 2026-08-08
+
+## Context
+
+Workflow steps frequently produce structured outputs that are useful to later workflow steps.
+
+Examples include:
+
+- classifications;
+- confidence scores;
+- retrieval results;
+- tool outputs; and
+- structured intermediate reasoning.
+
+These values are distinct from workflow context.
+
+Workflow context records evidence and execution history.
+
+Workflow values represent named conclusions intentionally exported by workflow steps for later workflow processing.
+
+Workflow execution therefore requires an explicit mechanism for declaring and recording exported workflow values.
+
+## Decision
+
+Workflow steps explicitly declare exported values using `WorkflowValueBinding`.
+
+Each binding assigns a stable workflow value name to a path within the strategy execution output.
+
+Bindings are preserved from workflow specification through executable workflow candidates.
+
+During execution, bindings are resolved against the strategy output to produce immutable `WorkflowValue` records.
+
+Workflow values are recorded within each `WorkflowStepRun`.
+
+`WorkflowRun` exposes deterministic query methods for retrieving recorded values by workflow value name or producing workflow step.
+
+Workflow values are not automatically inserted into workflow context.
+
+## Consequences
+
+### Positive
+
+- Workflow outputs are explicitly declared.
+- Workflow values remain deterministic.
+- Workflow execution remains independent from execution output structure.
+- Multiple workflow steps may export values with the same name.
+- Workflow values remain durable and serializable.
+- Future routing and branching can depend upon workflow values.
+
+### Negative
+
+- Workflow steps must explicitly declare exported values.
+- Invalid bindings terminate workflow execution.
+
+## Alternatives Considered
+
+### Export the entire execution output automatically
+
+Rejected because workflow outputs should be intentional rather than implicit.
+
+### Insert workflow values directly into context
+
+Rejected because workflow values and execution evidence serve different architectural purposes.
+
+### Require globally unique workflow value names
+
+Rejected because independent workflow steps may legitimately export values with identical names.
+
+================================================================================
+FILE: docs/adrs/0019-workflow-value-dataflow.md
+================================================================================
+
+# ADR 0019: Explicit Workflow Value Dataflow
+
+- Status: Accepted
+- Date: 2026-08-09
+
+## Context
+
+Workflow execution frequently requires passing structured information from one workflow step to another.
+
+Examples include:
+
+- classifications;
+- retrieved documents;
+- confidence scores;
+- routing decisions; and
+- intermediate reasoning.
+
+Passing these values implicitly through execution context obscures workflow dependencies and makes workflows difficult to validate.
+
+Workflow dataflow should therefore be explicitly declared and statically validated.
+
+## Decision
+
+Workflow steps explicitly export structured outputs using `WorkflowValueBinding`.
+
+Workflow values are identified by the combination of:
+
+- producing workflow step; and
+- exported workflow value name.
+
+Downstream workflow steps declare required inputs using `WorkflowInputBinding`.
+
+Each input references a specific exported workflow value using `WorkflowValueReference`.
+
+Workflow specifications validate that:
+
+- referenced producer steps exist;
+- referenced output names exist;
+- referenced producer steps are upstream in the workflow dependency graph;
+- producer output names are unique within a workflow step; and
+- consumer input names are unique within a workflow step.
+
+During execution, workflow input bindings resolve against committed workflow values and are made available only within the execution context of the consuming workflow step.
+
+Workflow input bindings are not persisted within shared workflow context.
+
+## Consequences
+
+### Positive
+
+- Workflow dataflow is explicit.
+- Invalid workflows fail during validation.
+- Runtime execution becomes deterministic.
+- Workflow context remains independent from workflow value propagation.
+- Multiple workflow steps may export values with identical names.
+- Workflow values become suitable for routing and conditional execution.
+
+### Negative
+
+- Workflow specifications require explicit input and output declarations.
+- Additional validation is performed during workflow construction.
+
+## Alternatives Considered
+
+### Pass workflow values through shared context
+
+Rejected because execution history and workflow data represent different concepts.
+
+### Resolve workflow values dynamically without declarations
+
+Rejected because invalid workflows would fail during execution rather than validation.
+
+### Require globally unique workflow value names
+
+Rejected because workflow value identity is intentionally scoped to the producing workflow step.
+
+================================================================================
+FILE: docs/adrs/0020-conditional-workflow-execution.md
+================================================================================
+
+# ADR 0020: Conditional Workflow Execution
+
+- Status: Accepted
+- Date: 2026-08-09
+
+## Context
+
+Azathoth workflows are represented as directed acyclic graphs of independently configured workflow steps.
+
+Workflow steps can export structured workflow values, and downstream steps can explicitly reference those values through validated workflow dataflow.
+
+Not every downstream step should necessarily execute.
+
+For example, a workflow may classify a request before selecting an appropriate processing path:
+
+```text
+                Classifier
+                    │
+             classification
+                /       \
+            "math"     "general"
+              │            │
+              ▼            ▼
+        Math Reasoner  General Reasoner
+```
+
+Conditional execution therefore requires a durable representation of eligibility rules that can be validated before execution and evaluated deterministically at runtime.
+
+Conditional routing must preserve the existing workflow architecture:
+
+* workflow topology remains explicit;
+* workflow values remain producer-qualified;
+* different steps may use different models and tools;
+* skipped steps must not fabricate execution evidence;
+* dependency-layer semantics must remain deterministic.
+
+Decision
+
+Workflow steps may declare zero or more WorkflowCondition instances.
+
+A workflow condition references a producer-qualified workflow value and declares the value expected for the condition to be satisfied.
+
+```text
+WorkflowCondition
+├── source
+│   ├── producer_step_id
+│   └── value name
+└── expected value
+```
+
+Workflow specifications validate conditions before candidate generation.
+
+Validation ensures that:
+
+* the referenced producer step exists;
+* the referenced producer exports the requested workflow value; and
+* the producer is upstream of the conditional consumer step.
+
+A workflow step with no conditions is always eligible for execution.
+
+A workflow step with conditions is eligible only when all declared conditions are satisfied.
+
+Multiple conditions therefore use logical AND semantics.
+
+During workflow execution:
+
+* conditions are evaluated against committed workflow values;
+* eligible steps execute normally;
+* ineligible steps are skipped;
+* skipped steps produce no ExecutionResult;
+* skipped steps produce no workflow values; and
+* skipped steps are still represented in the durable WorkflowRun.
+
+Workflow step execution status is explicitly recorded using WorkflowStepStatus.
+
+A condition referencing an unavailable workflow value evaluates as unsatisfied.
+
+This allows conditional skips to propagate naturally when an upstream conditional branch did not produce a value.
+
+Consequences
+
+Positive
+
+* Workflows can adapt execution based on prior results.
+* Conditional routing remains explicit and serializable.
+* Invalid condition references fail during workflow validation.
+* Workflow execution remains deterministic.
+* Skipped steps are distinguishable from executed steps.
+* Execution evidence is never fabricated for skipped work.
+* Conditional execution composes with existing workflow dependency layers.
+* Different conditional branches may independently use different models, tools, or strategies.
+* Conditional behavior can be inspected after execution through WorkflowRun.
+
+Negative
+
+* The initial condition model supports equality predicates only.
+* Multiple conditions currently use fixed logical AND semantics.
+* Skipped upstream branches may cause downstream conditions to become unsatisfied through missing workflow values.
+
+Alternatives Considered
+
+Encode routing directly in strategies
+
+Rejected because routing is workflow orchestration behavior rather than strategy behavior.
+
+Embedding routing inside strategies would obscure workflow topology and make optimization more difficult.
+
+Use shared context events for conditions
+
+Rejected because workflow values already provide an explicit, producer-qualified dataflow model.
+
+Conditions should operate on declared workflow data rather than infer routing state from execution history.
+
+Fabricate execution results for skipped steps
+
+Rejected because a skipped workflow step did not execute.
+
+Recording synthetic execution evidence would make workflow traces misleading and complicate evaluation and optimization.
+
+Introduce a general expression language
+
+Rejected because equality conditions and logical AND semantics provide useful conditional execution without prematurely introducing a workflow expression language.
+
+================================================================================
+FILE: docs/adrs/0021-workflow-condition-operators.md
+================================================================================
+
+# ADR 0021: Workflow Condition Operators
+
+- Status: Accepted
+- Date: 2026-08-10
+
+## Context
+
+Conditional workflow execution allows workflow steps to execute only when upstream workflow values satisfy declared conditions.
+
+The initial condition model supported equality comparison only.
+
+While equality enables basic routing, many practical workflows depend on numeric thresholds or inequality comparisons.
+
+Examples include:
+
+- confidence scores;
+- relevance scores;
+- latency thresholds;
+- document counts;
+- evaluation metrics; and
+- cost limits.
+
+Supporting these scenarios should not require introducing a general workflow expression language.
+
+## Decision
+
+Workflow conditions now declare an explicit comparison operator.
+
+```text
+WorkflowCondition
+
+source
+operator
+expected
+```
+
+Supported operators are:
+
+- Equal
+- Not Equal
+- Greater Than
+- Greater Than or Equal
+- Less Than
+- Less Than or Equal
+
+Equality operators support all JSON values.
+
+Ordering operators support numeric values only.
+
+Boolean values are intentionally excluded from ordering comparisons even though Python treats them as integers.
+
+Workflow comparison semantics are centralized within `WorkflowCondition`.
+
+The workflow runner resolves workflow values and delegates comparison to the workflow condition rather than implementing comparison logic itself.
+
+## Consequences
+
+### Positive
+
+- Workflow routing supports threshold-based decisions.
+- Comparison behavior is centralized.
+- WorkflowRunner remains independent of comparison semantics.
+- Existing equality conditions remain fully compatible.
+- Condition serialization remains stable.
+- Additional operators can be introduced without modifying workflow orchestration.
+
+### Negative
+
+- Ordering comparisons are intentionally limited to numeric values.
+- Complex expressions such as logical OR or nested conditions remain unsupported.
+
+## Alternatives Considered
+
+### Continue supporting equality only
+
+Rejected because threshold-based workflow routing is a common orchestration requirement.
+
+### Embed comparison logic inside WorkflowRunner
+
+Rejected because comparison semantics belong to workflow conditions rather than orchestration.
+
+### Introduce a workflow expression language
+
+Rejected because comparison operators satisfy current routing requirements while preserving a simple, explicit workflow model.
+
+================================================================================
+FILE: docs/adrs/0022-workflow-retry-policies.md
+================================================================================
+
+# ADR 0022: Workflow Retry Policies
+
+- Status: Accepted
+- Date: 2026-08-11
+
+## Context
+
+Workflow execution currently attempts each workflow step exactly once.
+
+In practice, workflow steps frequently interact with external systems such as language models, tool providers, APIs, or network services.
+
+Many failures are transient rather than permanent.
+
+Examples include:
+
+- temporary provider outages;
+- rate limiting;
+- network interruptions;
+- infrastructure failures; and
+- transport timeouts.
+
+Retry behavior should be configurable per workflow step without coupling retry semantics to strategy implementations.
+
+Different workflow steps may execute different language models, tools, or external services and therefore require different retry policies.
+
+## Decision
+
+Workflow steps may declare a `WorkflowRetryPolicy`.
+
+Retry policies are immutable and become part of the durable workflow specification.
+
+A retry policy defines:
+
+- maximum attempts;
+- initial retry delay;
+- exponential backoff multiplier; and
+- optional maximum delay.
+
+`max_attempts` represents the total number of execution attempts, including the initial attempt.
+
+For example:
+
+```text
+max_attempts = 1
+
+attempt
+
+done
+```
+
+```text
+max_attempts = 3
+
+attempt
+   │
+failure
+   │
+retry
+   │
+failure
+   │
+retry
+   │
+success
+```
+
+Workflow retry behavior is implemented by `WorkflowRunner`.
+
+Strategies remain unaware of retry behavior.
+
+The workflow runner retries failed executions until either:
+
+- execution succeeds; or
+- the configured number of attempts has been exhausted.
+
+The current implementation computes retry delays but intentionally does not delay execution.
+
+This preserves deterministic execution and fast test suites while establishing the durable retry architecture.
+
+## Consequences
+
+### Positive
+
+- Retry behavior is explicitly configured per workflow step.
+- Retry configuration is preserved through workflow specification and candidate generation.
+- Workflow orchestration owns retry semantics.
+- Strategy implementations remain simple and deterministic.
+- Different workflow steps may use different retry policies.
+- Retry behavior composes naturally with conditional execution and workflow dependency layers.
+
+### Negative
+
+- Retry delays are currently computed but not applied.
+- Retry behavior currently retries every execution failure.
+- Retry attempts are not yet surfaced as execution metrics.
+
+## Alternatives Considered
+
+### Retry inside strategies
+
+Rejected because retry behavior is workflow orchestration rather than strategy behavior.
+
+Embedding retries inside strategies would make execution behavior inconsistent across workflow steps.
+
+### Global workflow retry policy
+
+Rejected because different workflow steps frequently interact with different external systems.
+
+Retry behavior should remain step-scoped, matching model bindings, tool bindings, and conditional execution.
+
+### Immediate delay implementation
+
+Rejected because deterministic execution and fast tests are more valuable while establishing the workflow retry architecture.
+
+Delay scheduling can be enabled later without changing workflow specifications.
+
+================================================================================
+FILE: docs/adrs/0023-workflow-step-attempt-history.md
+================================================================================
+
+# ADR 0023: Workflow Step Attempt History
+
+- Status: Accepted
+- Date: 2026-08-11
+
+## Context
+
+Workflow retry policies allow workflow steps to recover from transient failures.
+
+Prior to this change, successful retries discarded information about previous failed attempts.
+
+As a result, durable workflow execution records could not answer questions such as:
+
+- How many attempts were required?
+- Which attempts failed?
+- What exception occurred?
+- Did retries improve reliability?
+
+Execution history should be preserved independently from retry behavior.
+
+## Decision
+
+Workflow execution now records every execution attempt.
+
+Each workflow step produces a sequence of immutable `WorkflowStepAttempt` records.
+
+Each attempt records:
+
+- attempt number;
+- start time;
+- completion time;
+- either a successful execution result or a recorded failure.
+
+Exactly one outcome must be present.
+
+```text
+WorkflowStepRun
+        │
+        ├── execution
+        └── attempts
+                ├── Attempt 1
+                ├── Attempt 2
+                └── Attempt N
+```
+
+Successful executions remain represented by `ExecutionResult`.
+
+Failures are represented by `WorkflowStepFailure`, which records:
+
+- exception type; and
+- exception message.
+
+Exception objects themselves are intentionally not persisted.
+
+Workflow execution attempts become part of the durable `WorkflowRun` model.
+
+## Consequences
+
+### Positive
+
+- Complete retry history is preserved.
+- Successful execution remains easy to access.
+- Failure history becomes durable.
+- Workflow execution becomes auditable.
+- Retry policies and execution history remain independent concerns.
+- Future optimization algorithms can reason about execution reliability.
+
+### Negative
+
+- Workflow run objects become larger.
+- Additional execution metadata is persisted.
+
+## Alternatives Considered
+
+### Persist only the final execution
+
+Rejected because retry history is valuable operational information.
+
+### Persist Python exception objects
+
+Rejected because exceptions are runtime objects and are not suitable for durable serialization.
+
+### Store attempts inside `ExecutionResult`
+
+Rejected because an execution result represents one successful execution.
+
+Attempt history belongs to workflow orchestration rather than strategy execution.
+
+================================================================================
+FILE: docs/adrs/0024-workflow-failure-policies.md
+================================================================================
+
+# ADR 0024: Workflow Failure Policies
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow retry policies allow transient failures to be retried.
+
+However, not every failure should terminate an entire workflow.
+
+Different workflow steps have different operational requirements.
+
+Examples include:
+
+- required classification steps;
+- optional enrichment steps;
+- best-effort metadata extraction; and
+- independent execution branches.
+
+Failure handling should therefore be configurable independently for each workflow step.
+
+Retry behavior answers:
+
+> How many times should execution be attempted?
+
+Failure policy answers:
+
+> What should happen if execution never succeeds?
+
+These are separate orchestration concerns.
+
+## Decision
+
+Workflow steps may now declare a `WorkflowFailurePolicy`.
+
+Failure policies are immutable and become part of the durable workflow specification.
+
+The supported policies are:
+
+- `FAIL_WORKFLOW`
+- `CONTINUE`
+- `SKIP_DEPENDENTS`
+
+### FAIL_WORKFLOW
+
+Abort workflow execution immediately after retries are exhausted.
+
+The original exception is propagated to the caller.
+
+### CONTINUE
+
+Record the failed workflow step while allowing remaining workflow execution to continue.
+
+Failed workflow steps do not produce workflow values.
+
+Downstream steps continue to participate in workflow execution.
+
+If a downstream step requires workflow values that were never produced, existing workflow value and condition evaluation naturally prevent execution.
+
+### SKIP_DEPENDENTS
+
+Record the failed workflow step.
+
+Transitively skip every workflow step that depends upon the failed step.
+
+Independent branches continue executing normally.
+
+## Consequences
+
+### Positive
+
+- Failure handling becomes configurable per workflow step.
+- Retry behavior and failure handling remain independent concepts.
+- Failed workflow steps become durable workflow artifacts.
+- Independent workflow branches continue whenever appropriate.
+- Workflow orchestration becomes fault tolerant without increasing strategy complexity.
+
+### Negative
+
+- Workflow execution semantics become more expressive.
+- Workflow runs may now contain executed, failed, and skipped workflow steps simultaneously.
+
+## Alternatives Considered
+
+### Always abort workflow execution
+
+Rejected because many workflow steps are optional or belong to independent execution branches.
+
+### Retry indefinitely
+
+Rejected because retry behavior and failure handling solve different problems.
+
+Retries address transient failures.
+
+Failure policies address permanent failures.
+
+### Encode failure handling inside strategies
+
+Rejected because failure handling is orchestration behavior rather than strategy behavior.
+
+Keeping failure policies within workflow execution preserves simple strategy implementations while allowing execution policies to evolve independently.
+
+================================================================================
+FILE: docs/adrs/0025-workflow-execution-statistics.md
+================================================================================
+
+# ADR 0025: Workflow Execution Statistics
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution records contain complete information about execution.
+
+This includes:
+
+- executed workflow steps;
+- failed workflow steps;
+- skipped workflow steps;
+- execution attempts;
+- retry history; and
+- execution timestamps.
+
+Consumers frequently need summary information such as:
+
+- Did the workflow succeed?
+- How many retries occurred?
+- How many workflow steps failed?
+- How many execution attempts were made?
+- How long did execution take?
+
+Requiring every consumer to compute these metrics independently duplicates logic and increases the risk of inconsistent reporting.
+
+## Decision
+
+Workflow execution statistics are computed directly from recorded workflow execution.
+
+Statistics are represented by an immutable `WorkflowRunStatistics` model.
+
+The statistics include:
+
+- total workflow steps;
+- executed workflow steps;
+- failed workflow steps;
+- skipped workflow steps;
+- total execution attempts;
+- successful execution attempts;
+- failed execution attempts;
+- retry count; and
+- workflow duration.
+
+`WorkflowRun` exposes computed convenience properties that delegate to the statistics model.
+
+Examples include:
+
+- `succeeded`
+- `failed`
+- `retry_count`
+- `duration_seconds`
+
+Statistics are derived from durable workflow execution records and are not persisted independently.
+
+## Consequences
+
+### Positive
+
+- Statistics always remain consistent with recorded workflow execution.
+- No duplicated execution state is stored.
+- Common execution metrics become available through a simple API.
+- Future analytics can build on a single deterministic statistics model.
+
+### Negative
+
+- Statistics are recomputed when requested.
+- Additional derived models increase the public API surface.
+
+## Alternatives Considered
+
+### Persist execution statistics
+
+Rejected because statistics are entirely derivable from recorded workflow execution.
+
+Persisting both execution records and derived statistics introduces duplicated state that can become inconsistent.
+
+### Require consumers to compute statistics
+
+Rejected because identical aggregation logic would be duplicated across consumers.
+
+Providing a canonical implementation improves consistency and simplifies workflow analysis.
+
+================================================================================
+FILE: docs/adrs/0026-workflow-reliability-metrics.md
+================================================================================
+
+# ADR 0026: Workflow Reliability Metrics
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution statistics summarize what occurred during execution.
+
+Examples include:
+
+- executed workflow steps;
+- failed workflow steps;
+- skipped workflow steps;
+- retry count; and
+- execution duration.
+
+While useful for inspection, these raw statistics do not directly support comparing workflow executions.
+
+Optimization systems require normalized metrics that remain meaningful across workflows of different sizes.
+
+For example:
+
+- a workflow with one retry out of two steps;
+- a workflow with one retry out of one hundred steps; and
+- a workflow with one skipped branch
+
+should not necessarily be interpreted identically.
+
+Reliability metrics provide normalized execution characteristics that can later support workflow evaluation and optimization.
+
+## Decision
+
+Workflow runs expose immutable reliability metrics derived directly from recorded workflow execution.
+
+Reliability metrics include:
+
+- completion rate;
+- first-attempt success rate;
+- retry rate; and
+- failure rate.
+
+Completion rate is calculated across all workflow steps.
+
+Attempt-based metrics are calculated only across attempted workflow steps.
+
+Skipped workflow steps are excluded from attempt-based reliability metrics because they do not represent execution outcomes.
+
+Reliability metrics are computed on demand and are never persisted independently.
+
+## Consequences
+
+### Positive
+
+- Reliability metrics are independent of workflow size.
+- Reliability remains deterministic.
+- No duplicated execution state is introduced.
+- Future optimization systems receive normalized execution metrics.
+
+### Negative
+
+- Reliability metrics require computation when requested.
+- Metric definitions become part of the public API.
+
+## Alternatives Considered
+
+### Use raw execution statistics only
+
+Rejected because raw counts are difficult to compare across workflows of different sizes.
+
+### Persist reliability metrics
+
+Rejected because reliability metrics are completely derivable from recorded workflow execution.
+
+Persisting derived values would introduce duplicated state and potential inconsistencies.
+
+================================================================================
+FILE: docs/adrs/0027-workflow-evaluation.md
+================================================================================
+
+# ADR 0027: Workflow Evaluation
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution produces durable execution records.
+
+Derived execution statistics summarize workflow behavior.
+
+Derived reliability metrics normalize execution behavior across workflows of different sizes.
+
+Optimization systems, benchmarking tools, dashboards, and future adaptive workflow planners should not depend directly on workflow execution internals.
+
+A stable evaluation model provides a consistent interface between execution and higher-level analysis.
+
+## Decision
+
+Workflow runs expose immutable workflow evaluations.
+
+A workflow evaluation packages:
+
+- workflow identity;
+- execution statistics;
+- reliability metrics; and
+- evaluation timestamp.
+
+Workflow evaluations are derived entirely from recorded workflow execution.
+
+Workflow evaluations contain no duplicated execution state and introduce no additional scoring or heuristics.
+
+Evaluation models remain objective observations of workflow execution.
+
+Interpretation and optimization remain responsibilities of higher-level components.
+
+## Consequences
+
+### Positive
+
+- Execution and optimization remain cleanly separated.
+- Consumers receive a stable evaluation interface.
+- Evaluation remains deterministic.
+- No duplicated execution state is introduced.
+- Future optimization systems can evolve independently of execution internals.
+
+### Negative
+
+- Evaluations are recomputed when requested.
+- Additional evaluation models become part of the public API.
+
+## Alternatives Considered
+
+### Expose workflow execution directly
+
+Rejected because higher-level systems would become tightly coupled to execution internals.
+
+### Add optimization scores directly to evaluations
+
+Rejected because scoring policies evolve independently of execution.
+
+Keeping evaluations objective allows multiple optimization strategies to coexist without changing the execution model.
+
+================================================================================
+FILE: docs/adrs/0028-workflow-scorecards.md
+================================================================================
+
+# ADR 0028: Workflow Scorecards
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution records durable execution history.
+
+Workflow evaluation provides objective observations describing execution quality, reliability, latency, and cost.
+
+Optimization systems require a normalized representation that expresses how desirable a workflow execution was according to a scoring policy.
+
+Scoring policies are inherently subjective and may evolve over time without changing workflow execution or evaluation.
+
+## Decision
+
+Workflow evaluations are converted into immutable workflow scorecards.
+
+A workflow scorecard packages:
+
+- quality score;
+- reliability score;
+- latency score;
+- cost score;
+- overall score; and
+- scoring rationale.
+
+All scores are normalized to the range:
+
+- 0.0 = worst
+- 1.0 = best
+
+Workflow scorecards are produced by deterministic scoring policies.
+
+Scoring policies operate entirely on durable execution records and objective workflow evaluations.
+
+Workflow execution remains independent of optimization strategy.
+
+Different scoring policies may coexist without affecting workflow execution or evaluation.
+
+## Consequences
+
+### Positive
+
+- Execution remains independent of optimization.
+- Objective evaluation and subjective scoring are cleanly separated.
+- Scorecards provide a stable optimization interface.
+- Multiple scoring policies can coexist.
+- Future optimization algorithms can compare workflows using normalized dimensions.
+
+### Negative
+
+- Scorecards introduce another derived model.
+- Different optimization objectives may require different scoring policies.
+
+## Alternatives Considered
+
+### Store optimization scores directly in workflow evaluations
+
+Rejected because evaluations are intended to remain objective observations of execution.
+
+### Embed optimization heuristics inside workflow execution
+
+Rejected because execution should remain deterministic and independent of optimization policy.
+
+Separating execution, evaluation, and scoring allows each layer to evolve independently.
+
+================================================================================
+FILE: docs/adrs/0029-workflow-ranking.md
+================================================================================
+
+# ADR 0029: Workflow Ranking
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow scorecards provide normalized quality, reliability, latency, cost, and overall scores for individual workflow executions.
+
+Optimization systems require a deterministic mechanism for comparing multiple workflow executions and selecting the strongest candidate.
+
+Ranking is a comparison concern rather than a scoring concern.
+
+Separating ranking from scoring allows different optimization systems to reuse the same workflow scorecards while applying consistent ordering behavior.
+
+## Decision
+
+Workflow scorecards are ordered using immutable workflow rankings.
+
+A workflow ranking contains:
+
+- ranked workflow entries;
+- consecutive ranking positions; and
+- the highest-ranked workflow as the winner.
+
+Ranking is deterministic.
+
+Workflow scorecards are ordered by:
+
+1. overall score;
+2. quality score;
+3. reliability score;
+4. latency score;
+5. cost score; and
+6. original input order for exact ties.
+
+Ranking introduces no additional heuristics beyond deterministic ordering.
+
+Workflow execution, evaluation, and scoring remain unchanged.
+
+## Consequences
+
+### Positive
+
+- Workflow comparison becomes deterministic.
+- Ranking is separated from scoring.
+- Optimization systems receive a stable comparison interface.
+- Exact ties remain reproducible.
+- Future optimization algorithms can consume rankings directly.
+
+### Negative
+
+- Workflow rankings are another derived model.
+- Alternative ranking policies require separate ranking implementations.
+
+## Alternatives Considered
+
+### Compare workflow scorecards directly throughout optimization
+
+Rejected because comparison behavior would become duplicated across optimization systems.
+
+### Embed ranking inside workflow scorecards
+
+Rejected because scorecards describe one workflow while rankings compare many workflows.
+
+Separating the two responsibilities keeps both models simple and reusable.
+
+================================================================================
+FILE: docs/adrs/0030-workflow-experiments.md
+================================================================================
+
+# ADR 0030: Workflow Experiments
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution produces durable workflow runs.
+
+Workflow evaluation summarizes execution correctness.
+
+Workflow scorecards normalize workflow quality according to a scoring policy.
+
+Workflow rankings deterministically compare multiple workflow scorecards.
+
+Optimization systems require a reusable orchestration layer capable of executing multiple workflow candidates, evaluating them, scoring them, and selecting the strongest result.
+
+This orchestration should remain independent of optimization algorithms.
+
+## Decision
+
+Workflow experiments provide deterministic orchestration for comparing multiple workflow candidates.
+
+A workflow experiment:
+
+- executes every supplied workflow candidate;
+- evaluates every workflow result;
+- scores every workflow evaluation;
+- ranks every workflow scorecard; and
+- exposes the winning workflow scorecard.
+
+Workflow experiments introduce no optimization logic.
+
+They execute existing workflow infrastructure while preserving immutable experiment results.
+
+## Consequences
+
+### Positive
+
+- Workflow comparison becomes reusable.
+- Optimization algorithms remain focused on candidate generation.
+- Execution, evaluation, scoring, and ranking remain independently testable.
+- Experiment results are deterministic and immutable.
+- Future optimization systems can reuse workflow experiments without duplicating orchestration.
+
+### Negative
+
+- Workflow experiments introduce another orchestration layer.
+- Experiment execution requires every workflow candidate to be evaluated.
+
+## Alternatives Considered
+
+### Allow optimization systems to orchestrate workflow execution directly
+
+Rejected because execution orchestration would become duplicated across optimization implementations.
+
+### Embed experiment behavior inside the workflow runner
+
+Rejected because workflow runners execute one workflow while experiments compare many workflows.
+
+Separating these responsibilities preserves a clean execution architecture.
+
+================================================================================
+FILE: docs/adrs/0031-workflow-optimization-boundary.md
+================================================================================
+
+# ADR 0031: Workflow Optimization Boundary
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow execution, evaluation, scoring, ranking, and experimentation produce deterministic evidence describing workflow performance.
+
+Optimization systems require a mechanism for generating subsequent workflow populations using this evidence.
+
+Optimization should remain independent of workflow execution details.
+
+Execution systems should not contain optimization algorithms.
+
+A clear architectural boundary is required between workflow experimentation and workflow optimization.
+
+## Decision
+
+Workflow optimization is established as a separate top-level domain.
+
+Workflow optimization consumes:
+
+- workflow experiment results; and
+- workflow candidate populations.
+
+Workflow optimization produces immutable optimization results describing the next workflow generation.
+
+The initial optimizer implementation is `ReplayWorkflowOptimizer`.
+
+Replay optimization intentionally performs no candidate modification.
+
+It exists solely to establish and validate the optimization boundary independently of future optimization algorithms.
+
+## Consequences
+
+### Positive
+
+- Workflow execution and optimization remain independently evolvable.
+- Optimization algorithms share a common interface.
+- Workflow experiments remain focused on empirical observation.
+- Candidate generation becomes replaceable without affecting workflow execution.
+- Future optimization algorithms can be introduced without changing experiment orchestration.
+
+### Negative
+
+- Optimization introduces an additional architectural layer.
+- The initial replay optimizer intentionally performs no optimization.
+
+## Alternatives Considered
+
+### Embed optimization into workflow experiments
+
+Rejected because experiments observe workflow behavior while optimization generates future candidates.
+
+### Implement evolutionary optimization immediately
+
+Rejected because architectural boundaries should be established before introducing optimization heuristics.
+
+A deterministic replay optimizer validates the optimization contract while keeping optimization behavior independent from execution.
+
+================================================================================
+FILE: docs/adrs/0032-workflow-optimization-session.md
+================================================================================
+
+# ADR 0032: Workflow Optimization Sessions
+
+- Status: Accepted
+- Date: 2026-08-12
+
+## Context
+
+Workflow experiments evaluate candidate workflow populations.
+
+Workflow optimizers produce new workflow generations from experiment evidence.
+
+Optimization systems require a durable representation of the complete optimization process rather than isolated experiment results.
+
+Recording optimization history enables reproducibility, benchmarking, visualization, and future adaptive optimization strategies.
+
+## Decision
+
+Workflow optimization is modeled as a sequence of immutable optimization generations.
+
+Each generation records:
+
+- the generation number;
+- the experiment used as optimization input; and
+- the candidate workflows produced by the optimizer.
+
+Workflow optimization sessions expose:
+
+- the initial candidate population; and
+- the ordered history of optimization generations.
+
+Optimization sessions contain no optimizer-specific heuristics.
+
+Replay optimization is implemented as the canonical deterministic optimizer for validating orchestration and end-to-end optimization pipelines.
+
+## Consequences
+
+### Positive
+
+- Optimization history becomes durable and reproducible.
+- Entire optimization sessions can be inspected after execution.
+- Optimizers remain interchangeable.
+- Replay optimization provides deterministic baseline behavior.
+- Future evolutionary optimizers can reuse the same session infrastructure.
+
+### Negative
+
+- Optimization sessions introduce additional immutable models.
+- Long optimization runs may produce larger recorded histories.
+
+## Alternatives Considered
+
+### Record only the final optimized candidates
+
+Rejected because optimization history is valuable for analysis, benchmarking, debugging, and visualization.
+
+### Allow optimizers to mutate candidate collections in place
+
+Rejected because immutable generations provide reproducibility and deterministic replay.
+
+================================================================================
+FILE: docs/adrs/0033-durable-tool-definitions.md
+================================================================================
+
+# ADR 0033: Durable Tool Definitions
+
+- Status: Accepted
+- Date: 2026-08-14
+
+## Context
+
+Azathoth workflows will increasingly rely on reusable capabilities beyond language
+models.
+
+Representing tools as Python functions tightly couples capability definitions to
+implementation details and execution environments.
+
+Future optimization systems should reason about durable capabilities, independently
+of how those capabilities are executed or persisted.
+
+Tool definitions should therefore establish stable contracts describing what a
+capability accepts and produces without requiring a specific runtime or
+implementation.
+
+## Decision
+
+Tools are represented as immutable, versioned capability definitions.
+
+A tool definition packages:
+
+- tool identity;
+- name;
+- description;
+- version;
+- input contract; and
+- output contract.
+
+Tool verification is represented independently using immutable tool test cases.
+
+Executable implementations are represented independently using immutable tool
+implementations.
+
+Tool catalogs provide deterministic discovery of tool definitions without
+introducing execution behavior, persistence, or optimization policy.
+
+Tool definitions remain independent of implementation language, execution
+environment, and storage mechanism.
+
+## Consequences
+
+### Positive
+
+- Capability contracts remain stable as implementations evolve.
+- Multiple implementations may satisfy the same capability.
+- Tool discovery remains deterministic.
+- Durable capabilities become independent of runtime environments.
+- Future persistence mechanisms can evolve independently of the tool model.
+- Automatic tool generation and verification become natural extensions of the
+  architecture.
+
+### Negative
+
+- Additional domain models become part of the public API.
+- Tool execution requires additional layers beyond the capability model.
+- Catalogs currently provide deterministic discovery only.
+
+## Alternatives Considered
+
+### Represent tools as Python functions
+
+Rejected because executable code does not provide durable capability contracts and
+cannot naturally support multiple implementations.
+
+### Couple tool definitions directly to persistence
+
+Rejected because persistence mechanisms should remain interchangeable and should
+not define the domain model.
+
+### Couple tool definitions directly to execution
+
+Rejected because execution policies evolve independently from capability
+definitions.
+
+Separating capability, implementation, verification, discovery, persistence, and
+execution establishes a stable foundation for future optimization systems.
+
+================================================================================
+FILE: docs/adrs/0034-tool-execution.md
+================================================================================
+
+# ADR 0034: Tool Execution
+
+- Status: Accepted
+- Date: 2026-08-14
+
+## Context
+
+Tool definitions describe durable capabilities independently of execution
+environments.
+
+Tool implementations describe executable realizations of those capabilities.
+
+Future optimization systems, benchmarking pipelines, and synthesized tool
+generation require deterministic evidence that implementations satisfy their
+contracts.
+
+Execution should remain independent from verification so that multiple
+verification strategies may evolve without changing execution semantics.
+
+## Decision
+
+Azathoth introduces deterministic tool execution.
+
+Tool execution consists of:
+
+- executable tool implementations;
+- asynchronous tool executor protocols;
+- Python tool execution;
+- durable tool verification; and
+- immutable tool verification results.
+
+Tool executors execute implementations and return structured outputs.
+
+Tool verifiers execute durable tool test cases using tool executors and compare
+actual outputs against expected outputs.
+
+Verification remains deterministic.
+
+Execution does not perform optimization, ranking, or heuristic evaluation.
+
+## Consequences
+
+### Positive
+
+- Tool execution is separated from verification.
+- Tool verification produces durable evidence of correctness.
+- Multiple executor implementations may coexist.
+- Future runtimes can be introduced without changing verification.
+- Future verification strategies can evolve independently of execution.
+- Tool execution remains deterministic and fully testable.
+
+### Negative
+
+- Additional execution and verification models become part of the public API.
+- Trusted Python execution is currently performed in-process.
+- Additional runtimes require future executor implementations.
+
+## Alternatives Considered
+
+### Execute tools directly from tool definitions
+
+Rejected because capability definitions should remain independent of execution.
+
+### Combine execution and verification
+
+Rejected because execution and verification evolve independently.
+
+Separating these responsibilities allows multiple verification policies to share
+the same execution substrate.
+
+### Store verification inside tool implementations
+
+Rejected because verification represents evidence produced by execution rather
+than implementation metadata.
+
+================================================================================
+FILE: docs/adrs/0035-tool-requirements.md
+================================================================================
+
+# ADR 0035: Tool Requirements
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Workflows should express the capabilities they require rather than depending on
+specific tool identifiers.
+
+Tool definitions describe durable capabilities independently of executable
+implementations.
+
+As the number of available tools grows, workflow execution requires a
+deterministic mechanism for resolving capability requirements into candidate tool
+definitions.
+
+Requirement matching should remain objective and independent of optimization,
+ranking, and execution policy.
+
+## Decision
+
+Azathoth introduces durable tool requirements and deterministic requirement
+resolution.
+
+Tool requirements describe the capabilities needed by higher-level systems.
+
+Tool matchers determine whether a tool definition satisfies a requirement.
+
+Tool resolvers coordinate immutable tool catalogs and deterministic matching to
+produce candidate tool definitions.
+
+Resolution preserves catalog ordering and introduces no ranking, optimization, or
+heuristics.
+
+## Consequences
+
+### Positive
+
+- Workflows depend on capabilities rather than identifiers.
+- Requirement resolution remains deterministic.
+- Matching policy is separated from catalog storage.
+- Multiple matching strategies can evolve independently.
+- Future optimization systems can rank candidate definitions without changing
+  requirement resolution.
+
+### Negative
+
+- Additional domain models become part of the public API.
+- Resolution currently operates on capability definitions only.
+- Runtime selection remains a future responsibility of implementation
+  resolution.
+
+## Alternatives Considered
+
+### Resolve tools directly from the catalog
+
+Rejected because catalogs should remain immutable inventories rather than
+containing matching policy.
+
+### Couple matching to workflow execution
+
+Rejected because capability resolution should remain reusable independently of
+workflows.
+
+### Introduce heuristic or semantic matching
+
+Rejected because deterministic exact matching provides a stable architectural
+foundation for future optimization systems.
+
+================================================================================
+FILE: docs/adrs/0036-tool-implementation-resolution.md
+================================================================================
+
+# ADR 0036: Tool Implementation Resolution
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Tool definitions describe durable capability contracts.
+
+Executable behavior is provided by tool implementations rather than capability
+definitions.
+
+Multiple implementations may satisfy the same capability contract across
+different runtimes, implementation versions, or execution environments.
+
+Workflow execution requires deterministic selection of executable
+implementations while remaining independent of optimization policy.
+
+## Decision
+
+Azathoth introduces immutable implementation catalogs and deterministic
+implementation resolution.
+
+Implementation catalogs provide inventories of executable tool
+implementations.
+
+Implementation resolvers map capability definitions to executable
+implementations.
+
+Runtime constraints are evaluated only during implementation resolution.
+
+Capability resolution and implementation resolution remain separate
+architectural responsibilities.
+
+## Consequences
+
+### Positive
+
+- Capability definitions remain independent of execution environments.
+- Runtime selection is separated from capability resolution.
+- Multiple implementations may coexist for the same capability.
+- Implementation resolution remains deterministic.
+- Future optimization systems can rank implementations without changing
+  deterministic resolution.
+
+### Negative
+
+- Additional implementation models become part of the public API.
+- Resolution currently performs exact constraint matching only.
+- Ranking and optimization remain future responsibilities.
+
+## Alternatives Considered
+
+### Store implementations directly in tool definitions
+
+Rejected because executable implementations evolve independently of capability
+contracts.
+
+### Resolve runtime during capability resolution
+
+Rejected because runtime is an implementation concern rather than a capability
+concern.
+
+### Select a preferred implementation automatically
+
+Rejected because implementation preference belongs to optimization policy rather
+than deterministic resolution.
+
+================================================================================
+FILE: docs/adrs/0037-model-request-execution.md
+================================================================================
+
+# ADR 0037: Model Request Execution
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Language model providers expose a protocol for executing rendered prompts.
+
+Future provider integrations will require durable request models supporting
+provider-neutral execution parameters.
+
+Introducing provider-specific execution semantics directly into the language
+model protocol would unnecessarily couple execution to future network
+implementations.
+
+A provider-neutral execution boundary enables future providers to evolve without
+changing higher-level workflow execution.
+
+## Decision
+
+Azathoth introduces immutable model requests and provider-neutral model
+execution.
+
+Model requests package rendered prompts together with future execution
+parameters.
+
+Model executors bridge durable requests to existing language model providers.
+
+Unsupported execution controls are rejected explicitly rather than ignored.
+
+Language model providers continue to execute rendered prompts until request-aware
+providers are introduced.
+
+## Consequences
+
+### Positive
+
+- Durable request models become part of the public API.
+- Execution remains deterministic.
+- Existing language model implementations remain compatible.
+- Future providers can adopt request-aware execution incrementally.
+- Unsupported request controls fail explicitly.
+
+### Negative
+
+- Request execution currently supports prompt-only execution.
+- Additional execution layers become part of the architecture.
+- Advanced generation controls remain unavailable until provider-specific
+  implementations exist.
+
+## Alternatives Considered
+
+### Replace the language model protocol immediately
+
+Rejected because doing so would unnecessarily break existing deterministic
+providers and workflow execution.
+
+### Ignore unsupported request controls
+
+Rejected because silently discarding execution parameters would produce
+incorrect behavior and make future debugging significantly more difficult.
+
+### Introduce provider-specific request models
+
+Rejected because request models should remain independent of individual provider
+implementations.
+
+================================================================================
+FILE: docs/adrs/0038-openrouter-provider.md
+================================================================================
+
+# ADR 0038: OpenRouter Provider
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Azathoth executes provider-neutral language model requests through the
+`LanguageModel` protocol.
+
+A concrete provider implementation is required to execute workflows against
+real language models while preserving deterministic testing and provider
+independence.
+
+The first production provider should maximize model availability while
+minimizing integration complexity.
+
+## Decision
+
+Azathoth introduces `OpenRouterLanguageModel` as its first production language
+model provider.
+
+The implementation maps rendered prompts to the OpenRouter chat completion API
+and translates provider responses into provider-neutral `ModelResponse`
+objects.
+
+Live provider testing is opt-in.
+
+Normal unit tests and continuous integration remain fully deterministic through
+mocked HTTP transports.
+
+## Consequences
+
+### Positive
+
+- Azathoth can execute real language model requests.
+- Existing provider abstractions remain unchanged.
+- Unit and integration tests remain deterministic.
+- Live provider verification is explicitly opt-in.
+- Future providers can implement the same protocol.
+
+### Negative
+
+- OpenRouter-specific request mapping becomes part of the codebase.
+- HTTP becomes a runtime dependency.
+- Live integration tests require external credentials.
+
+## Alternatives Considered
+
+### Integrate OpenAI directly
+
+Rejected because OpenRouter provides access to multiple providers through a
+single integration.
+
+### Make live tests part of normal CI
+
+Rejected because external services introduce nondeterminism, cost, and
+credential management concerns.
+
+### Delay provider integration
+
+Rejected because demonstrating real model execution is the next milestone
+toward an end-to-end optimization demo.
+
+================================================================================
+FILE: docs/adrs/0039-openrouter-workflow-execution.md
+================================================================================
+
+# ADR 0039: OpenRouter Workflow Execution
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Azathoth provides provider-neutral workflow execution through immutable workflow
+specifications, candidate generation, and executable language model bindings.
+
+The provider layer already supports production language model execution through
+OpenRouter.
+
+The workflow layer should execute against production language models without
+introducing provider-specific logic into workflow execution.
+
+Testing must remain deterministic and inexpensive while still allowing
+verification against real language models.
+
+## Decision
+
+Workflow execution now supports production language models through the existing
+provider abstraction.
+
+Workflow candidates continue to bind provider-neutral model identifiers through
+the language model registry.
+
+Production execution is verified through:
+
+- deterministic end-to-end workflow tests using mocked HTTP transports; and
+- opt-in live workflow smoke tests executed against OpenRouter.
+
+Live workflow execution is never part of normal development or continuous
+integration.
+
+Execution remains deterministic unless explicitly requested.
+
+## Consequences
+
+### Positive
+
+- Workflows execute against production language models.
+- Workflow execution remains provider neutral.
+- Existing workflow abstractions remain unchanged.
+- Normal development remains deterministic.
+- Live verification remains explicitly opt-in.
+- Future providers automatically participate through the existing abstraction.
+
+### Negative
+
+- Live workflow verification requires external credentials.
+- Production providers may expose alias resolution and provider-specific
+  execution metadata.
+
+## Alternatives Considered
+
+### Execute providers directly from workflows
+
+Rejected because workflow execution should remain independent from provider
+implementations.
+
+### Make live workflow tests part of continuous integration
+
+Rejected because external services introduce nondeterminism, credentials, and
+usage costs.
+
+### Delay production workflow execution
+
+Rejected because demonstrating real workflow execution is a prerequisite for
+provider comparison, routing, benchmarking, and optimization.
+
+================================================================================
+FILE: docs/adrs/0040-workflow-benchmarks.md
+================================================================================
+
+# ADR 0040: Workflow Benchmarks
+
+- Status: Accepted
+- Date: 2026-08-16
+
+## Context
+
+Workflow execution, evaluation, scorecards, and ranking provide objective
+measurements for individual workflow executions.
+
+Optimization systems should compare workflow candidates using representative
+workloads rather than isolated executions.
+
+Benchmark execution should reuse existing workflow execution, evaluation,
+scorecard, and ranking infrastructure rather than introducing a parallel
+evaluation pipeline.
+
+## Decision
+
+Azathoth introduces immutable benchmark datasets composed of benchmark cases.
+
+Each benchmark case contains:
+
+- input;
+- expected outcome; and
+- optional metadata.
+
+Benchmark datasets execute workflow candidates using the existing workflow
+runner.
+
+Each benchmark execution produces:
+
+- workflow runs;
+- evaluation results; and
+- benchmark execution summaries.
+
+Benchmark scorecards are derived from existing workflow scorecards.
+
+Benchmark ranking delegates to the existing workflow ranking system.
+
+No benchmark-specific ranking policy is introduced.
+
+## Consequences
+
+### Positive
+
+- Benchmarks reuse existing workflow infrastructure.
+- Evaluation remains deterministic.
+- Ranking policy remains centralized.
+- New benchmark datasets require no framework changes.
+- Future optimization systems can compare candidates using representative
+  workloads.
+
+### Negative
+
+- Benchmark execution requires multiple workflow runs.
+- Aggregate scorecards introduce another analytical layer.
+
+## Alternatives Considered
+
+### Benchmark-specific ranking
+
+Rejected because ranking policy already exists.
+
+Maintaining two ranking systems would create unnecessary duplication and risk
+divergent optimization behavior.
+
+### Compare raw benchmark accuracy only
+
+Rejected because workflow quality already considers reliability, latency, and
+cost in addition to evaluation quality.
+
+Benchmark evaluation should preserve those dimensions.
+
+================================================================================
+FILE: docs/adrs/0041-persistent-tool-repository.md
+================================================================================
+
+# ADR 0041: Persistent Tool Repository
+
+- Status: Accepted
+- Date: 2026-08-17
+
+## Context
+
+Azathoth models tools as durable capabilities rather than application-specific
+functions.
+
+A tool consists of independently versioned artifacts including:
+
+- tool definitions;
+- executable implementations; and
+- deterministic test cases.
+
+Tool implementations already contain their runtime, entrypoint, and executable
+source as data.
+
+Tool definitions and implementations should therefore not require corresponding
+Python modules inside the Azathoth source tree.
+
+The existing tool catalogs are immutable execution snapshots and should remain
+independent of mutable persistence infrastructure.
+
+## Decision
+
+Azathoth introduces a storage-neutral `ToolRepository` contract.
+
+Repositories persist:
+
+- `ToolDefinition`;
+- `ToolImplementation`; and
+- `ToolTestCase`.
+
+An in-memory repository provides deterministic local and test behavior.
+
+A SQLite-backed repository provides durable local persistence using the Python
+standard library.
+
+Persisted artifacts are append-only by identifier.
+
+Attempting to save another artifact with an existing identifier is rejected
+rather than replacing the existing record.
+
+Repository contents are loaded into the existing immutable:
+
+- `ToolCatalog`; and
+- `ToolImplementationCatalog`.
+
+Existing tool resolution, implementation resolution, execution, and verification
+remain unchanged.
+
+Tool catalogs do not know how persistence is implemented.
+
+Tool resolvers do not query databases directly.
+
+Tool executors do not depend on persistence.
+
+## Persistence Model
+
+SQLite stores each durable artifact as its canonical serialized Pydantic payload
+together with its stable identifier and insertion order.
+
+```text
+SQLite
+  │
+  ├── tool_definitions
+  ├── tool_implementations
+  └── tool_test_cases
+          │
+          ▼
+    ToolRepository
+          │
+          ▼
+   ToolCatalogLoader
+       /        \
+      ▼          ▼
+ToolCatalog   ToolImplementationCatalog
+      │          │
+      └────┬─────┘
+           ▼
+      Existing Resolvers
+```
+
+This avoids duplicating the complete domain model as a separate SQL schema.
+
+## Consequences
+
+### Positive
+
+- Tool implementations no longer need to be compiled into Azathoth.
+- Executable source can survive application restarts.
+- Tool test cases survive application restarts.
+- Existing immutable catalogs remain unchanged.
+- Existing resolution and execution infrastructure remains storage agnostic.
+- Historical implementations cannot be silently replaced by identifier.
+- SQLite provides a zero-infrastructure persistence option for local development
+  and demonstrations.
+- Future persistence implementations can satisfy the same repository contract.
+
+### Negative
+
+- Persisted Pydantic payloads must remain compatible with future domain model
+  evolution.
+- SQLite schema evolution may eventually require explicit migrations.
+- Persisted Python source is trusted code and still executes in process.
+- Referential integrity between definitions, implementations, and test cases is
+  not yet enforced by the repository.
+
+## Alternatives Considered
+
+### Store built-in tools as Python modules
+
+Rejected because tools are intended to be durable, discoverable, versioned
+artifacts rather than functions permanently compiled into the application.
+
+A growing directory of application-specific tool implementations would also
+make future tool synthesis and dynamic tool registration substantially harder.
+
+### Make tool catalogs persistent
+
+Rejected because catalogs represent immutable execution snapshots.
+
+Persistence is mutable infrastructure.
+
+Repositories load artifacts into catalogs rather than changing the catalog
+abstraction.
+
+### Query SQLite directly from tool resolvers
+
+Rejected because resolution is a domain concern and should remain independent
+of storage technology.
+
+### Use SQLAlchemy
+
+Rejected for the current implementation because standard-library SQLite is
+sufficient for the current persistence requirements and avoids introducing an
+additional dependency.
+
+### Introduce PostgreSQL immediately
+
+Rejected because the current goal is durable local tool storage and a
+demonstrable execution path, not distributed persistence infrastructure.
+
+## Future Direction
+
+Persistent tools establish the foundation for future capabilities including:
+
+- workflow tool execution;
+- dynamic tool registration;
+- implementation version history;
+- persisted verification evidence;
+- tool implementation benchmarking;
+- tool ranking;
+- synthesized tools; and
+- optimizer-generated tools.

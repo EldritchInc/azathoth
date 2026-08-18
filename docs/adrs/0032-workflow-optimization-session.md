@@ -11,7 +11,7 @@ Workflow optimizers produce new workflow generations from experiment evidence.
 
 Optimization systems require a durable representation of the complete optimization process rather than isolated experiment results.
 
-Recording optimization history enables reproducibility, benchmarking, visualization, and future adaptive optimization strategies.
+Recording optimization history enables reproducibility, benchmarking, and visualization.
 
 ## Decision
 
@@ -40,7 +40,6 @@ Replay optimization is implemented as the canonical deterministic optimizer for 
 - Entire optimization sessions can be inspected after execution.
 - Optimizers remain interchangeable.
 - Replay optimization provides deterministic baseline behavior.
-- Future evolutionary optimizers can reuse the same session infrastructure.
 
 ### Negative
 

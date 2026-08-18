@@ -455,44 +455,10 @@ Keeping these stages separate prevents provider runtime details from leaking int
 
 ## Prompting and Optimization
 
-Prompt strategies are designed to become optimization candidates.
+Prompt strategies can participate in empirical comparison through Azathoth's
+existing execution, evaluation, scoring, and ranking infrastructure.
 
-A single specification may generate several executable strategies:
-
-```text
-PromptStrategySpec
-        │
-        ├── Model A → Candidate A
-        ├── Model B → Candidate B
-        └── Model C → Candidate C
-```
-
-Azathoth can then:
-
-```text
-Execute
-   │
-   ▼
-Evaluate
-   │
-   ▼
-Score
-   │
-   ▼
-Rank
-```
-
-those candidates empirically.
-
-Future optimization strategies may also modify:
-
-- prompt text;
-- prompt templates;
-- model requirements;
-- bindings; or
-- model selection
-
-while preserving the same execution interface.
+Optimization policy remains outside the prompting package.
 
 ## Prompting and Workflows
 
@@ -548,6 +514,6 @@ Those responsibilities belong to higher-level experimentation and optimization.
 
 [`azathoth.workflows`](../workflows/README.md) uses `PromptStrategySpec` when defining model-independent workflow steps.
 
-[`azathoth.optimization`](../optimization/README.md) can compare prompt candidates and eventually evolve prompt-backed strategies empirically.
+[`azathoth.optimization`](../optimization/README.md) can compare prompt-backed candidates using empirical evidence.
 
 See the [project README](../../../README.md) for the complete Azathoth architecture.

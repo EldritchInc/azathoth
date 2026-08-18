@@ -116,7 +116,7 @@ Rejected because tools are intended to be durable, discoverable, versioned
 artifacts rather than functions permanently compiled into the application.
 
 A growing directory of application-specific tool implementations would also
-make future tool synthesis and dynamic tool registration substantially harder.
+make dynamic registration and external tool management substantially harder.
 
 ### Make tool catalogs persistent
 
@@ -145,13 +145,6 @@ demonstrable execution path, not distributed persistence infrastructure.
 
 ## Future Direction
 
-Persistent tools establish the foundation for future capabilities including:
-
-- workflow tool execution;
-- dynamic tool registration;
-- implementation version history;
-- persisted verification evidence;
-- tool implementation benchmarking;
-- tool ranking;
-- synthesized tools; and
-- optimizer-generated tools.
+Persistent tools provide a stable foundation for additional runtime,
+verification, and integration capabilities without changing the repository
+contract.

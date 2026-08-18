@@ -51,8 +51,7 @@ environment, and storage mechanism.
 - Tool discovery remains deterministic.
 - Durable capabilities become independent of runtime environments.
 - Future persistence mechanisms can evolve independently of the tool model.
-- Automatic tool generation and verification become natural extensions of the
-  architecture.
+- Tool registration and verification remain independently extensible.
 
 ### Negative
 

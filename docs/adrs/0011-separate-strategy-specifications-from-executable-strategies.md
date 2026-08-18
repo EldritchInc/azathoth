@@ -64,5 +64,5 @@ This decision establishes the foundation for:
 
 - automatic generation of prompt strategy candidates;
 - empirical comparison across multiple language models;
-- automatic strategy synthesis; and
+- application-defined candidate generation
 - optimization over quality, latency, and cost without changing workload specifications.

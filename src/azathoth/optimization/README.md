@@ -436,7 +436,8 @@ WorkflowOptimizer
 
 This keeps experiment results focused on empirical evidence while still giving optimizers access to the executable candidates they may transform.
 
-Future provenance models may provide more durable candidate identity and lineage without forcing live strategy objects into experiment evidence.
+Future durable representations may provide stable candidate identity without
+forcing live strategy objects into experiment evidence.
 
 ## WorkflowOptimizationResult
 
@@ -654,14 +655,11 @@ Generation 2 Population
 
 The session runner never assumes that optimizer output resembles its input.
 
-A future optimizer may:
+The session runner does not assume that optimizer output is identical to its
+input.
 
-- remove candidates;
-- create candidates;
-- change candidate order;
-- replace strategies;
-- change model bindings; or
-- restructure entire workflows.
+Optimizer-produced populations remain opaque to the orchestration layer as long
+as they satisfy the public optimizer contract.
 
 The orchestration layer remains unchanged.
 
@@ -777,13 +775,11 @@ This is deliberate.
 
 The current infrastructure proves that the full iterative empirical loop works before introducing adaptive behavior.
 
-## Cost-Aware Optimization
+## Cost-Aware Evidence
 
-Execution evidence already records estimated cost.
+Execution evidence records estimated cost.
 
-Workflow scorecards already normalize cost relative to explicit targets.
-
-Future optimizers can therefore reason about tradeoffs such as:
+Workflow scorecards normalize cost relative to explicit targets.
 
 ```text
 Quality
@@ -792,12 +788,6 @@ Quality
    │
    └────────► Cost
 ```
-
-A more expensive candidate does not automatically win.
-
-A cheaper candidate does not automatically win.
-
-Optimization can compare empirical tradeoffs according to scoring policy.
 
 ## Replaceable Optimizers
 
@@ -815,6 +805,15 @@ WorkflowOptimizer
         ▼
 Next Population
 ```
+
+Azathoth does not prescribe how an optimizer chooses the next population.
+
+Applications may provide optimization implementations through this interface
+without changing the deterministic execution, evaluation, scoring, ranking, or
+experiment infrastructure.
+
+Optimizer proposals receive no special trust. Improvement must be established by
+subsequent execution and evaluation.
 
 ## Design Principles
 
@@ -901,7 +900,7 @@ WorkflowExperimentRunner
 WorkflowOptimizationSession
 ```
 
-That loop is the foundation for Azathoth's long-term goal of iterative empirical improvement.
+This loop provides the iterative empirical execution model exposed by the optimization package.
 
 ## Relationship to Other Packages
 
@@ -917,7 +916,9 @@ That loop is the foundation for Azathoth's long-term goal of iterative empirical
 
 [`azathoth.prompting`](../prompting/README.md) provides prompt-backed strategies that can participate in optimization.
 
-[`azathoth.providers`](../providers/README.md) provides model metadata, requirements, pricing, discovery, and executable models that future optimizers can explore.
+[`azathoth.providers`](../providers/README.md) provides model metadata,
+requirements, pricing, discovery, and executable model implementations used by
+model-backed candidates.
 
 [`azathoth.workflows`](../workflows/README.md) owns workflow execution, scoring, ranking, and experiments and supplies the evidence consumed by workflow optimizers.
 

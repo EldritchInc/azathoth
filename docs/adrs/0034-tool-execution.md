@@ -10,8 +10,7 @@ environments.
 
 Tool implementations describe executable realizations of those capabilities.
 
-Future optimization systems, benchmarking pipelines, and synthesized tool
-generation require deterministic evidence that implementations satisfy their
+Future consumers and benchmarking pipelines require deterministic evidence that implementations satisfy their
 contracts.
 
 Execution should remain independent from verification so that multiple
