@@ -1087,6 +1087,86 @@ WorkflowRun
 
 This keeps the persisted execution record canonical.
 
+## Workflow Run Evaluations
+
+Evaluator judgments can be durably associated with completed workflow runs.
+
+`EvaluationResult` remains independent of workflow execution.
+
+The workflow layer represents the relationship using
+`WorkflowRunEvaluation`.
+
+```text
+WorkflowRunEvaluation
+├── run_id
+├── evaluation
+└── evaluated_at
+```
+
+The embedded `EvaluationResult` retains the complete evaluator judgment,
+including:
+
+- evaluator name and version;
+- score;
+- threshold;
+- status;
+- reason; and
+- structured evidence.
+
+The evaluation's existing identifier is also the durable identity of the
+`WorkflowRunEvaluation`.
+
+```text
+WorkflowRunEvaluation.id
+          │
+          ▼
+EvaluationResult.id
+```
+
+This avoids introducing two identities for one evaluator judgment.
+
+### Evaluation Persistence
+
+`WorkflowRunEvaluationRepository` provides the storage-neutral persistence
+boundary.
+
+Current implementations include:
+
+- `InMemoryWorkflowRunEvaluationRepository`; and
+- `SQLiteWorkflowRunEvaluationRepository`.
+
+```text
+WorkflowRun
+    │
+    │ run_id
+    ▼
+WorkflowRunEvaluation
+    │
+    ▼
+WorkflowRunEvaluationRepository
+    │
+    ├── InMemoryWorkflowRunEvaluationRepository
+    └── SQLiteWorkflowRunEvaluationRepository
+```
+
+Run evaluations are append-only.
+
+Multiple evaluations may reference the same workflow run.
+
+```text
+WorkflowRun
+    │
+    ├── Evaluation A
+    ├── Evaluation B
+    └── Evaluation C
+```
+
+This allows independent evaluators to judge different properties of the same
+execution without replacing one another.
+
+Persisted evaluations can be reconstructed by evaluation identifier or queried
+by workflow run identifier.
+
 ## Workflow Run Feedback
 
 Judgment about a completed run is stored separately from the run itself.
@@ -1392,24 +1472,38 @@ The canonical ordering compares:
 
 ## Observation Versus Judgment
 
-Azathoth distinguishes execution evidence from judgments about execution.
+Azathoth distinguishes raw execution evidence from judgments about execution.
+
+```text
+                    WorkflowRun
+                   "What happened?"
+                    /         \
+                   /           \
+                  ▼             ▼
+ WorkflowRunEvaluation     WorkflowRunFeedback
+ "Machine judgment"        "Human/app judgment"
+          │                       │
+          ▼                       ▼
+  EvaluationResult            good / bad
+```
+
+These artifacts are independent.
+
+An evaluator may fail a run while a human or application considers the same
+result acceptable.
+
+Conversely, an evaluator may pass a result that later receives bad feedback.
+
+Neither case changes the original workflow execution record.
 
 ```text
 WorkflowRun
-"What happened?"
-
-EvaluationResult
-"Did an evaluator consider it correct?"
-
-WorkflowRunFeedback
-"Did a human or application consider it good?"
+    │
+    ├── evaluation: FAILED
+    └── feedback: GOOD
 ```
 
-These artifacts may disagree.
-
-That disagreement is preserved rather than normalized away.
-
-Evaluation and feedback do not rewrite raw workflow execution evidence.
+The disagreement itself is preserved as evidence.
 
 ## RankedWorkflow
 

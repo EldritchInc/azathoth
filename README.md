@@ -624,6 +624,35 @@ Feedback does not modify the original execution record.
 This keeps observed runtime behavior separate from later judgments about that
 behavior.
 
+Machine evaluation can also be associated durably with a specific run.
+
+```text
+WorkflowRun
+    │
+    │ run_id
+    ▼
+WorkflowRunEvaluation
+    │
+    ▼
+EvaluationResult
+```
+
+A run may have multiple independent evaluations.
+
+Evaluator judgments remain separate from human or application feedback.
+
+```text
+                    WorkflowRun
+                    /         \
+                   ▼           ▼
+          Run Evaluation    Run Feedback
+          machine judgment  human/app judgment
+```
+
+All three artifacts can be persisted and reconstructed independently.
+
+Recording a later judgment never modifies the original execution evidence.
+
 ### Workflow Experiments
 
 Workflow experiments compose execution, evaluation, scoring, and ranking.
