@@ -101,6 +101,9 @@ from azathoth.workflows.sqlite_feedback_repository import (
     SQLiteWorkflowRunFeedbackRepository,
 )
 from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
+from azathoth.workflows.sqlite_run_evaluation_repository import (
+    SQLiteWorkflowRunEvaluationRepository,
+)
 from azathoth.workflows.sqlite_run_repository import (
     SQLiteWorkflowRunRepository,
 )
@@ -126,6 +129,7 @@ __all__ = [
     "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowRepository",
+    "SQLiteWorkflowRunEvaluationRepository",
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
