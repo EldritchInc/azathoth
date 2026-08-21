@@ -1467,6 +1467,60 @@ pipeline.
 Each benchmark case executes independently using the same workflow
 infrastructure used elsewhere throughout Azathoth.
 
+### Durable Benchmark Execution
+
+Benchmark datasets may be reconstructed from persistent storage before
+execution.
+
+```text
+SQLiteBenchmarkRepository
+          │
+          ▼
+BenchmarkCatalogLoader
+          │
+          ▼
+BenchmarkDataset
+          │
+          ▼
+WorkflowBenchmarkRunner
+```
+
+The benchmark runner does not distinguish between directly constructed and
+reconstructed datasets.
+
+For each case, the runner:
+
+```text
+BenchmarkCase
+      │
+      ▼
+candidate_factory(case)
+      │
+      ▼
+WorkflowCandidate
+      │
+      ▼
+WorkflowRunner
+      │
+      ▼
+workflow output
+      │
+      +
+ExpectedOutcome
+      │
+      ▼
+Evaluator
+```
+
+This allows a benchmark workload persisted today to be reconstructed and run
+later using the normal workflow execution path.
+
+Dataset identity and benchmark case identity are retained in benchmark
+execution evidence.
+
+Durable benchmark definitions remain separate from the runtime workflow
+candidates used to execute them.
+
 ## Workflow Scorecards
 
 Workflow execution and output evaluation can be combined into a normalized `WorkflowScorecard`.
