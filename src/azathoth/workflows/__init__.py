@@ -35,6 +35,13 @@ from azathoth.workflows.execution import (
 from azathoth.workflows.experiment import (
     WorkflowExperimentResult,
 )
+from azathoth.workflows.experiment_record import (
+    WorkflowExperimentObservation,
+    WorkflowExperimentRecord,
+)
+from azathoth.workflows.experiment_repository import (
+    WorkflowExperimentRepository,
+)
 from azathoth.workflows.experiment_runner import WorkflowExperimentRunner
 from azathoth.workflows.failure import (
     WorkflowFailurePolicy,
@@ -49,6 +56,10 @@ from azathoth.workflows.feedback_repository import (
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
     generate_workflow_candidate,
+)
+from azathoth.workflows.memory_experiment_repository import (
+    InMemoryWorkflowExperimentRepository,
+    require_workflow_experiment_repository,
 )
 from azathoth.workflows.memory_feedback_repository import (
     InMemoryWorkflowRunFeedbackRepository,
@@ -126,6 +137,7 @@ __all__ = [
     "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
+    "InMemoryWorkflowExperimentRepository",
     "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowRepository",
@@ -152,6 +164,9 @@ __all__ = [
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
     "WorkflowEvaluation",
+    "WorkflowExperimentObservation",
+    "WorkflowExperimentRecord",
+    "WorkflowExperimentRepository",
     "WorkflowExperimentResult",
     "WorkflowExperimentRunner",
     "WorkflowFailurePolicy",
@@ -186,6 +201,7 @@ __all__ = [
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
     "generate_workflow_candidate",
+    "require_workflow_experiment_repository",
     "require_workflow_repository",
     "require_workflow_run_evaluation_repository",
     "require_workflow_run_feedback_repository",
