@@ -519,6 +519,50 @@ This allows Azathoth to distinguish:
 - eligible models; and
 - executable models.
 
+## Registry Composition
+
+Executable language model registries can be composed.
+
+```python
+registry = LanguageModelRegistry.compose(
+    (
+        openrouter_registry,
+        local_registry,
+        other_registry,
+    )
+)
+```
+
+Composition preserves registry and model order.
+
+Provider-qualified model identifiers must remain unique across the combined
+registries.
+
+```text
+Registry A
+├── provider-a/model-1
+└── provider-a/model-2
+
+Registry B
+├── provider-b/model-3
+└── provider-b/model-4
+
+        │
+        ▼
+     compose
+        │
+        ▼
+Combined Registry
+├── provider-a/model-1
+├── provider-a/model-2
+├── provider-b/model-3
+└── provider-b/model-4
+```
+
+Source registries remain unchanged.
+
+Registry composition introduces no model-selection policy.
+
 ## OpenRouter Configuration
 
 `OpenRouterConfiguration` records the immutable configuration required to
@@ -532,6 +576,131 @@ Configuration includes:
 
 Sensitive credentials are represented using `SecretStr` to reduce accidental
 exposure through logging or serialization.
+
+## Multi-Model Live Verification
+
+Multi-model OpenRouter execution has optional live verification.
+
+Live tests remain disabled by default and consume no provider credits during
+normal development or CI.
+
+```text
+AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
+```
+
+The multi-model smoke test reads a comma-separated test population from:
+
+```text
+OPENROUTER_TEST_MODELS
+```
+
+For example:
+
+```text
+provider/model-a,provider/model-b
+```
+
+This variable configures only the opt-in live test population.
+
+It is not a production model-selection mechanism.
+
+## Multi-Model OpenRouter Runtime
+
+One `OpenRouterConfiguration` can back multiple executable OpenRouter models.
+
+`OpenRouterModelRegistryLoader` creates runtime registrations for the
+OpenRouter models present in a `ModelCatalog`.
+
+```text
+OpenRouterConfiguration
+          +
+     ModelCatalog
+          │
+          ▼
+OpenRouterModelRegistryLoader
+          │
+          ▼
+LanguageModelRegistry
+├── openrouter/model-a
+├── openrouter/model-b
+└── openrouter/model-c
+```
+
+Provider configuration supplies API access.
+
+It does not select one global OpenRouter model.
+
+Each model remains independently identified by its provider-qualified model
+identifier.
+
+The resulting OpenRouter registry can also be composed with registries from
+other providers.
+
+```text
+OpenRouter Registry
+        +
+Other Provider Registry
+        │
+        ▼
+LanguageModelRegistry.compose(...)
+        │
+        ▼
+Unified Executable Runtime
+```
+
+### Per-Workload Selection
+
+Model selection remains driven by workload requirements.
+
+```text
+ModelRequirements
+        │
+        ▼
+    ModelCatalog
+        │
+        ▼
+eligible models
+        │
+        ▼
+LanguageModelRegistry
+        │
+        ▼
+executable candidates
+```
+
+For example, one workload may require inexpensive models while another requires
+structured-output capability.
+
+```text
+cheap workload
+      │
+      ▼
+cheap OpenRouter model
+
+structured workload
+      │
+      ▼
+structured-output OpenRouter model
+```
+
+No OpenRouter-specific model name needs to be embedded in the workload
+specification.
+
+### Requested and Resolved Models
+
+OpenRouter responses preserve both the configured model and the model identity
+reported by OpenRouter.
+
+```text
+ModelResponse.model
+    configured model
+
+ModelResponse.resolved_model
+    OpenRouter-reported model
+```
+
+This is useful when OpenRouter resolves aliases or routed model identifiers to
+a concrete served model.
 
 ## DeterministicLanguageModel
 

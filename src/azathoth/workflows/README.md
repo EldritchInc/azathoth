@@ -486,6 +486,81 @@ Specifications can be stored, compared, generated, and manipulated without carry
 
 Candidates exist for execution.
 
+### Per-Step Model Resolution
+
+Prompt-backed workflow steps resolve models independently.
+
+Each `PromptStrategySpec` contains its own `ModelRequirements`.
+
+```text
+WorkflowSpecification
+│
+├── Prompt Step A
+│   └── ModelRequirements A
+│
+├── Prompt Step B
+│   └── ModelRequirements B
+│
+└── Prompt Step C
+    └── ModelRequirements C
+```
+
+Candidate generation performs model discovery separately for each prompt-backed
+step.
+
+Different steps in one workflow may therefore resolve to different concrete
+language models.
+
+```text
+Step A requirements
+        │
+        ▼
+     Model A
+
+Step B requirements
+        │
+        ▼
+     Model C
+
+Step C requirements
+        │
+        ▼
+     Model B
+```
+
+The concrete model choice is recorded in the generated prompt strategy's
+`ModelBinding`.
+
+The workflow specification itself remains model-independent.
+
+### Heterogeneous Provider Execution
+
+A workflow does not have one global language model.
+
+Multiple prompt-backed steps may use:
+
+- different models from one provider;
+- models from different providers; or
+- any mixture represented by the configured catalog and executable registry.
+
+For example:
+
+```text
+Workflow
+│
+├── inexpensive classification
+│       └── OpenRouter model A
+│
+├── structured extraction
+│       └── OpenRouter model B
+│
+└── later prompt step
+        └── another registered model
+```
+
+Each step retains its own provider-neutral execution metrics, including model,
+token usage, latency, and estimated cost.
+
 ## Workflow Values
 
 Workflow steps can export structured values from their outputs.

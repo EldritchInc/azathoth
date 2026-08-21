@@ -335,6 +335,39 @@ Execution remains deterministic while allowing future providers to introduce
 additional execution capabilities without changing higher-level workflow
 execution.
 
+### Heterogeneous Model Execution
+
+Model-backed workflow steps declare requirements rather than one global model.
+
+```text
+Workflow
+│
+├── Step A
+│   └── ModelRequirements A
+│       └── model A
+│
+├── Step B
+│   └── ModelRequirements B
+│       └── model C
+│
+└── Step C
+    └── ModelRequirements C
+        └── model B
+```
+
+`ModelCatalog` describes available models.
+
+`LanguageModelRegistry` supplies executable implementations.
+
+Registries can be composed across runtime sources, and one OpenRouter
+configuration can provide executable registrations for multiple OpenRouter
+models.
+
+Concrete model binding occurs during candidate generation independently for
+each prompt-backed workflow step.
+
+There is no global workflow model requirement.
+
 ## OpenRouter
 
 Azathoth's first production language model provider is OpenRouter.

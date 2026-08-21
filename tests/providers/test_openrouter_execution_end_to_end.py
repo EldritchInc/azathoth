@@ -147,7 +147,19 @@ def test_execution_is_deterministic() -> None:
         )
     )
 
-    assert first == second
+    assert first.text == second.text
+    assert first.provider == second.provider
+    assert first.model == second.model
+    assert first.resolved_model == second.resolved_model
+
+    assert first.prompt_tokens == second.prompt_tokens
+    assert first.completion_tokens == second.completion_tokens
+    assert first.total_tokens == second.total_tokens
+
+    assert first.estimated_cost_usd == second.estimated_cost_usd
+
+    assert first.latency_ms >= 0
+    assert second.latency_ms >= 0
 
 
 def test_complete_execution_lifecycle() -> None:
