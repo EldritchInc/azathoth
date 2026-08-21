@@ -368,6 +368,47 @@ each prompt-backed workflow step.
 
 There is no global workflow model requirement.
 
+### Durable Model Catalogs
+
+Configured model metadata can be persisted and reconstructed independently from
+provider runtime objects.
+
+```text
+ModelMetadata
+      │
+      ▼
+ModelRepository
+      │
+      ▼
+ModelCatalogLoader
+      │
+      ▼
+ModelCatalog
+```
+
+Persisted metadata includes model identity, capabilities, context limits, and
+pricing.
+
+Provider credentials and executable clients remain runtime configuration.
+
+This allows durable workflow requirements and durable model catalogs to be
+reconstructed together before normal candidate generation.
+
+```text
+Persisted Workflow
+        +
+Persisted Model Catalog
+        │
+        ▼
+runtime provider assembly
+        │
+        ▼
+candidate generation
+        │
+        ▼
+execution
+```
+
 ## OpenRouter
 
 Azathoth's first production language model provider is OpenRouter.
