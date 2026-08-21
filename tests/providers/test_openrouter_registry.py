@@ -4,6 +4,7 @@ import httpx
 from pydantic import SecretStr
 
 from azathoth.providers import (
+    DeterministicLanguageModel,
     LanguageModelRegistry,
     ModelCatalog,
     ModelMetadata,
@@ -155,3 +156,42 @@ def test_openrouter_registry_models_execute_independently() -> None:
     assert registry.get(SECOND_IDENTIFIER) is not None
 
     assert registry.get(THIRD_IDENTIFIER) is not None
+
+
+def test_openrouter_registry_composes_with_existing_provider_registry() -> None:
+    existing_model = DeterministicLanguageModel(
+        provider="deterministic",
+        model="existing-model",
+    )
+
+    existing_registry = LanguageModelRegistry(
+        models={
+            "deterministic/existing-model": existing_model,
+        },
+    )
+
+    openrouter_registry = OpenRouterModelRegistryLoader(create_configuration()).load_registry(
+        create_catalog()
+    )
+
+    combined = LanguageModelRegistry.compose(
+        (
+            existing_registry,
+            openrouter_registry,
+        )
+    )
+
+    assert combined.identifiers == (
+        "deterministic/existing-model",
+        FIRST_IDENTIFIER,
+        SECOND_IDENTIFIER,
+        THIRD_IDENTIFIER,
+    )
+
+    assert combined.get("deterministic/existing-model") is existing_model
+
+    assert combined.get(FIRST_IDENTIFIER) is not None
+
+    assert combined.get(SECOND_IDENTIFIER) is not None
+
+    assert combined.get(THIRD_IDENTIFIER) is not None
