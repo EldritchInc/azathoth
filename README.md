@@ -653,6 +653,40 @@ All three artifacts can be persisted and reconstructed independently.
 
 Recording a later judgment never modifies the original execution evidence.
 
+### Durable Experiments
+
+Completed workflow comparisons can be persisted with references to the exact
+execution and evaluation evidence used to produce their scorecards and ranking.
+
+```text
+WorkflowRun
+    +
+EvaluationResult
+    │
+    ▼
+WorkflowScorecard
+    │
+    ▼
+WorkflowExperimentRecord
+    │
+    ▼
+Persistent Storage
+```
+
+Experiment records preserve:
+
+- workflow identity;
+- run identity;
+- evaluation identity;
+- scorecards; and
+- final ranking.
+
+Runs and evaluations remain independently durable rather than being duplicated
+inside experiment records.
+
+Persisted experiments record completed empirical comparisons. They do not define
+how future candidates are generated.
+
 ### Workflow Experiments
 
 Workflow experiments compose execution, evaluation, scoring, and ranking.

@@ -1580,6 +1580,112 @@ winner = result.winner
 
 Experiment results are immutable.
 
+## Durable Workflow Experiment Records
+
+`WorkflowExperimentResult` is useful as immediate experiment output, but durable
+experiment history also needs provenance linking derived scorecards back to the
+executions and evaluator judgments that produced them.
+
+`WorkflowExperimentRecord` provides that durable representation.
+
+```text
+WorkflowExperimentRecord
+├── id
+├── observations
+├── ranking
+└── recorded_at
+```
+
+Each observation records:
+
+```text
+WorkflowExperimentObservation
+├── workflow
+├── run_id
+├── evaluation_id
+└── scorecard
+```
+
+The record references persisted execution and evaluation evidence rather than
+embedding duplicate copies.
+
+```text
+WorkflowExperimentObservation
+        │
+        ├── run_id ─────────► WorkflowRun
+        │
+        └── evaluation_id ──► WorkflowRunEvaluation
+```
+
+### Experiment Ranking
+
+Durable experiment rankings use workflow-run identity.
+
+```text
+WorkflowExperimentRecord
+        │
+        ▼
+ranking
+├── best run
+├── second run
+└── remaining runs
+```
+
+Every observed run must appear exactly once in the ranking.
+
+The first ranked observation is exposed as the experiment winner.
+
+### Experiment Persistence
+
+`WorkflowExperimentRepository` provides the storage-neutral persistence
+boundary.
+
+Current implementations include:
+
+- `InMemoryWorkflowExperimentRepository`; and
+- `SQLiteWorkflowExperimentRepository`.
+
+```text
+WorkflowExperimentRecord
+        │
+        ▼
+WorkflowExperimentRepository
+       / \
+      /   \
+     ▼     ▼
+ memory  SQLite
+```
+
+Experiment records are append-only.
+
+SQLite also stores queryable workflow, run, and evaluation identities so
+experiment history can be discovered without deserializing every record.
+
+### Durable Experiment Provenance
+
+A reconstructed experiment can be followed back to its exact source evidence.
+
+```text
+WorkflowExperimentRecord
+        │
+        ├── run_id
+        │      ▼
+        │  WorkflowRunRepository
+        │      ▼
+        │  WorkflowRun
+        │
+        └── evaluation_id
+               ▼
+       WorkflowRunEvaluationRepository
+               ▼
+       EvaluationResult
+```
+
+Scorecards and rankings remain historical derived evidence.
+
+They do not replace the raw execution or evaluator records from which they were
+produced.
+
 ## Deterministic and Live Testing
 
 Workflow execution is verified at two levels.
@@ -1628,6 +1734,8 @@ Evidence
 Optimization begins only after experiment evidence exists.
 
 This boundary keeps empirical measurement separate from candidate transformation.
+
+Persisting experiment provenance does not change this boundary.
 
 ## Relationship to Optimization
 
