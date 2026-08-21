@@ -117,6 +117,32 @@ Optimization examples are immutable.
 
 They allow several candidate strategies to be compared against exactly the same goal, context, and expectation.
 
+### Durable Goal Sources
+
+Optimization examples may be constructed from goals reconstructed through the
+goal persistence subsystem.
+
+```text
+SQLiteGoalRepository
+        │
+        ▼
+GoalCatalogLoader
+        │
+        ▼
+Goal
+        │
+        ▼
+OptimizationExample
+```
+
+The resulting optimization example embeds the complete immutable goal.
+
+Repository access is therefore needed when selecting or constructing the
+example, not when interpreting the example later.
+
+This preserves goal snapshot semantics across historical optimization
+evidence.
+
 ## OptimizationRunner
 
 `OptimizationRunner` executes and evaluates one strategy against one optimization example.
