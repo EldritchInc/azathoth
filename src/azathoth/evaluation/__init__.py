@@ -17,6 +17,9 @@ from azathoth.evaluation.models import (
     OutcomeComparison,
 )
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
+from azathoth.evaluation.sqlite_benchmark_repository import (
+    SQLiteBenchmarkRepository,
+)
 
 __all__ = [
     "BenchmarkCase",
@@ -33,5 +36,6 @@ __all__ = [
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
     "OutcomeComparison",
+    "SQLiteBenchmarkRepository",
     "require_benchmark_repository",
 ]

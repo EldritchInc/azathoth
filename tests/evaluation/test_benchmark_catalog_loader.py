@@ -1,5 +1,6 @@
 """Tests for reconstruction of benchmark catalogs."""
 
+from pathlib import Path
 from uuid import UUID
 
 from azathoth.evaluation import (
@@ -9,6 +10,7 @@ from azathoth.evaluation import (
     ExpectedOutcome,
     InMemoryBenchmarkRepository,
     OutcomeComparison,
+    SQLiteBenchmarkRepository,
 )
 
 FIRST_DATASET_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -94,3 +96,36 @@ def test_benchmark_catalog_loader_returns_empty_catalog() -> None:
     catalog = BenchmarkCatalogLoader(InMemoryBenchmarkRepository()).load_catalog()
 
     assert catalog.datasets == ()
+
+
+def test_benchmark_catalog_loader_reconstructs_sqlite_repository(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "benchmarks.db"
+
+    repository = SQLiteBenchmarkRepository(database)
+
+    first = create_dataset(
+        dataset_id=FIRST_DATASET_ID,
+        name="first benchmark",
+    )
+
+    second = create_dataset(
+        dataset_id=SECOND_DATASET_ID,
+        name="second benchmark",
+    )
+
+    repository.save(first)
+    repository.save(second)
+
+    catalog = BenchmarkCatalogLoader(SQLiteBenchmarkRepository(database)).load_catalog()
+
+    assert catalog.datasets == (
+        first,
+        second,
+    )
+
+    assert catalog.identifiers == (
+        FIRST_DATASET_ID,
+        SECOND_DATASET_ID,
+    )
