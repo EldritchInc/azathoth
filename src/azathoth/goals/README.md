@@ -49,6 +49,82 @@ Goals are immutable.
 
 Once created, they become stable reference points for experiments and optimization.
 
+## Goal Persistence
+
+Reusable goals can be persisted independently from application source.
+
+`GoalRepository` provides the storage-neutral persistence boundary.
+
+Current implementations include:
+
+- `InMemoryGoalRepository`; and
+- `SQLiteGoalRepository`.
+
+```text
+Goal
+ │
+ ▼
+GoalRepository
+ │
+ ├── InMemoryGoalRepository
+ └── SQLiteGoalRepository
+```
+
+Repositories persist complete immutable goals, including:
+
+- stable identity;
+- name;
+- description;
+- success criteria; and
+- constraints.
+
+Persisting an existing goal identifier is rejected rather than replacing the
+stored objective.
+
+### Goal Catalogs
+
+`GoalCatalogLoader` reconstructs an immutable `GoalCatalog` from repository
+state.
+
+```text
+GoalRepository
+      │
+      ▼
+GoalCatalogLoader
+      │
+      ▼
+GoalCatalog
+      │
+      ▼
+Goal
+```
+
+Repository order becomes catalog order.
+
+Goals can be selected by stable goal identity.
+
+### Reusable Objectives
+
+A persisted goal can be reconstructed after process restart and reused when
+creating new optimization examples.
+
+```text
+persist Goal
+    │
+    ▼
+process restart
+    │
+    ▼
+reconstruct Goal
+    │
+    ▼
+OptimizationExample
+```
+
+Goal persistence stores objective semantics.
+
+It does not execute strategies or evaluate outcomes.
+
 ## Goals and Optimization Examples
 
 A goal describes an objective.
@@ -67,6 +143,30 @@ OptimizationExample
 Many optimization examples can share the same goal while exercising different contexts and expected outcomes.
 
 This allows Azathoth to measure how well candidate strategies generalize across many situations while pursuing the same objective.
+
+### Goal Snapshot Semantics
+
+`OptimizationExample` continues to embed a complete immutable `Goal`.
+
+A reusable goal may be reconstructed from a repository before creating the
+example.
+
+```text
+GoalRepository
+      │
+      ▼
+reconstructed Goal
+      │
+      ▼
+OptimizationExample
+      │
+      └── embedded Goal snapshot
+```
+
+The example does not dynamically resolve its goal through the repository.
+
+This preserves the exact success criteria and constraints under which the
+example was defined, even if other goals are persisted later.
 
 ## Goals and Strategies
 

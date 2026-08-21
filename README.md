@@ -304,6 +304,29 @@ system.
 This provides the objective evidence required for provider comparison, routing,
 and future optimization.
 
+### Durable Goals
+
+Reusable goals can be persisted and reconstructed independently from runtime
+strategies and evaluators.
+
+```text
+Goal
+ │
+ ▼
+GoalRepository
+ │
+ ▼
+GoalCatalogLoader
+ │
+ ▼
+GoalCatalog
+```
+
+Persisted goals retain stable identity, success criteria, and constraints.
+
+A reconstructed goal can be embedded into new optimization examples, which
+retain immutable snapshots of the objective under which they were defined.
+
 # Providers
 
 The providers package separates durable execution requests from provider
