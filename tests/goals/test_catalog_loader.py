@@ -1,11 +1,13 @@
 """Tests for reconstruction of goal catalogs."""
 
+from pathlib import Path
 from uuid import UUID
 
 from azathoth.goals import (
     Goal,
     GoalCatalogLoader,
     InMemoryGoalRepository,
+    SQLiteGoalRepository,
 )
 
 FIRST_GOAL_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -121,4 +123,37 @@ def test_goal_catalog_loader_preserves_complete_goal_semantics() -> None:
     assert restored.constraints == (
         "Do not rely on unavailable external state.",
         "Remain provider independent.",
+    )
+
+
+def test_goal_catalog_loader_reconstructs_sqlite_repository(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "goals.db"
+
+    repository = SQLiteGoalRepository(database)
+
+    first = create_goal(
+        goal_id=FIRST_GOAL_ID,
+        name="first goal",
+    )
+
+    second = create_goal(
+        goal_id=SECOND_GOAL_ID,
+        name="second goal",
+    )
+
+    repository.save(first)
+    repository.save(second)
+
+    catalog = GoalCatalogLoader(SQLiteGoalRepository(database)).load_catalog()
+
+    assert catalog.goals == (
+        first,
+        second,
+    )
+
+    assert catalog.identifiers == (
+        FIRST_GOAL_ID,
+        SECOND_GOAL_ID,
     )
