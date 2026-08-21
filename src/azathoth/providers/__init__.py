@@ -31,6 +31,7 @@ from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
+from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
     "DeterministicLanguageModel",
@@ -54,6 +55,7 @@ __all__ = [
     "OpenRouterLanguageModel",
     "OpenRouterModelRegistryLoader",
     "Prompt",
+    "SQLiteModelRepository",
     "UnsupportedModelRequestError",
     "require_model_repository",
 ]

@@ -1,11 +1,14 @@
 """Tests for reconstruction of model catalogs from repositories."""
 
+from pathlib import Path
+
 from azathoth.providers import (
     InMemoryModelRepository,
     ModelCapability,
     ModelCatalogLoader,
     ModelMetadata,
     ModelPricing,
+    SQLiteModelRepository,
 )
 
 
@@ -100,3 +103,29 @@ def test_reconstructed_catalog_preserves_model_capabilities() -> None:
 
     assert restored.pricing is not None
     assert restored.pricing.input_usd_per_million_tokens == 1.0
+
+
+def test_model_catalog_loader_reconstructs_sqlite_repository(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "models.db"
+
+    repository = SQLiteModelRepository(database)
+
+    first = create_first_model()
+    second = create_second_model()
+
+    repository.save(first)
+    repository.save(second)
+
+    catalog = ModelCatalogLoader(SQLiteModelRepository(database)).load_catalog()
+
+    assert catalog.models == (
+        first,
+        second,
+    )
+
+    assert catalog.identifiers == (
+        first.identifier,
+        second.identifier,
+    )
