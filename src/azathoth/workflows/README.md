@@ -202,24 +202,35 @@ implementation.
 Persisted workflow specifications can be reconstructed and executed using the
 same runtime infrastructure as directly constructed specifications.
 
-A persisted workflow may reference persisted tool capabilities.
+A persisted workflow may reference persisted tool capabilities and declare
+model requirements that are resolved against persisted model metadata.
 
 ```text
 Persisted WorkflowSpecification
               +
-Persisted Tool Definition / Implementation
+Persisted Tool Definitions / Implementations
+              +
+Persisted ModelMetadata
               │
               ▼
      Reconstructed Catalogs
               │
               ▼
-       Candidate Generation
+       Runtime Assembly
               │
               ▼
-         WorkflowRunner
+      Candidate Generation
+              │
+              ▼
+        WorkflowRunner
 ```
 
 Workflow persistence introduces no separate execution path.
+
+Model-backed steps continue to resolve through `ModelCatalog` and
+`LanguageModelRegistry`.
+
+Tool-backed steps continue to resolve through the tool subsystem.
 
 Reconstructed workflows retain their:
 
@@ -231,6 +242,45 @@ Reconstructed workflows retain their:
 - conditions;
 - retry policies; and
 - failure policies.
+
+### Durable Model Resolution
+
+Both the workflow's model requirements and the configured model universe may
+survive process restart.
+
+```text
+WorkflowRepository
+       │
+       ▼
+WorkflowCatalogLoader
+       │
+       ▼
+WorkflowSpecification
+       │
+       └── ModelRequirements
+                 +
+ModelRepository
+       │
+       ▼
+ModelCatalogLoader
+       │
+       ▼
+ModelCatalog
+                 │
+                 ▼
+       Candidate Generation
+```
+
+Concrete provider implementations remain runtime dependencies and are attached
+after model metadata is reconstructed.
+
+Different prompt-backed steps may still resolve different models after restart.
+
+```text
+Step A requirements → model A
+Step B requirements → model C
+Step C requirements → model B
+```
 
 ## WorkflowMetadata
 

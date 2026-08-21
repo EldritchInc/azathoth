@@ -463,6 +463,100 @@ Catalog order is preserved.
 
 This becomes important when higher-level systems deliberately use configured model order as a deterministic selection policy.
 
+## Model Persistence
+
+Configured model metadata can be persisted outside application source.
+
+`ModelRepository` provides the storage-neutral persistence boundary.
+
+Current implementations include:
+
+- `InMemoryModelRepository`; and
+- `SQLiteModelRepository`.
+
+```text
+ModelMetadata
+      │
+      ▼
+ModelRepository
+      │
+      ├── InMemoryModelRepository
+      └── SQLiteModelRepository
+```
+
+Repositories persist `ModelMetadata`, not executable language model
+implementations.
+
+### Model Catalog Reconstruction
+
+`ModelCatalogLoader` reconstructs an immutable `ModelCatalog` from repository
+state.
+
+```text
+ModelRepository
+      │
+      ▼
+ModelCatalogLoader
+      │
+      ▼
+ModelCatalog
+```
+
+Repository order becomes catalog order.
+
+This preserves deterministic discovery behavior across process restarts.
+
+### Persisted Versus Runtime State
+
+Model persistence records configured model knowledge.
+
+```text
+persisted
+├── provider
+├── model identity
+├── modalities
+├── capabilities
+├── context limits
+└── pricing
+```
+
+Provider runtime objects remain process-local.
+
+```text
+runtime
+├── provider credentials
+├── HTTP clients
+├── transports
+├── LanguageModel implementations
+└── LanguageModelRegistry
+```
+
+Provider credentials are not persisted by `ModelRepository`.
+
+For OpenRouter, reconstructed model metadata can be combined with runtime
+provider configuration after restart.
+
+```text
+SQLiteModelRepository
+        │
+        ▼
+ModelCatalogLoader
+        │
+        ▼
+ModelCatalog
+        │
+        +
+OpenRouterConfiguration
+        │
+        ▼
+OpenRouterModelRegistryLoader
+        │
+        ▼
+LanguageModelRegistry
+```
+
+This preserves the separation between model knowledge and provider access.
+
 ## Catalog Versus Registry
 
 Azathoth intentionally separates model metadata from executable implementations.
@@ -647,6 +741,30 @@ LanguageModelRegistry.compose(...)
         ▼
 Unified Executable Runtime
 ```
+
+### Durable OpenRouter Model Catalogs
+
+OpenRouter model metadata may be reconstructed from a `ModelRepository` before
+runtime assembly.
+
+```text
+SQLite
+  │
+  ▼
+ModelCatalog
+  │
+  ▼
+OpenRouterModelRegistryLoader
+  │
+  ▼
+multiple executable OpenRouter models
+```
+
+The reconstructed catalog retains configured model identity, capabilities,
+pricing, and deterministic order.
+
+The OpenRouter API key remains runtime configuration and is not stored with the
+model catalog.
 
 ### Per-Workload Selection
 
