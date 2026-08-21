@@ -1,12 +1,17 @@
 """Language model provider abstractions."""
 
 from azathoth.providers.catalog import ModelCatalog
+from azathoth.providers.catalog_loader import ModelCatalogLoader
 from azathoth.providers.deterministic import DeterministicLanguageModel
 from azathoth.providers.exceptions import (
     ModelExecutionError,
     UnsupportedModelRequestError,
 )
 from azathoth.providers.execution import ModelExecutor
+from azathoth.providers.memory_repository import (
+    InMemoryModelRepository,
+    require_model_repository,
+)
 from azathoth.providers.models import (
     ModelCapability,
     ModelMetadata,
@@ -24,14 +29,17 @@ from azathoth.providers.openrouter_registry import (
 from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
+from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
 
 __all__ = [
     "DeterministicLanguageModel",
+    "InMemoryModelRepository",
     "LanguageModel",
     "LanguageModelRegistry",
     "ModelCapability",
     "ModelCatalog",
+    "ModelCatalogLoader",
     "ModelExecutionError",
     "ModelExecutor",
     "ModelMetadata",
@@ -39,6 +47,7 @@ __all__ = [
     "ModelPricing",
     "ModelQuery",
     "ModelRequest",
+    "ModelRepository",
     "ModelRequirements",
     "ModelResponse",
     "OpenRouterConfiguration",
@@ -46,4 +55,5 @@ __all__ = [
     "OpenRouterModelRegistryLoader",
     "Prompt",
     "UnsupportedModelRequestError",
+    "require_model_repository",
 ]
