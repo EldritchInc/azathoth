@@ -409,6 +409,30 @@ candidate generation
 execution
 ```
 
+### Durable Benchmark Workloads
+
+Reusable benchmark datasets can be persisted and reconstructed independently
+from workflow runtime objects.
+
+```text
+BenchmarkDataset
+       │
+       ▼
+BenchmarkRepository
+       │
+       ▼
+BenchmarkCatalogLoader
+       │
+       ▼
+WorkflowBenchmarkRunner
+```
+
+A persisted benchmark retains its version, case identities, inputs, expected
+outcomes, and case metadata.
+
+This allows the same empirical workload to be loaded after process restart and
+executed through the normal workflow runtime.
+
 ## OpenRouter
 
 Azathoth's first production language model provider is OpenRouter.

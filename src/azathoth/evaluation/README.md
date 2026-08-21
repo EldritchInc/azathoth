@@ -235,6 +235,85 @@ workflow outputs satisfy expected outcomes.
 
 Benchmark execution belongs to the workflow layer.
 
+### Benchmark Persistence
+
+Reusable benchmark datasets can be persisted outside application source.
+
+`BenchmarkRepository` provides the storage-neutral persistence boundary.
+
+Current implementations include:
+
+- `InMemoryBenchmarkRepository`; and
+- `SQLiteBenchmarkRepository`.
+
+```text
+BenchmarkDataset
+       │
+       ▼
+BenchmarkRepository
+       │
+       ├── InMemoryBenchmarkRepository
+       └── SQLiteBenchmarkRepository
+```
+
+Repositories persist complete benchmark datasets, including:
+
+- dataset identity;
+- name;
+- description;
+- version;
+- case identities;
+- inputs;
+- expected outcomes; and
+- case metadata.
+
+Persisting an existing dataset identifier is rejected rather than replacing the
+stored workload.
+
+### Benchmark Catalogs
+
+`BenchmarkCatalogLoader` reconstructs an immutable `BenchmarkCatalog` from
+repository state.
+
+```text
+BenchmarkRepository
+       │
+       ▼
+BenchmarkCatalogLoader
+       │
+       ▼
+BenchmarkCatalog
+       │
+       ▼
+BenchmarkDataset
+```
+
+Repository order becomes catalog order.
+
+Datasets can be selected by stable dataset identity.
+
+### Reproducible Workloads
+
+A persisted benchmark can be reconstructed after process restart with the same
+version, case identities, inputs, and expected outcomes.
+
+```text
+persist dataset
+      │
+      ▼
+process restart
+      │
+      ▼
+reconstruct dataset
+      │
+      ▼
+run same workload
+```
+
+Persistence preserves the benchmark definition.
+
+Benchmark execution remains the responsibility of the workflow layer.
+
 ## Design Principles
 
 Evaluation is intentionally:
