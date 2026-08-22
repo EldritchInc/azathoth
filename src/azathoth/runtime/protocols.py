@@ -1,6 +1,7 @@
 """Protocols exposed by Azathoth runtime composition."""
 
 from typing import Protocol
+from uuid import UUID
 
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -12,56 +13,47 @@ from azathoth.tools import (
     ToolImplementationResolver,
     ToolResolver,
 )
-from azathoth.workflows import WorkflowCatalog
+from azathoth.workflows import (
+    WorkflowCandidate,
+    WorkflowCatalog,
+)
 
 
 class RuntimeEnvironment(Protocol):
-    """Expose dependencies required for Azathoth runtime assembly."""
+    """Expose dependencies and operations required for Azathoth runtime assembly."""
 
     @property
-    def workflows(
-        self,
-    ) -> WorkflowCatalog:
+    def workflows(self) -> WorkflowCatalog:
         """Return configured workflow specifications."""
 
         ...
 
     @property
-    def models(
-        self,
-    ) -> ModelCatalog:
+    def models(self) -> ModelCatalog:
         """Return configured model metadata."""
 
         ...
 
     @property
-    def language_models(
-        self,
-    ) -> LanguageModelRegistry:
+    def language_models(self) -> LanguageModelRegistry:
         """Return executable language-model implementations."""
 
         ...
 
     @property
-    def tools(
-        self,
-    ) -> ToolCatalog:
+    def tools(self) -> ToolCatalog:
         """Return configured tool definitions."""
 
         ...
 
     @property
-    def tool_implementations(
-        self,
-    ) -> ToolImplementationCatalog:
+    def tool_implementations(self) -> ToolImplementationCatalog:
         """Return configured tool implementations."""
 
         ...
 
     @property
-    def tool_resolver(
-        self,
-    ) -> ToolResolver:
+    def tool_resolver(self) -> ToolResolver:
         """Return capability resolution for configured tools."""
 
         ...
@@ -71,5 +63,13 @@ class RuntimeEnvironment(Protocol):
         self,
     ) -> ToolImplementationResolver:
         """Return implementation resolution for configured tools."""
+
+        ...
+
+    def generate_workflow_candidate(
+        self,
+        workflow_id: UUID,
+    ) -> WorkflowCandidate:
+        """Generate an executable candidate for one configured workflow."""
 
         ...
