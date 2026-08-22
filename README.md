@@ -915,6 +915,35 @@ and rank the resulting scorecards.
 This allows Azathoth to demonstrate real empirical improvement while keeping
 optimization policy replaceable through the `WorkflowOptimizer` protocol.
 
+### Runtime Composition
+
+Durable configuration and process-local implementations can be composed through
+`AzathothRuntime`.
+
+```text
+reconstructed catalogs
+        +
+runtime implementations
+        │
+        ▼
+AzathothRuntime
+        │
+        ▼
+workflow ID
+        │
+        ▼
+WorkflowCandidate
+        │
+        ▼
+WorkflowRunner
+```
+
+The runtime does not own persistence or workflow execution.
+
+It provides one supported boundary for turning configured workflow identities
+into executable candidates using the existing model and tool resolution
+infrastructure.
+
 ## Development
 
 Azathoth uses a strict development toolchain.

@@ -243,6 +243,42 @@ Reconstructed workflows retain their:
 - retry policies; and
 - failure policies.
 
+### Runtime Composition
+
+Applications may compose reconstructed workflow, model, and tool catalogs
+through `AzathothRuntime`.
+
+```text
+WorkflowCatalog
+ModelCatalog
+ToolCatalog
+ToolImplementationCatalog
+        +
+LanguageModelRegistry
+        │
+        ▼
+AzathothRuntime
+```
+
+The runtime exposes workflow candidate generation by stable workflow identity.
+
+```python
+candidate = runtime.generate_workflow_candidate(
+    workflow_id,
+)
+```
+
+This delegates to the existing `generate_workflow_candidate()` function.
+
+Prompt-backed and tool-backed step resolution therefore follow the same
+candidate-generation path whether the catalogs were constructed directly or
+reconstructed from persistent storage.
+
+`AzathothRuntime` does not execute workflows.
+
+The resulting `WorkflowCandidate` continues to execute through
+`WorkflowRunner`.
+
 ### Durable Model Resolution
 
 Both the workflow's model requirements and the configured model universe may
