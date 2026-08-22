@@ -249,6 +249,55 @@ Help and version operations do not require a database or provider credentials.
 
 Domain commands are introduced separately on top of this application boundary.
 
+### Workflow Inspection
+
+The CLI can inspect durable workflow configuration.
+
+List configured workflows:
+
+```bash
+azathoth workflow list
+```
+
+Inspect one workflow:
+
+```bash
+azathoth workflow show <WORKFLOW_ID>
+```
+
+Workflow inspection operates on durable `WorkflowSpecification` instances and
+does not generate executable candidates.
+
+```text
+configured SQLite database
+        │
+        ▼
+CLI runtime bootstrap
+        │
+        ▼
+WorkflowCatalog
+        │
+        ├── workflow list
+        └── workflow show
+```
+
+Provider credentials are not required for these operations.
+
+The workflow CLI is being introduced in lifecycle order:
+
+```text
+workflow import
+      │
+      ▼
+workflow list / show
+      │
+      ▼
+workflow run
+```
+
+Import is the next workflow capability so a fresh CLI user can populate durable
+workflow configuration before execution is exposed.
+
 ## Core Concepts
 
 ### Context
