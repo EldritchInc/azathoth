@@ -6,15 +6,22 @@ from argparse import (
 )
 from collections.abc import Sequence
 from typing import cast
+from uuid import UUID
 
 from azathoth import __version__
-from azathoth.cli.workflows import list_workflows
+from azathoth.cli.workflows import (
+    list_workflows,
+    show_workflow,
+)
 
 COMMAND_ATTRIBUTE = "command"
 WORKFLOW_COMMAND = "workflow"
 
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_LIST_ACTION = "list"
+WORKFLOW_SHOW_ACTION = "show"
+
+WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 
 
 def build_parser() -> ArgumentParser:
@@ -47,6 +54,18 @@ def build_parser() -> ArgumentParser:
     workflow_actions.add_parser(
         WORKFLOW_LIST_ACTION,
         help="List configured workflows.",
+    )
+
+    show_parser = workflow_actions.add_parser(
+        WORKFLOW_SHOW_ACTION,
+        help="Show one configured workflow.",
+    )
+
+    show_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID to inspect.",
     )
 
     return parser
@@ -99,5 +118,16 @@ def _dispatch(
 
     if action == WORKFLOW_LIST_ACTION:
         return list_workflows()
+
+    if action == WORKFLOW_SHOW_ACTION:
+        workflow_id = cast(
+            UUID,
+            getattr(
+                arguments,
+                WORKFLOW_ID_ATTRIBUTE,
+            ),
+        )
+
+        return show_workflow(workflow_id)
 
     return None

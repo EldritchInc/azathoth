@@ -11,7 +11,10 @@ from azathoth.cli.configuration import (
     OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE,
     CliRuntimeConfiguration,
 )
-from azathoth.cli.workflows import list_workflows
+from azathoth.cli.workflows import (
+    list_workflows,
+    show_workflow,
+)
 
 __all__ = [
     "DATABASE_ENVIRONMENT_VARIABLE",
@@ -22,4 +25,5 @@ __all__ = [
     "list_workflows",
     "load_runtime",
     "main",
+    "show_workflow",
 ]
