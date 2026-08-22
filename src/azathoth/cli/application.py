@@ -1,9 +1,20 @@
 """Command-line application for Azathoth."""
 
-from argparse import ArgumentParser
+from argparse import (
+    ArgumentParser,
+    Namespace,
+)
 from collections.abc import Sequence
+from typing import cast
 
 from azathoth import __version__
+from azathoth.cli.workflows import list_workflows
+
+COMMAND_ATTRIBUTE = "command"
+WORKFLOW_COMMAND = "workflow"
+
+WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
+WORKFLOW_LIST_ACTION = "list"
 
 
 def build_parser() -> ArgumentParser:
@@ -20,6 +31,24 @@ def build_parser() -> ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
 
+    commands = parser.add_subparsers(
+        dest=COMMAND_ATTRIBUTE,
+    )
+
+    workflow_parser = commands.add_parser(
+        WORKFLOW_COMMAND,
+        help="Inspect and operate configured workflows.",
+    )
+
+    workflow_actions = workflow_parser.add_subparsers(
+        dest=WORKFLOW_ACTION_ATTRIBUTE,
+    )
+
+    workflow_actions.add_parser(
+        WORKFLOW_LIST_ACTION,
+        help="List configured workflows.",
+    )
+
     return parser
 
 
@@ -30,8 +59,45 @@ def main(
 
     parser = build_parser()
 
-    parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+
+    result = _dispatch(arguments)
+
+    if result is not None:
+        return result
 
     parser.print_help()
 
     return 0
+
+
+def _dispatch(
+    arguments: Namespace,
+) -> int | None:
+    """Dispatch parsed CLI arguments to a command handler."""
+
+    command = cast(
+        str | None,
+        getattr(
+            arguments,
+            COMMAND_ATTRIBUTE,
+            None,
+        ),
+    )
+
+    if command != WORKFLOW_COMMAND:
+        return None
+
+    action = cast(
+        str | None,
+        getattr(
+            arguments,
+            WORKFLOW_ACTION_ATTRIBUTE,
+            None,
+        ),
+    )
+
+    if action == WORKFLOW_LIST_ACTION:
+        return list_workflows()
+
+    return None
