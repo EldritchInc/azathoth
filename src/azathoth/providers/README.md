@@ -360,6 +360,43 @@ Pricing data is configuration, not live billing data.
 
 Azathoth uses it to reason about workload eligibility and future cost-aware optimization.
 
+### Pricing and Optimization
+
+Configured model pricing and observed execution cost serve different purposes.
+
+```text
+ModelMetadata.pricing
+        │
+        ▼
+candidate search space
+```
+
+Reference model-substitution optimization uses configured input and output
+token pricing to identify strictly cheaper eligible model bindings.
+
+Actual execution produces independent empirical evidence.
+
+```text
+ModelResponse.estimated_cost_usd
+        │
+        ▼
+StrategyExecutionMetrics
+        │
+        ▼
+WorkflowRun
+        │
+        ▼
+WorkflowScorer
+```
+
+A model being cheaper according to configured pricing therefore makes it
+eligible for exploration.
+
+It does not establish that the resulting workflow is better.
+
+The workflow must execute and be evaluated normally before its observed cost
+can contribute to empirical scoring and ranking.
+
 ## ModelRequirements
 
 Model-backed workloads declare provider-neutral requirements using `ModelRequirements`.

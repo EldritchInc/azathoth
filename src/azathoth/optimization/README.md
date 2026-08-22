@@ -558,6 +558,183 @@ That gives Azathoth a deterministic baseline capable of proving:
 
 Only after these mechanics are trustworthy does adaptive optimization need to be introduced.
 
+## Model Substitution Optimization
+
+`ModelSubstitutionWorkflowOptimizer` is Azathoth's reference optimizer that
+produces genuinely different workflow candidates.
+
+```text
+current population
+        │
+        ▼
+ModelSubstitutionWorkflowOptimizer
+        │
+        ▼
+baseline candidates
+        +
+strictly cheaper model substitutions
+        │
+        ▼
+next population
+```
+
+The optimizer is intentionally mechanical.
+
+For each prompt-backed workflow step, it:
+
+1. reads the step's declared `ModelRequirements`;
+2. finds compatible models in the `ModelCatalog`;
+3. requires an executable implementation in the `LanguageModelRegistry`;
+4. retains only models with comparable configured pricing;
+5. retains only models that are strictly cheaper than the current binding; and
+6. generates a new workflow candidate for each surviving substitution.
+
+A target model is strictly cheaper when neither its input nor output token
+price is higher and at least one is lower.
+
+```text
+target input  <= current input
+target output <= current output
+
+and
+
+target input < current input
+or
+target output < current output
+```
+
+This Pareto criterion deliberately avoids assumptions about workload-specific
+input/output token ratios.
+
+### One-Step Substitutions
+
+Each generated candidate changes one model-backed step.
+
+```text
+Candidate
+├── Step A → Model X
+├── Step B → Model Y
+└── Step C → Model Z
+
+              ↓
+
+Candidate'
+├── Step A → Model X
+├── Step B → Model Y'
+└── Step C → Model Z
+```
+
+The replacement prompt strategy is regenerated through the normal prompt
+candidate-generation path.
+
+Executable strategies are not mutated in place.
+
+### Baseline Preservation
+
+Existing candidates remain in the next population.
+
+```text
+current candidate
+      │
+      ├───────────────┐
+      ▼               ▼
+baseline          substitution
+```
+
+A lower configured model price does not prove that a workflow is better.
+
+Preserving the baseline allows the next experiment to reject substitutions
+that reduce quality, reliability, latency, or overall score.
+
+### Deduplication
+
+Equivalent resolved workflow configurations are deduplicated before the next
+population is returned.
+
+The candidate signature is the ordered sequence of resolved step strategy
+identities.
+
+This prevents multiple parent candidates from causing the same executable
+configuration to be evaluated repeatedly.
+
+### Empirical Improvement
+
+The reference optimizer does not assign success to its proposals.
+
+```text
+optimizer proposes
+       │
+       ▼
+experiment executes
+       │
+       ▼
+evaluator judges
+       │
+       ▼
+scorer measures
+       │
+       ▼
+ranker compares
+```
+
+Azathoth's end-to-end optimization coverage demonstrates a case where:
+
+```text
+Generation 0
+
+expensive model
+quality = passing
+cost    = high
+
+        ↓
+
+Generation 1
+
+expensive baseline
+cheaper model
+cheapest model
+
+        ↓
+
+all retain passing quality
+
+        ↓
+
+cheaper execution records lower cost
+
+        ↓
+
+workflow scoring improves
+
+        ↓
+
+cheapest passing execution ranks first
+```
+
+The improvement is therefore derived from normal execution evidence and
+workflow scoring rather than asserted by the optimizer.
+
+### Reference Policy Boundary
+
+`ModelSubstitutionWorkflowOptimizer` deliberately does not perform:
+
+- failure clustering;
+- context partition discovery;
+- routing synthesis;
+- prompt mutation;
+- tool insertion;
+- workflow topology mutation;
+- learned search;
+- model-quality prediction; or
+- LLM-guided optimization.
+
+It answers only:
+
+> Which strictly cheaper legal model bindings could be empirically tried next?
+
+More sophisticated optimizers can implement the same `WorkflowOptimizer`
+protocol without changing experiment orchestration.
+
 ## Optimization Sessions
 
 One optimization result represents one generation.

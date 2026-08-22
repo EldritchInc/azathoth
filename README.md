@@ -882,6 +882,39 @@ Generation 2
 
 See [`azathoth.optimization`](src/azathoth/optimization/README.md).
 
+### Empirical Workflow Optimization
+
+Azathoth includes a reference model-substitution optimizer that can explore
+strictly cheaper compatible model bindings.
+
+```text
+workflow
+   │
+   ▼
+cheaper legal substitutions
+   │
+   ▼
+execute
+   │
+   ▼
+evaluate
+   │
+   ▼
+score
+   │
+   ▼
+rank
+```
+
+The optimizer does not declare its proposals better.
+
+Existing workflow experiments execute both the baseline and proposed
+candidates, preserve quality and reliability evidence, measure runtime cost,
+and rank the resulting scorecards.
+
+This allows Azathoth to demonstrate real empirical improvement while keeping
+optimization policy replaceable through the `WorkflowOptimizer` protocol.
+
 ## Development
 
 Azathoth uses a strict development toolchain.
