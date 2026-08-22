@@ -1,6 +1,9 @@
 """Optimization job models and services."""
 
 from azathoth.optimization.experiment import ExperimentRunner
+from azathoth.optimization.model_substitution import (
+    generate_model_substitutions,
+)
 from azathoth.optimization.models import (
     OptimizationExample,
     OptimizationRun,
@@ -32,4 +35,5 @@ __all__ = [
     "WorkflowOptimizationSession",
     "WorkflowOptimizationSessionRunner",
     "WorkflowOptimizer",
+    "generate_model_substitutions",
 ]
