@@ -26,11 +26,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Typing :: Typed"
 ]
-
 dependencies = [
     "httpx>=0.28,<1",
     "pydantic>=2",
 ]
+[project.scripts]
+azathoth = "azathoth.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -207,6 +207,48 @@ Detailed documentation lives with each major package.
 
 Architectural decisions are recorded separately in [`docs/adr`](docs/adr).
 
+
+## Command-Line Application
+
+Installing Azathoth exposes the `azathoth` command.
+
+```bash
+azathoth --help
+azathoth --version
+```
+
+The command-line application separates lightweight shell behavior from runtime
+bootstrap.
+
+```text
+azathoth
+   │
+   ├── help / version
+   │
+   └── domain commands
+            │
+            ▼
+       CLI bootstrap
+            │
+            ▼
+     AzathothRuntime
+```
+
+Runtime bootstrap reconstructs durable workflow, model, and tool configuration
+from the configured SQLite database and attaches process-local provider
+implementations.
+
+The initial runtime configuration recognizes:
+
+```text
+AZATHOTH_DATABASE
+OPENROUTER_API_KEY
+```
+
+Help and version operations do not require a database or provider credentials.
+
+Domain commands are introduced separately on top of this application boundary.
+
 ## Core Concepts
 
 ### Context

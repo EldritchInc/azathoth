@@ -213,6 +213,33 @@ AzathothRuntime
 
 This keeps persistence independent from runtime assembly.
 
+## CLI Runtime Bootstrap
+
+The command-line application composes `AzathothRuntime` through its own
+application-level bootstrap boundary.
+
+```text
+CliRuntimeConfiguration
+        │
+        ▼
+CLI bootstrap
+        │
+        ├── reconstruct durable catalogs
+        └── attach provider implementations
+        │
+        ▼
+AzathothRuntime
+```
+
+Environment variables, database-path selection, and provider credentials remain
+CLI concerns.
+
+`AzathothRuntime` itself does not read process environment variables, open
+databases, or construct repositories.
+
+This preserves the runtime composition boundary for non-CLI applications while
+allowing the installed application to provide a conventional boot path.
+
 ## Reconstructed Execution
 
 A persisted application can rebuild its declarative configuration after process
