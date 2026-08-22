@@ -1,9 +1,9 @@
 # Command-Line Interface
 
-`azathoth.cli` provides the installed Azathoth command-line application and its
-runtime bootstrap boundary.
+`azathoth.cli` provides the installed Azathoth command-line application,
+runtime bootstrap, and application-facing domain commands.
 
-## Installation Entry Point
+## Application
 
 Installing Azathoth exposes:
 
@@ -11,20 +11,13 @@ Installing Azathoth exposes:
 azathoth
 ```
 
-as a console command.
-
 The package also supports:
 
 ```text
 python -m azathoth.cli
 ```
 
-The installed console entry point is declared through project metadata and
-invokes the CLI application's `main()` function.
-
-## Application Shell
-
-The initial CLI supports:
+The base application provides:
 
 ```bash
 azathoth
@@ -32,68 +25,114 @@ azathoth --help
 azathoth --version
 ```
 
-Running without arguments displays help.
+Running `azathoth` without arguments displays help.
 
-The package version is the authoritative CLI version.
+## Command Structure
+
+The current command hierarchy is:
 
 ```text
-azathoth.__version__
+azathoth
+│
+├── --help
+├── --version
+│
+└── workflow
+    ├── list
+    └── show <WORKFLOW_ID>
+```
+
+## Workflow Listing
+
+List configured durable workflows with:
+
+```bash
+azathoth workflow list
+```
+
+Each workflow is rendered as:
+
+```text
+WORKFLOW_ID  VERSION  NAME
+```
+
+For example:
+
+```text
+11111111-1111-1111-1111-111111111111  1.0.0  classify sentiment
+```
+
+An empty workflow catalog produces no output and exits successfully.
+
+## Workflow Inspection
+
+Inspect one durable workflow with:
+
+```bash
+azathoth workflow show <WORKFLOW_ID>
+```
+
+The human-readable view includes workflow metadata and structural information
+about each step.
+
+```text
+ID: 11111111-1111-1111-1111-111111111111
+Name: classify sentiment
+Version: 1.0.0
+Description: Classify sentiment for one request.
+Steps: 1
+
+Step 1
+ID: 22222222-2222-2222-2222-222222222222
+Type: prompt
+Strategy: classify sentiment prompt
+Dependencies: 0
+Inputs: 0
+Outputs: 0
+Conditions: 0
+```
+
+Prompt and tool-backed steps are identified without resolving them to runtime
+implementations.
+
+## Inspection Versus Execution
+
+Workflow inspection operates on durable `WorkflowSpecification` instances.
+
+```text
+workflow list / show
         │
         ▼
-azathoth --version
+WorkflowSpecification
 ```
 
-Invalid arguments use standard parser error behavior.
+It does not generate a `WorkflowCandidate` or execute a `WorkflowRun`.
 
-## Application Structure
+Provider credentials are therefore unnecessary for workflow inspection.
 
-The CLI deliberately separates shell behavior from runtime bootstrap.
+## Runtime Bootstrap
 
-```text
-azathoth.cli
-├── application
-│   ├── parser
-│   ├── help
-│   ├── version
-│   └── process status
-│
-├── configuration
-│   └── runtime configuration
-│
-└── bootstrap
-    └── AzathothRuntime construction
-```
-
-Help and version operations do not require runtime configuration.
-
-## Runtime Configuration
-
-`CliRuntimeConfiguration` describes the application configuration required to
-bootstrap an Azathoth runtime.
+Domain commands reconstruct application state through the supported CLI
+bootstrap path.
 
 ```text
+command
+   │
+   ▼
 CliRuntimeConfiguration
-├── database
-└── openrouter_api_key
+   │
+   ▼
+load_runtime()
+   │
+   ▼
+AzathothRuntime
 ```
 
-Configuration may be created directly:
+Commands do not construct their own persistence or provider environments.
 
-```python
-configuration = CliRuntimeConfiguration(
-    database=database,
-)
-```
+## Configuration
 
-or loaded from the environment:
-
-```python
-configuration = CliRuntimeConfiguration.from_environment()
-```
-
-## Environment Variables
-
-The initial CLI runtime recognizes:
+The initial runtime configuration recognizes:
 
 ```text
 AZATHOTH_DATABASE
@@ -103,192 +142,77 @@ OPENROUTER_API_KEY
 `AZATHOTH_DATABASE` selects the SQLite database containing durable application
 configuration.
 
-When absent or empty, the default is:
+When absent, the default path is:
 
 ```text
 azathoth.db
 ```
 
-`OPENROUTER_API_KEY` supplies process-local credentials for executable
-OpenRouter model implementations.
+`OPENROUTER_API_KEY` supplies process-local OpenRouter credentials.
 
-An absent or empty key leaves OpenRouter models known but non-executable.
-
-## Runtime Bootstrap
-
-`load_runtime()` reconstructs durable application state and composes the
-process-local runtime.
-
-```python
-configuration = CliRuntimeConfiguration.from_environment()
-
-runtime = load_runtime(configuration)
-```
-
-The bootstrap path is:
-
-```text
-configured SQLite database
-        │
-        ├── workflows
-        ├── models
-        └── tools
-        │
-        ▼
-existing repositories
-        │
-        ▼
-existing catalog loaders
-        │
-        ▼
-reconstructed catalogs
-        │
-        +
-provider runtime implementations
-        │
-        ▼
-AzathothRuntime
-```
-
-The CLI does not implement alternative repository, catalog, provider, or
-runtime abstractions.
-
-## One SQLite Application Database
-
-The CLI supplies the same configured SQLite path to the existing workflow,
-model, and tool repositories.
-
-```text
-azathoth.db
-├── workflow tables
-├── model tables
-└── tool tables
-```
-
-The persistence subsystems remain independent.
-
-The shared path is an application configuration decision rather than a merged
-repository abstraction.
-
-## OpenRouter Bootstrap
-
-When OpenRouter credentials are configured:
-
-```text
-ModelCatalog
-        +
-OpenRouterConfiguration
-        │
-        ▼
-OpenRouterModelRegistryLoader
-        │
-        ▼
-LanguageModelRegistry
-```
-
-Only OpenRouter models present in the reconstructed model catalog are attached
-as executable implementations.
-
-The registry is then supplied to `AzathothRuntime`.
-
-No provider API request is required merely to construct the runtime registry.
-
-## Known Versus Executable Models
-
-The CLI preserves the distinction between durable model metadata and executable
-runtime implementations.
-
-Without credentials:
-
-```text
-ModelCatalog
-├── openrouter/model-a
-└── openrouter/model-b
-
-LanguageModelRegistry
-└── empty
-```
-
-With credentials:
-
-```text
-ModelCatalog
-├── openrouter/model-a
-└── openrouter/model-b
-
-LanguageModelRegistry
-├── openrouter/model-a
-└── openrouter/model-b
-```
-
-This allows future inspection commands to operate without requiring provider
-credentials.
+Workflow inspection does not require this credential.
 
 ## Lazy Bootstrap
 
-The application shell does not automatically invoke `load_runtime()`.
+Shell-only operations remain independent from runtime state.
 
 ```text
 azathoth --help
-      │
-      ▼
-parser
-      │
-      ▼
-exit
+azathoth --version
+azathoth workflow --help
 ```
 
-not:
+do not require runtime bootstrap.
+
+Commands that inspect application state do:
 
 ```text
-azathoth --help
-      │
-      ▼
-database
-      │
-      ▼
-providers
-      │
-      ▼
-runtime
-      │
-      ▼
-help
+azathoth workflow list
+azathoth workflow show <WORKFLOW_ID>
 ```
 
-Runtime bootstrap should occur only when a domain command needs Azathoth state.
+## Workflow Lifecycle
 
-## Process Contract
-
-The installed console application is tested as a real subprocess.
-
-The supported shell behavior is:
+The CLI workflow surface is being introduced in lifecycle order.
 
 ```text
-command                       result
-────────────────────────────────────────────
-azathoth                      help, exit 0
-azathoth --help               help, exit 0
-azathoth --version            version, exit 0
-azathoth <invalid argument>   error, exit 2
+workflow specification
+        │
+        ▼
+workflow import
+        │
+        ▼
+workflow list / show
+        │
+        ▼
+workflow run
 ```
 
-Help and version operations must not create the default database or otherwise
-bootstrap runtime state.
+Inspection is currently implemented.
+
+The next workflow capability is import of a serialized
+`WorkflowSpecification`.
+
+Execution follows after workflows can be ingested through the CLI itself.
 
 ## Current Scope
 
-The CLI foundation deliberately does not yet expose domain commands.
-
-Not yet included:
+Implemented:
 
 ```text
-workflow list
-workflow show
-workflow run
-benchmark commands
-experiment commands
-optimization commands
+azathoth
+azathoth --help
+azathoth --version
+azathoth workflow list
+azathoth workflow show <WORKFLOW_ID>
 ```
 
-Those commands build on the shell and bootstrap boundaries established here.
+Planned next:
+
+```text
+azathoth workflow import <FILE>
+azathoth workflow run <WORKFLOW_ID>
+```
+
+Benchmark and optimization command families build on the same application and
+runtime boundaries afterward.
