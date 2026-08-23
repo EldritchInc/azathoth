@@ -1,12 +1,18 @@
 """Workflow commands for the Azathoth command-line application."""
 
 import sys
+from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.prompting import PromptStrategySpec
-from azathoth.workflows import ToolStepSpecification
+from azathoth.workflows import (
+    SQLiteWorkflowRepository,
+    ToolStepSpecification,
+    WorkflowDocumentError,
+    decode_workflow_document,
+)
 
 
 def list_workflows() -> int:
@@ -86,6 +92,50 @@ def show_workflow(
         print(f"Outputs: {len(step.outputs)}")
 
         print(f"Conditions: {len(step.conditions)}")
+
+    return 0
+
+
+def import_workflow(
+    document_path: Path,
+) -> int:
+    """Import one durable workflow from a JSON document."""
+
+    try:
+        document = document_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(
+            f"Unable to read workflow document {document_path}: {exc}",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    try:
+        specification = decode_workflow_document(document)
+    except WorkflowDocumentError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteWorkflowRepository(configuration.database)
+
+    try:
+        repository.save(specification)
+    except ValueError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(f"Imported workflow {specification.metadata.id}.")
 
     return 0
 

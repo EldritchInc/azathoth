@@ -197,6 +197,77 @@ Candidate generation does not know whether a specification originated from
 SQLite, memory, application configuration, or another repository
 implementation.
 
+## Workflow JSON Documents
+
+Durable workflow specifications can be represented as portable JSON documents.
+
+```text
+WorkflowSpecification
+        │
+        ▼
+encode_workflow_document()
+        │
+        ▼
+JSON
+        │
+        ▼
+decode_workflow_document()
+        │
+        ▼
+WorkflowSpecification
+```
+
+`encode_workflow_document()` produces readable canonical JSON for a complete
+workflow specification.
+
+`decode_workflow_document()` validates a JSON document through the existing
+workflow domain model.
+
+Invalid JSON or invalid workflow configuration raises:
+
+```text
+WorkflowDocumentError
+```
+
+Workflow documents use the same durable representation as workflow
+persistence. They do not introduce a separate interchange model.
+
+### Canonical Example
+
+A complete importable document is available at:
+
+```text
+examples/workflows/simple-prompt.json
+```
+
+The test suite verifies that the checked-in file exactly matches canonical
+serialization of its expected `WorkflowSpecification`.
+
+This means the example is kept synchronized with the actual workflow document
+format.
+
+### Durable Only
+
+Workflow documents contain specifications rather than runtime candidates.
+
+```text
+JSON document
+      │
+      ▼
+WorkflowSpecification
+```
+
+They do not serialize:
+
+- concrete language-model implementations;
+- runtime model bindings;
+- resolved tool implementations;
+- workflow candidates; or
+- workflow runs.
+
+Executable dependencies are attached later through the existing candidate
+generation path.
+
 ## Reconstructed Execution
 
 Persisted workflow specifications can be reconstructed and executed using the

@@ -5,11 +5,13 @@ from argparse import (
     Namespace,
 )
 from collections.abc import Sequence
+from pathlib import Path
 from typing import cast
 from uuid import UUID
 
 from azathoth import __version__
 from azathoth.cli.workflows import (
+    import_workflow,
     list_workflows,
     show_workflow,
 )
@@ -18,9 +20,11 @@ COMMAND_ATTRIBUTE = "command"
 WORKFLOW_COMMAND = "workflow"
 
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
+WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_SHOW_ACTION = "show"
 
+WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 
 
@@ -66,6 +70,18 @@ def build_parser() -> ArgumentParser:
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to inspect.",
+    )
+
+    import_parser = workflow_actions.add_parser(
+        WORKFLOW_IMPORT_ACTION,
+        help="Import a workflow JSON document.",
+    )
+
+    import_parser.add_argument(
+        WORKFLOW_DOCUMENT_ATTRIBUTE,
+        type=Path,
+        metavar="FILE",
+        help="JSON workflow document to import.",
     )
 
     return parser
@@ -129,5 +145,16 @@ def _dispatch(
         )
 
         return show_workflow(workflow_id)
+
+    if action == WORKFLOW_IMPORT_ACTION:
+        workflow_document = cast(
+            Path,
+            getattr(
+                arguments,
+                WORKFLOW_DOCUMENT_ATTRIBUTE,
+            ),
+        )
+
+        return import_workflow(workflow_document)
 
     return None

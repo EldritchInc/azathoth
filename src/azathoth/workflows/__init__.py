@@ -26,6 +26,11 @@ from azathoth.workflows.condition import (
     WorkflowConditionEvaluationError,
     WorkflowConditionOperator,
 )
+from azathoth.workflows.document import (
+    WorkflowDocumentError,
+    decode_workflow_document,
+    encode_workflow_document,
+)
 from azathoth.workflows.evaluation import WorkflowEvaluation
 from azathoth.workflows.execution import (
     WorkflowRun,
@@ -167,6 +172,7 @@ __all__ = [
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
+    "WorkflowDocumentError",
     "WorkflowEvaluation",
     "WorkflowExperimentObservation",
     "WorkflowExperimentRecord",
@@ -204,6 +210,8 @@ __all__ = [
     "WorkflowValueBinding",
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
+    "decode_workflow_document",
+    "encode_workflow_document",
     "generate_workflow_candidate",
     "require_workflow_experiment_repository",
     "require_workflow_repository",

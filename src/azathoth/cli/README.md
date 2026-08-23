@@ -42,58 +42,138 @@ azathoth
     └── show <WORKFLOW_ID>
 ```
 
-## Workflow Listing
+## Workflow Commands
 
-List configured durable workflows with:
+The current workflow command family is:
+
+```text
+azathoth workflow
+├── import <FILE>
+├── list
+└── show <WORKFLOW_ID>
+```
+
+### Import a Workflow
+
+Import a complete durable workflow JSON document:
+
+```bash
+azathoth workflow import \
+    examples/workflows/simple-prompt.json
+```
+
+On success:
+
+```text
+Imported workflow 11111111-1111-1111-1111-111111111111.
+```
+
+The command:
+
+```text
+FILE
+ │
+ ▼
+workflow JSON validation
+ │
+ ▼
+WorkflowSpecification
+ │
+ ▼
+SQLiteWorkflowRepository
+```
+
+Import does not require provider credentials or runtime candidate generation.
+
+### Example JSON
+
+The canonical example is:
+
+```text
+examples/workflows/simple-prompt.json
+```
+
+It is a complete JSON representation of a `WorkflowSpecification`, not a
+simplified tutorial schema.
+
+Its high-level structure is:
+
+```text
+{
+  metadata,
+  steps: [
+    {
+      id,
+      specification: {
+        metadata,
+        prompt,
+        model_requirements
+      },
+      depends_on,
+      inputs,
+      outputs,
+      conditions,
+      retry_policy,
+      failure_policy
+    }
+  ]
+}
+```
+
+The actual checked-in file should be used as the authoritative example.
+
+CI verifies that it exactly matches Azathoth's canonical workflow
+serialization.
+
+### List Workflows
 
 ```bash
 azathoth workflow list
 ```
 
-Each workflow is rendered as:
+Each configured workflow is rendered as:
 
 ```text
 WORKFLOW_ID  VERSION  NAME
 ```
 
-For example:
-
-```text
-11111111-1111-1111-1111-111111111111  1.0.0  classify sentiment
-```
-
-An empty workflow catalog produces no output and exits successfully.
-
-## Workflow Inspection
-
-Inspect one durable workflow with:
+### Inspect a Workflow
 
 ```bash
 azathoth workflow show <WORKFLOW_ID>
 ```
 
-The human-readable view includes workflow metadata and structural information
-about each step.
+This displays durable workflow metadata and step topology without generating or
+executing a workflow candidate.
+
+## Current Workflow Lifecycle
+
+The CLI can now complete the durable workflow lifecycle without Python code.
 
 ```text
-ID: 11111111-1111-1111-1111-111111111111
-Name: classify sentiment
-Version: 1.0.0
-Description: Classify sentiment for one request.
-Steps: 1
-
-Step 1
-ID: 22222222-2222-2222-2222-222222222222
-Type: prompt
-Strategy: classify sentiment prompt
-Dependencies: 0
-Inputs: 0
-Outputs: 0
-Conditions: 0
+JSON file
+    │
+    ▼
+workflow import
+    │
+    ▼
+SQLite
+    │
+    ├── workflow list
+    └── workflow show
 ```
 
-Prompt and tool-backed steps are identified without resolving them to runtime
-implementations.
+The next workflow command crosses into execution:
+
+```text
+workflow run
+      │
+      ▼
+candidate generation
+      │
+      ▼
+WorkflowRunner
+```
 
 ## Inspection Versus Execution
 

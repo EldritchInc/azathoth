@@ -249,9 +249,22 @@ Help and version operations do not require a database or provider credentials.
 
 Domain commands are introduced separately on top of this application boundary.
 
-### Workflow Inspection
+### Workflow CLI
 
-The CLI can inspect durable workflow configuration.
+Azathoth can import and inspect durable workflows entirely from the terminal.
+
+A canonical example is included:
+
+```text
+examples/workflows/simple-prompt.json
+```
+
+Import it:
+
+```bash
+azathoth workflow import \
+    examples/workflows/simple-prompt.json
+```
 
 List configured workflows:
 
@@ -259,44 +272,36 @@ List configured workflows:
 azathoth workflow list
 ```
 
-Inspect one workflow:
+Inspect the imported workflow:
 
 ```bash
-azathoth workflow show <WORKFLOW_ID>
+azathoth workflow show \
+    11111111-1111-1111-1111-111111111111
 ```
 
-Workflow inspection operates on durable `WorkflowSpecification` instances and
-does not generate executable candidates.
+The lifecycle is:
 
 ```text
-configured SQLite database
-        │
-        ▼
-CLI runtime bootstrap
-        │
-        ▼
-WorkflowCatalog
-        │
-        ├── workflow list
-        └── workflow show
-```
-
-Provider credentials are not required for these operations.
-
-The workflow CLI is being introduced in lifecycle order:
-
-```text
-workflow import
+workflow JSON
       │
       ▼
-workflow list / show
+domain validation
       │
       ▼
-workflow run
+durable SQLite persistence
+      │
+      ├── workflow list
+      └── workflow show
 ```
 
-Import is the next workflow capability so a fresh CLI user can populate durable
-workflow configuration before execution is exposed.
+Workflow documents are complete serialized `WorkflowSpecification` objects.
+The checked-in example is tested against Azathoth's canonical serializer so it
+remains an accurate importable reference.
+
+Import and inspection require no provider credentials.
+
+Concrete provider resolution occurs later when a workflow is generated into an
+executable candidate.
 
 ## Core Concepts
 
