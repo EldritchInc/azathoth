@@ -303,6 +303,77 @@ Import and inspection require no provider credentials.
 Concrete provider resolution occurs later when a workflow is generated into an
 executable candidate.
 
+### Workflow Execution
+
+Configured workflows can be executed from the terminal:
+
+```bash
+azathoth workflow run <WORKFLOW_ID>
+```
+
+Execution uses the same runtime path as library consumers.
+
+```text
+durable WorkflowSpecification
+        │
+        ▼
+CLI runtime bootstrap
+        │
+        ▼
+candidate generation
+        │
+        ▼
+WorkflowCandidate
+        │
+        ▼
+WorkflowRunner
+        │
+        ▼
+WorkflowRun
+```
+
+The CLI renders recorded execution evidence including workflow status, duration,
+step status, retries, strategy output, and provider-neutral model metrics when
+available.
+
+Prompt-backed execution remains driven by each step's `ModelRequirements`.
+
+```text
+ModelRequirements
+      │
+      ▼
+configured ModelCatalog
+      │
+      ▼
+executable LanguageModelRegistry
+```
+
+There is no global CLI workflow model selection.
+
+Different steps may resolve to different configured models.
+
+A prompt-backed workflow therefore requires compatible model metadata to
+already exist in the configured database.
+
+The CLI does not yet provide model import commands, so complete fresh-user
+installed execution remains the next application milestone.
+
+The intended lifecycle is:
+
+```text
+model import
+     +
+workflow import
+     +
+provider credentials
+     │
+     ▼
+workflow run
+     │
+     ▼
+WorkflowRun
+```
+
 ## Core Concepts
 
 ### Context

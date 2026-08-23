@@ -350,6 +350,108 @@ reconstructed from persistent storage.
 The resulting `WorkflowCandidate` continues to execute through
 `WorkflowRunner`.
 
+## CLI Workflow Execution
+
+The command-line application can execute a workflow configured in the runtime.
+
+```text
+workflow ID
+    │
+    ▼
+AzathothRuntime
+    │
+    ▼
+WorkflowCandidate
+    │
+    ▼
+WorkflowRunner
+    │
+    ▼
+WorkflowRun
+```
+
+The CLI does not introduce a separate workflow execution implementation.
+
+Runtime composition remains responsible for turning durable configuration into
+an executable candidate.
+
+`WorkflowRunner` remains responsible for executing that candidate.
+
+### Completed Run Evidence
+
+A completed `WorkflowRun` is meaningful evidence whether it succeeded or
+failed.
+
+```text
+WorkflowRun
+├── workflow metadata
+├── step runs
+├── contexts
+├── timestamps
+├── statistics
+└── reliability
+```
+
+The CLI renders this evidence and uses the run's success state to determine its
+process status.
+
+A failed step therefore produces a failed `WorkflowRun` rather than a generic
+CLI exception.
+
+### Execution Metrics
+
+Successful workflow steps may contain provider-neutral strategy execution
+metrics.
+
+These may include:
+
+```text
+provider
+model
+prompt tokens
+completion tokens
+total tokens
+latency
+estimated cost
+```
+
+The CLI renders these metrics when present.
+
+It does not derive provider-specific measurements independently.
+
+### Structured Output
+
+Workflow strategy output is JSON-compatible.
+
+The CLI renders output as JSON so structured results remain distinct from
+plain text.
+
+```text
+Output:
+{
+  "result": "success"
+}
+```
+
+### Model Resolution
+
+Prompt-backed workflow execution continues to resolve through:
+
+```text
+ModelRequirements
+      │
+      ▼
+ModelCatalog
+      │
+      ▼
+LanguageModelRegistry
+```
+
+The CLI does not choose a global workflow model.
+
+Different prompt-backed workflow steps may resolve to different configured
+models.
+
 ### Durable Model Resolution
 
 Both the workflow's model requirements and the configured model universe may
