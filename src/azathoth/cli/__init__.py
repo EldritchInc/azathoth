@@ -15,6 +15,7 @@ from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
+    run_workflow,
     show_workflow,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "list_workflows",
     "load_runtime",
     "main",
+    "run_workflow",
     "show_workflow",
 ]

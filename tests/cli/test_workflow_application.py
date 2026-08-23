@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 
+import azathoth.cli.application as cli_application
 from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     main,
@@ -214,9 +215,10 @@ def test_cli_workflow_help_includes_actions(
 
     assert raised.value.code == 0
 
-    assert "list" in captured.out
-    assert "show" in captured.out
     assert "import" in captured.out
+    assert "list" in captured.out
+    assert "run" in captured.out
+    assert "show" in captured.out
 
 
 def test_cli_workflow_show_help_describes_identifier(
@@ -294,3 +296,77 @@ def test_cli_workflow_import_help_describes_file(
     assert "FILE" in captured.out
 
     assert "JSON workflow document to import." in captured.out
+
+
+def test_cli_workflow_run_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[UUID] = []
+
+    def fake_run_workflow(
+        workflow_id: UUID,
+    ) -> int:
+        calls.append(workflow_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        cli_application,
+        "run_workflow",
+        fake_run_workflow,
+    )
+
+    result = main(
+        (
+            "workflow",
+            "run",
+            str(WORKFLOW_ID),
+        )
+    )
+
+    assert result == 0
+
+    assert calls == [
+        WORKFLOW_ID,
+    ]
+
+
+def test_cli_workflow_run_rejects_invalid_uuid(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "run",
+                "definitely-not-a-uuid",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+
+    assert "invalid UUID value" in captured.err
+
+
+def test_cli_workflow_run_help_describes_identifier(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "run",
+                "--help",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 0
+
+    assert "WORKFLOW_ID" in captured.out
+
+    assert "Workflow UUID to execute." in captured.out
