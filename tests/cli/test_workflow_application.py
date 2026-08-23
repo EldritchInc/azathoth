@@ -20,6 +20,7 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    encode_workflow_document,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -215,6 +216,7 @@ def test_cli_workflow_help_includes_actions(
 
     assert "list" in captured.out
     assert "show" in captured.out
+    assert "import" in captured.out
 
 
 def test_cli_workflow_show_help_describes_identifier(
@@ -236,3 +238,59 @@ def test_cli_workflow_show_help_describes_identifier(
     assert "WORKFLOW_ID" in captured.out
 
     assert "Workflow UUID to inspect." in captured.out
+
+
+def test_cli_workflow_import_dispatches_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document = tmp_path / "workflow.json"
+
+    document.write_text(
+        encode_workflow_document(create_workflow()),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv(
+        DATABASE_ENVIRONMENT_VARIABLE,
+        str(database),
+    )
+
+    result = main(
+        (
+            "workflow",
+            "import",
+            str(document),
+        )
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+
+    assert captured.out == (f"Imported workflow {WORKFLOW_ID}.\n")
+
+    assert captured.err == ""
+
+
+def test_cli_workflow_import_help_describes_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "import",
+                "--help",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 0
+
+    assert "FILE" in captured.out
+
+    assert "JSON workflow document to import." in captured.out
