@@ -13,6 +13,7 @@ from azathoth import __version__
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
+    run_workflow,
     show_workflow,
 )
 
@@ -22,6 +23,7 @@ WORKFLOW_COMMAND = "workflow"
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_LIST_ACTION = "list"
+WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_SHOW_ACTION = "show"
 
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
@@ -82,6 +84,18 @@ def build_parser() -> ArgumentParser:
         type=Path,
         metavar="FILE",
         help="JSON workflow document to import.",
+    )
+
+    run_parser = workflow_actions.add_parser(
+        WORKFLOW_RUN_ACTION,
+        help="Execute one configured workflow.",
+    )
+
+    run_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID to execute.",
     )
 
     return parser
@@ -156,5 +170,16 @@ def _dispatch(
         )
 
         return import_workflow(workflow_document)
+
+    if action == WORKFLOW_RUN_ACTION:
+        workflow_id = cast(
+            UUID,
+            getattr(
+                arguments,
+                WORKFLOW_ID_ATTRIBUTE,
+            ),
+        )
+
+        return run_workflow(workflow_id)
 
     return None

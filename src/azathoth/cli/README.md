@@ -163,17 +163,150 @@ SQLite
     └── workflow show
 ```
 
-The next workflow command crosses into execution:
+### Run a Workflow
+
+Execute one configured workflow:
+
+```bash
+azathoth workflow run <WORKFLOW_ID>
+```
+
+Execution follows the existing runtime and workflow boundaries:
 
 ```text
-workflow run
-      │
-      ▼
-candidate generation
-      │
-      ▼
+WORKFLOW_ID
+    │
+    ▼
+CLI runtime bootstrap
+    │
+    ▼
+AzathothRuntime
+    │
+    ▼
+WorkflowCandidate
+    │
+    ▼
 WorkflowRunner
+    │
+    ▼
+WorkflowRun
 ```
+
+A successful run returns exit status `0`.
+
+A completed run containing failed steps is still rendered as execution evidence
+and returns exit status `1`.
+
+Failures that prevent candidate generation also return a nonzero status.
+
+### Execution Output
+
+Completed workflow runs are rendered from recorded domain evidence.
+
+The workflow summary includes:
+
+```text
+Workflow
+Workflow ID
+Run ID
+Status
+Duration
+Steps
+Executed
+Failed
+Skipped
+Retries
+```
+
+Each step includes its ID, status, and attempt count.
+
+Executed steps may additionally include:
+
+```text
+Strategy
+Provider
+Model
+Prompt Tokens
+Completion Tokens
+Total Tokens
+Latency
+Estimated Cost
+Output
+```
+
+Optional metrics are omitted when they were not recorded.
+
+Failed steps show the terminal recorded exception type and message.
+
+### Output Values
+
+Strategy outputs are JSON-compatible and are rendered as JSON.
+
+A textual result appears as:
+
+```text
+Output:
+"success"
+```
+
+A structured result appears as:
+
+```text
+Output:
+{
+  "classification": "positive"
+}
+```
+
+### Model Requirements
+
+Running a prompt-backed workflow requires compatible durable model metadata and
+an executable language-model implementation.
+
+For OpenRouter:
+
+```text
+persisted ModelMetadata
+        │
+        ▼
+ModelCatalog
+        │
+        +
+OPENROUTER_API_KEY
+        │
+        ▼
+LanguageModelRegistry
+```
+
+The workflow itself declares `ModelRequirements`.
+
+The CLI does not select one global model for an entire workflow.
+
+### Current Workflow Surface
+
+```text
+azathoth workflow
+├── import <FILE>
+├── list
+├── run <WORKFLOW_ID>
+└── show <WORKFLOW_ID>
+```
+
+The durable and executable workflow boundaries now exist.
+
+The remaining fresh-user execution gap is model configuration.
+
+The planned next application surface is:
+
+```text
+azathoth model import <FILE>
+azathoth model list
+azathoth model show <MODEL_IDENTIFIER>
+```
+
+After model configuration is available through the CLI, the installed
+application can support a complete end-to-end workflow execution journey
+without Python-side database setup.
 
 ## Inspection Versus Execution
 

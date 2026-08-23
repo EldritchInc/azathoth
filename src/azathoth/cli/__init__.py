@@ -11,9 +11,12 @@ from azathoth.cli.configuration import (
     OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE,
     CliRuntimeConfiguration,
 )
+from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.rendering import render_workflow_run
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
+    run_workflow,
     show_workflow,
 )
 
@@ -23,9 +26,12 @@ __all__ = [
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
     "build_parser",
+    "execute_configured_workflow",
     "import_workflow",
     "list_workflows",
     "load_runtime",
     "main",
+    "render_workflow_run",
+    "run_workflow",
     "show_workflow",
 ]

@@ -1,16 +1,21 @@
 """Workflow commands for the Azathoth command-line application."""
 
+import asyncio
 import sys
 from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.rendering import render_workflow_run
 from azathoth.prompting import PromptStrategySpec
+from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
+    WorkflowGenerationError,
     decode_workflow_document,
 )
 
@@ -138,6 +143,38 @@ def import_workflow(
     print(f"Imported workflow {specification.metadata.id}.")
 
     return 0
+
+
+def run_workflow(
+    workflow_id: UUID,
+) -> int:
+    """Execute one configured workflow."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    runtime = load_runtime(configuration)
+
+    try:
+        run = asyncio.run(
+            execute_configured_workflow(
+                runtime=runtime,
+                workflow_id=workflow_id,
+            )
+        )
+    except (
+        WorkflowNotConfiguredError,
+        WorkflowGenerationError,
+    ) as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(render_workflow_run(run))
+
+    return 0 if run.succeeded else 1
 
 
 def _step_type(
