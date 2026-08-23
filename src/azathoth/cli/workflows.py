@@ -8,6 +8,7 @@ from uuid import UUID
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.rendering import render_workflow_run
 from azathoth.prompting import PromptStrategySpec
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
@@ -171,17 +172,9 @@ def run_workflow(
 
         return 1
 
-    if run.failed:
-        print(
-            f"Workflow {workflow_id} failed.",
-            file=sys.stderr,
-        )
+    print(render_workflow_run(run))
 
-        return 1
-
-    print(f"Workflow {workflow_id} succeeded.")
-
-    return 0
+    return 0 if run.succeeded else 1
 
 
 def _step_type(

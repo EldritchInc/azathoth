@@ -1,11 +1,13 @@
 """Tests for running configured workflows through the CLI."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
 import azathoth.cli.workflows as workflow_commands
 from azathoth.cli import run_workflow
+from azathoth.context import Context
 from azathoth.prompting import PromptStrategySpec
 from azathoth.providers import (
     DeterministicLanguageModel,
@@ -20,8 +22,13 @@ from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowCatalog,
     WorkflowMetadata,
+    WorkflowRun,
     WorkflowSpecification,
+    WorkflowStepAttempt,
+    WorkflowStepFailure,
+    WorkflowStepRun,
     WorkflowStepSpecification,
+    WorkflowStepStatus,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -105,7 +112,7 @@ def configure_runtime(
     )
 
 
-def test_workflow_run_executes_configured_workflow(
+def test_workflow_run_renders_completed_execution(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -119,10 +126,19 @@ def test_workflow_run_executes_configured_workflow(
     captured = capsys.readouterr()
 
     assert result == 0
-
-    assert captured.out == (f"Workflow {WORKFLOW_ID} succeeded.\n")
-
     assert captured.err == ""
+
+    assert "Workflow: CLI execution\n" in captured.out
+
+    assert f"Workflow ID: {WORKFLOW_ID}\n" in captured.out
+
+    assert "Status: succeeded\n" in captured.out
+    assert "Steps: 1\n" in captured.out
+    assert "Executed: 1\n" in captured.out
+
+    assert f"Strategy: CLI prompt [{MODEL_IDENTIFIER}]\n" in captured.out
+
+    assert 'Output:\n"success"\n' in captured.out
 
 
 def test_workflow_run_reports_unknown_workflow(
@@ -179,3 +195,60 @@ def test_workflow_run_reports_non_executable_workflow(
         "No executable prompt candidate could be generated "
         f"for workflow step {STEP_ID}." in captured.err
     )
+
+
+def test_workflow_run_renders_failed_run_and_returns_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = datetime.now(tz=UTC)
+
+    failed = WorkflowRun(
+        workflow=create_workflow().metadata,
+        steps=(
+            WorkflowStepRun(
+                step_id=STEP_ID,
+                layer_index=0,
+                status=WorkflowStepStatus.FAILED,
+                attempts=(
+                    WorkflowStepAttempt(
+                        attempt_number=1,
+                        started_at=now,
+                        completed_at=now,
+                        failure=WorkflowStepFailure(
+                            exception_type="RuntimeError",
+                            message="Execution failed.",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        initial_context=Context(),
+        final_context=Context(),
+        started_at=now,
+        completed_at=now,
+    )
+
+    async def fake_execute_configured_workflow(
+        **_kwargs: object,
+    ) -> WorkflowRun:
+        return failed
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "execute_configured_workflow",
+        fake_execute_configured_workflow,
+    )
+
+    result = run_workflow(WORKFLOW_ID)
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+
+    assert captured.err == ""
+
+    assert "Status: failed\n" in captured.out
+    assert "Failed: 1\n" in captured.out
+
+    assert "Error: RuntimeError: Execution failed.\n" in captured.out
