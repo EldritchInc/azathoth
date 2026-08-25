@@ -60,7 +60,7 @@ class _OpenRouterTopProvider(BaseModel):
 
     max_completion_tokens: int | None = Field(
         default=None,
-        gt=0,
+        ge=0,
     )
 
 
@@ -73,7 +73,7 @@ class _OpenRouterModel(BaseModel):
 
     name: str = Field(min_length=1)
 
-    context_length: int = Field(gt=0)
+    context_length: int = Field(ge=0)
 
     architecture: _OpenRouterArchitecture
 
@@ -239,7 +239,7 @@ def _normalize_model(
     maximum_output_tokens = None
 
     if model.top_provider is not None:
-        maximum_output_tokens = model.top_provider.max_completion_tokens
+        maximum_output_tokens = _positive_or_none(model.top_provider.max_completion_tokens)
 
     return ProviderModel(
         provider=OPENROUTER_PROVIDER,
@@ -248,7 +248,7 @@ def _normalize_model(
         input_modalities=input_modalities,
         output_modalities=output_modalities,
         capabilities=capabilities,
-        context_window_tokens=model.context_length,
+        context_window_tokens=_positive_or_none(model.context_length),
         maximum_output_tokens=maximum_output_tokens,
         pricing=_normalize_pricing(model.pricing),
     )
@@ -324,3 +324,14 @@ def _normalize_pricing(
         input_usd_per_million_tokens=float(prompt * per_million),
         output_usd_per_million_tokens=float(completion * per_million),
     )
+
+
+def _positive_or_none(
+    value: int | None,
+) -> int | None:
+    """Normalize non-positive provider limits to unknown."""
+
+    if value is None or value <= 0:
+        return None
+
+    return value

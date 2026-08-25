@@ -48,7 +48,10 @@ class ProviderModel(BaseModel):
 
     capabilities: frozenset[ModelCapability] = frozenset()
 
-    context_window_tokens: int = Field(gt=0)
+    context_window_tokens: int | None = Field(
+        default=None,
+        gt=0,
+    )
 
     maximum_output_tokens: int | None = Field(
         default=None,

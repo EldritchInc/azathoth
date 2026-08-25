@@ -222,3 +222,14 @@ def test_provider_model_and_observation_are_immutable() -> None:
 
     assert model.model_config["frozen"]
     assert observation.model_config["frozen"]
+
+
+def test_provider_model_allows_unknown_token_limits() -> None:
+    model = ProviderModel(
+        provider="example",
+        model="non-token-model",
+        display_name="Non-Token Model",
+    )
+
+    assert model.context_window_tokens is None
+    assert model.maximum_output_tokens is None

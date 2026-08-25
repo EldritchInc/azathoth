@@ -394,3 +394,64 @@ def test_openrouter_directory_rejects_empty_model_identifier() -> None:
         match=("OpenRouter model identifier must not be empty"),
     ):
         asyncio.run(directory.model(""))
+
+
+def test_openrouter_directory_normalizes_zero_context_length_to_unknown() -> None:
+    async def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        payload = create_model_payload()
+
+        payload["context_length"] = 0
+
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    payload,
+                ],
+            },
+        )
+
+    directory = OpenRouterModelDirectory(
+        create_configuration(),
+        transport=httpx.MockTransport(handle_request),
+    )
+
+    models = asyncio.run(directory.models())
+
+    assert models[0].context_window_tokens is None
+
+
+def test_openrouter_directory_normalizes_zero_maximum_output_tokens_to_unknown() -> None:
+    async def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        payload = create_model_payload()
+
+        top_provider = payload["top_provider"]
+
+        assert isinstance(
+            top_provider,
+            dict,
+        )
+
+        top_provider["max_completion_tokens"] = 0
+
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    payload,
+                ],
+            },
+        )
+
+    directory = OpenRouterModelDirectory(
+        create_configuration(),
+        transport=httpx.MockTransport(handle_request),
+    )
+
+    models = asyncio.run(directory.models())
+
+    assert models[0].maximum_output_tokens is None
