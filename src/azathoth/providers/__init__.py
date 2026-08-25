@@ -34,6 +34,10 @@ from azathoth.providers.openrouter_models import OpenRouterConfiguration
 from azathoth.providers.openrouter_registry import (
     OpenRouterModelRegistryLoader,
 )
+from azathoth.providers.portfolio import (
+    ModelPortfolio,
+    ModelPortfolioEntry,
+)
 from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.provider_directory import (
     ProviderModelDirectory,
@@ -72,6 +76,8 @@ __all__ = [
     "ModelExecutor",
     "ModelMetadata",
     "ModelModality",
+    "ModelPortfolio",
+    "ModelPortfolioEntry",
     "ModelPricing",
     "ModelQuery",
     "ModelRequest",
