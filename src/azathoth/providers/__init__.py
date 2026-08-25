@@ -41,6 +41,10 @@ from azathoth.providers.provider_models import (
 from azathoth.providers.provider_observation_repository import (
     ProviderModelObservationRepository,
 )
+from azathoth.providers.provider_observer import (
+    ProviderModelObservationUpdate,
+    ProviderModelObserver,
+)
 from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
@@ -77,6 +81,8 @@ __all__ = [
     "ProviderModelDirectory",
     "ProviderModelObservation",
     "ProviderModelObservationRepository",
+    "ProviderModelObservationUpdate",
+    "ProviderModelObserver",
     "SQLiteModelRepository",
     "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
