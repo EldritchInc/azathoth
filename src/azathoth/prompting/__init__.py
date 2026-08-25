@@ -9,6 +9,11 @@ from azathoth.prompting.exceptions import (
     PromptBindingFieldNotFoundError,
     PromptingError,
 )
+from azathoth.prompting.model_selection import (
+    FixedModelSelection,
+    ModelSelection,
+    PortfolioModelSelection,
+)
 from azathoth.prompting.models import (
     ModelBinding,
     PromptBinding,
@@ -19,8 +24,11 @@ from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
     "ContextPromptStrategy",
+    "FixedModelSelection",
     "ModelBinding",
     "ModelBindingMismatchError",
+    "ModelSelection",
+    "PortfolioModelSelection",
     "PromptBinding",
     "PromptBindingError",
     "PromptBindingEventNotFoundError",
