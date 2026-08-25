@@ -8,6 +8,10 @@ from azathoth.providers.exceptions import (
     UnsupportedModelRequestError,
 )
 from azathoth.providers.execution import ModelExecutor
+from azathoth.providers.memory_provider_observation_repository import (
+    InMemoryProviderModelObservationRepository,
+    require_provider_model_observation_repository,
+)
 from azathoth.providers.memory_repository import (
     InMemoryModelRepository,
     require_model_repository,
@@ -34,15 +38,22 @@ from azathoth.providers.provider_models import (
     ProviderModel,
     ProviderModelObservation,
 )
+from azathoth.providers.provider_observation_repository import (
+    ProviderModelObservationRepository,
+)
 from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
+from azathoth.providers.sqlite_provider_observation_repository import (
+    SQLiteProviderModelObservationRepository,
+)
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
     "DeterministicLanguageModel",
     "InMemoryModelRepository",
+    "InMemoryProviderModelObservationRepository",
     "LanguageModel",
     "LanguageModelRegistry",
     "ModelCapability",
@@ -65,7 +76,10 @@ __all__ = [
     "ProviderModel",
     "ProviderModelDirectory",
     "ProviderModelObservation",
+    "ProviderModelObservationRepository",
     "SQLiteModelRepository",
+    "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
     "require_model_repository",
+    "require_provider_model_observation_repository",
 ]
