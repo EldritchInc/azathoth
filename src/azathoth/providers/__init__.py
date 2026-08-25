@@ -9,6 +9,10 @@ from azathoth.providers.exceptions import (
     UnsupportedModelRequestError,
 )
 from azathoth.providers.execution import ModelExecutor
+from azathoth.providers.memory_portfolio_repository import (
+    InMemoryModelPortfolioRepository,
+    require_model_portfolio_repository,
+)
 from azathoth.providers.memory_provider_observation_repository import (
     InMemoryProviderModelObservationRepository,
     require_provider_model_observation_repository,
@@ -34,6 +38,16 @@ from azathoth.providers.openrouter_models import OpenRouterConfiguration
 from azathoth.providers.openrouter_registry import (
     OpenRouterModelRegistryLoader,
 )
+from azathoth.providers.portfolio import (
+    ModelPortfolio,
+    ModelPortfolioEntry,
+)
+from azathoth.providers.portfolio_loader import (
+    ModelPortfolioLoader,
+)
+from azathoth.providers.portfolio_repository import (
+    ModelPortfolioRepository,
+)
 from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.provider_directory import (
     ProviderModelDirectory,
@@ -53,6 +67,9 @@ from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
+from azathoth.providers.sqlite_portfolio_repository import (
+    SQLiteModelPortfolioRepository,
+)
 from azathoth.providers.sqlite_provider_observation_repository import (
     SQLiteProviderModelObservationRepository,
 )
@@ -61,6 +78,7 @@ from azathoth.providers.sqlite_repository import SQLiteModelRepository
 __all__ = [
     "DeterministicLanguageModel",
     "InMemoryModelRepository",
+    "InMemoryModelPortfolioRepository",
     "InMemoryProviderModelObservationRepository",
     "LanguageModel",
     "LanguageModelRegistry",
@@ -72,6 +90,10 @@ __all__ = [
     "ModelExecutor",
     "ModelMetadata",
     "ModelModality",
+    "ModelPortfolio",
+    "ModelPortfolioEntry",
+    "ModelPortfolioLoader",
+    "ModelPortfolioRepository",
     "ModelPricing",
     "ModelQuery",
     "ModelRequest",
@@ -90,8 +112,10 @@ __all__ = [
     "ProviderModelObservationUpdate",
     "ProviderModelObserver",
     "SQLiteModelRepository",
+    "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
+    "require_model_portfolio_repository",
     "require_model_repository",
     "require_provider_model_observation_repository",
 ]
