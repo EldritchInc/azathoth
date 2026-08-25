@@ -42,6 +42,9 @@ from azathoth.providers.portfolio import (
     ModelPortfolio,
     ModelPortfolioEntry,
 )
+from azathoth.providers.portfolio_loader import (
+    ModelPortfolioLoader,
+)
 from azathoth.providers.portfolio_repository import (
     ModelPortfolioRepository,
 )
@@ -89,6 +92,7 @@ __all__ = [
     "ModelModality",
     "ModelPortfolio",
     "ModelPortfolioEntry",
+    "ModelPortfolioLoader",
     "ModelPortfolioRepository",
     "ModelPricing",
     "ModelQuery",
