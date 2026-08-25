@@ -4,6 +4,7 @@ from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
 from azathoth.providers.deterministic import DeterministicLanguageModel
 from azathoth.providers.exceptions import (
+    ModelDiscoveryError,
     ModelExecutionError,
     UnsupportedModelRequestError,
 )
@@ -26,6 +27,9 @@ from azathoth.providers.models import (
     Prompt,
 )
 from azathoth.providers.openrouter import OpenRouterLanguageModel
+from azathoth.providers.openrouter_directory import (
+    OpenRouterModelDirectory,
+)
 from azathoth.providers.openrouter_models import OpenRouterConfiguration
 from azathoth.providers.openrouter_registry import (
     OpenRouterModelRegistryLoader,
@@ -63,6 +67,7 @@ __all__ = [
     "ModelCapability",
     "ModelCatalog",
     "ModelCatalogLoader",
+    "ModelDiscoveryError",
     "ModelExecutionError",
     "ModelExecutor",
     "ModelMetadata",
@@ -75,6 +80,7 @@ __all__ = [
     "ModelResponse",
     "OpenRouterConfiguration",
     "OpenRouterLanguageModel",
+    "OpenRouterModelDirectory",
     "OpenRouterModelRegistryLoader",
     "Prompt",
     "ProviderModel",

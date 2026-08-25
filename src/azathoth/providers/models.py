@@ -12,6 +12,8 @@ class ModelModality(StrEnum):
     IMAGE = "image"
     AUDIO = "audio"
     VIDEO = "video"
+    FILE = "file"
+    EMBEDDINGS = "embeddings"
 
 
 class ModelCapability(StrEnum):

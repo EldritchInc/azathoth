@@ -1,4 +1,4 @@
-"""Exceptions raised by language model provider execution."""
+"""Exceptions raised by language model providers."""
 
 
 class ModelExecutionError(RuntimeError):
@@ -7,3 +7,7 @@ class ModelExecutionError(RuntimeError):
 
 class UnsupportedModelRequestError(ModelExecutionError):
     """Raised when a model request requires unsupported execution behavior."""
+
+
+class ModelDiscoveryError(RuntimeError):
+    """Raised when provider model discovery cannot complete."""
