@@ -28,14 +28,9 @@ class InMemoryProviderModelObservationRepository:
         """Persist one observation without replacing existing evidence."""
 
         if observation.id in self._observations:
-            raise ValueError(
-                "Provider model observation "
-                f"{observation.id} already exists."
-            )
+            raise ValueError(f"Provider model observation {observation.id} already exists.")
 
-        self._observations[
-            observation.id
-        ] = observation
+        self._observations[observation.id] = observation
 
     def get(
         self,
@@ -43,9 +38,7 @@ class InMemoryProviderModelObservationRepository:
     ) -> ProviderModelObservation | None:
         """Return one observation by identifier."""
 
-        return self._observations.get(
-            observation_id
-        )
+        return self._observations.get(observation_id)
 
     def observations(
         self,
@@ -55,9 +48,7 @@ class InMemoryProviderModelObservationRepository:
     ]:
         """Return all observations in insertion order."""
 
-        return tuple(
-            self._observations.values()
-        )
+        return tuple(self._observations.values())
 
     def observations_for_model(
         self,
@@ -80,9 +71,7 @@ class InMemoryProviderModelObservationRepository:
     ) -> ProviderModelObservation | None:
         """Return the latest persisted observation for one model."""
 
-        observations = self.observations_for_model(
-            identifier
-        )
+        observations = self.observations_for_model(identifier)
 
         if not observations:
             return None

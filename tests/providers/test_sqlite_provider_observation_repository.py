@@ -14,17 +14,11 @@ from azathoth.providers import (
     SQLiteProviderModelObservationRepository,
 )
 
-FIRST_OBSERVATION_ID = UUID(
-    "11111111-1111-1111-1111-111111111111"
-)
+FIRST_OBSERVATION_ID = UUID("11111111-1111-1111-1111-111111111111")
 
-SECOND_OBSERVATION_ID = UUID(
-    "22222222-2222-2222-2222-222222222222"
-)
+SECOND_OBSERVATION_ID = UUID("22222222-2222-2222-2222-222222222222")
 
-OTHER_OBSERVATION_ID = UUID(
-    "33333333-3333-3333-3333-333333333333"
-)
+OTHER_OBSERVATION_ID = UUID("33333333-3333-3333-3333-333333333333")
 
 
 def create_observation(
@@ -65,19 +59,13 @@ def create_repository(
 ) -> SQLiteProviderModelObservationRepository:
     """Create one SQLite observation repository."""
 
-    return SQLiteProviderModelObservationRepository(
-        database
-    )
+    return SQLiteProviderModelObservationRepository(database)
 
 
 def test_sqlite_observation_repository_satisfies_protocol(
     tmp_path: Path,
 ) -> None:
-    repository: ProviderModelObservationRepository = (
-        create_repository(
-            tmp_path / "observations.db"
-        )
-    )
+    repository: ProviderModelObservationRepository = create_repository(tmp_path / "observations.db")
 
     assert repository.observations() == ()
 
@@ -92,27 +80,17 @@ def test_sqlite_observation_repository_persists_across_instances(
         hour=20,
     )
 
-    create_repository(
-        database
-    ).save(
-        observation
-    )
+    create_repository(database).save(observation)
 
-    repository = create_repository(
-        database
-    )
+    repository = create_repository(database)
 
-    assert repository.get(
-        observation.id
-    ) == observation
+    assert repository.get(observation.id) == observation
 
 
 def test_sqlite_observation_repository_preserves_insertion_order(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
     first = create_observation(
         observation_id=FIRST_OBSERVATION_ID,
@@ -131,17 +109,11 @@ def test_sqlite_observation_repository_preserves_insertion_order(
         hour=22,
     )
 
-    repository.save(
-        first
-    )
+    repository.save(first)
 
-    repository.save(
-        second
-    )
+    repository.save(second)
 
-    repository.save(
-        other
-    )
+    repository.save(other)
 
     assert repository.observations() == (
         first,
@@ -153,9 +125,7 @@ def test_sqlite_observation_repository_preserves_insertion_order(
 def test_sqlite_observation_repository_returns_model_history(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
     first = create_observation(
         observation_id=FIRST_OBSERVATION_ID,
@@ -174,21 +144,13 @@ def test_sqlite_observation_repository_returns_model_history(
         price=0.5,
     )
 
-    repository.save(
-        first
-    )
+    repository.save(first)
 
-    repository.save(
-        other
-    )
+    repository.save(other)
 
-    repository.save(
-        second
-    )
+    repository.save(second)
 
-    assert repository.observations_for_model(
-        "example/frontier"
-    ) == (
+    assert repository.observations_for_model("example/frontier") == (
         first,
         second,
     )
@@ -197,9 +159,7 @@ def test_sqlite_observation_repository_returns_model_history(
 def test_sqlite_observation_repository_returns_latest_model_observation(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
     first = create_observation(
         observation_id=FIRST_OBSERVATION_ID,
@@ -212,73 +172,48 @@ def test_sqlite_observation_repository_returns_latest_model_observation(
         price=0.5,
     )
 
-    repository.save(
-        first
-    )
+    repository.save(first)
 
-    repository.save(
-        second
-    )
+    repository.save(second)
 
-    assert repository.latest(
-        "example/frontier"
-    ) == second
+    assert repository.latest("example/frontier") == second
 
 
 def test_sqlite_observation_repository_returns_none_for_unknown_values(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
-    assert repository.get(
-        FIRST_OBSERVATION_ID
-    ) is None
+    assert repository.get(FIRST_OBSERVATION_ID) is None
 
-    assert repository.latest(
-        "example/frontier"
-    ) is None
+    assert repository.latest("example/frontier") is None
 
-    assert repository.observations_for_model(
-        "example/frontier"
-    ) == ()
+    assert repository.observations_for_model("example/frontier") == ()
 
 
 def test_sqlite_observation_repository_rejects_duplicate_observation_id(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
     observation = create_observation(
         observation_id=FIRST_OBSERVATION_ID,
         hour=20,
     )
 
-    repository.save(
-        observation
-    )
+    repository.save(observation)
 
     with pytest.raises(
         ValueError,
-        match=(
-            f"Provider model observation "
-            f"{FIRST_OBSERVATION_ID} already exists"
-        ),
+        match=(f"Provider model observation {FIRST_OBSERVATION_ID} already exists"),
     ):
-        repository.save(
-            observation
-        )
+        repository.save(observation)
 
 
 def test_sqlite_observation_repository_allows_equal_fingerprints(
     tmp_path: Path,
 ) -> None:
-    repository = create_repository(
-        tmp_path / "observations.db"
-    )
+    repository = create_repository(tmp_path / "observations.db")
 
     first = create_observation(
         observation_id=FIRST_OBSERVATION_ID,
@@ -292,17 +227,11 @@ def test_sqlite_observation_repository_allows_equal_fingerprints(
 
     assert first.fingerprint == second.fingerprint
 
-    repository.save(
-        first
-    )
+    repository.save(first)
 
-    repository.save(
-        second
-    )
+    repository.save(second)
 
-    assert repository.observations_for_model(
-        "example/frontier"
-    ) == (
+    assert repository.observations_for_model("example/frontier") == (
         first,
         second,
     )

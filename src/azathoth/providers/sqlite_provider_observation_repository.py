@@ -16,9 +16,7 @@ class SQLiteProviderModelObservationRepository:
         self,
         database: str | Path,
     ) -> None:
-        self._database = str(
-            database
-        )
+        self._database = str(database)
 
         self._initialize()
 
@@ -28,9 +26,7 @@ class SQLiteProviderModelObservationRepository:
     ) -> None:
         """Persist one observation without replacing existing evidence."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             try:
@@ -48,9 +44,7 @@ class SQLiteProviderModelObservationRepository:
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        str(
-                            observation.id
-                        ),
+                        str(observation.id),
                         observation.identifier,
                         observation.provider,
                         observation.model_identifier,
@@ -64,8 +58,7 @@ class SQLiteProviderModelObservationRepository:
 
             except sqlite3.IntegrityError as exc:
                 raise ValueError(
-                    "Provider model observation "
-                    f"{observation.id} already exists."
+                    f"Provider model observation {observation.id} already exists."
                 ) from exc
 
         finally:
@@ -77,9 +70,7 @@ class SQLiteProviderModelObservationRepository:
     ) -> ProviderModelObservation | None:
         """Return one observation by identifier."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             row = connection.execute(
@@ -88,11 +79,7 @@ class SQLiteProviderModelObservationRepository:
                 FROM provider_model_observations
                 WHERE observation_id = ?
                 """,
-                (
-                    str(
-                        observation_id
-                    ),
-                ),
+                (str(observation_id),),
             ).fetchone()
 
         finally:
@@ -101,9 +88,7 @@ class SQLiteProviderModelObservationRepository:
         if row is None:
             return None
 
-        return self._deserialize_payload(
-            row[0]
-        )
+        return self._deserialize_payload(row[0])
 
     def observations(
         self,
@@ -113,9 +98,7 @@ class SQLiteProviderModelObservationRepository:
     ]:
         """Return all observations in insertion order."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             rows = connection.execute(
@@ -129,12 +112,7 @@ class SQLiteProviderModelObservationRepository:
         finally:
             connection.close()
 
-        return tuple(
-            self._deserialize_payload(
-                row[0]
-            )
-            for row in rows
-        )
+        return tuple(self._deserialize_payload(row[0]) for row in rows)
 
     def observations_for_model(
         self,
@@ -145,9 +123,7 @@ class SQLiteProviderModelObservationRepository:
     ]:
         """Return observations for one model in insertion order."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             rows = connection.execute(
@@ -157,20 +133,13 @@ class SQLiteProviderModelObservationRepository:
                 WHERE identifier = ?
                 ORDER BY sequence
                 """,
-                (
-                    identifier,
-                ),
+                (identifier,),
             ).fetchall()
 
         finally:
             connection.close()
 
-        return tuple(
-            self._deserialize_payload(
-                row[0]
-            )
-            for row in rows
-        )
+        return tuple(self._deserialize_payload(row[0]) for row in rows)
 
     def latest(
         self,
@@ -178,9 +147,7 @@ class SQLiteProviderModelObservationRepository:
     ) -> ProviderModelObservation | None:
         """Return the latest persisted observation for one model."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             row = connection.execute(
@@ -191,9 +158,7 @@ class SQLiteProviderModelObservationRepository:
                 ORDER BY sequence DESC
                 LIMIT 1
                 """,
-                (
-                    identifier,
-                ),
+                (identifier,),
             ).fetchone()
 
         finally:
@@ -202,9 +167,7 @@ class SQLiteProviderModelObservationRepository:
         if row is None:
             return None
 
-        return self._deserialize_payload(
-            row[0]
-        )
+        return self._deserialize_payload(row[0])
 
     @staticmethod
     def _deserialize_payload(
@@ -216,23 +179,16 @@ class SQLiteProviderModelObservationRepository:
             payload,
             str,
         ):
-            raise TypeError(
-                "Persisted provider model observation "
-                "payload was not text."
-            )
+            raise TypeError("Persisted provider model observation payload was not text.")
 
-        return ProviderModelObservation.model_validate_json(
-            payload
-        )
+        return ProviderModelObservation.model_validate_json(payload)
 
     def _initialize(
         self,
     ) -> None:
         """Create repository tables when they do not already exist."""
 
-        connection = sqlite3.connect(
-            self._database
-        )
+        connection = sqlite3.connect(self._database)
 
         try:
             connection.execute(
