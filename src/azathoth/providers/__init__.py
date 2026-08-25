@@ -27,6 +27,10 @@ from azathoth.providers.openrouter_registry import (
     OpenRouterModelRegistryLoader,
 )
 from azathoth.providers.protocol import LanguageModel
+from azathoth.providers.provider_models import (
+    ProviderModel,
+    ProviderModelObservation,
+)
 from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
@@ -55,6 +59,8 @@ __all__ = [
     "OpenRouterLanguageModel",
     "OpenRouterModelRegistryLoader",
     "Prompt",
+    "ProviderModel",
+    "ProviderModelObservation",
     "SQLiteModelRepository",
     "UnsupportedModelRequestError",
     "require_model_repository",
