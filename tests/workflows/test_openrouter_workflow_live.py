@@ -8,7 +8,10 @@ import pytest
 from pydantic import SecretStr
 
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -81,7 +84,9 @@ def create_specification() -> WorkflowSpecification:
                             "Text: I absolutely loved this."
                         ),
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(

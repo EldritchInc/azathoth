@@ -18,19 +18,21 @@
         "prompt": {
           "text": "Answer the request concisely."
         },
-        "model_requirements": {
-          "required_capabilities": [],
-          "required_input_modalities": [
-            "text"
-          ],
-          "required_output_modalities": [
-            "text"
-          ],
-          "minimum_context_window_tokens": null,
-          "minimum_output_tokens": null,
-          "maximum_input_usd_per_million_tokens": null,
-          "maximum_output_usd_per_million_tokens": null,
-          "require_known_pricing": false
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
         }
       },
       "depends_on": [],

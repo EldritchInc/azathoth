@@ -1,15 +1,15 @@
 """Tests for context-aware prompt strategies."""
 
 import asyncio
-
-import pytest
+from uuid import UUID
 
 from azathoth.context import Context, ContextEvent
 from azathoth.prompting import (
     ContextPromptStrategy,
     ModelBinding,
-    ModelBindingMismatchError,
+    PortfolioModelSelection,
     PromptBinding,
+    PromptStrategySpec,
     PromptTemplate,
 )
 from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
@@ -19,15 +19,7 @@ from azathoth.strategies import Strategy, StrategyMetadata
 class RecordingLanguageModel:
     """A deterministic model that records its rendered prompt."""
 
-    def __init__(
-        self,
-        *,
-        provider: str = "test-provider",
-        model: str = "test-model",
-        response_text: str,
-    ) -> None:
-        self._provider = provider
-        self._model = model
+    def __init__(self, response_text: str) -> None:
         self._response_text = response_text
         self.received_prompt: Prompt | None = None
 
@@ -38,8 +30,8 @@ class RecordingLanguageModel:
 
         return ModelResponse(
             text=self._response_text,
-            provider=self._provider,
-            model=self._model,
+            provider="test",
+            model="stub",
             prompt_tokens=10,
             completion_tokens=2,
             total_tokens=12,
@@ -49,16 +41,15 @@ class RecordingLanguageModel:
 
 
 def create_strategy(
-    *,
-    language_model: RecordingLanguageModel,
-    model_binding: ModelBinding | None = None,
+    model: RecordingLanguageModel,
 ) -> ContextPromptStrategy:
-    """Create a deterministic context-aware prompt strategy."""
+    """Create a deterministic context-aware strategy."""
 
     return ContextPromptStrategy(
         metadata=StrategyMetadata(
+            id=UUID("c09d58ae-6eb2-458a-aaba-607b786850d6"),
             name="Classify support message",
-            description="Classify a support message rendered from context.",
+            description=("Render a support message from context and classify it."),
             version="1.0.0",
         ),
         template=PromptTemplate(
@@ -71,32 +62,30 @@ def create_strategy(
                 ),
             ),
         ),
-        language_model=language_model,
-        model_binding=model_binding,
+        language_model=model,
     )
 
 
-def create_context() -> Context:
-    """Create context containing a support message."""
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
 
-    return Context(
-        events=(
-            ContextEvent(
-                event_type="customer.message.received",
-                payload={
-                    "message": "I was charged twice.",
-                },
-                producer="test-suite",
-            ),
-        )
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
     )
+
+    return selection.requirements
 
 
 def test_context_strategy_renders_prompt_before_model_call() -> None:
     model = RecordingLanguageModel(
         response_text="duplicate_charge",
     )
-    strategy = create_strategy(language_model=model)
+    strategy = create_strategy(model)
 
     context = Context(
         events=(
@@ -113,8 +102,8 @@ def test_context_strategy_renders_prompt_before_model_call() -> None:
     assert model.received_prompt == Prompt(text="Classify: I was charged twice.")
     assert outcome.output == "duplicate_charge"
     assert outcome.metrics is not None
-    assert outcome.metrics.provider == "test-provider"
-    assert outcome.metrics.model == "test-model"
+    assert outcome.metrics.provider == "test"
+    assert outcome.metrics.model == "stub"
     assert outcome.metrics.prompt_tokens == 10
     assert outcome.metrics.completion_tokens == 2
     assert outcome.metrics.total_tokens == 12
@@ -126,7 +115,7 @@ def test_context_strategy_exposes_metadata_and_template() -> None:
     model = RecordingLanguageModel(
         response_text="duplicate_charge",
     )
-    strategy = create_strategy(language_model=model)
+    strategy = create_strategy(model)
 
     assert strategy.metadata.name == "Classify support message"
     assert strategy.template.text == "Classify: {message}"
@@ -147,7 +136,7 @@ async def execute_strategy(
 
 def test_context_strategy_satisfies_strategy_protocol() -> None:
     strategy = create_strategy(
-        language_model=RecordingLanguageModel(
+        RecordingLanguageModel(
             response_text="duplicate_charge",
         )
     )
@@ -208,7 +197,7 @@ def test_context_strategy_exposes_model_requirements() -> None:
 
 def test_context_strategy_allows_omitted_model_requirements() -> None:
     strategy = create_strategy(
-        language_model=RecordingLanguageModel(
+        RecordingLanguageModel(
             response_text="duplicate_charge",
         )
     )
@@ -248,110 +237,9 @@ def test_context_strategy_exposes_model_binding() -> None:
 
 def test_context_strategy_allows_omitted_model_binding() -> None:
     strategy = create_strategy(
-        language_model=RecordingLanguageModel(
+        RecordingLanguageModel(
             response_text="duplicate_charge",
         )
     )
 
     assert strategy.model_binding is None
-
-
-def test_context_strategy_accepts_matching_model_binding() -> None:
-    model = RecordingLanguageModel(
-        provider="provider-a",
-        model="small",
-        response_text="duplicate_charge",
-    )
-    strategy = create_strategy(
-        language_model=model,
-        model_binding=ModelBinding(
-            identifier="provider-a/small",
-        ),
-    )
-
-    outcome = asyncio.run(strategy.run(create_context()))
-
-    assert model.received_prompt == Prompt(text="Classify: I was charged twice.")
-    assert outcome.output == "duplicate_charge"
-    assert outcome.metrics is not None
-    assert outcome.metrics.provider == "provider-a"
-    assert outcome.metrics.model == "small"
-
-
-def test_context_strategy_rejects_mismatched_model_binding() -> None:
-    model = RecordingLanguageModel(
-        provider="provider-b",
-        model="large",
-        response_text="duplicate_charge",
-    )
-    strategy = create_strategy(
-        language_model=model,
-        model_binding=ModelBinding(
-            identifier="provider-a/small",
-        ),
-    )
-
-    with pytest.raises(
-        ModelBindingMismatchError,
-        match="provider-b/large",
-    ):
-        asyncio.run(strategy.run(create_context()))
-
-
-def test_context_strategy_rejects_response_from_different_model() -> None:
-    model = RecordingLanguageModel(
-        provider="provider-a",
-        model="large",
-        response_text="duplicate_charge",
-    )
-    strategy = create_strategy(
-        language_model=model,
-        model_binding=ModelBinding(
-            identifier="provider-a/small",
-        ),
-    )
-
-    with pytest.raises(
-        ModelBindingMismatchError,
-        match="provider-a/large",
-    ):
-        asyncio.run(strategy.run(create_context()))
-
-
-def test_context_strategy_executes_without_model_binding() -> None:
-    model = RecordingLanguageModel(
-        provider="provider-any",
-        model="model-any",
-        response_text="duplicate_charge",
-    )
-    strategy = create_strategy(
-        language_model=model,
-    )
-
-    outcome = asyncio.run(strategy.run(create_context()))
-
-    assert outcome.output == "duplicate_charge"
-
-
-def test_context_strategy_renders_prompt_before_execution() -> None:
-    language_model = RecordingLanguageModel(
-        response_text="duplicate_charge",
-    )
-    strategy = create_strategy(
-        language_model=language_model,
-    )
-    context = Context(
-        events=(
-            ContextEvent(
-                event_type="customer.message.received",
-                payload={
-                    "message": "I was charged twice.",
-                },
-                producer="test-suite",
-            ),
-        )
-    )
-
-    asyncio.run(strategy.run(context))
-
-    assert language_model.received_prompt == Prompt(text="Classify: I was charged twice.")

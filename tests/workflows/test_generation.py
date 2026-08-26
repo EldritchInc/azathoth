@@ -6,7 +6,11 @@ from uuid import UUID, uuid5
 import pytest
 
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategy, PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategy,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCapability,
@@ -89,13 +93,15 @@ def create_classification_step() -> WorkflowStepSpecification:
             prompt=Prompt(
                 text="Classify the supplied request.",
             ),
-            model_requirements=ModelRequirements(
-                required_capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                minimum_context_window_tokens=32_000,
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(
+                    required_capabilities=frozenset(
+                        {
+                            ModelCapability.STRUCTURED_OUTPUT,
+                        }
+                    ),
+                    minimum_context_window_tokens=32_000,
+                )
             ),
         ),
         outputs=(
@@ -137,13 +143,15 @@ def create_reasoning_step() -> WorkflowStepSpecification:
             prompt=Prompt(
                 text="Reason about the classified request.",
             ),
-            model_requirements=ModelRequirements(
-                required_capabilities=frozenset(
-                    {
-                        ModelCapability.TOOL_USE,
-                    }
-                ),
-                minimum_context_window_tokens=64_000,
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(
+                    required_capabilities=frozenset(
+                        {
+                            ModelCapability.TOOL_USE,
+                        }
+                    ),
+                    minimum_context_window_tokens=64_000,
+                )
             ),
         ),
         inputs=(
@@ -261,6 +269,21 @@ def generate_candidate() -> WorkflowCandidate:
     )
 
 
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
+
+
 def test_generation_preserves_workflow_metadata() -> None:
     specification = create_workflow_specification()
 
@@ -306,8 +329,10 @@ def test_generation_preserves_step_scoped_model_requirements() -> None:
     classification_specification = require_prompt_specification(specification.steps[0])
     reasoning_specification = require_prompt_specification(specification.steps[1])
 
-    assert classification.model_requirements == classification_specification.model_requirements
-    assert reasoning.model_requirements == reasoning_specification.model_requirements
+    assert classification.model_requirements == require_portfolio_requirements(
+        classification_specification
+    )
+    assert reasoning.model_requirements == require_portfolio_requirements(reasoning_specification)
     assert classification.model_requirements != reasoning.model_requirements
 
 
@@ -469,12 +494,14 @@ def test_generation_fails_when_step_has_no_eligible_model() -> None:
                     prompt=Prompt(
                         text="Describe the supplied image.",
                     ),
-                    model_requirements=ModelRequirements(
-                        required_capabilities=frozenset(
-                            {
-                                ModelCapability.VISION,
-                            }
-                        ),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(
+                            required_capabilities=frozenset(
+                                {
+                                    ModelCapability.VISION,
+                                }
+                            ),
+                        )
                     ),
                 ),
             ),

@@ -6,7 +6,10 @@ from uuid import UUID
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult, StrategyExecutor
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -130,7 +133,9 @@ def create_prompt_specification(
         prompt=Prompt(
             text=name,
         ),
-        model_requirements=ModelRequirements(),
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(),
+        ),
     )
 
 

@@ -10,6 +10,7 @@ from azathoth.optimization import (
     WorkflowOptimizer,
 )
 from azathoth.prompting import (
+    PortfolioModelSelection,
     PromptStrategy,
     PromptStrategySpec,
 )
@@ -147,7 +148,9 @@ def create_workflow(
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),

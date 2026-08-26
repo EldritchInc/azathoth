@@ -12,7 +12,10 @@ from azathoth.evaluation import (
     ExpectedOutcome,
     OutcomeComparison,
 )
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -102,7 +105,9 @@ def create_candidate(
                     prompt=Prompt(
                         text=(f"Classify this text as positive or negative.\n\nText: {case.input}"),
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(

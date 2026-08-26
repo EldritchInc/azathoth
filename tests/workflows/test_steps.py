@@ -5,7 +5,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelRequirements,
@@ -36,13 +39,15 @@ def create_prompt_specification() -> PromptStrategySpec:
         prompt=Prompt(
             text="Classify the supplied support request.",
         ),
-        model_requirements=ModelRequirements(
-            required_capabilities=frozenset(
-                {
-                    ModelCapability.STRUCTURED_OUTPUT,
-                }
-            ),
-            minimum_context_window_tokens=32_000,
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(
+                required_capabilities=frozenset(
+                    {
+                        ModelCapability.STRUCTURED_OUTPUT,
+                    }
+                ),
+                minimum_context_window_tokens=32_000,
+            )
         ),
     )
 
@@ -54,6 +59,21 @@ def create_step() -> WorkflowStepSpecification:
         id=STEP_ID,
         specification=create_prompt_specification(),
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def test_workflow_step_records_identifier() -> None:
@@ -74,10 +94,9 @@ def test_workflow_step_preserves_strategy_specification() -> None:
 
     assert specification.metadata.name == "Classification"
     assert specification.prompt.text == ("Classify the supplied support request.")
-    assert (
-        ModelCapability.STRUCTURED_OUTPUT in specification.model_requirements.required_capabilities
-    )
-    assert specification.model_requirements.minimum_context_window_tokens == 32_000
+    specification_requirements = require_portfolio_requirements(specification)
+    assert ModelCapability.STRUCTURED_OUTPUT in specification_requirements.required_capabilities
+    assert specification_requirements.minimum_context_window_tokens == 32_000
 
 
 def test_workflow_step_preserves_specification() -> None:
@@ -103,7 +122,9 @@ def test_workflow_step_is_immutable() -> None:
             prompt=Prompt(
                 text="Changed prompt.",
             ),
-            model_requirements=ModelRequirements(),
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(),
+            ),
         )
 
 

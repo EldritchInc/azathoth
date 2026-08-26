@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelRequirements,
@@ -47,7 +50,9 @@ def create_prompt_step(
             prompt=Prompt(
                 text=f"Execute {name}.",
             ),
-            model_requirements=requirements,
+            model_selection=PortfolioModelSelection(
+                requirements=requirements,
+            ),
         ),
     )
 
@@ -65,6 +70,21 @@ def require_prompt_specification(
     )
 
     return specification
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def create_workflow() -> WorkflowSpecification:
@@ -116,6 +136,20 @@ def create_workflow() -> WorkflowSpecification:
         ),
     )
 
+    def require_portfolio_requirements(
+        specification: PromptStrategySpec,
+    ) -> ModelRequirements:
+        """Return requirements from a portfolio-selected prompt specification."""
+
+        selection = specification.model_selection
+
+        assert isinstance(
+            selection,
+            PortfolioModelSelection,
+        )
+
+        return selection.requirements
+
     return WorkflowSpecification(
         metadata=WorkflowMetadata(
             name="Classify and resolve request",
@@ -145,9 +179,15 @@ def test_execution_layers_preserve_step_scoped_model_requirements() -> None:
 
     layers = workflow.execution_layers()
 
-    classifier_requirements = require_prompt_specification(layers[0][0]).model_requirements
-    question_requirements = require_prompt_specification(layers[0][1]).model_requirements
-    reasoning_requirements = require_prompt_specification(layers[1][0]).model_requirements
+    classifier_requirements = require_portfolio_requirements(
+        require_prompt_specification(layers[0][0])
+    )
+    question_requirements = require_portfolio_requirements(
+        require_prompt_specification(layers[0][1])
+    )
+    reasoning_requirements = require_portfolio_requirements(
+        require_prompt_specification(layers[1][0])
+    )
 
     assert classifier_requirements == ModelRequirements(
         required_capabilities=frozenset(
@@ -190,8 +230,12 @@ def test_steps_in_same_layer_keep_independent_requirements() -> None:
 
     first_layer = workflow.execution_layers()[0]
 
-    first_requirements = require_prompt_specification(first_layer[0]).model_requirements
-    second_requirements = require_prompt_specification(first_layer[1]).model_requirements
+    first_requirements = require_portfolio_requirements(
+        require_prompt_specification(first_layer[0])
+    )
+    second_requirements = require_portfolio_requirements(
+        require_prompt_specification(first_layer[1])
+    )
 
     assert first_requirements != second_requirements
     assert first_requirements.minimum_context_window_tokens == 8_000
@@ -209,9 +253,11 @@ def test_planned_downstream_step_preserves_dependencies_and_requirements() -> No
         QUESTION_STEP_ID,
     )
     assert (
-        ModelCapability.TOOL_USE in reasoning_specification.model_requirements.required_capabilities
+        ModelCapability.TOOL_USE
+        in require_portfolio_requirements(reasoning_specification).required_capabilities
     )
-    assert reasoning_specification.model_requirements.minimum_context_window_tokens == 128_000
+    reasoning_specification_requirements = require_portfolio_requirements(reasoning_specification)
+    assert reasoning_specification_requirements.minimum_context_window_tokens == 128_000
 
 
 def test_restored_workflow_produces_equivalent_execution_layers() -> None:
@@ -231,4 +277,5 @@ def test_restored_workflow_produces_equivalent_execution_layers() -> None:
     restored_reasoning = require_prompt_specification(restored.execution_layers()[1][0])
     original_reasoning = require_prompt_specification(workflow.execution_layers()[1][0])
 
-    assert restored_reasoning.model_requirements == original_reasoning.model_requirements
+    restored_reasoning_requirements = restored_reasoning
+    assert restored_reasoning_requirements == original_reasoning

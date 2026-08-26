@@ -8,7 +8,10 @@ from pydantic import JsonValue
 
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult, StrategyExecutor
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -147,7 +150,9 @@ def create_workflow_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Score the request confidence.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(
@@ -168,7 +173,9 @@ def create_workflow_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Handle the high-confidence request.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 depends_on=(SCORER_STEP_ID,),
                 conditions=(
@@ -194,7 +201,9 @@ def create_workflow_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Handle the low-confidence request.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 depends_on=(SCORER_STEP_ID,),
                 conditions=(

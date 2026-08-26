@@ -5,7 +5,10 @@ from uuid import UUID
 
 import pytest
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import ModelRequirements, Prompt
 from azathoth.strategies import StrategyMetadata
 from azathoth.tools import ToolRequirement
@@ -50,7 +53,9 @@ def create_prompt_specification(
         prompt=Prompt(
             text=f"Execute {name}.",
         ),
-        model_requirements=ModelRequirements(),
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(),
+        ),
     )
 
 

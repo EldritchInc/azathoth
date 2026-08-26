@@ -13,7 +13,10 @@ from azathoth.evaluation import (
     ExpectedOutcome,
     OutcomeComparison,
 )
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -108,7 +111,9 @@ def create_workflow(
                     prompt=Prompt(
                         text="Classify the request.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(

@@ -3,7 +3,11 @@
 from uuid import UUID
 
 from azathoth.optimization import generate_model_substitutions
-from azathoth.prompting import PromptStrategy, PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategy,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -166,11 +170,13 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_requirements=ModelRequirements(
-                        required_capabilities=frozenset(
-                            {
-                                ModelCapability.STRUCTURED_OUTPUT,
-                            }
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(
+                            required_capabilities=frozenset(
+                                {
+                                    ModelCapability.STRUCTURED_OUTPUT,
+                                }
+                            ),
                         ),
                     ),
                 ),

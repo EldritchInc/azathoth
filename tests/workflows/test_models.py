@@ -5,7 +5,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import ModelRequirements, Prompt
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
@@ -40,7 +43,9 @@ def create_step(
             prompt=Prompt(
                 text=f"Perform the {name.lower()} step.",
             ),
-            model_requirements=ModelRequirements(),
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(),
+            ),
         ),
         depends_on=depends_on,
     )

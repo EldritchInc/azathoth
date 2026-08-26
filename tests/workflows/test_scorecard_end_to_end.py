@@ -11,7 +11,10 @@ from azathoth.evaluation import (
     ExpectedOutcome,
     OutcomeComparison,
 )
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -82,7 +85,9 @@ def create_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Return exactly success.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),

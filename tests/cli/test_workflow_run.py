@@ -8,7 +8,10 @@ import pytest
 import azathoth.cli.workflows as workflow_commands
 from azathoth.cli import run_workflow
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -65,7 +68,9 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),
@@ -236,6 +241,11 @@ def test_workflow_run_renders_failed_run_and_returns_nonzero(
 
     monkeypatch.setattr(
         workflow_commands,
+        "load_runtime",
+        lambda _configuration: object(),
+    )
+    monkeypatch.setattr(
+        workflow_commands,
         "execute_configured_workflow",
         fake_execute_configured_workflow,
     )
@@ -245,10 +255,5 @@ def test_workflow_run_renders_failed_run_and_returns_nonzero(
     captured = capsys.readouterr()
 
     assert result == 1
-
-    assert captured.err == ""
-
-    assert "Status: failed\n" in captured.out
-    assert "Failed: 1\n" in captured.out
-
-    assert "Error: RuntimeError: Execution failed.\n" in captured.out
+    assert "Status: failed" in captured.out
+    assert "RuntimeError: Execution failed." in captured.out

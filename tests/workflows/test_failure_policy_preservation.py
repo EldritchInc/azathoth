@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -72,7 +75,9 @@ def create_specification(
                     prompt=Prompt(
                         text="Run.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 failure_policy=failure_policy,
             ),
@@ -126,7 +131,9 @@ def test_step_defaults_to_fail_workflow() -> None:
                     prompt=Prompt(
                         text="Run.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),

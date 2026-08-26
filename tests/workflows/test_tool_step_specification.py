@@ -5,7 +5,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -70,7 +73,9 @@ def create_prompt_step() -> WorkflowStepSpecification:
             prompt=Prompt(
                 text="Classify the supplied text.",
             ),
-            model_requirements=ModelRequirements(),
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(),
+            ),
         ),
         depends_on=(TOOL_STEP_ID,),
     )

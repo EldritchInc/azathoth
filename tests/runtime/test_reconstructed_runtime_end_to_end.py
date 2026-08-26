@@ -5,7 +5,10 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -75,7 +78,9 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(

@@ -2,7 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from azathoth.providers import ModelRequirements, Prompt
+from azathoth.prompting.model_selection import ModelSelection
+from azathoth.providers import Prompt
 from azathoth.strategies import StrategyMetadata
 
 
@@ -13,4 +14,4 @@ class PromptStrategySpec(BaseModel):
 
     metadata: StrategyMetadata
     prompt: Prompt
-    model_requirements: ModelRequirements
+    model_selection: ModelSelection

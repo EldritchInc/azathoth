@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelCatalog,
@@ -44,16 +47,33 @@ def create_classification_step() -> WorkflowStepSpecification:
                     "Return structured output."
                 ),
             ),
-            model_requirements=ModelRequirements(
-                required_capabilities=frozenset(
-                    {
-                        ModelCapability.STRUCTURED_OUTPUT,
-                    }
-                ),
-                minimum_context_window_tokens=8_000,
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(
+                    required_capabilities=frozenset(
+                        {
+                            ModelCapability.STRUCTURED_OUTPUT,
+                        }
+                    ),
+                    minimum_context_window_tokens=8_000,
+                )
             ),
         ),
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def require_prompt_specification(
@@ -89,18 +109,20 @@ def create_reasoning_step() -> WorkflowStepSpecification:
                     "when the task requires one."
                 ),
             ),
-            model_requirements=ModelRequirements(
-                required_capabilities=frozenset(
-                    {
-                        ModelCapability.TOOL_USE,
-                    }
-                ),
-                required_input_modalities=frozenset(
-                    {
-                        ModelModality.TEXT,
-                    }
-                ),
-                minimum_context_window_tokens=128_000,
+            model_selection=PortfolioModelSelection(
+                requirements=ModelRequirements(
+                    required_capabilities=frozenset(
+                        {
+                            ModelCapability.TOOL_USE,
+                        }
+                    ),
+                    required_input_modalities=frozenset(
+                        {
+                            ModelModality.TEXT,
+                        }
+                    ),
+                    minimum_context_window_tokens=128_000,
+                )
             ),
         ),
     )
@@ -126,8 +148,12 @@ def create_workflow() -> WorkflowSpecification:
 def test_workflow_steps_preserve_independent_model_requirements() -> None:
     workflow = create_workflow()
 
-    classification_requirements = require_prompt_specification(workflow.steps[0]).model_requirements
-    reasoning_requirements = require_prompt_specification(workflow.steps[1]).model_requirements
+    classification_requirements = require_portfolio_requirements(
+        require_prompt_specification(workflow.steps[0])
+    )
+    reasoning_requirements = require_portfolio_requirements(
+        require_prompt_specification(workflow.steps[1])
+    )
 
     assert classification_requirements == ModelRequirements(
         required_capabilities=frozenset(
@@ -182,13 +208,14 @@ def test_workflow_round_trip_preserves_step_scoped_requirements() -> None:
     classification = require_prompt_specification(restored.steps[0])
     reasoning = require_prompt_specification(restored.steps[1])
 
-    assert classification.model_requirements != reasoning.model_requirements
-
-    assert (
-        ModelCapability.STRUCTURED_OUTPUT in classification.model_requirements.required_capabilities
+    assert require_portfolio_requirements(classification) != require_portfolio_requirements(
+        reasoning
     )
 
-    assert ModelCapability.TOOL_USE in reasoning.model_requirements.required_capabilities
+    classification_requirements = require_portfolio_requirements(classification)
+    assert ModelCapability.STRUCTURED_OUTPUT in classification_requirements.required_capabilities
+    reasoning_requirements = require_portfolio_requirements(reasoning)
+    assert ModelCapability.TOOL_USE in reasoning_requirements.required_capabilities
 
 
 def test_each_workflow_step_can_discover_different_eligible_models() -> None:
@@ -227,8 +254,12 @@ def test_each_workflow_step_can_discover_different_eligible_models() -> None:
         )
     )
 
-    classification_requirements = require_prompt_specification(workflow.steps[0]).model_requirements
-    reasoning_requirements = require_prompt_specification(workflow.steps[1]).model_requirements
+    classification_requirements = require_portfolio_requirements(
+        require_prompt_specification(workflow.steps[0])
+    )
+    reasoning_requirements = require_portfolio_requirements(
+        require_prompt_specification(workflow.steps[1])
+    )
 
     classification_models = catalog.find(ModelQuery.from_requirements(classification_requirements))
     reasoning_models = catalog.find(ModelQuery.from_requirements(reasoning_requirements))

@@ -3,7 +3,10 @@
 from pathlib import Path
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelModality,
     ModelRequirements,
@@ -54,11 +57,28 @@ def create_simple_prompt_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Answer the request concisely.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def read_simple_prompt_document() -> str:
@@ -118,7 +138,7 @@ def test_simple_prompt_example_uses_default_model_requirements() -> None:
         PromptStrategySpec,
     )
 
-    requirements = prompt.model_requirements
+    requirements = require_portfolio_requirements(prompt)
 
     assert requirements.required_capabilities == frozenset()
 

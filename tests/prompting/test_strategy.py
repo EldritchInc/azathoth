@@ -6,7 +6,13 @@ from uuid import UUID
 import pytest
 
 from azathoth.context import Context
-from azathoth.prompting import ModelBinding, ModelBindingMismatchError, PromptStrategy
+from azathoth.prompting import (
+    ModelBinding,
+    ModelBindingMismatchError,
+    PortfolioModelSelection,
+    PromptStrategy,
+    PromptStrategySpec,
+)
 from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
 from azathoth.strategies import Strategy, StrategyMetadata
 
@@ -74,6 +80,21 @@ def create_metadata() -> StrategyMetadata:
         description="Classify a support request using a language model.",
         version="1.0.0",
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def test_prompt_strategy_sends_prompt_to_language_model() -> None:

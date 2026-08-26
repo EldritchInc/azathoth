@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -67,7 +70,9 @@ def create_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Retry.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 retry_policy=WorkflowRetryPolicy(
                     max_attempts=4,
@@ -156,7 +161,9 @@ def test_default_retry_policy_is_preserved() -> None:
                     prompt=Prompt(
                         text="Default.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),
