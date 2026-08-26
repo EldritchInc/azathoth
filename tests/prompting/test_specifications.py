@@ -5,7 +5,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelModality,
@@ -28,25 +31,42 @@ def create_specification() -> PromptStrategySpec:
         prompt=Prompt(
             text=("Classify the support request and return structured JSON."),
         ),
-        model_requirements=ModelRequirements(
-            required_capabilities=frozenset(
-                {
-                    ModelCapability.STRUCTURED_OUTPUT,
-                }
-            ),
-            required_input_modalities=frozenset(
-                {
-                    ModelModality.TEXT,
-                }
-            ),
-            required_output_modalities=frozenset(
-                {
-                    ModelModality.TEXT,
-                }
-            ),
-            minimum_context_window_tokens=32_000,
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(
+                required_capabilities=frozenset(
+                    {
+                        ModelCapability.STRUCTURED_OUTPUT,
+                    }
+                ),
+                required_input_modalities=frozenset(
+                    {
+                        ModelModality.TEXT,
+                    }
+                ),
+                required_output_modalities=frozenset(
+                    {
+                        ModelModality.TEXT,
+                    }
+                ),
+                minimum_context_window_tokens=32_000,
+            )
         ),
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def test_prompt_strategy_spec_records_workload_definition() -> None:
@@ -54,10 +74,12 @@ def test_prompt_strategy_spec_records_workload_definition() -> None:
 
     assert specification.metadata.name == ("Structured support classification")
     assert specification.prompt.text.startswith("Classify the support request")
-    assert (
-        ModelCapability.STRUCTURED_OUTPUT in specification.model_requirements.required_capabilities
-    )
-    assert specification.model_requirements.minimum_context_window_tokens == 32_000
+
+    specification_model_requirements = require_portfolio_requirements(specification)
+    required_capabilities = specification_model_requirements.required_capabilities
+
+    assert ModelCapability.STRUCTURED_OUTPUT in required_capabilities
+    assert specification_model_requirements.minimum_context_window_tokens == 32_000
 
 
 def test_prompt_strategy_spec_does_not_contain_language_model() -> None:
@@ -70,7 +92,7 @@ def test_prompt_strategy_spec_contains_only_durable_configuration() -> None:
     assert set(PromptStrategySpec.model_fields) == {
         "metadata",
         "prompt",
-        "model_requirements",
+        "model_selection",
     }
 
 
@@ -115,12 +137,11 @@ def test_prompt_strategy_spec_supports_default_text_requirements() -> None:
         prompt=Prompt(
             text="Classify the request.",
         ),
-        model_requirements=ModelRequirements(),
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(),
+        ),
     )
 
-    assert specification.model_requirements.required_input_modalities == (
-        frozenset({ModelModality.TEXT})
-    )
-    assert specification.model_requirements.required_output_modalities == (
-        frozenset({ModelModality.TEXT})
-    )
+    specification_requirements = require_portfolio_requirements(specification)
+    assert specification_requirements.required_input_modalities == frozenset({ModelModality.TEXT})
+    assert specification_requirements.required_output_modalities == frozenset({ModelModality.TEXT})

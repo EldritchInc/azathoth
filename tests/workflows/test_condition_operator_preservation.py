@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -79,7 +82,9 @@ def create_workflow_specification(
                     prompt=Prompt(
                         text="Score the request.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(
@@ -102,7 +107,9 @@ def create_workflow_specification(
                     prompt=Prompt(
                         text="Handle the confident request.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 depends_on=(PRODUCER_STEP_ID,),
                 conditions=(

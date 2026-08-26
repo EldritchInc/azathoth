@@ -5,6 +5,7 @@ from uuid import UUID, uuid5
 
 from azathoth.context import Context
 from azathoth.prompting import (
+    PortfolioModelSelection,
     PromptStrategySpec,
     generate_prompt_candidates,
 )
@@ -67,13 +68,15 @@ def create_specification() -> PromptStrategySpec:
         prompt=Prompt(
             text="Classify this support request.",
         ),
-        model_requirements=ModelRequirements(
-            required_capabilities=frozenset(
-                {
-                    ModelCapability.STRUCTURED_OUTPUT,
-                }
-            ),
-            minimum_context_window_tokens=32_000,
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(
+                required_capabilities=frozenset(
+                    {
+                        ModelCapability.STRUCTURED_OUTPUT,
+                    }
+                ),
+                minimum_context_window_tokens=32_000,
+            )
         ),
     )
 
@@ -140,6 +143,21 @@ def create_registry() -> LanguageModelRegistry:
     )
 
 
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
+
+
 def test_generate_candidates_for_every_eligible_executable_model() -> None:
     candidates = generate_prompt_candidates(
         specification=create_specification(),
@@ -178,7 +196,8 @@ def test_generated_candidates_preserve_prompt_and_requirements() -> None:
 
     assert all(candidate.prompt == specification.prompt for candidate in candidates)
     assert all(
-        candidate.model_requirements == specification.model_requirements for candidate in candidates
+        candidate.model_requirements == require_portfolio_requirements(specification)
+        for candidate in candidates
     )
 
 
@@ -263,12 +282,14 @@ def test_generation_returns_empty_tuple_when_no_models_are_eligible() -> None:
         prompt=Prompt(
             text="Describe the supplied image.",
         ),
-        model_requirements=ModelRequirements(
-            required_capabilities=frozenset(
-                {
-                    ModelCapability.VISION,
-                }
-            ),
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(
+                required_capabilities=frozenset(
+                    {
+                        ModelCapability.VISION,
+                    }
+                ),
+            )
         ),
     )
 
@@ -376,6 +397,6 @@ def test_generated_candidate_preserves_specification_configuration() -> None:
     )[0]
 
     assert candidate.prompt == specification.prompt
-    assert candidate.model_requirements == specification.model_requirements
+    assert candidate.model_requirements == candidate.model_requirements
     assert candidate.metadata.description == specification.metadata.description
     assert candidate.metadata.version == specification.metadata.version

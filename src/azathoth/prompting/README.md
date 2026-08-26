@@ -244,7 +244,9 @@ specification = PromptStrategySpec(
     prompt=Prompt(
         text="Return exactly success.",
     ),
-    model_requirements=ModelRequirements(),
+    model_selection=PortfolioModelSelection(
+        requirements=ModelRequirements(),
+    ),
 )
 ```
 

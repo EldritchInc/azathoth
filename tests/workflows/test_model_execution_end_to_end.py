@@ -4,7 +4,10 @@ import asyncio
 from uuid import UUID
 
 from azathoth.context import Context
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
@@ -53,7 +56,9 @@ def create_specification() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Classify this text as positive or negative.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
                 outputs=(
                     WorkflowValueBinding(

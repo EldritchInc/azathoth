@@ -9,7 +9,10 @@ from azathoth.cli import (
     CliRuntimeConfiguration,
     load_runtime,
 )
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelMetadata,
     ModelRequirements,
@@ -67,7 +70,9 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_requirements=ModelRequirements(),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(),
+                    ),
                 ),
             ),
         ),

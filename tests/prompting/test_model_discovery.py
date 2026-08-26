@@ -1,6 +1,8 @@
 """Tests for discovering models from prompt strategy requirements."""
 
-from azathoth.prompting import PromptStrategy
+from azathoth.prompting import (
+    PromptStrategy,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelCatalog,

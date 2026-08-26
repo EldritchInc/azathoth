@@ -2,7 +2,10 @@
 
 from uuid import UUID
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelRequirements,
     Prompt,
@@ -32,7 +35,9 @@ def create_prompt_specification() -> PromptStrategySpec:
         prompt=Prompt(
             text="Reason about the request.",
         ),
-        model_requirements=ModelRequirements(),
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(),
+        ),
     )
 
 

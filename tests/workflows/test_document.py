@@ -5,7 +5,10 @@ from uuid import UUID
 
 import pytest
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    PortfolioModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     ModelCapability,
     ModelRequirements,
@@ -55,12 +58,14 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text=("Classify the request and return the expected result."),
                     ),
-                    model_requirements=ModelRequirements(
-                        required_capabilities=frozenset(
-                            {
-                                ModelCapability.STRUCTURED_OUTPUT,
-                            }
-                        ),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(
+                            required_capabilities=frozenset(
+                                {
+                                    ModelCapability.STRUCTURED_OUTPUT,
+                                }
+                            ),
+                        )
                     ),
                 ),
             ),
@@ -77,6 +82,21 @@ def create_workflow() -> WorkflowSpecification:
             ),
         ),
     )
+
+
+def require_portfolio_requirements(
+    specification: PromptStrategySpec,
+) -> ModelRequirements:
+    """Return requirements from a portfolio-selected prompt specification."""
+
+    selection = specification.model_selection
+
+    assert isinstance(
+        selection,
+        PortfolioModelSelection,
+    )
+
+    return selection.requirements
 
 
 def test_workflow_document_round_trips_complete_specification() -> None:
@@ -135,7 +155,9 @@ def test_workflow_document_preserves_prompt_specification() -> None:
         "Classify the request and return the expected result."
     )
 
-    assert prompt_step.specification.model_requirements.required_capabilities == frozenset(
+    assert require_portfolio_requirements(
+        prompt_step.specification
+    ).required_capabilities == frozenset(
         {
             ModelCapability.STRUCTURED_OUTPUT,
         }

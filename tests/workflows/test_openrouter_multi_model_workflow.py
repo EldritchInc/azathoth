@@ -9,6 +9,7 @@ from pydantic import SecretStr
 
 from azathoth.context import Context
 from azathoth.prompting import (
+    PortfolioModelSelection,
     PromptStrategy,
     PromptStrategySpec,
 )
@@ -106,10 +107,12 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Classify this request cheaply.",
                     ),
-                    model_requirements=ModelRequirements(
-                        maximum_input_usd_per_million_tokens=0.2,
-                        maximum_output_usd_per_million_tokens=0.2,
-                        require_known_pricing=True,
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(
+                            maximum_input_usd_per_million_tokens=0.2,
+                            maximum_output_usd_per_million_tokens=0.2,
+                            require_known_pricing=True,
+                        )
                     ),
                 ),
                 outputs=(
@@ -130,12 +133,14 @@ def create_workflow() -> WorkflowSpecification:
                     prompt=Prompt(
                         text="Classify this request with structured output.",
                     ),
-                    model_requirements=ModelRequirements(
-                        required_capabilities=frozenset(
-                            {
-                                ModelCapability.STRUCTURED_OUTPUT,
-                            }
-                        ),
+                    model_selection=PortfolioModelSelection(
+                        requirements=ModelRequirements(
+                            required_capabilities=frozenset(
+                                {
+                                    ModelCapability.STRUCTURED_OUTPUT,
+                                }
+                            ),
+                        )
                     ),
                 ),
                 depends_on=(CHEAP_STEP_ID,),

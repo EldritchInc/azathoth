@@ -3,6 +3,7 @@
 from dataclasses import replace
 
 from azathoth.prompting import (
+    PortfolioModelSelection,
     PromptStrategy,
     PromptStrategySpec,
     generate_prompt_candidates,
@@ -45,6 +46,14 @@ def generate_model_substitutions(
         ):
             continue
 
+        selection = prompt_specification.model_selection
+
+        if not isinstance(
+            selection,
+            PortfolioModelSelection,
+        ):
+            continue
+
         candidate_step = candidate_steps[workflow_step.id]
 
         strategy = candidate_step.strategy
@@ -67,9 +76,7 @@ def generate_model_substitutions(
                 "Workflow candidate model binding must reference the configured model catalog."
             )
 
-        eligible_models = catalog.find(
-            ModelQuery.from_requirements(prompt_specification.model_requirements)
-        )
+        eligible_models = catalog.find(ModelQuery.from_requirements(selection.requirements))
 
         for target_model in eligible_models:
             if target_model.identifier == current_model.identifier:
