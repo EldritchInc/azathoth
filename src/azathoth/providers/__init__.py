@@ -52,6 +52,9 @@ from azathoth.providers.protocol import LanguageModel
 from azathoth.providers.provider_directory import (
     ProviderModelDirectory,
 )
+from azathoth.providers.provider_metadata import (
+    model_metadata_from_provider_model,
+)
 from azathoth.providers.provider_models import (
     ProviderModel,
     ProviderModelObservation,
@@ -115,6 +118,7 @@ __all__ = [
     "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
+    "model_metadata_from_provider_model",
     "require_model_portfolio_repository",
     "require_model_repository",
     "require_provider_model_observation_repository",
