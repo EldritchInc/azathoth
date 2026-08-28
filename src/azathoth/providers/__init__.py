@@ -49,6 +49,9 @@ from azathoth.providers.portfolio_repository import (
     ModelPortfolioRepository,
 )
 from azathoth.providers.protocol import LanguageModel
+from azathoth.providers.provider_catalog_synchronizer import (
+    ProviderModelCatalogSynchronizer,
+)
 from azathoth.providers.provider_directory import (
     ProviderModelDirectory,
 )
@@ -109,6 +112,7 @@ __all__ = [
     "OpenRouterModelRegistryLoader",
     "Prompt",
     "ProviderModel",
+    "ProviderModelCatalogSynchronizer",
     "ProviderModelDirectory",
     "ProviderModelObservation",
     "ProviderModelObservationRepository",
