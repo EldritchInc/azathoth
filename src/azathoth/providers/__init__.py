@@ -42,6 +42,9 @@ from azathoth.providers.portfolio import (
     ModelPortfolio,
     ModelPortfolioEntry,
 )
+from azathoth.providers.portfolio_catalog import (
+    model_catalog_for_portfolio,
+)
 from azathoth.providers.portfolio_loader import (
     ModelPortfolioLoader,
 )
@@ -122,6 +125,7 @@ __all__ = [
     "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
+    "model_catalog_for_portfolio",
     "model_metadata_from_provider_model",
     "require_model_portfolio_repository",
     "require_model_repository",
