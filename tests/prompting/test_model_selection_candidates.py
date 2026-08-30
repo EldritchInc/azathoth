@@ -12,6 +12,8 @@ from azathoth.providers import (
     ModelCapability,
     ModelCatalog,
     ModelMetadata,
+    ModelPortfolio,
+    ModelPortfolioEntry,
     ModelRequirements,
     Prompt,
 )
@@ -66,7 +68,7 @@ def create_specification(
     )
 
 
-def test_portfolio_selection_generates_all_eligible_executable_models() -> None:
+def test_portfolio_selection_generates_all_eligible_authorized_models() -> None:
     first = create_metadata(
         model="first",
         capabilities=frozenset(
@@ -75,11 +77,90 @@ def test_portfolio_selection_generates_all_eligible_executable_models() -> None:
             }
         ),
     )
+
     second = create_metadata(
         model="second",
     )
+
     third = create_metadata(
         model="third",
+        capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+            }
+        ),
+    )
+
+    catalog = ModelCatalog(
+        models=(
+            first,
+            second,
+            third,
+        )
+    )
+
+    portfolio = ModelPortfolio(
+        entries=(
+            ModelPortfolioEntry(
+                provider=first.provider,
+                model=first.model,
+            ),
+            ModelPortfolioEntry(
+                provider=second.provider,
+                model=second.model,
+            ),
+            ModelPortfolioEntry(
+                provider=third.provider,
+                model=third.model,
+            ),
+        )
+    )
+
+    specification = create_specification(
+        model_selection=PortfolioModelSelection(
+            requirements=ModelRequirements(
+                required_capabilities=frozenset(
+                    {
+                        ModelCapability.STRUCTURED_OUTPUT,
+                    }
+                )
+            )
+        )
+    )
+
+    candidates = generate_prompt_candidates(
+        specification=specification,
+        catalog=catalog,
+        registry=create_registry(
+            first,
+            second,
+            third,
+        ),
+        portfolio=portfolio,
+    )
+
+    assert tuple(
+        candidate.model_binding.identifier
+        for candidate in candidates
+        if candidate.model_binding is not None
+    ) == (
+        "example/first",
+        "example/third",
+    )
+
+
+def test_portfolio_selection_excludes_current_unauthorized_model() -> None:
+    authorized = create_metadata(
+        model="authorized",
+        capabilities=frozenset(
+            {
+                ModelCapability.STRUCTURED_OUTPUT,
+            }
+        ),
+    )
+
+    unauthorized = create_metadata(
+        model="unauthorized",
         capabilities=frozenset(
             {
                 ModelCapability.STRUCTURED_OUTPUT,
@@ -103,32 +184,37 @@ def test_portfolio_selection_generates_all_eligible_executable_models() -> None:
         specification=specification,
         catalog=ModelCatalog(
             models=(
-                first,
-                second,
-                third,
+                authorized,
+                unauthorized,
             )
         ),
         registry=create_registry(
-            first,
-            second,
-            third,
+            authorized,
+            unauthorized,
+        ),
+        portfolio=ModelPortfolio(
+            entries=(
+                ModelPortfolioEntry(
+                    provider=authorized.provider,
+                    model=authorized.model,
+                ),
+            )
         ),
     )
 
-    assert tuple(
-        candidate.model_binding.identifier
-        for candidate in candidates
-        if candidate.model_binding is not None
-    ) == (
-        "example/first",
-        "example/third",
-    )
+    assert len(candidates) == 1
+
+    binding = candidates[0].model_binding
+
+    assert binding is not None
+    assert binding.identifier == authorized.identifier
 
 
-def test_fixed_selection_generates_only_required_model() -> None:
+def test_fixed_selection_generates_required_model_outside_portfolio() -> None:
     first = create_metadata(
         model="first",
     )
+
     second = create_metadata(
         model="second",
     )
@@ -152,6 +238,7 @@ def test_fixed_selection_generates_only_required_model() -> None:
             first,
             second,
         ),
+        portfolio=ModelPortfolio(),
     )
 
     assert len(candidates) == 1
@@ -180,6 +267,7 @@ def test_fixed_selection_does_not_substitute_missing_model() -> None:
         registry=create_registry(
             available,
         ),
+        portfolio=ModelPortfolio(),
     )
 
     assert candidates == ()
@@ -201,6 +289,7 @@ def test_fixed_selection_requires_executable_registered_model() -> None:
         specification=specification,
         catalog=ModelCatalog(models=(fixed,)),
         registry=LanguageModelRegistry(),
+        portfolio=ModelPortfolio(),
     )
 
     assert candidates == ()
@@ -224,6 +313,7 @@ def test_fixed_selection_candidate_has_no_selection_requirements() -> None:
         registry=create_registry(
             fixed,
         ),
+        portfolio=ModelPortfolio(),
     )
 
     assert len(candidates) == 1

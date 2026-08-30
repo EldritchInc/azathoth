@@ -33,6 +33,9 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
+from tests.model_authorization import (
+    portfolio_for_catalog,
+)
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -157,6 +160,7 @@ def create_tool_implementation_catalog() -> ToolImplementationCatalog:
 def test_runtime_exposes_configured_dependencies() -> None:
     workflows = create_workflow_catalog()
     models = create_model_catalog()
+    portfolio = portfolio_for_catalog(models)
     language_models = create_language_model_registry()
     tools = create_tool_catalog()
     implementations = create_tool_implementation_catalog()
@@ -164,6 +168,7 @@ def test_runtime_exposes_configured_dependencies() -> None:
     runtime = AzathothRuntime(
         workflows=workflows,
         models=models,
+        portfolio=portfolio,
         language_models=language_models,
         tools=tools,
         tool_implementations=implementations,
@@ -171,15 +176,19 @@ def test_runtime_exposes_configured_dependencies() -> None:
 
     assert runtime.workflows is workflows
     assert runtime.models is models
+    assert runtime.portfolio is portfolio
     assert runtime.language_models is language_models
     assert runtime.tools is tools
     assert runtime.tool_implementations is implementations
 
 
 def test_runtime_defaults_to_empty_tool_catalogs() -> None:
+    models = create_model_catalog()
+
     runtime = AzathothRuntime(
         workflows=create_workflow_catalog(),
-        models=create_model_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=create_language_model_registry(),
     )
 
@@ -188,9 +197,12 @@ def test_runtime_defaults_to_empty_tool_catalogs() -> None:
 
 
 def test_runtime_satisfies_runtime_environment_protocol() -> None:
+    models = create_model_catalog()
+
     runtime: RuntimeEnvironment = AzathothRuntime(
         workflows=create_workflow_catalog(),
-        models=create_model_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=create_language_model_registry(),
     )
 
@@ -198,9 +210,12 @@ def test_runtime_satisfies_runtime_environment_protocol() -> None:
 
 
 def test_runtime_reuses_tool_resolver() -> None:
+    models = create_model_catalog()
+
     runtime = AzathothRuntime(
         workflows=create_workflow_catalog(),
-        models=create_model_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=create_language_model_registry(),
         tools=create_tool_catalog(),
     )
@@ -209,9 +224,12 @@ def test_runtime_reuses_tool_resolver() -> None:
 
 
 def test_runtime_reuses_tool_implementation_resolver() -> None:
+    models = create_model_catalog()
+
     runtime = AzathothRuntime(
         workflows=create_workflow_catalog(),
-        models=create_model_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=create_language_model_registry(),
         tool_implementations=create_tool_implementation_catalog(),
     )

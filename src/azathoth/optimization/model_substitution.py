@@ -12,7 +12,10 @@ from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
     ModelMetadata,
+    ModelPortfolio,
+    ModelPortfolioEntry,
     ModelQuery,
+    model_catalog_for_portfolio,
 )
 from azathoth.workflows import (
     WorkflowCandidate,
@@ -26,6 +29,7 @@ def generate_model_substitutions(
     specification: WorkflowSpecification,
     candidate: WorkflowCandidate,
     catalog: ModelCatalog,
+    portfolio: ModelPortfolio,
     registry: LanguageModelRegistry,
 ) -> tuple[WorkflowCandidate, ...]:
     """Generate one-step substitutions using strictly cheaper eligible models."""
@@ -76,7 +80,14 @@ def generate_model_substitutions(
                 "Workflow candidate model binding must reference the configured model catalog."
             )
 
-        eligible_models = catalog.find(ModelQuery.from_requirements(selection.requirements))
+        portfolio_catalog = model_catalog_for_portfolio(
+            catalog=catalog,
+            portfolio=portfolio,
+        )
+
+        eligible_models = portfolio_catalog.find(
+            ModelQuery.from_requirements(selection.requirements)
+        )
 
         for target_model in eligible_models:
             if target_model.identifier == current_model.identifier:
@@ -118,6 +129,14 @@ def _replace_prompt_step_model(
         specification=specification,
         catalog=ModelCatalog(models=(target_model,)),
         registry=registry,
+        portfolio=ModelPortfolio(
+            entries=(
+                ModelPortfolioEntry(
+                    provider=target_model.provider,
+                    model=target_model.model,
+                ),
+            )
+        ),
     )
 
     if len(generated) != 1:

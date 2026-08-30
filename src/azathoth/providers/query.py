@@ -40,7 +40,10 @@ class ModelQuery(BaseModel):
 
     require_known_pricing: bool = False
 
-    def matches(self, model: ModelMetadata) -> bool:
+    def matches(
+        self,
+        model: ModelMetadata,
+    ) -> bool:
         """Return whether a model satisfies every configured requirement."""
 
         if self.providers and model.provider not in self.providers:
@@ -55,11 +58,12 @@ class ModelQuery(BaseModel):
         if not self.required_output_modalities.issubset(model.output_modalities):
             return False
 
-        if (
-            self.minimum_context_window_tokens is not None
-            and model.context_window_tokens < self.minimum_context_window_tokens
-        ):
-            return False
+        if self.minimum_context_window_tokens is not None:
+            if model.context_window_tokens is None:
+                return False
+
+            if model.context_window_tokens < self.minimum_context_window_tokens:
+                return False
 
         if self.minimum_output_tokens is not None:
             if model.maximum_output_tokens is None:

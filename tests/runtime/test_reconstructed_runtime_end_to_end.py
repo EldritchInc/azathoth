@@ -39,6 +39,9 @@ from azathoth.workflows import (
     WorkflowStepSpecification,
     WorkflowValueBinding,
 )
+from tests.model_authorization import (
+    portfolio_for_catalog,
+)
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -185,6 +188,8 @@ def reconstruct_runtime(
 
     models = ModelCatalogLoader(SQLiteModelRepository(model_database)).load_catalog()
 
+    portfolio = portfolio_for_catalog(models)
+
     tool_loader = ToolCatalogLoader(SQLiteToolRepository(tool_database))
 
     tools = tool_loader.load_catalog()
@@ -204,6 +209,7 @@ def reconstruct_runtime(
     return AzathothRuntime(
         workflows=workflows,
         models=models,
+        portfolio=portfolio,
         language_models=language_models,
         tools=tools,
         tool_implementations=tool_implementations,

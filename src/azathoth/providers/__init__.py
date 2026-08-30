@@ -42,6 +42,9 @@ from azathoth.providers.portfolio import (
     ModelPortfolio,
     ModelPortfolioEntry,
 )
+from azathoth.providers.portfolio_catalog import (
+    model_catalog_for_portfolio,
+)
 from azathoth.providers.portfolio_loader import (
     ModelPortfolioLoader,
 )
@@ -49,8 +52,14 @@ from azathoth.providers.portfolio_repository import (
     ModelPortfolioRepository,
 )
 from azathoth.providers.protocol import LanguageModel
+from azathoth.providers.provider_catalog_synchronizer import (
+    ProviderModelCatalogSynchronizer,
+)
 from azathoth.providers.provider_directory import (
     ProviderModelDirectory,
+)
+from azathoth.providers.provider_metadata import (
+    model_metadata_from_provider_model,
 )
 from azathoth.providers.provider_models import (
     ProviderModel,
@@ -106,6 +115,7 @@ __all__ = [
     "OpenRouterModelRegistryLoader",
     "Prompt",
     "ProviderModel",
+    "ProviderModelCatalogSynchronizer",
     "ProviderModelDirectory",
     "ProviderModelObservation",
     "ProviderModelObservationRepository",
@@ -115,6 +125,8 @@ __all__ = [
     "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
     "UnsupportedModelRequestError",
+    "model_catalog_for_portfolio",
+    "model_metadata_from_provider_model",
     "require_model_portfolio_repository",
     "require_model_repository",
     "require_provider_model_observation_repository",

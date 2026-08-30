@@ -46,7 +46,10 @@ class ModelMetadata(BaseModel):
     input_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
     output_modalities: frozenset[ModelModality] = frozenset({ModelModality.TEXT})
     capabilities: frozenset[ModelCapability] = frozenset()
-    context_window_tokens: int = Field(gt=0)
+    context_window_tokens: int | None = Field(
+        default=None,
+        gt=0,
+    )
     maximum_output_tokens: int | None = Field(default=None, gt=0)
     pricing: ModelPricing | None = None
 

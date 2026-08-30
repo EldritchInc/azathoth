@@ -6,6 +6,7 @@ from uuid import UUID
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.tools import (
     ToolCatalog,
@@ -31,6 +32,14 @@ class RuntimeEnvironment(Protocol):
     @property
     def models(self) -> ModelCatalog:
         """Return configured model metadata."""
+
+        ...
+
+    @property
+    def portfolio(
+        self,
+    ) -> ModelPortfolio:
+        """Return organizational model-selection authorization."""
 
         ...
 

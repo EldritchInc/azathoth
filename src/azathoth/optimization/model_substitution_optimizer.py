@@ -11,6 +11,7 @@ from azathoth.optimization.workflow import (
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.workflows import (
     WorkflowCandidate,
@@ -27,11 +28,13 @@ class ModelSubstitutionWorkflowOptimizer:
         *,
         workflows: WorkflowCatalog,
         models: ModelCatalog,
+        portfolio: ModelPortfolio,
         registry: LanguageModelRegistry,
     ) -> None:
         self._workflows = workflows
         self._models = models
         self._registry = registry
+        self._portfolio = portfolio
 
     def optimize(
         self,
@@ -59,6 +62,7 @@ class ModelSubstitutionWorkflowOptimizer:
                     specification=specification,
                     candidate=candidate,
                     catalog=self._models,
+                    portfolio=self._portfolio,
                     registry=self._registry,
                 ),
             )

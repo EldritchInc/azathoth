@@ -1,13 +1,19 @@
 """Bootstrap Azathoth runtime composition for the command-line application."""
 
+import asyncio
+
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
-    ModelCatalogLoader,
+    ModelPortfolioLoader,
     OpenRouterConfiguration,
+    OpenRouterModelDirectory,
     OpenRouterModelRegistryLoader,
-    SQLiteModelRepository,
+    ProviderModelCatalogSynchronizer,
+    ProviderModelObserver,
+    SQLiteModelPortfolioRepository,
+    SQLiteProviderModelObservationRepository,
 )
 from azathoth.runtime import AzathothRuntime
 from azathoth.tools import (
@@ -29,7 +35,11 @@ def load_runtime(
         SQLiteWorkflowRepository(configuration.database)
     ).load_catalog()
 
-    models = ModelCatalogLoader(SQLiteModelRepository(configuration.database)).load_catalog()
+    models = _load_current_models(configuration)
+
+    portfolio = ModelPortfolioLoader(
+        SQLiteModelPortfolioRepository(configuration.database)
+    ).load_portfolio()
 
     tool_loader = ToolCatalogLoader(SQLiteToolRepository(configuration.database))
 
@@ -45,10 +55,31 @@ def load_runtime(
     return AzathothRuntime(
         workflows=workflows,
         models=models,
+        portfolio=portfolio,
         language_models=language_models,
         tools=tools,
         tool_implementations=tool_implementations,
     )
+
+
+def _load_current_models(
+    configuration: CliRuntimeConfiguration,
+) -> ModelCatalog:
+    """Return current provider model state for runtime composition."""
+
+    if configuration.openrouter_api_key is None:
+        return ModelCatalog()
+
+    provider_configuration = OpenRouterConfiguration(api_key=configuration.openrouter_api_key)
+
+    observer = ProviderModelObserver(
+        directory=OpenRouterModelDirectory(provider_configuration),
+        repository=SQLiteProviderModelObservationRepository(configuration.database),
+    )
+
+    synchronizer = ProviderModelCatalogSynchronizer(observers=(observer,))
+
+    return asyncio.run(synchronizer.synchronize())
 
 
 def _load_language_models(
@@ -56,13 +87,13 @@ def _load_language_models(
     configuration: CliRuntimeConfiguration,
     models: ModelCatalog,
 ) -> LanguageModelRegistry:
-    """Construct executable provider implementations for configured models."""
+    """Construct executable provider implementations for current models."""
 
     if configuration.openrouter_api_key is None:
         return LanguageModelRegistry()
 
-    openrouter = OpenRouterModelRegistryLoader(
-        OpenRouterConfiguration(api_key=configuration.openrouter_api_key)
-    ).load_registry(models)
+    provider_configuration = OpenRouterConfiguration(api_key=configuration.openrouter_api_key)
+
+    openrouter = OpenRouterModelRegistryLoader(provider_configuration).load_registry(models)
 
     return LanguageModelRegistry.compose((openrouter,))

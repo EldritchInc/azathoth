@@ -34,7 +34,10 @@ from azathoth.workflows import (
     WorkflowScorecard,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
+    portfolio_for_catalog,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -213,6 +216,7 @@ def create_optimizer(
     return ModelSubstitutionWorkflowOptimizer(
         workflows=WorkflowCatalog(specifications=(workflow,)),
         models=catalog,
+        portfolio=portfolio_for_catalog(catalog),
         registry=registry,
     )
 
@@ -425,6 +429,7 @@ def test_model_substitution_optimizer_requires_workflow_specification() -> None:
     optimizer = ModelSubstitutionWorkflowOptimizer(
         workflows=WorkflowCatalog(),
         models=catalog,
+        portfolio=portfolio_for_catalog(catalog),
         registry=registry,
     )
 
@@ -461,6 +466,7 @@ def test_model_substitution_optimizer_resolves_specification_by_workflow_id() ->
             )
         ),
         models=catalog,
+        portfolio=portfolio_for_catalog(catalog),
         registry=registry,
     )
 

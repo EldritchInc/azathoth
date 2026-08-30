@@ -13,8 +13,10 @@ from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
     ModelMetadata,
+    ModelPortfolio,
     ModelQuery,
     ModelRequirements,
+    model_catalog_for_portfolio,
 )
 from azathoth.strategies import StrategyMetadata
 
@@ -23,6 +25,8 @@ def generate_prompt_candidates(
     specification: PromptStrategySpec,
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
+    *,
+    portfolio: ModelPortfolio,
 ) -> tuple[PromptStrategy, ...]:
     """Generate executable candidates allowed by model-selection authority."""
 
@@ -32,12 +36,21 @@ def generate_prompt_candidates(
         selection,
         PortfolioModelSelection,
     ):
-        eligible_models = catalog.find(ModelQuery.from_requirements(selection.requirements))
+        portfolio_catalog = model_catalog_for_portfolio(
+            catalog=catalog,
+            portfolio=portfolio,
+        )
+
+        eligible_models = portfolio_catalog.find(
+            ModelQuery.from_requirements(selection.requirements)
+        )
+
         model_requirements: ModelRequirements | None = selection.requirements
     else:
         fixed_model = catalog.get(selection.identifier)
 
         eligible_models = (fixed_model,) if fixed_model is not None else ()
+
         model_requirements = None
 
     candidates: list[PromptStrategy] = []

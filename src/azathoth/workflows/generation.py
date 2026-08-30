@@ -4,6 +4,7 @@ from azathoth.prompting import generate_prompt_candidates
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.strategies import (
     Strategy,
@@ -32,6 +33,7 @@ def generate_workflow_candidate(
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
     *,
+    portfolio: ModelPortfolio,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
 ) -> WorkflowCandidate:
@@ -58,6 +60,7 @@ def generate_workflow_candidate(
                 specification=step_specification,
                 catalog=catalog,
                 registry=registry,
+                portfolio=portfolio,
             )
 
             if not prompt_candidates:

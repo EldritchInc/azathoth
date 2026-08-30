@@ -20,6 +20,8 @@ from azathoth.workflows import (
     WorkflowRetryPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
 )
 
