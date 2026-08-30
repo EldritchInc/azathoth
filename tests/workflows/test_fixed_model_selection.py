@@ -13,6 +13,7 @@ from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
     ModelMetadata,
+    ModelPortfolio,
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
@@ -91,4 +92,5 @@ def test_fixed_model_selection_does_not_fall_back_to_available_model() -> None:
             specification=create_workflow(),
             catalog=catalog,
             registry=registry,
+            portfolio=ModelPortfolio(),
         )

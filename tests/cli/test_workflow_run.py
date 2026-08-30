@@ -33,6 +33,9 @@ from azathoth.workflows import (
     WorkflowStepSpecification,
     WorkflowStepStatus,
 )
+from tests.model_authorization import (
+    portfolio_for_catalog,
+)
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -80,18 +83,21 @@ def create_workflow() -> WorkflowSpecification:
 def create_runtime() -> AzathothRuntime:
     """Create one deterministic executable runtime."""
 
+    models = ModelCatalog(
+        models=(
+            ModelMetadata(
+                provider="test",
+                model="example",
+                display_name="Example Model",
+                context_window_tokens=8_192,
+            ),
+        )
+    )
+
     return AzathothRuntime(
         workflows=WorkflowCatalog(specifications=(create_workflow(),)),
-        models=ModelCatalog(
-            models=(
-                ModelMetadata(
-                    provider="test",
-                    model="example",
-                    display_name="Example Model",
-                    context_window_tokens=8_192,
-                ),
-            )
-        ),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=LanguageModelRegistry(
             models={
                 MODEL_IDENTIFIER: DeterministicLanguageModel(
@@ -169,18 +175,21 @@ def test_workflow_run_reports_non_executable_workflow(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    models = ModelCatalog(
+        models=(
+            ModelMetadata(
+                provider="test",
+                model="example",
+                display_name="Example Model",
+                context_window_tokens=8_192,
+            ),
+        )
+    )
+
     runtime = AzathothRuntime(
         workflows=WorkflowCatalog(specifications=(create_workflow(),)),
-        models=ModelCatalog(
-            models=(
-                ModelMetadata(
-                    provider="test",
-                    model="example",
-                    display_name="Example Model",
-                    context_window_tokens=8_192,
-                ),
-            )
-        ),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
         language_models=LanguageModelRegistry(),
     )
 

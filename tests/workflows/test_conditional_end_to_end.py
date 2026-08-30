@@ -33,6 +33,8 @@ from azathoth.workflows import (
     WorkflowStepStatus,
     WorkflowValueBinding,
     WorkflowValueReference,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
 )
 

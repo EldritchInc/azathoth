@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Generate a complete Azathoth source snapshot suitable for pasting into ChatGPT.
+Generate a complete Azathoth project snapshot suitable for pasting into ChatGPT.
 
 Outputs:
     project_snapshot.txt
 
 Includes:
     - src/azathoth/** (excluding ui/)
-    - docs/adr/**
+    - tests/**
+    - docs/adrs/**
 
 Excludes:
     - __pycache__
@@ -19,13 +20,15 @@ Excludes:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TextIO
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 OUTPUT_FILE = PROJECT_ROOT / "project_snapshot.txt"
 
 SOURCE_ROOT = PROJECT_ROOT / "src" / "azathoth"
-ADR_ROOT = PROJECT_ROOT / "docs" / "adr"
+TEST_ROOT = PROJECT_ROOT / "tests"
+ADR_ROOT = PROJECT_ROOT / "docs" / "adrs"
 
 EXCLUDED_DIRS = {
     "__pycache__",
@@ -44,12 +47,18 @@ EXCLUDED_FILES = {
 def separator(
     path: Path,
 ) -> str:
-    return "\n" + "=" * 100 + "\n" + str(path.relative_to(PROJECT_ROOT)) + "\n" + "=" * 100 + "\n\n"
+    """Return a deterministic file separator for the snapshot."""
+
+    relative_path = path.relative_to(PROJECT_ROOT)
+
+    return "\n" + "=" * 100 + "\n" + str(relative_path) + "\n" + "=" * 100 + "\n\n"
 
 
 def iter_files(
     root: Path,
 ) -> list[Path]:
+    """Return included files beneath one snapshot root."""
+
     files: list[Path] = []
 
     if not root.exists():
@@ -74,9 +83,11 @@ def iter_files(
 
 
 def write_section(
-    output,
+    output: TextIO,
     files: list[Path],
 ) -> None:
+    """Write one collection of files to the snapshot."""
+
     for path in files:
         output.write(separator(path))
 
@@ -94,9 +105,24 @@ def write_section(
             output.write("\n")
 
 
+def write_heading(
+    output: TextIO,
+    heading: str,
+) -> None:
+    """Write one top-level snapshot section heading."""
+
+    output.write("\n" + "#" * 100 + "\n" + heading + "\n" + "#" * 100 + "\n")
+
+
 def main() -> None:
+    """Generate the complete project snapshot."""
+
     source_files = iter_files(
         SOURCE_ROOT,
+    )
+
+    test_files = iter_files(
+        TEST_ROOT,
     )
 
     adr_files = iter_files(
@@ -113,16 +139,34 @@ def main() -> None:
 
         output.write(f"Source files: {len(source_files)}\n")
 
+        output.write(f"Test files: {len(test_files)}\n")
+
         output.write(f"ADR files: {len(adr_files)}\n\n")
 
-        output.write("#" * 100 + "\n" + "SOURCE\n" + "#" * 100 + "\n")
+        write_heading(
+            output,
+            "SOURCE",
+        )
 
         write_section(
             output,
             source_files,
         )
 
-        output.write("\n" + "#" * 100 + "\n" + "ADRS\n" + "#" * 100 + "\n")
+        write_heading(
+            output,
+            "TESTS",
+        )
+
+        write_section(
+            output,
+            test_files,
+        )
+
+        write_heading(
+            output,
+            "ADRS",
+        )
 
         write_section(
             output,

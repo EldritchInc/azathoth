@@ -2,7 +2,9 @@
 
 from uuid import UUID
 
-from azathoth.optimization import generate_model_substitutions
+from azathoth.optimization import (
+    generate_model_substitutions as generate_model_substitutions_with_portfolio,
+)
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategy,
@@ -14,6 +16,8 @@ from azathoth.providers import (
     ModelCapability,
     ModelCatalog,
     ModelMetadata,
+    ModelPortfolio,
+    ModelPortfolioEntry,
     ModelPricing,
     ModelRequirements,
     Prompt,
@@ -24,6 +28,9 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
+    generate_model_substitutions,
     generate_workflow_candidate,
 )
 
@@ -430,3 +437,39 @@ def test_model_substitution_rejects_mismatched_workflow_identity() -> None:
         assert str(exc) == ("Workflow specification and candidate must share an identifier.")
     else:
         raise AssertionError("Expected mismatched workflow identity to fail.")
+
+
+def test_model_substitution_does_not_propose_unauthorized_cheaper_model() -> None:
+    workflow = create_workflow()
+    registry = create_registry()
+    catalog = create_catalog()
+
+    expensive = catalog.get(EXPENSIVE_IDENTIFIER)
+
+    cheapest = catalog.get(CHEAPEST_IDENTIFIER)
+
+    assert expensive is not None
+    assert cheapest is not None
+
+    candidate = generate_workflow_candidate(
+        specification=workflow,
+        catalog=ModelCatalog(models=(expensive,)),
+        registry=registry,
+    )
+
+    substitutions = generate_model_substitutions_with_portfolio(
+        specification=workflow,
+        candidate=candidate,
+        catalog=catalog,
+        portfolio=ModelPortfolio(
+            entries=(
+                ModelPortfolioEntry(
+                    provider=expensive.provider,
+                    model=expensive.model,
+                ),
+            )
+        ),
+        registry=registry,
+    )
+
+    assert substitutions == ()

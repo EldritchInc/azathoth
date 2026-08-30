@@ -37,7 +37,10 @@ from azathoth.workflows import (
     WorkflowScoringPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
+    portfolio_for_catalog,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -256,6 +259,7 @@ def test_model_substitution_session_generates_cheaper_population() -> None:
             optimizer=ModelSubstitutionWorkflowOptimizer(
                 workflows=WorkflowCatalog(specifications=(workflow,)),
                 models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
                 registry=registry,
             ),
         ).run(
@@ -299,6 +303,7 @@ def test_model_substitution_session_preserves_passing_quality() -> None:
             optimizer=ModelSubstitutionWorkflowOptimizer(
                 workflows=WorkflowCatalog(specifications=(workflow,)),
                 models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
                 registry=registry,
             ),
         ).run(
@@ -346,6 +351,7 @@ def test_model_substitution_session_improves_empirical_cost_score() -> None:
             optimizer=ModelSubstitutionWorkflowOptimizer(
                 workflows=WorkflowCatalog(specifications=(workflow,)),
                 models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
                 registry=registry,
             ),
         ).run(
@@ -398,6 +404,7 @@ def test_model_substitution_session_ranks_cheapest_passing_execution_first() -> 
             optimizer=ModelSubstitutionWorkflowOptimizer(
                 workflows=WorkflowCatalog(specifications=(workflow,)),
                 models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
                 registry=registry,
             ),
         ).run(
@@ -445,6 +452,7 @@ def test_model_substitution_session_retains_empirical_baseline() -> None:
             optimizer=ModelSubstitutionWorkflowOptimizer(
                 workflows=WorkflowCatalog(specifications=(workflow,)),
                 models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
                 registry=registry,
             ),
         ).run(

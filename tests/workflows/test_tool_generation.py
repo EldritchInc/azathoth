@@ -27,6 +27,8 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
 )
 

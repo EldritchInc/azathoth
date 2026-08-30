@@ -41,6 +41,9 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
+from tests.model_authorization import (
+    portfolio_for_catalog,
+)
 
 PROMPT_WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -182,16 +185,22 @@ def create_runtime(
         )
     )
 
+    models = create_model_catalog()
+
+    portfolio = portfolio_for_catalog(models)
+
     if not include_tools:
         return AzathothRuntime(
             workflows=workflows,
-            models=create_model_catalog(),
+            models=models,
+            portfolio=portfolio,
             language_models=create_language_model_registry(),
         )
 
     return AzathothRuntime(
         workflows=workflows,
-        models=create_model_catalog(),
+        models=models,
+        portfolio=portfolio,
         language_models=create_language_model_registry(),
         tools=ToolCatalog(definitions=(create_tool_definition(),)),
         tool_implementations=ToolImplementationCatalog(

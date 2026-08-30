@@ -5,8 +5,10 @@ from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
     ModelCatalogLoader,
+    ModelPortfolioLoader,
     OpenRouterConfiguration,
     OpenRouterModelRegistryLoader,
+    SQLiteModelPortfolioRepository,
     SQLiteModelRepository,
 )
 from azathoth.runtime import AzathothRuntime
@@ -31,6 +33,10 @@ def load_runtime(
 
     models = ModelCatalogLoader(SQLiteModelRepository(configuration.database)).load_catalog()
 
+    portfolio = ModelPortfolioLoader(
+        SQLiteModelPortfolioRepository(configuration.database)
+    ).load_portfolio()
+
     tool_loader = ToolCatalogLoader(SQLiteToolRepository(configuration.database))
 
     tools = tool_loader.load_catalog()
@@ -45,6 +51,7 @@ def load_runtime(
     return AzathothRuntime(
         workflows=workflows,
         models=models,
+        portfolio=portfolio,
         language_models=language_models,
         tools=tools,
         tool_implementations=tool_implementations,

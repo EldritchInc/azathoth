@@ -32,6 +32,8 @@ from azathoth.workflows import (
     WorkflowScoringPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
+)
+from tests.model_authorization import (
     generate_workflow_candidate,
 )
 

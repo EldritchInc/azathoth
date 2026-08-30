@@ -5,6 +5,7 @@ from uuid import UUID
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.runtime.exceptions import WorkflowNotConfiguredError
 from azathoth.tools import (
@@ -28,12 +29,14 @@ class AzathothRuntime:
         *,
         workflows: WorkflowCatalog,
         models: ModelCatalog,
+        portfolio: ModelPortfolio,
         language_models: LanguageModelRegistry,
         tools: ToolCatalog | None = None,
         tool_implementations: ToolImplementationCatalog | None = None,
     ) -> None:
         self._workflows = workflows
         self._models = models
+        self._portfolio = portfolio
         self._language_models = language_models
 
         self._tools = tools if tools is not None else ToolCatalog()
@@ -92,6 +95,14 @@ class AzathothRuntime:
 
         return self._tool_implementation_resolver
 
+    @property
+    def portfolio(
+        self,
+    ) -> ModelPortfolio:
+        """Return organizational model-selection authorization."""
+
+        return self._portfolio
+
     def generate_workflow_candidate(
         self,
         workflow_id: UUID,
@@ -107,6 +118,7 @@ class AzathothRuntime:
             specification=specification,
             catalog=self._models,
             registry=self._language_models,
+            portfolio=self._portfolio,
             tool_resolver=self._tool_resolver,
             tool_implementation_resolver=(self._tool_implementation_resolver),
         )

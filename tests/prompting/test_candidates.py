@@ -7,7 +7,6 @@ from azathoth.context import Context
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
-    generate_prompt_candidates,
 )
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -19,6 +18,9 @@ from azathoth.providers import (
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
+from tests.model_authorization import (
+    generate_prompt_candidates,
+)
 
 SPECIFICATION_ID = UUID("7a0af90c-53dc-4329-aa19-2c38887949fa")
 

@@ -15,8 +15,10 @@ from azathoth.prompting import (
 )
 from azathoth.providers import (
     ModelMetadata,
+    ModelPortfolioEntry,
     ModelRequirements,
     Prompt,
+    SQLiteModelPortfolioRepository,
     SQLiteModelRepository,
 )
 from azathoth.strategies import StrategyMetadata
@@ -133,7 +135,16 @@ def persist_configuration(
 
     SQLiteWorkflowRepository(database).save(create_workflow())
 
-    SQLiteModelRepository(database).save(create_model())
+    model = create_model()
+
+    SQLiteModelRepository(database).save(model)
+
+    SQLiteModelPortfolioRepository(database).save(
+        ModelPortfolioEntry(
+            provider=model.provider,
+            model=model.model,
+        )
+    )
 
     tools = SQLiteToolRepository(database)
 
@@ -223,6 +234,7 @@ def test_cli_bootstrap_handles_empty_database(
     assert runtime.language_models.identifiers == ()
     assert runtime.tools.definitions == ()
     assert runtime.tool_implementations.implementations == ()
+    assert runtime.portfolio.identifiers == ()
 
 
 def test_cli_bootstrap_uses_one_database_for_all_durable_configuration(
@@ -248,3 +260,17 @@ def test_cli_bootstrap_uses_one_database_for_all_durable_configuration(
     assert runtime.tools.definitions == (create_tool_definition(),)
 
     assert runtime.tool_implementations.implementations == (create_tool_implementation(),)
+
+    assert runtime.portfolio.identifiers == (OPENROUTER_IDENTIFIER,)
+
+
+def test_cli_bootstrap_reconstructs_model_portfolio(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    runtime = load_runtime(CliRuntimeConfiguration(database=database))
+
+    assert runtime.portfolio.identifiers == (OPENROUTER_IDENTIFIER,)
