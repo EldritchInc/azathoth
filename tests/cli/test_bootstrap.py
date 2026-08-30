@@ -3,6 +3,7 @@
 from pathlib import Path
 from uuid import UUID
 
+import pytest
 from pydantic import SecretStr
 
 from azathoth.cli import (
@@ -18,8 +19,10 @@ from azathoth.providers import (
     ModelPortfolioEntry,
     ModelRequirements,
     Prompt,
+    ProviderModel,
     SQLiteModelPortfolioRepository,
     SQLiteModelRepository,
+    SQLiteProviderModelObservationRepository,
 )
 from azathoth.strategies import StrategyMetadata
 from azathoth.tools import (
@@ -49,6 +52,44 @@ IMPLEMENTATION_ID = UUID("55555555-5555-5555-5555-555555555555")
 OPENROUTER_IDENTIFIER = "openrouter/example/model"
 
 
+class FakeOpenRouterModelDirectory:
+    """Provide deterministic current OpenRouter state for bootstrap tests."""
+
+    def __init__(
+        self,
+        configuration: object,
+    ) -> None:
+        self._configuration = configuration
+
+    @property
+    def provider(
+        self,
+    ) -> str:
+        """Return the OpenRouter provider identity."""
+
+        return "openrouter"
+
+    async def models(
+        self,
+    ) -> tuple[ProviderModel, ...]:
+        """Return deterministic current OpenRouter model state."""
+
+        return (create_provider_model(),)
+
+    async def model(
+        self,
+        identifier: str,
+    ) -> ProviderModel | None:
+        """Return one deterministic current OpenRouter model."""
+
+        model = create_provider_model()
+
+        if identifier != model.model:
+            return None
+
+        return model
+
+
 def create_workflow() -> WorkflowSpecification:
     """Create one durable workflow specification."""
 
@@ -56,7 +97,7 @@ def create_workflow() -> WorkflowSpecification:
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
             name="CLI workflow",
-            description="Exercise CLI runtime bootstrap.",
+            description=("Exercise CLI runtime bootstrap."),
             version="1.0.0",
         ),
         steps=(
@@ -66,14 +107,16 @@ def create_workflow() -> WorkflowSpecification:
                     metadata=StrategyMetadata(
                         id=STRATEGY_ID,
                         name="CLI prompt",
-                        description=("Exercise reconstructed model configuration."),
+                        description=("Exercise current model discovery."),
                         version="1.0.0",
                     ),
                     prompt=Prompt(
                         text="Return success.",
                     ),
-                    model_selection=PortfolioModelSelection(
-                        requirements=ModelRequirements(),
+                    model_selection=(
+                        PortfolioModelSelection(
+                            requirements=ModelRequirements(),
+                        )
                     ),
                 ),
             ),
@@ -81,14 +124,25 @@ def create_workflow() -> WorkflowSpecification:
     )
 
 
-def create_model() -> ModelMetadata:
-    """Create one durable OpenRouter model."""
+def create_provider_model() -> ProviderModel:
+    """Create deterministic current OpenRouter model state."""
 
-    return ModelMetadata(
+    return ProviderModel(
         provider="openrouter",
         model="example/model",
         display_name="Example Model",
         context_window_tokens=8_192,
+    )
+
+
+def create_stale_model_metadata() -> ModelMetadata:
+    """Create persisted metadata that must not establish availability."""
+
+    return ModelMetadata(
+        provider="openrouter",
+        model="stale/model",
+        display_name="Stale Model",
+        context_window_tokens=4_096,
     )
 
 
@@ -98,7 +152,7 @@ def create_tool_definition() -> ToolDefinition:
     return ToolDefinition(
         id=TOOL_ID,
         name="example tool",
-        description="Execute one deterministic example tool.",
+        description=("Execute one deterministic example tool."),
         version="1.0.0",
         input_schema=ToolInputSchema(
             json_schema={
@@ -131,18 +185,14 @@ def create_tool_implementation() -> ToolImplementation:
 def persist_configuration(
     database: Path,
 ) -> None:
-    """Persist all durable CLI runtime configuration into one database."""
+    """Persist durable CLI runtime configuration."""
 
     SQLiteWorkflowRepository(database).save(create_workflow())
 
-    model = create_model()
-
-    SQLiteModelRepository(database).save(model)
-
     SQLiteModelPortfolioRepository(database).save(
         ModelPortfolioEntry(
-            provider=model.provider,
-            model=model.model,
+            provider="openrouter",
+            model="example/model",
         )
     )
 
@@ -165,7 +215,7 @@ def test_cli_bootstrap_reconstructs_workflow_catalog(
     assert runtime.workflows.identifiers == (WORKFLOW_ID,)
 
 
-def test_cli_bootstrap_reconstructs_model_catalog(
+def test_cli_bootstrap_without_provider_credentials_has_no_current_models(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "azathoth.db"
@@ -174,7 +224,103 @@ def test_cli_bootstrap_reconstructs_model_catalog(
 
     runtime = load_runtime(CliRuntimeConfiguration(database=database))
 
+    assert runtime.models.identifiers == ()
+
+    assert runtime.language_models.identifiers == ()
+
+
+def test_cli_bootstrap_does_not_treat_persisted_metadata_as_current(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    stale = create_stale_model_metadata()
+
+    SQLiteModelRepository(database).save(stale)
+
+    runtime = load_runtime(CliRuntimeConfiguration(database=database))
+
+    assert stale.identifier not in (runtime.models.identifiers)
+
+
+def test_cli_bootstrap_discovers_current_openrouter_models(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    monkeypatch.setattr(
+        "azathoth.cli.bootstrap.OpenRouterModelDirectory",
+        FakeOpenRouterModelDirectory,
+    )
+
+    runtime = load_runtime(
+        CliRuntimeConfiguration(
+            database=database,
+            openrouter_api_key=SecretStr("test-secret-key"),
+        )
+    )
+
     assert runtime.models.identifiers == (OPENROUTER_IDENTIFIER,)
+
+
+def test_cli_bootstrap_records_current_provider_observations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    monkeypatch.setattr(
+        "azathoth.cli.bootstrap.OpenRouterModelDirectory",
+        FakeOpenRouterModelDirectory,
+    )
+
+    load_runtime(
+        CliRuntimeConfiguration(
+            database=database,
+            openrouter_api_key=SecretStr("test-secret-key"),
+        )
+    )
+
+    repository = SQLiteProviderModelObservationRepository(database)
+
+    observations = repository.observations_for_model(OPENROUTER_IDENTIFIER)
+
+    assert len(observations) == 1
+    assert observations[0].model == create_provider_model()
+
+
+def test_cli_bootstrap_reuses_unchanged_provider_observation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    monkeypatch.setattr(
+        "azathoth.cli.bootstrap.OpenRouterModelDirectory",
+        FakeOpenRouterModelDirectory,
+    )
+
+    configuration = CliRuntimeConfiguration(
+        database=database,
+        openrouter_api_key=SecretStr("test-secret-key"),
+    )
+
+    first = load_runtime(configuration)
+    second = load_runtime(configuration)
+
+    repository = SQLiteProviderModelObservationRepository(database)
+
+    assert first.models == second.models
+    assert len(repository.observations_for_model(OPENROUTER_IDENTIFIER)) == 1
 
 
 def test_cli_bootstrap_reconstructs_tool_catalogs(
@@ -189,37 +335,6 @@ def test_cli_bootstrap_reconstructs_tool_catalogs(
     assert runtime.tools.definitions == (create_tool_definition(),)
 
     assert runtime.tool_implementations.implementations == (create_tool_implementation(),)
-
-
-def test_cli_bootstrap_without_api_key_keeps_models_non_executable(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "azathoth.db"
-
-    persist_configuration(database)
-
-    runtime = load_runtime(CliRuntimeConfiguration(database=database))
-
-    assert runtime.models.identifiers == (OPENROUTER_IDENTIFIER,)
-
-    assert runtime.language_models.identifiers == ()
-
-
-def test_cli_bootstrap_attaches_openrouter_models_when_configured(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "azathoth.db"
-
-    persist_configuration(database)
-
-    runtime = load_runtime(
-        CliRuntimeConfiguration(
-            database=database,
-            openrouter_api_key=SecretStr("test-secret-key"),
-        )
-    )
-
-    assert runtime.language_models.identifiers == (OPENROUTER_IDENTIFIER,)
 
 
 def test_cli_bootstrap_handles_empty_database(
@@ -237,18 +352,28 @@ def test_cli_bootstrap_handles_empty_database(
     assert runtime.portfolio.identifiers == ()
 
 
-def test_cli_bootstrap_uses_one_database_for_all_durable_configuration(
+def test_cli_bootstrap_uses_one_database_for_durable_state_and_observations(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = tmp_path / "azathoth.db"
 
     persist_configuration(database)
+
+    monkeypatch.setattr(
+        "azathoth.cli.bootstrap.OpenRouterModelDirectory",
+        FakeOpenRouterModelDirectory,
+    )
 
     runtime = load_runtime(
         CliRuntimeConfiguration(
             database=database,
             openrouter_api_key=SecretStr("test-secret-key"),
         )
+    )
+
+    observations = SQLiteProviderModelObservationRepository(database).observations_for_model(
+        OPENROUTER_IDENTIFIER
     )
 
     assert runtime.workflows.identifiers == (WORKFLOW_ID,)
@@ -262,6 +387,8 @@ def test_cli_bootstrap_uses_one_database_for_all_durable_configuration(
     assert runtime.tool_implementations.implementations == (create_tool_implementation(),)
 
     assert runtime.portfolio.identifiers == (OPENROUTER_IDENTIFIER,)
+
+    assert len(observations) == 1
 
 
 def test_cli_bootstrap_reconstructs_model_portfolio(
