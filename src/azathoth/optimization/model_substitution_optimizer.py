@@ -1,7 +1,5 @@
 """Reference workflow optimization through cheaper model substitution."""
 
-from uuid import UUID
-
 from azathoth.optimization.model_substitution import (
     generate_model_substitutions,
 )
@@ -15,6 +13,7 @@ from azathoth.providers import (
 )
 from azathoth.workflows import (
     WorkflowCandidate,
+    WorkflowCandidateSignature,
     WorkflowCatalog,
     WorkflowExperimentResult,
 )
@@ -46,7 +45,7 @@ class ModelSubstitutionWorkflowOptimizer:
         """Preserve the population and add unique cheaper substitutions."""
 
         next_candidates: list[WorkflowCandidate] = []
-        seen: set[tuple[UUID, ...]] = set()
+        seen: set[WorkflowCandidateSignature] = set()
 
         for candidate in candidates:
             specification = self._workflows.get(candidate.metadata.id)
@@ -68,12 +67,10 @@ class ModelSubstitutionWorkflowOptimizer:
             )
 
             for proposal in proposals:
-                signature = tuple(step.strategy.metadata.id for step in proposal.steps)
-
-                if signature in seen:
+                if proposal.signature in seen:
                     continue
 
-                seen.add(signature)
+                seen.add(proposal.signature)
                 next_candidates.append(proposal)
 
         return WorkflowOptimizationResult(

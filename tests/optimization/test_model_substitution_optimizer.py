@@ -414,6 +414,54 @@ def test_model_substitution_optimizer_deduplicates_expanded_candidates() -> None
     )
 
 
+def test_model_substitution_optimizer_does_not_deduplicate_distinct_workflows() -> None:
+    first_workflow = create_workflow()
+    second_workflow = create_workflow(
+        workflow_id=SECOND_WORKFLOW_ID,
+    )
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    first_candidate = create_candidate(
+        specification=first_workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+    second_candidate = create_candidate(
+        specification=second_workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    optimizer = ModelSubstitutionWorkflowOptimizer(
+        workflows=WorkflowCatalog(
+            specifications=(
+                first_workflow,
+                second_workflow,
+            )
+        ),
+        models=catalog,
+        portfolio=portfolio_for_catalog(catalog),
+        registry=registry,
+    )
+
+    result = optimizer.optimize(
+        experiment=create_experiment(),
+        candidates=(
+            first_candidate,
+            second_candidate,
+        ),
+        generation=1,
+    )
+
+    assert result.candidates == (
+        first_candidate,
+        second_candidate,
+    )
+
+
 def test_model_substitution_optimizer_requires_workflow_specification() -> None:
     workflow = create_workflow()
     catalog = create_model_catalog()

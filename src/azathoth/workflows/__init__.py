@@ -17,6 +17,7 @@ from azathoth.workflows.benchmark import (
 )
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
+    WorkflowCandidateSignature,
     WorkflowCandidateStep,
 )
 from azathoth.workflows.catalog import WorkflowCatalog
@@ -166,6 +167,7 @@ __all__ = [
     "WorkflowBenchmarkRunner",
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
+    "WorkflowCandidateSignature",
     "WorkflowCandidateStep",
     "WorkflowCatalog",
     "WorkflowCatalogLoader",

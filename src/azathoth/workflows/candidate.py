@@ -3,12 +3,25 @@
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from azathoth.strategies import Strategy
 from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
+
+
+class WorkflowCandidateSignature(BaseModel):
+    """Identify one resolved executable workflow configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    workflow_id: UUID
+    strategy_ids: tuple[UUID, ...] = Field(
+        min_length=1,
+    )
 
 
 @dataclass(frozen=True)
@@ -80,6 +93,17 @@ class WorkflowCandidate:
 
         for step_id in step_ids:
             visit(step_id)
+
+    @property
+    def signature(
+        self,
+    ) -> WorkflowCandidateSignature:
+        """Return the deterministic identity of this resolved candidate."""
+
+        return WorkflowCandidateSignature(
+            workflow_id=self.metadata.id,
+            strategy_ids=tuple(step.strategy.metadata.id for step in self.steps),
+        )
 
     def execution_layers(
         self,
