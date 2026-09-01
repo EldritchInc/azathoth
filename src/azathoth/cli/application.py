@@ -12,6 +12,7 @@ from uuid import UUID
 from azathoth import __version__
 from azathoth.cli.models import (
     authorize_model,
+    deauthorize_model,
     list_models,
     list_portfolio_models,
     show_model,
@@ -37,6 +38,7 @@ WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 MODEL_COMMAND = "model"
 MODEL_ACTION_ATTRIBUTE = "model_action"
 MODEL_AUTHORIZE_ACTION = "authorize"
+MODEL_DEAUTHORIZE_ACTION = "deauthorize"
 MODEL_LIST_ACTION = "list"
 MODEL_PORTFOLIO_ACTION = "portfolio"
 MODEL_SHOW_ACTION = "show"
@@ -129,6 +131,17 @@ def build_parser() -> ArgumentParser:
         MODEL_IDENTIFIER_ATTRIBUTE,
         metavar="MODEL_IDENTIFIER",
         help="Provider-qualified model identifier to authorize.",
+    )
+
+    model_deauthorize_parser = model_actions.add_parser(
+        MODEL_DEAUTHORIZE_ACTION,
+        help="Remove one model from organizational authorization.",
+    )
+
+    model_deauthorize_parser.add_argument(
+        MODEL_IDENTIFIER_ATTRIBUTE,
+        metavar="MODEL_IDENTIFIER",
+        help="Provider-qualified model identifier to deauthorize.",
     )
 
     model_actions.add_parser(
@@ -256,6 +269,17 @@ def _dispatch(
             )
 
             return authorize_model(model_identifier)
+
+        if action == MODEL_DEAUTHORIZE_ACTION:
+            model_identifier = cast(
+                str,
+                getattr(
+                    arguments,
+                    MODEL_IDENTIFIER_ATTRIBUTE,
+                ),
+            )
+
+            return deauthorize_model(model_identifier)
 
         if action == MODEL_LIST_ACTION:
             return list_models()

@@ -14,6 +14,7 @@ from azathoth.cli.configuration import (
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.models import (
     authorize_model,
+    deauthorize_model,
     list_models,
     list_portfolio_models,
     show_model,
@@ -33,6 +34,7 @@ __all__ = [
     "CliRuntimeConfiguration",
     "authorize_model",
     "build_parser",
+    "deauthorize_model",
     "execute_configured_workflow",
     "import_workflow",
     "list_models",

@@ -9,6 +9,7 @@ import azathoth.cli.models as model_commands
 from azathoth.cli import (
     CliRuntimeConfiguration,
     authorize_model,
+    deauthorize_model,
     list_models,
     list_portfolio_models,
     show_model,
@@ -528,3 +529,135 @@ def test_model_authorize_uses_provider_reported_identity(
     assert entry.provider == model.provider
     assert entry.model == model.model
     assert entry.identifier == model.identifier
+
+
+def test_model_deauthorize_deletes_authorized_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    entry = ModelPortfolioEntry(
+        provider="provider-a",
+        model="example/alpha",
+    )
+
+    repository = SQLiteModelPortfolioRepository(database)
+    repository.save(entry)
+
+    configure_authorization_runtime(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(),
+        portfolio=ModelPortfolio(
+            entries=(entry,),
+        ),
+    )
+
+    result = deauthorize_model(entry.identifier)
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert repository.entries() == ()
+    assert captured.out == (f"Deauthorized model {entry.identifier}.\n")
+
+    assert captured.err == ""
+
+
+def test_model_deauthorize_rejects_model_not_authorized(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_authorization_runtime(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(),
+        portfolio=ModelPortfolio(),
+    )
+
+    result = deauthorize_model(UNKNOWN_IDENTIFIER)
+
+    captured = capsys.readouterr()
+
+    repository = SQLiteModelPortfolioRepository(database)
+
+    assert result == 1
+    assert repository.entries() == ()
+    assert captured.out == ""
+    assert captured.err == (f"Model {UNKNOWN_IDENTIFIER!r} is not authorized.\n")
+
+
+def test_model_deauthorize_does_not_require_current_provider_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    entry = ModelPortfolioEntry(
+        provider="openrouter",
+        model="example/removed-by-provider",
+    )
+
+    repository = SQLiteModelPortfolioRepository(database)
+    repository.save(entry)
+
+    configure_authorization_runtime(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(),
+        portfolio=ModelPortfolio(
+            entries=(entry,),
+        ),
+    )
+
+    result = deauthorize_model(entry.identifier)
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert repository.entries() == ()
+    assert captured.out == (f"Deauthorized model {entry.identifier}.\n")
+    assert captured.err == ""
+
+
+def test_model_deauthorize_preserves_other_authorized_models(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    first = ModelPortfolioEntry(
+        provider="provider-a",
+        model="example/alpha",
+    )
+
+    second = ModelPortfolioEntry(
+        provider="provider-b",
+        model="example/beta",
+    )
+
+    repository = SQLiteModelPortfolioRepository(database)
+    repository.save(first)
+    repository.save(second)
+
+    configure_authorization_runtime(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(),
+        portfolio=ModelPortfolio(
+            entries=(
+                first,
+                second,
+            ),
+        ),
+    )
+
+    assert deauthorize_model(first.identifier) == 0
+
+    assert repository.entries() == (second,)

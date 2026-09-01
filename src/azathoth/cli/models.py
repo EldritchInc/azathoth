@@ -102,6 +102,33 @@ def authorize_model(
     return 0
 
 
+def deauthorize_model(
+    identifier: str,
+) -> int:
+    """Remove one model from organizational authorization."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    runtime = load_runtime(configuration)
+
+    if runtime.portfolio.get(identifier) is None:
+        print(
+            f"Model {identifier!r} is not authorized.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    repository = SQLiteModelPortfolioRepository(
+        configuration.database,
+    )
+
+    repository.delete(identifier)
+
+    print(f"Deauthorized model {identifier}.")
+
+    return 0
+
+
 def _print_model(
     model: ModelMetadata,
 ) -> None:

@@ -290,3 +290,70 @@ def test_cli_model_authorize_requires_identifier(
     assert raised.value.code == 2
     assert captured.out == ""
     assert "MODEL_IDENTIFIER" in captured.err
+
+
+def test_cli_model_help_lists_deauthorize_action(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "model",
+                "--help",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 0
+    assert "deauthorize" in captured.out
+
+
+def test_cli_dispatches_model_deauthorize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identifiers: list[str] = []
+
+    def fake_deauthorize_model(
+        identifier: str,
+    ) -> int:
+        identifiers.append(identifier)
+
+        return 37
+
+    monkeypatch.setattr(
+        application,
+        "deauthorize_model",
+        fake_deauthorize_model,
+    )
+
+    result = main(
+        (
+            "model",
+            "deauthorize",
+            FIRST_IDENTIFIER,
+        )
+    )
+
+    assert result == 37
+    assert identifiers == [
+        FIRST_IDENTIFIER,
+    ]
+
+
+def test_cli_model_deauthorize_requires_identifier(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "model",
+                "deauthorize",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "MODEL_IDENTIFIER" in captured.err
