@@ -10,6 +10,10 @@ from typing import cast
 from uuid import UUID
 
 from azathoth import __version__
+from azathoth.cli.models import (
+    list_models,
+    show_model,
+)
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
@@ -19,6 +23,13 @@ from azathoth.cli.workflows import (
 
 COMMAND_ATTRIBUTE = "command"
 WORKFLOW_COMMAND = "workflow"
+MODEL_COMMAND = "model"
+
+MODEL_ACTION_ATTRIBUTE = "model_action"
+MODEL_LIST_ACTION = "list"
+MODEL_SHOW_ACTION = "show"
+
+MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
 
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_IMPORT_ACTION = "import"
@@ -98,6 +109,31 @@ def build_parser() -> ArgumentParser:
         help="Workflow UUID to execute.",
     )
 
+    model_parser = commands.add_parser(
+        MODEL_COMMAND,
+        help="Inspect models currently available from providers.",
+    )
+
+    model_actions = model_parser.add_subparsers(
+        dest=MODEL_ACTION_ATTRIBUTE,
+    )
+
+    model_actions.add_parser(
+        MODEL_LIST_ACTION,
+        help="List currently available provider models.",
+    )
+
+    model_show_parser = model_actions.add_parser(
+        MODEL_SHOW_ACTION,
+        help="Show one currently available provider model.",
+    )
+
+    model_show_parser.add_argument(
+        MODEL_IDENTIFIER_ATTRIBUTE,
+        metavar="MODEL_IDENTIFIER",
+        help="Provider-qualified model identifier to inspect.",
+    )
+
     return parser
 
 
@@ -134,52 +170,78 @@ def _dispatch(
         ),
     )
 
-    if command != WORKFLOW_COMMAND:
+    if command == WORKFLOW_COMMAND:
+        action = cast(
+            str | None,
+            getattr(
+                arguments,
+                WORKFLOW_ACTION_ATTRIBUTE,
+                None,
+            ),
+        )
+
+        if action == WORKFLOW_LIST_ACTION:
+            return list_workflows()
+
+        if action == WORKFLOW_SHOW_ACTION:
+            workflow_id = cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            )
+
+            return show_workflow(workflow_id)
+
+        if action == WORKFLOW_IMPORT_ACTION:
+            workflow_document = cast(
+                Path,
+                getattr(
+                    arguments,
+                    WORKFLOW_DOCUMENT_ATTRIBUTE,
+                ),
+            )
+
+            return import_workflow(workflow_document)
+
+        if action == WORKFLOW_RUN_ACTION:
+            workflow_id = cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            )
+
+            return run_workflow(workflow_id)
+
         return None
 
-    action = cast(
-        str | None,
-        getattr(
-            arguments,
-            WORKFLOW_ACTION_ATTRIBUTE,
-            None,
-        ),
-    )
-
-    if action == WORKFLOW_LIST_ACTION:
-        return list_workflows()
-
-    if action == WORKFLOW_SHOW_ACTION:
-        workflow_id = cast(
-            UUID,
+    if command == MODEL_COMMAND:
+        action = cast(
+            str | None,
             getattr(
                 arguments,
-                WORKFLOW_ID_ATTRIBUTE,
+                MODEL_ACTION_ATTRIBUTE,
+                None,
             ),
         )
 
-        return show_workflow(workflow_id)
+        if action == MODEL_LIST_ACTION:
+            return list_models()
 
-    if action == WORKFLOW_IMPORT_ACTION:
-        workflow_document = cast(
-            Path,
-            getattr(
-                arguments,
-                WORKFLOW_DOCUMENT_ATTRIBUTE,
-            ),
-        )
+        if action == MODEL_SHOW_ACTION:
+            model_identifier = cast(
+                str,
+                getattr(
+                    arguments,
+                    MODEL_IDENTIFIER_ATTRIBUTE,
+                ),
+            )
 
-        return import_workflow(workflow_document)
+            return show_model(model_identifier)
 
-    if action == WORKFLOW_RUN_ACTION:
-        workflow_id = cast(
-            UUID,
-            getattr(
-                arguments,
-                WORKFLOW_ID_ATTRIBUTE,
-            ),
-        )
-
-        return run_workflow(workflow_id)
+        return None
 
     return None
