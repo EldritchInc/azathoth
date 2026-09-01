@@ -38,6 +38,17 @@ class InMemoryModelPortfolioRepository:
 
         return self._entries.get(identifier)
 
+    def delete(
+        self,
+        identifier: str,
+    ) -> None:
+        """Delete one authorized model entry."""
+
+        if identifier not in self._entries:
+            raise ValueError(f"Model portfolio entry {identifier!r} does not exist.")
+
+        del self._entries[identifier]
+
     def entries(
         self,
     ) -> tuple[

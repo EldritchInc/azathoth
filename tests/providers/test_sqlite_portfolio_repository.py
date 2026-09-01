@@ -184,3 +184,87 @@ def test_sqlite_portfolio_repository_rejects_equivalent_duplicate_entry(
         match=("Model portfolio entry 'openrouter/example/frontier' already exists"),
     ):
         repository.save(second)
+
+
+def test_sqlite_portfolio_repository_deletes_entry(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(
+        tmp_path / "portfolio.db",
+    )
+
+    entry = create_entry()
+
+    repository.save(entry)
+    repository.delete(entry.identifier)
+
+    assert repository.get(entry.identifier) is None
+    assert repository.entries() == ()
+
+
+def test_sqlite_portfolio_repository_delete_persists_across_restart(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "portfolio.db"
+
+    first = create_entry(
+        model="example/alpha",
+    )
+    second = create_entry(
+        model="example/beta",
+    )
+
+    repository = create_repository(database)
+
+    repository.save(first)
+    repository.save(second)
+    repository.delete(first.identifier)
+
+    reconstructed = create_repository(database)
+
+    assert reconstructed.entries() == (second,)
+
+
+def test_sqlite_portfolio_repository_delete_preserves_remaining_order(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(
+        tmp_path / "portfolio.db",
+    )
+
+    first = create_entry(
+        model="example/alpha",
+    )
+    second = create_entry(
+        model="example/beta",
+    )
+    third = create_entry(
+        model="example/gamma",
+    )
+
+    repository.save(first)
+    repository.save(second)
+    repository.save(third)
+
+    repository.delete(second.identifier)
+
+    assert repository.entries() == (
+        first,
+        third,
+    )
+
+
+def test_sqlite_portfolio_repository_rejects_deleting_unknown_entry(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(
+        tmp_path / "portfolio.db",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="does not exist",
+    ):
+        repository.delete(
+            "openrouter/example/missing",
+        )

@@ -132,3 +132,52 @@ def test_memory_portfolio_repository_starts_empty() -> None:
     repository = InMemoryModelPortfolioRepository()
 
     assert repository.entries() == ()
+
+
+def test_portfolio_repository_deletes_entry() -> None:
+    repository = InMemoryModelPortfolioRepository()
+
+    entry = create_entry()
+
+    repository.save(entry)
+    repository.delete(entry.identifier)
+
+    assert repository.get(entry.identifier) is None
+    assert repository.entries() == ()
+
+
+def test_portfolio_repository_delete_preserves_remaining_order() -> None:
+    repository = InMemoryModelPortfolioRepository()
+
+    first = create_entry(
+        model="example/alpha",
+    )
+    second = create_entry(
+        model="example/beta",
+    )
+    third = create_entry(
+        model="example/gamma",
+    )
+
+    repository.save(first)
+    repository.save(second)
+    repository.save(third)
+
+    repository.delete(second.identifier)
+
+    assert repository.entries() == (
+        first,
+        third,
+    )
+
+
+def test_portfolio_repository_rejects_deleting_unknown_entry() -> None:
+    repository = InMemoryModelPortfolioRepository()
+
+    with pytest.raises(
+        ValueError,
+        match="does not exist",
+    ):
+        repository.delete(
+            "openrouter/example/missing",
+        )

@@ -35,3 +35,11 @@ class ModelPortfolioRepository(Protocol):
         """Return all authorized models in insertion order."""
 
         ...
+
+    def delete(
+        self,
+        identifier: str,
+    ) -> None:
+        """Delete one authorized model entry."""
+
+        ...
