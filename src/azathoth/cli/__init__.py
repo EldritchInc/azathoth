@@ -20,7 +20,10 @@ from azathoth.cli.models import (
     show_model,
 )
 from azathoth.cli.optimization import optimize_configured_workflow
-from azathoth.cli.rendering import render_workflow_run
+from azathoth.cli.rendering import (
+    render_workflow_optimization_session,
+    render_workflow_run,
+)
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
@@ -44,6 +47,7 @@ __all__ = [
     "load_runtime",
     "main",
     "optimize_configured_workflow",
+    "render_workflow_optimization_session",
     "render_workflow_run",
     "run_workflow",
     "show_model",
