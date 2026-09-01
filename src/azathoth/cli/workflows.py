@@ -5,10 +5,20 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from pydantic import JsonValue
+
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
-from azathoth.cli.rendering import render_workflow_run
+from azathoth.cli.optimization import optimize_configured_workflow
+from azathoth.cli.rendering import (
+    render_workflow_optimization_session,
+    render_workflow_run,
+)
+from azathoth.evaluation import (
+    ExpectedOutcome,
+    OutcomeComparison,
+)
 from azathoth.prompting import PromptStrategySpec
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
@@ -16,6 +26,7 @@ from azathoth.workflows import (
     ToolStepSpecification,
     WorkflowDocumentError,
     WorkflowGenerationError,
+    WorkflowScoringPolicy,
     decode_workflow_document,
 )
 
@@ -175,6 +186,58 @@ def run_workflow(
     print(render_workflow_run(run))
 
     return 0 if run.succeeded else 1
+
+
+def optimize_workflow(
+    *,
+    workflow_id: UUID,
+    expected_value: JsonValue,
+    target_latency_seconds: float,
+    target_cost_usd: float,
+    generations: int,
+) -> int:
+    """Empirically optimize one configured workflow."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    runtime = load_runtime(configuration)
+
+    try:
+        session = asyncio.run(
+            optimize_configured_workflow(
+                runtime=runtime,
+                workflow_id=workflow_id,
+                expected_outcome=ExpectedOutcome(
+                    description="Match the operator-supplied expected value.",
+                    value=expected_value,
+                    comparison=OutcomeComparison.EXACT,
+                ),
+                scoring_policy=WorkflowScoringPolicy(
+                    target_latency_seconds=target_latency_seconds,
+                    target_cost_usd=target_cost_usd,
+                ),
+                max_generations=generations,
+            )
+        )
+    except (
+        WorkflowNotConfiguredError,
+        WorkflowGenerationError,
+        ValueError,
+    ) as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(
+        render_workflow_optimization_session(
+            session,
+        )
+    )
+
+    return 0
 
 
 def _step_type(

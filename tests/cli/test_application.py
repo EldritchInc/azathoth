@@ -1,8 +1,13 @@
 """Tests for the Azathoth command-line application."""
 
+import json
+from argparse import ArgumentTypeError
 from collections.abc import Sequence
+from typing import cast
+from uuid import UUID
 
 import pytest
+from pydantic import JsonValue
 
 import azathoth.cli.application as application
 from azathoth import __version__
@@ -12,6 +17,24 @@ from azathoth.cli import (
 )
 
 FIRST_IDENTIFIER = "openrouter/example/model"
+
+WORKFLOW_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+
+def _json_value(
+    value: str,
+) -> JsonValue:
+    """Parse one JSON-compatible command-line value."""
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ArgumentTypeError(f"expected value must be valid JSON: {exc.msg}") from exc
+
+    return cast(
+        JsonValue,
+        parsed,
+    )
 
 
 def test_cli_parser_uses_azathoth_program_name() -> None:
@@ -357,3 +380,178 @@ def test_cli_model_deauthorize_requires_identifier(
     assert raised.value.code == 2
     assert captured.out == ""
     assert "MODEL_IDENTIFIER" in captured.err
+
+
+def test_cli_workflow_help_lists_optimize_action(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "--help",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 0
+    assert "optimize" in captured.out
+
+
+def test_cli_dispatches_workflow_optimize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: dict[str, object] = {}
+
+    def fake_optimize_workflow(
+        *,
+        workflow_id: UUID,
+        expected_value: JsonValue,
+        target_latency_seconds: float,
+        target_cost_usd: float,
+        generations: int,
+    ) -> int:
+        received.update(
+            {
+                "workflow_id": workflow_id,
+                "expected_value": expected_value,
+                "target_latency_seconds": target_latency_seconds,
+                "target_cost_usd": target_cost_usd,
+                "generations": generations,
+            }
+        )
+
+        return 37
+
+    monkeypatch.setattr(
+        application,
+        "optimize_workflow",
+        fake_optimize_workflow,
+    )
+
+    result = main(
+        (
+            "workflow",
+            "optimize",
+            str(WORKFLOW_ID),
+            "--expected",
+            '"success"',
+            "--target-latency",
+            "5.0",
+            "--target-cost",
+            "0.01",
+            "--generations",
+            "3",
+        )
+    )
+
+    assert result == 37
+
+    assert received == {
+        "workflow_id": WORKFLOW_ID,
+        "expected_value": "success",
+        "target_latency_seconds": 5.0,
+        "target_cost_usd": 0.01,
+        "generations": 3,
+    }
+
+
+def test_cli_workflow_optimize_parses_structured_expected_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_values: list[JsonValue] = []
+
+    def fake_optimize_workflow(
+        *,
+        workflow_id: UUID,
+        expected_value: JsonValue,
+        target_latency_seconds: float,
+        target_cost_usd: float,
+        generations: int,
+    ) -> int:
+        del (
+            workflow_id,
+            target_latency_seconds,
+            target_cost_usd,
+            generations,
+        )
+
+        expected_values.append(expected_value)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "optimize_workflow",
+        fake_optimize_workflow,
+    )
+
+    result = main(
+        (
+            "workflow",
+            "optimize",
+            str(WORKFLOW_ID),
+            "--expected",
+            '{"classification":"positive"}',
+            "--target-latency",
+            "5",
+            "--target-cost",
+            "0.01",
+        )
+    )
+
+    assert result == 0
+    assert expected_values == [
+        {
+            "classification": "positive",
+        }
+    ]
+
+
+def test_cli_workflow_optimize_requires_scoring_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "optimize",
+                str(WORKFLOW_ID),
+                "--expected",
+                '"success"',
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "--target-latency" in captured.err
+    assert "--target-cost" in captured.err
+
+
+def test_cli_workflow_optimize_rejects_invalid_expected_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(
+        (
+            SystemExit,
+            ValueError,
+        )
+    ):
+        main(
+            (
+                "workflow",
+                "optimize",
+                str(WORKFLOW_ID),
+                "--expected",
+                "{not-json}",
+                "--target-latency",
+                "5",
+                "--target-cost",
+                "0.01",
+            )
+        )
+
+    capsys.readouterr()

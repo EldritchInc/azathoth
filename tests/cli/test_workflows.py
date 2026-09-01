@@ -5,11 +5,16 @@ from uuid import UUID
 
 import pytest
 
+import azathoth.cli.workflows as workflow_commands
 from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
+    CliRuntimeConfiguration,
     list_workflows,
     show_workflow,
 )
+from azathoth.context import Context
+from azathoth.evaluation import ExpectedOutcome
+from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
@@ -18,12 +23,18 @@ from azathoth.providers import (
     ModelRequirements,
     Prompt,
 )
-from azathoth.strategies import StrategyMetadata
+from azathoth.strategies import (
+    StrategyMetadata,
+    StrategyOutcome,
+)
 from azathoth.tools import ToolRequirement
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
+    WorkflowCandidate,
+    WorkflowCandidateStep,
     WorkflowMetadata,
+    WorkflowScoringPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
@@ -41,6 +52,40 @@ SECOND_STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
 FIRST_STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
 
 SECOND_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
+
+
+class StaticStrategy:
+    """Return one deterministic strategy outcome for CLI tests."""
+
+    def __init__(
+        self,
+        *,
+        strategy_id: UUID,
+    ) -> None:
+        self._metadata = StrategyMetadata(
+            id=strategy_id,
+            name="optimization test strategy",
+            description="Provide deterministic optimization test behavior.",
+            version="1.0.0",
+        )
+
+    @property
+    def metadata(
+        self,
+    ) -> StrategyMetadata:
+        """Return deterministic strategy metadata."""
+
+        return self._metadata
+
+    async def run(
+        self,
+        _context: Context,
+    ) -> StrategyOutcome:
+        """Return one deterministic strategy result."""
+
+        return StrategyOutcome(
+            output="success",
+        )
 
 
 def create_workflow(
@@ -122,6 +167,31 @@ def create_mixed_workflow() -> WorkflowSpecification:
                 depends_on=(FIRST_STEP_ID,),
             ),
         ),
+    )
+
+
+def create_optimization_session() -> WorkflowOptimizationSession:
+    """Create one minimal deterministic optimization session."""
+
+    candidate = WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=FIRST_WORKFLOW_ID,
+            name="optimization workflow",
+            description="Exercise CLI optimization command behavior.",
+            version="1.0.0",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=FIRST_STEP_ID,
+                strategy=StaticStrategy(
+                    strategy_id=FIRST_STRATEGY_ID,
+                ),
+            ),
+        ),
+    )
+
+    return WorkflowOptimizationSession(
+        initial_candidates=(candidate,),
     )
 
 
@@ -414,3 +484,129 @@ def test_workflow_show_does_not_require_openrouter_credentials(
 
     assert result == 0
     assert "Name: mixed workflow" in captured.out
+
+
+def test_optimize_workflow_renders_optimization_session(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session = create_optimization_session()
+
+    runtime = object()
+
+    monkeypatch.setattr(
+        CliRuntimeConfiguration,
+        "from_environment",
+        lambda: object(),
+    )
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "load_runtime",
+        lambda _configuration: runtime,
+    )
+
+    async def fake_optimize_configured_workflow(
+        **_kwargs: object,
+    ) -> WorkflowOptimizationSession:
+        return session
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "optimize_configured_workflow",
+        fake_optimize_configured_workflow,
+    )
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "render_workflow_optimization_session",
+        lambda value: "optimization-result" if value is session else "wrong-session",
+    )
+
+    result = workflow_commands.optimize_workflow(
+        workflow_id=FIRST_WORKFLOW_ID,
+        expected_value="success",
+        target_latency_seconds=5.0,
+        target_cost_usd=0.01,
+        generations=2,
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out == "optimization-result\n"
+    assert captured.err == ""
+
+
+def test_optimize_workflow_preserves_operator_optimization_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: dict[str, object] = {}
+
+    runtime = object()
+
+    monkeypatch.setattr(
+        CliRuntimeConfiguration,
+        "from_environment",
+        lambda: object(),
+    )
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "load_runtime",
+        lambda _configuration: runtime,
+    )
+
+    async def fake_optimize_configured_workflow(
+        **kwargs: object,
+    ) -> WorkflowOptimizationSession:
+        received.update(kwargs)
+
+        return create_optimization_session()
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "optimize_configured_workflow",
+        fake_optimize_configured_workflow,
+    )
+
+    monkeypatch.setattr(
+        workflow_commands,
+        "render_workflow_optimization_session",
+        lambda _session: "result",
+    )
+
+    assert (
+        workflow_commands.optimize_workflow(
+            workflow_id=FIRST_WORKFLOW_ID,
+            expected_value={
+                "classification": "positive",
+            },
+            target_latency_seconds=2.5,
+            target_cost_usd=0.004,
+            generations=4,
+        )
+        == 0
+    )
+
+    expected_outcome = received["expected_outcome"]
+    scoring_policy = received["scoring_policy"]
+
+    assert isinstance(
+        expected_outcome,
+        ExpectedOutcome,
+    )
+    assert expected_outcome.value == {
+        "classification": "positive",
+    }
+
+    assert isinstance(
+        scoring_policy,
+        WorkflowScoringPolicy,
+    )
+    assert scoring_policy.target_latency_seconds == 2.5
+    assert scoring_policy.target_cost_usd == 0.004
+
+    assert received["runtime"] is runtime
+    assert received["workflow_id"] == FIRST_WORKFLOW_ID
+    assert received["max_generations"] == 4
