@@ -1,5 +1,6 @@
 """Command-line application for Azathoth."""
 
+import json
 from argparse import (
     ArgumentParser,
     Namespace,
@@ -8,6 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 from uuid import UUID
+
+from pydantic import JsonValue
 
 from azathoth import __version__
 from azathoth.cli.models import (
@@ -20,6 +23,7 @@ from azathoth.cli.models import (
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
+    optimize_workflow,
     run_workflow,
     show_workflow,
 )
@@ -30,10 +34,16 @@ WORKFLOW_COMMAND = "workflow"
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_LIST_ACTION = "list"
+WORKFLOW_OPTIMIZE_ACTION = "optimize"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_SHOW_ACTION = "show"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
+
+EXPECTED_VALUE_ATTRIBUTE = "expected_value"
+TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
+TARGET_COST_ATTRIBUTE = "target_cost_usd"
+GENERATIONS_ATTRIBUTE = "generations"
 
 MODEL_COMMAND = "model"
 MODEL_ACTION_ATTRIBUTE = "model_action"
@@ -45,12 +55,28 @@ MODEL_SHOW_ACTION = "show"
 MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
 
 
+def _json_value(
+    value: str,
+) -> JsonValue:
+    """Parse one JSON-compatible command-line value."""
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Expected value must be valid JSON: {exc.msg}") from exc
+
+    return cast(
+        JsonValue,
+        parsed,
+    )
+
+
 def build_parser() -> ArgumentParser:
     """Build the Azathoth command-line parser."""
 
     parser = ArgumentParser(
         prog="azathoth",
-        description=("Empirical optimization for context-aware AI workflows."),
+        description="Empirical optimization for context-aware AI workflows.",
     )
 
     parser.add_argument(
@@ -111,6 +137,54 @@ def build_parser() -> ArgumentParser:
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to execute.",
+    )
+
+    workflow_optimize_parser = workflow_actions.add_parser(
+        WORKFLOW_OPTIMIZE_ACTION,
+        help="Empirically optimize one configured workflow.",
+    )
+
+    workflow_optimize_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID to optimize.",
+    )
+
+    workflow_optimize_parser.add_argument(
+        "--expected",
+        dest=EXPECTED_VALUE_ATTRIBUTE,
+        required=True,
+        type=_json_value,
+        metavar="JSON",
+        help="Expected workflow output as JSON.",
+    )
+
+    workflow_optimize_parser.add_argument(
+        "--target-latency",
+        dest=TARGET_LATENCY_ATTRIBUTE,
+        required=True,
+        type=float,
+        metavar="SECONDS",
+        help="Target workflow latency in seconds.",
+    )
+
+    workflow_optimize_parser.add_argument(
+        "--target-cost",
+        dest=TARGET_COST_ATTRIBUTE,
+        required=True,
+        type=float,
+        metavar="USD",
+        help="Target workflow execution cost in USD.",
+    )
+
+    workflow_optimize_parser.add_argument(
+        "--generations",
+        dest=GENERATIONS_ATTRIBUTE,
+        type=int,
+        default=1,
+        metavar="COUNT",
+        help="Number of empirical optimization generations.",
     )
 
     model_parser = commands.add_parser(
@@ -246,6 +320,45 @@ def _dispatch(
             )
 
             return run_workflow(workflow_id)
+
+        if action == WORKFLOW_OPTIMIZE_ACTION:
+            return optimize_workflow(
+                workflow_id=cast(
+                    UUID,
+                    getattr(
+                        arguments,
+                        WORKFLOW_ID_ATTRIBUTE,
+                    ),
+                ),
+                expected_value=cast(
+                    JsonValue,
+                    getattr(
+                        arguments,
+                        EXPECTED_VALUE_ATTRIBUTE,
+                    ),
+                ),
+                target_latency_seconds=cast(
+                    float,
+                    getattr(
+                        arguments,
+                        TARGET_LATENCY_ATTRIBUTE,
+                    ),
+                ),
+                target_cost_usd=cast(
+                    float,
+                    getattr(
+                        arguments,
+                        TARGET_COST_ATTRIBUTE,
+                    ),
+                ),
+                generations=cast(
+                    int,
+                    getattr(
+                        arguments,
+                        GENERATIONS_ATTRIBUTE,
+                    ),
+                ),
+            )
 
         return None
 

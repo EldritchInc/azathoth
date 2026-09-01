@@ -27,6 +27,7 @@ from azathoth.cli.rendering import (
 from azathoth.cli.workflows import (
     import_workflow,
     list_workflows,
+    optimize_workflow,
     run_workflow,
     show_workflow,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "load_runtime",
     "main",
     "optimize_configured_workflow",
+    "optimize_workflow",
     "render_workflow_optimization_session",
     "render_workflow_run",
     "run_workflow",
