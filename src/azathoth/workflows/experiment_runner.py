@@ -14,6 +14,7 @@ from azathoth.workflows.execution import (
     WorkflowRun,
 )
 from azathoth.workflows.experiment import (
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
 )
 from azathoth.workflows.ranker import (
@@ -38,9 +39,7 @@ class WorkflowExperimentRunner:
         ranker: WorkflowRanker | None = None,
     ) -> None:
         self._runner = runner if runner is not None else WorkflowRunner()
-
         self._scorer = scorer
-
         self._ranker = ranker if ranker is not None else WorkflowRanker()
 
     async def run(
@@ -53,7 +52,7 @@ class WorkflowExperimentRunner:
     ) -> WorkflowExperimentResult:
         """Execute, evaluate, score, and rank workflow candidates."""
 
-        scorecards = []
+        evidence: list[WorkflowExperimentEvidence] = []
 
         for workflow in workflows:
             run = await self._runner.run(
@@ -66,19 +65,26 @@ class WorkflowExperimentRunner:
                 actual=self._output_from_run(run),
             )
 
-            scorecards.append(
-                self._scorer.score(
-                    run=run,
-                    evaluation=evaluation,
+            scorecard = self._scorer.score(
+                run=run,
+                evaluation=evaluation,
+            )
+
+            evidence.append(
+                WorkflowExperimentEvidence(
+                    candidate_signature=workflow.signature,
+                    scorecard=scorecard,
                 )
             )
 
+        scorecards = tuple(observation.scorecard for observation in evidence)
+
         ranking = self._ranker.rank(
-            tuple(scorecards),
+            scorecards,
         )
 
         return WorkflowExperimentResult(
-            scorecards=tuple(scorecards),
+            evidence=tuple(evidence),
             ranking=ranking,
         )
 

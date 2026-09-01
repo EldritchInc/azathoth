@@ -27,7 +27,9 @@ from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     RankedWorkflow,
     WorkflowCandidate,
+    WorkflowCandidateSignature,
     WorkflowCatalog,
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
     WorkflowMetadata,
     WorkflowRanking,
@@ -193,7 +195,15 @@ def create_experiment() -> WorkflowExperimentResult:
     )
 
     return WorkflowExperimentResult(
-        scorecards=(scorecard,),
+        evidence=(
+            WorkflowExperimentEvidence(
+                candidate_signature=WorkflowCandidateSignature(
+                    workflow_id=WORKFLOW_ID,
+                    strategy_ids=(STRATEGY_ID,),
+                ),
+                scorecard=scorecard,
+            ),
+        ),
         ranking=WorkflowRanking(
             entries=(
                 RankedWorkflow(

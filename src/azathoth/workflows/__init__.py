@@ -39,6 +39,7 @@ from azathoth.workflows.execution import (
     WorkflowStepStatus,
 )
 from azathoth.workflows.experiment import (
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
 )
 from azathoth.workflows.experiment_record import (
@@ -176,6 +177,7 @@ __all__ = [
     "WorkflowConditionOperator",
     "WorkflowDocumentError",
     "WorkflowEvaluation",
+    "WorkflowExperimentEvidence",
     "WorkflowExperimentObservation",
     "WorkflowExperimentRecord",
     "WorkflowExperimentRepository",

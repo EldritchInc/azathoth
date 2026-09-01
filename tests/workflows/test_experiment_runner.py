@@ -321,6 +321,51 @@ def test_experiment_runner_produces_scorecard_for_every_workflow() -> None:
     assert len(result.scorecards) == 2
 
 
+def test_experiment_runner_associates_scorecards_with_candidate_signatures() -> None:
+    """Every scorecard should retain the resolved candidate that produced it."""
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_A,
+                output="success",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_B,
+                output="failure",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-b",
+        ),
+    )
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=workflows,
+            context=Context(),
+            evaluator=RecordingEvaluator(),
+            expected_outcome=create_expected_outcome(),
+        )
+    )
+
+    assert tuple(observation.candidate_signature for observation in result.evidence) == (
+        workflows[0].signature,
+        workflows[1].signature,
+    )
+
+    assert tuple(observation.scorecard for observation in result.evidence) == result.scorecards
+
+
 def test_experiment_runner_ranks_workflow_scorecards() -> None:
     """Experiment results should rank stronger scorecards first."""
 
