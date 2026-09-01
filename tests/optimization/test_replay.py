@@ -18,6 +18,7 @@ from azathoth.workflows import (
     RankedWorkflow,
     WorkflowCandidate,
     WorkflowCandidateStep,
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
     WorkflowMetadata,
     WorkflowRanking,
@@ -130,10 +131,18 @@ def create_experiment() -> WorkflowExperimentResult:
         overall_score=0.7,
     )
 
+    candidates = create_candidates()
+
     return WorkflowExperimentResult(
-        scorecards=(
-            winner,
-            runner_up,
+        evidence=(
+            WorkflowExperimentEvidence(
+                candidate_signature=candidates[0].signature,
+                scorecard=winner,
+            ),
+            WorkflowExperimentEvidence(
+                candidate_signature=candidates[1].signature,
+                scorecard=runner_up,
+            ),
         ),
         ranking=WorkflowRanking(
             entries=(

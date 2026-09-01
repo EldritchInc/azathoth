@@ -17,6 +17,7 @@ from azathoth.workflows.benchmark import (
 )
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
+    WorkflowCandidateSignature,
     WorkflowCandidateStep,
 )
 from azathoth.workflows.catalog import WorkflowCatalog
@@ -38,6 +39,7 @@ from azathoth.workflows.execution import (
     WorkflowStepStatus,
 )
 from azathoth.workflows.experiment import (
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
 )
 from azathoth.workflows.experiment_record import (
@@ -166,6 +168,7 @@ __all__ = [
     "WorkflowBenchmarkRunner",
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
+    "WorkflowCandidateSignature",
     "WorkflowCandidateStep",
     "WorkflowCatalog",
     "WorkflowCatalogLoader",
@@ -174,6 +177,7 @@ __all__ = [
     "WorkflowConditionOperator",
     "WorkflowDocumentError",
     "WorkflowEvaluation",
+    "WorkflowExperimentEvidence",
     "WorkflowExperimentObservation",
     "WorkflowExperimentRecord",
     "WorkflowExperimentRepository",

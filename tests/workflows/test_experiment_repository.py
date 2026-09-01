@@ -7,6 +7,7 @@ import pytest
 
 from azathoth.workflows import (
     InMemoryWorkflowExperimentRepository,
+    WorkflowCandidateSignature,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowExperimentRepository,
@@ -27,6 +28,9 @@ SECOND_RUN_ID = UUID("66666666-6666-6666-6666-666666666666")
 FIRST_EVALUATION_ID = UUID("77777777-7777-7777-7777-777777777777")
 SECOND_EVALUATION_ID = UUID("88888888-8888-8888-8888-888888888888")
 
+FIRST_STRATEGY_ID = UUID("99999999-9999-9999-9999-999999999999")
+SECOND_STRATEGY_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
 RECORDED_AT = datetime(
     2026,
     8,
@@ -40,6 +44,7 @@ RECORDED_AT = datetime(
 def create_observation(
     *,
     workflow_id: UUID,
+    strategy_id: UUID,
     run_id: UUID,
     evaluation_id: UUID,
     score: float,
@@ -52,6 +57,10 @@ def create_observation(
             name=f"workflow-{workflow_id}",
             description="Execute a deterministic workflow.",
             version="1.0.0",
+        ),
+        candidate_signature=WorkflowCandidateSignature(
+            workflow_id=workflow_id,
+            strategy_ids=(strategy_id,),
         ),
         run_id=run_id,
         evaluation_id=evaluation_id,
@@ -70,6 +79,7 @@ def create_experiment(
     *,
     experiment_id: UUID,
     workflow_id: UUID,
+    strategy_id: UUID,
     run_id: UUID,
     evaluation_id: UUID,
 ) -> WorkflowExperimentRecord:
@@ -77,6 +87,7 @@ def create_experiment(
 
     observation = create_observation(
         workflow_id=workflow_id,
+        strategy_id=strategy_id,
         run_id=run_id,
         evaluation_id=evaluation_id,
         score=1.0,
@@ -96,6 +107,7 @@ def test_in_memory_experiment_repository_saves_and_gets_experiment() -> None:
     experiment = create_experiment(
         experiment_id=FIRST_EXPERIMENT_ID,
         workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
     )
@@ -117,6 +129,7 @@ def test_in_memory_experiment_repository_preserves_insertion_order() -> None:
     first = create_experiment(
         experiment_id=FIRST_EXPERIMENT_ID,
         workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
     )
@@ -124,6 +137,7 @@ def test_in_memory_experiment_repository_preserves_insertion_order() -> None:
     second = create_experiment(
         experiment_id=SECOND_EXPERIMENT_ID,
         workflow_id=SECOND_WORKFLOW_ID,
+        strategy_id=SECOND_STRATEGY_ID,
         run_id=SECOND_RUN_ID,
         evaluation_id=SECOND_EVALUATION_ID,
     )
@@ -143,6 +157,7 @@ def test_in_memory_experiment_repository_filters_by_workflow() -> None:
     first = create_experiment(
         experiment_id=FIRST_EXPERIMENT_ID,
         workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
     )
@@ -150,6 +165,7 @@ def test_in_memory_experiment_repository_filters_by_workflow() -> None:
     second = create_experiment(
         experiment_id=SECOND_EXPERIMENT_ID,
         workflow_id=SECOND_WORKFLOW_ID,
+        strategy_id=SECOND_STRATEGY_ID,
         run_id=SECOND_RUN_ID,
         evaluation_id=SECOND_EVALUATION_ID,
     )
@@ -158,7 +174,6 @@ def test_in_memory_experiment_repository_filters_by_workflow() -> None:
     repository.save(second)
 
     assert repository.experiments_for_workflow(FIRST_WORKFLOW_ID) == (first,)
-
     assert repository.experiments_for_workflow(SECOND_WORKFLOW_ID) == (second,)
 
 
@@ -168,6 +183,7 @@ def test_in_memory_experiment_repository_rejects_duplicate_experiment() -> None:
     experiment = create_experiment(
         experiment_id=FIRST_EXPERIMENT_ID,
         workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
     )

@@ -17,6 +17,7 @@ from azathoth.workflows import (
     RankedWorkflow,
     WorkflowCandidate,
     WorkflowCandidateStep,
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
     WorkflowMetadata,
     WorkflowRanking,
@@ -92,6 +93,23 @@ def create_candidate(
     )
 
 
+def create_candidates() -> tuple[WorkflowCandidate, ...]:
+    """Create a deterministic initial candidate population."""
+
+    return (
+        create_candidate(
+            workflow_id=WORKFLOW_ID,
+            step_id=STEP_ID,
+            strategy_id=STRATEGY_ID,
+        ),
+        create_candidate(
+            workflow_id=SECOND_WORKFLOW_ID,
+            step_id=SECOND_STEP_ID,
+            strategy_id=SECOND_STRATEGY_ID,
+        ),
+    )
+
+
 def create_scorecard(
     *,
     overall_score: float,
@@ -118,10 +136,18 @@ def create_experiment() -> WorkflowExperimentResult:
         overall_score=0.7,
     )
 
+    candidates = create_candidates()
+
     return WorkflowExperimentResult(
-        scorecards=(
-            winner,
-            runner_up,
+        evidence=(
+            WorkflowExperimentEvidence(
+                candidate_signature=candidates[0].signature,
+                scorecard=winner,
+            ),
+            WorkflowExperimentEvidence(
+                candidate_signature=candidates[1].signature,
+                scorecard=runner_up,
+            ),
         ),
         ranking=WorkflowRanking(
             entries=(

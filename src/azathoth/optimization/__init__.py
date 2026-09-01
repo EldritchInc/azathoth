@@ -1,5 +1,10 @@
 """Optimization job models and services."""
 
+from azathoth.optimization.candidate_resolution import (
+    resolve_workflow_candidate,
+    resolve_workflow_experiment_evidence,
+    resolve_workflow_experiment_winner,
+)
 from azathoth.optimization.experiment import ExperimentRunner
 from azathoth.optimization.model_substitution import (
     generate_model_substitutions,
@@ -40,4 +45,7 @@ __all__ = [
     "WorkflowOptimizationSessionRunner",
     "WorkflowOptimizer",
     "generate_model_substitutions",
+    "resolve_workflow_candidate",
+    "resolve_workflow_experiment_evidence",
+    "resolve_workflow_experiment_winner",
 ]

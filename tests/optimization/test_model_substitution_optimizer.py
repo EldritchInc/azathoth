@@ -28,6 +28,7 @@ from azathoth.workflows import (
     RankedWorkflow,
     WorkflowCandidate,
     WorkflowCatalog,
+    WorkflowExperimentEvidence,
     WorkflowExperimentResult,
     WorkflowMetadata,
     WorkflowRanking,
@@ -180,27 +181,68 @@ def create_candidate(
     )
 
 
-def create_experiment() -> WorkflowExperimentResult:
-    """Create deterministic experiment evidence."""
+def create_scorecard(
+    *,
+    overall_score: float,
+    rationale: str,
+) -> WorkflowScorecard:
+    """Create deterministic experiment scoring evidence."""
 
-    scorecard = WorkflowScorecard(
-        quality_score=1.0,
-        reliability_score=1.0,
-        latency_score=1.0,
-        cost_score=0.5,
-        overall_score=0.875,
-        rationale="Existing candidate passed.",
+    return WorkflowScorecard(
+        quality_score=overall_score,
+        reliability_score=overall_score,
+        latency_score=overall_score,
+        cost_score=overall_score,
+        overall_score=overall_score,
+        rationale=rationale,
+    )
+
+
+def create_experiment(
+    *,
+    candidates: tuple[WorkflowCandidate, ...],
+    winner_index: int = 0,
+) -> WorkflowExperimentResult:
+    """Create experiment evidence with one deterministic empirical winner."""
+
+    scorecards = tuple(
+        create_scorecard(
+            overall_score=(1.0 if index == winner_index else 0.5),
+            rationale=("Empirical winner." if index == winner_index else "Empirical runner-up."),
+        )
+        for index in range(len(candidates))
+    )
+
+    evidence = tuple(
+        WorkflowExperimentEvidence(
+            candidate_signature=candidate.signature,
+            scorecard=scorecard,
+        )
+        for candidate, scorecard in zip(
+            candidates,
+            scorecards,
+            strict=True,
+        )
+    )
+
+    ranking_order = (
+        winner_index,
+        *(index for index in range(len(candidates)) if index != winner_index),
     )
 
     return WorkflowExperimentResult(
-        scorecards=(scorecard,),
+        evidence=evidence,
         ranking=WorkflowRanking(
-            entries=(
+            entries=tuple(
                 RankedWorkflow(
-                    rank=1,
-                    scorecard=scorecard,
-                ),
-            )
+                    rank=rank,
+                    scorecard=scorecards[index],
+                )
+                for rank, index in enumerate(
+                    ranking_order,
+                    start=1,
+                )
+            ),
         ),
     )
 
@@ -257,7 +299,9 @@ def test_model_substitution_optimizer_satisfies_protocol() -> None:
     )
 
     result = optimizer.optimize(
-        experiment=create_experiment(),
+        experiment=create_experiment(
+            candidates=(candidate,),
+        ),
         candidates=(candidate,),
         generation=1,
     )
@@ -285,7 +329,9 @@ def test_model_substitution_optimizer_preserves_original_candidate() -> None:
         catalog=catalog,
         registry=registry,
     ).optimize(
-        experiment=create_experiment(),
+        experiment=create_experiment(
+            candidates=(candidate,),
+        ),
         candidates=(candidate,),
         generation=1,
     )
@@ -310,7 +356,9 @@ def test_model_substitution_optimizer_adds_cheaper_candidates() -> None:
         catalog=catalog,
         registry=registry,
     ).optimize(
-        experiment=create_experiment(),
+        experiment=create_experiment(
+            candidates=(candidate,),
+        ),
         candidates=(candidate,),
         generation=1,
     )
@@ -327,14 +375,14 @@ def test_model_substitution_optimizer_preserves_experiment_evidence() -> None:
     catalog = create_model_catalog()
     registry = create_registry()
 
-    experiment = create_experiment()
-
     candidate = create_candidate(
         specification=workflow,
         model_identifier=EXPENSIVE_IDENTIFIER,
         catalog=catalog,
         registry=registry,
     )
+
+    experiment = create_experiment(candidates=(candidate,))
 
     result = create_optimizer(
         workflow=workflow,
@@ -367,7 +415,9 @@ def test_model_substitution_optimizer_returns_baseline_when_no_cheaper_model_exi
         catalog=catalog,
         registry=registry,
     ).optimize(
-        experiment=create_experiment(),
+        experiment=create_experiment(
+            candidates=(candidate,),
+        ),
         candidates=(candidate,),
         generation=1,
     )
@@ -375,7 +425,7 @@ def test_model_substitution_optimizer_returns_baseline_when_no_cheaper_model_exi
     assert result.candidates == (candidate,)
 
 
-def test_model_substitution_optimizer_deduplicates_expanded_candidates() -> None:
+def test_model_substitution_optimizer_expands_only_empirical_winner() -> None:
     workflow = create_workflow()
     catalog = create_model_catalog()
     registry = create_registry()
@@ -394,23 +444,78 @@ def test_model_substitution_optimizer_deduplicates_expanded_candidates() -> None
         registry=registry,
     )
 
+    candidates = (
+        expensive,
+        cheaper,
+    )
+
     result = create_optimizer(
         workflow=workflow,
         catalog=catalog,
         registry=registry,
     ).optimize(
-        experiment=create_experiment(),
-        candidates=(
-            expensive,
-            cheaper,
+        experiment=create_experiment(
+            candidates=candidates,
+            winner_index=1,
         ),
+        candidates=candidates,
         generation=1,
     )
+
+    assert result.candidates[:2] == candidates
 
     assert tuple(model_identifier(candidate) for candidate in result.candidates) == (
         EXPENSIVE_IDENTIFIER,
         CHEAPER_IDENTIFIER,
         CHEAPEST_IDENTIFIER,
+    )
+
+
+def test_model_substitution_optimizer_does_not_deduplicate_distinct_workflows() -> None:
+    first_workflow = create_workflow()
+    second_workflow = create_workflow(
+        workflow_id=SECOND_WORKFLOW_ID,
+    )
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    first_candidate = create_candidate(
+        specification=first_workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+    second_candidate = create_candidate(
+        specification=second_workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    optimizer = ModelSubstitutionWorkflowOptimizer(
+        workflows=WorkflowCatalog(
+            specifications=(
+                first_workflow,
+                second_workflow,
+            )
+        ),
+        models=catalog,
+        portfolio=portfolio_for_catalog(catalog),
+        registry=registry,
+    )
+
+    result = optimizer.optimize(
+        experiment=create_experiment(candidates=(first_candidate, second_candidate)),
+        candidates=(
+            first_candidate,
+            second_candidate,
+        ),
+        generation=1,
+    )
+
+    assert result.candidates == (
+        first_candidate,
+        second_candidate,
     )
 
 
@@ -426,6 +531,10 @@ def test_model_substitution_optimizer_requires_workflow_specification() -> None:
         registry=registry,
     )
 
+    experiment = create_experiment(
+        candidates=(candidate,),
+    )
+
     optimizer = ModelSubstitutionWorkflowOptimizer(
         workflows=WorkflowCatalog(),
         models=catalog,
@@ -435,10 +544,10 @@ def test_model_substitution_optimizer_requires_workflow_specification() -> None:
 
     with pytest.raises(
         ValueError,
-        match=("Workflow candidate must reference a configured workflow specification"),
+        match="Workflow candidate must reference a configured workflow specification",
     ):
         optimizer.optimize(
-            experiment=create_experiment(),
+            experiment=experiment,
             candidates=(candidate,),
             generation=1,
         )
@@ -471,7 +580,7 @@ def test_model_substitution_optimizer_resolves_specification_by_workflow_id() ->
     )
 
     result = optimizer.optimize(
-        experiment=create_experiment(),
+        experiment=create_experiment(candidates=(candidate,)),
         candidates=(candidate,),
         generation=1,
     )
@@ -481,3 +590,169 @@ def test_model_substitution_optimizer_resolves_specification_by_workflow_id() ->
         CHEAPER_IDENTIFIER,
         CHEAPEST_IDENTIFIER,
     )
+
+
+def test_model_substitution_optimizer_does_not_expand_losing_candidate() -> None:
+    workflow = create_workflow()
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    expensive = create_candidate(
+        specification=workflow,
+        model_identifier=EXPENSIVE_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    cheapest = create_candidate(
+        specification=workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    candidates = (
+        expensive,
+        cheapest,
+    )
+
+    result = create_optimizer(
+        workflow=workflow,
+        catalog=catalog,
+        registry=registry,
+    ).optimize(
+        experiment=create_experiment(
+            candidates=candidates,
+            winner_index=1,
+        ),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert result.candidates == candidates
+
+
+def test_model_substitution_optimizer_uses_evidence_not_candidate_position() -> None:
+    workflow = create_workflow()
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    cheapest = create_candidate(
+        specification=workflow,
+        model_identifier=CHEAPEST_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    expensive = create_candidate(
+        specification=workflow,
+        model_identifier=EXPENSIVE_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    candidates = (
+        cheapest,
+        expensive,
+    )
+
+    result = create_optimizer(
+        workflow=workflow,
+        catalog=catalog,
+        registry=registry,
+    ).optimize(
+        experiment=create_experiment(
+            candidates=candidates,
+            winner_index=1,
+        ),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert result.candidates[:2] == candidates
+
+    assert tuple(model_identifier(candidate) for candidate in result.candidates) == (
+        CHEAPEST_IDENTIFIER,
+        EXPENSIVE_IDENTIFIER,
+        CHEAPER_IDENTIFIER,
+    )
+
+
+def test_model_substitution_optimizer_preserves_tested_population_order() -> None:
+    workflow = create_workflow()
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    cheaper = create_candidate(
+        specification=workflow,
+        model_identifier=CHEAPER_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    expensive = create_candidate(
+        specification=workflow,
+        model_identifier=EXPENSIVE_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    candidates = (
+        cheaper,
+        expensive,
+    )
+
+    result = create_optimizer(
+        workflow=workflow,
+        catalog=catalog,
+        registry=registry,
+    ).optimize(
+        experiment=create_experiment(
+            candidates=candidates,
+            winner_index=1,
+        ),
+        candidates=candidates,
+        generation=1,
+    )
+
+    assert result.candidates[: len(candidates)] == candidates
+
+    assert all(result.candidates[index] is candidate for index, candidate in enumerate(candidates))
+
+
+def test_model_substitution_optimizer_rejects_experiment_from_different_population() -> None:
+    workflow = create_workflow()
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    expensive = create_candidate(
+        specification=workflow,
+        model_identifier=EXPENSIVE_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    cheaper = create_candidate(
+        specification=workflow,
+        model_identifier=CHEAPER_IDENTIFIER,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    experiment = create_experiment(
+        candidates=(expensive,),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="does not match any supplied workflow candidate",
+    ):
+        create_optimizer(
+            workflow=workflow,
+            catalog=catalog,
+            registry=registry,
+        ).optimize(
+            experiment=experiment,
+            candidates=(cheaper,),
+            generation=1,
+        )
