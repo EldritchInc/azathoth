@@ -172,3 +172,170 @@ def test_experiment_round_trips_through_json() -> None:
 
     assert restored == experiment
     assert restored.scorecards == experiment.scorecards
+
+
+def test_experiment_exposes_ranked_candidate_evidence() -> None:
+    experiment = create_experiment()
+
+    assert experiment.ranked_evidence == (
+        experiment.evidence[0],
+        experiment.evidence[1],
+    )
+
+
+def test_experiment_ranked_evidence_follows_ranking_not_evidence_order() -> None:
+    weaker = create_scorecard(0.7)
+    stronger = create_scorecard(0.9)
+
+    weaker_evidence = WorkflowExperimentEvidence(
+        candidate_signature=create_signature(
+            workflow_id=FIRST_WORKFLOW_ID,
+            strategy_id=FIRST_STRATEGY_ID,
+        ),
+        scorecard=weaker,
+    )
+
+    stronger_evidence = WorkflowExperimentEvidence(
+        candidate_signature=create_signature(
+            workflow_id=SECOND_WORKFLOW_ID,
+            strategy_id=SECOND_STRATEGY_ID,
+        ),
+        scorecard=stronger,
+    )
+
+    experiment = WorkflowExperimentResult(
+        evidence=(
+            weaker_evidence,
+            stronger_evidence,
+        ),
+        ranking=WorkflowRanking(
+            entries=(
+                RankedWorkflow(
+                    rank=1,
+                    scorecard=stronger,
+                ),
+                RankedWorkflow(
+                    rank=2,
+                    scorecard=weaker,
+                ),
+            ),
+        ),
+    )
+
+    assert experiment.ranked_evidence == (
+        stronger_evidence,
+        weaker_evidence,
+    )
+
+    assert experiment.winner_evidence == stronger_evidence
+
+
+def test_experiment_ranked_evidence_preserves_distinct_equal_scorecards() -> None:
+    tied_scorecard = create_scorecard(0.9)
+
+    first = WorkflowExperimentEvidence(
+        candidate_signature=create_signature(
+            workflow_id=FIRST_WORKFLOW_ID,
+            strategy_id=FIRST_STRATEGY_ID,
+        ),
+        scorecard=tied_scorecard,
+    )
+
+    second = WorkflowExperimentEvidence(
+        candidate_signature=create_signature(
+            workflow_id=SECOND_WORKFLOW_ID,
+            strategy_id=SECOND_STRATEGY_ID,
+        ),
+        scorecard=tied_scorecard,
+    )
+
+    experiment = WorkflowExperimentResult(
+        evidence=(
+            first,
+            second,
+        ),
+        ranking=WorkflowRanking(
+            entries=(
+                RankedWorkflow(
+                    rank=1,
+                    scorecard=tied_scorecard,
+                ),
+                RankedWorkflow(
+                    rank=2,
+                    scorecard=tied_scorecard,
+                ),
+            ),
+        ),
+    )
+
+    assert experiment.ranked_evidence == (
+        first,
+        second,
+    )
+
+    assert experiment.winner_evidence == first
+
+
+def test_experiment_rejects_ranking_scorecard_not_in_evidence() -> None:
+    evidence_scorecard = create_scorecard(0.9)
+    unknown_scorecard = create_scorecard(0.5)
+
+    with pytest.raises(
+        ValidationError,
+        match="must reference every evidence scorecard exactly once",
+    ):
+        WorkflowExperimentResult(
+            evidence=(
+                WorkflowExperimentEvidence(
+                    candidate_signature=create_signature(
+                        workflow_id=FIRST_WORKFLOW_ID,
+                        strategy_id=FIRST_STRATEGY_ID,
+                    ),
+                    scorecard=evidence_scorecard,
+                ),
+            ),
+            ranking=WorkflowRanking(
+                entries=(
+                    RankedWorkflow(
+                        rank=1,
+                        scorecard=unknown_scorecard,
+                    ),
+                ),
+            ),
+        )
+
+
+def test_experiment_rejects_ranking_that_omits_evidence() -> None:
+    first_scorecard = create_scorecard(0.9)
+    second_scorecard = create_scorecard(0.7)
+
+    with pytest.raises(
+        ValidationError,
+        match="must reference every evidence scorecard exactly once",
+    ):
+        WorkflowExperimentResult(
+            evidence=(
+                WorkflowExperimentEvidence(
+                    candidate_signature=create_signature(
+                        workflow_id=FIRST_WORKFLOW_ID,
+                        strategy_id=FIRST_STRATEGY_ID,
+                    ),
+                    scorecard=first_scorecard,
+                ),
+                WorkflowExperimentEvidence(
+                    candidate_signature=create_signature(
+                        workflow_id=SECOND_WORKFLOW_ID,
+                        strategy_id=SECOND_STRATEGY_ID,
+                    ),
+                    scorecard=second_scorecard,
+                ),
+            ),
+            ranking=WorkflowRanking(
+                entries=(
+                    RankedWorkflow(
+                        rank=1,
+                        scorecard=first_scorecard,
+                    ),
+                ),
+            ),
+        )
