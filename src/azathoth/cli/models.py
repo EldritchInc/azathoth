@@ -8,6 +8,8 @@ from azathoth.providers import (
     ModelCapability,
     ModelMetadata,
     ModelModality,
+    ModelPortfolioEntry,
+    SQLiteModelPortfolioRepository,
 )
 
 
@@ -42,6 +44,60 @@ def show_model(
         return 1
 
     _print_model(model)
+
+    return 0
+
+
+def list_portfolio_models() -> int:
+    """List models authorized for organizational model selection."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    runtime = load_runtime(configuration)
+
+    for entry in runtime.portfolio.entries:
+        print(entry.identifier)
+
+    return 0
+
+
+def authorize_model(
+    identifier: str,
+) -> int:
+    """Authorize one currently available provider model."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    runtime = load_runtime(configuration)
+
+    model = runtime.models.get(identifier)
+
+    if model is None:
+        print(
+            f"Model {identifier!r} is not currently available.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    if runtime.portfolio.get(identifier) is not None:
+        print(
+            f"Model {identifier!r} is already authorized.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    repository = SQLiteModelPortfolioRepository(
+        configuration.database,
+    )
+
+    repository.save(
+        ModelPortfolioEntry(
+            provider=model.provider,
+            model=model.model,
+        )
+    )
+
+    print(f"Authorized model {identifier}.")
 
     return 0
 
@@ -96,15 +152,3 @@ def _render_optional_integer(
         return "unknown"
 
     return str(value)
-
-
-def list_portfolio_models() -> int:
-    """List models authorized for organizational model selection."""
-
-    configuration = CliRuntimeConfiguration.from_environment()
-    runtime = load_runtime(configuration)
-
-    for entry in runtime.portfolio.entries:
-        print(entry.identifier)
-
-    return 0

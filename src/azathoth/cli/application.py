@@ -11,6 +11,7 @@ from uuid import UUID
 
 from azathoth import __version__
 from azathoth.cli.models import (
+    authorize_model,
     list_models,
     list_portfolio_models,
     show_model,
@@ -23,24 +24,23 @@ from azathoth.cli.workflows import (
 )
 
 COMMAND_ATTRIBUTE = "command"
+
 WORKFLOW_COMMAND = "workflow"
-MODEL_COMMAND = "model"
-
-MODEL_ACTION_ATTRIBUTE = "model_action"
-MODEL_LIST_ACTION = "list"
-MODEL_PORTFOLIO_ACTION = "portfolio"
-MODEL_SHOW_ACTION = "show"
-
-MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
-
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_SHOW_ACTION = "show"
-
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
+
+MODEL_COMMAND = "model"
+MODEL_ACTION_ATTRIBUTE = "model_action"
+MODEL_AUTHORIZE_ACTION = "authorize"
+MODEL_LIST_ACTION = "list"
+MODEL_PORTFOLIO_ACTION = "portfolio"
+MODEL_SHOW_ACTION = "show"
+MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
 
 
 def build_parser() -> ArgumentParser:
@@ -75,36 +75,36 @@ def build_parser() -> ArgumentParser:
         help="List configured workflows.",
     )
 
-    show_parser = workflow_actions.add_parser(
+    workflow_show_parser = workflow_actions.add_parser(
         WORKFLOW_SHOW_ACTION,
         help="Show one configured workflow.",
     )
 
-    show_parser.add_argument(
+    workflow_show_parser.add_argument(
         WORKFLOW_ID_ATTRIBUTE,
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to inspect.",
     )
 
-    import_parser = workflow_actions.add_parser(
+    workflow_import_parser = workflow_actions.add_parser(
         WORKFLOW_IMPORT_ACTION,
         help="Import a workflow JSON document.",
     )
 
-    import_parser.add_argument(
+    workflow_import_parser.add_argument(
         WORKFLOW_DOCUMENT_ATTRIBUTE,
         type=Path,
         metavar="FILE",
         help="JSON workflow document to import.",
     )
 
-    run_parser = workflow_actions.add_parser(
+    workflow_run_parser = workflow_actions.add_parser(
         WORKFLOW_RUN_ACTION,
         help="Execute one configured workflow.",
     )
 
-    run_parser.add_argument(
+    workflow_run_parser.add_argument(
         WORKFLOW_ID_ATTRIBUTE,
         type=UUID,
         metavar="WORKFLOW_ID",
@@ -113,11 +113,22 @@ def build_parser() -> ArgumentParser:
 
     model_parser = commands.add_parser(
         MODEL_COMMAND,
-        help="Inspect models currently available from providers.",
+        help="Inspect and operate provider models.",
     )
 
     model_actions = model_parser.add_subparsers(
         dest=MODEL_ACTION_ATTRIBUTE,
+    )
+
+    model_authorize_parser = model_actions.add_parser(
+        MODEL_AUTHORIZE_ACTION,
+        help="Authorize one currently available provider model.",
+    )
+
+    model_authorize_parser.add_argument(
+        MODEL_IDENTIFIER_ATTRIBUTE,
+        metavar="MODEL_IDENTIFIER",
+        help="Provider-qualified model identifier to authorize.",
     )
 
     model_actions.add_parser(
@@ -125,14 +136,14 @@ def build_parser() -> ArgumentParser:
         help="List currently available provider models.",
     )
 
-    model_show_parser = model_actions.add_parser(
-        MODEL_SHOW_ACTION,
-        help="Show one currently available provider model.",
-    )
-
     model_actions.add_parser(
         MODEL_PORTFOLIO_ACTION,
         help="List models authorized for organizational selection.",
+    )
+
+    model_show_parser = model_actions.add_parser(
+        MODEL_SHOW_ACTION,
+        help="Show one currently available provider model.",
     )
 
     model_show_parser.add_argument(
@@ -235,8 +246,22 @@ def _dispatch(
             ),
         )
 
+        if action == MODEL_AUTHORIZE_ACTION:
+            model_identifier = cast(
+                str,
+                getattr(
+                    arguments,
+                    MODEL_IDENTIFIER_ATTRIBUTE,
+                ),
+            )
+
+            return authorize_model(model_identifier)
+
         if action == MODEL_LIST_ACTION:
             return list_models()
+
+        if action == MODEL_PORTFOLIO_ACTION:
+            return list_portfolio_models()
 
         if action == MODEL_SHOW_ACTION:
             model_identifier = cast(
@@ -248,9 +273,6 @@ def _dispatch(
             )
 
             return show_model(model_identifier)
-
-        if action == MODEL_PORTFOLIO_ACTION:
-            return list_portfolio_models()
 
         return None
 

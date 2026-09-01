@@ -13,6 +13,7 @@ from azathoth.cli.configuration import (
 )
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.models import (
+    authorize_model,
     list_models,
     list_portfolio_models,
     show_model,
@@ -30,6 +31,7 @@ __all__ = [
     "DEFAULT_DATABASE",
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
+    "authorize_model",
     "build_parser",
     "execute_configured_workflow",
     "import_workflow",

@@ -223,3 +223,70 @@ def test_cli_dispatches_model_portfolio(
 
     assert result == 29
     assert called
+
+
+def test_cli_model_help_lists_authorize_action(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "model",
+                "--help",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 0
+    assert "authorize" in captured.out
+
+
+def test_cli_dispatches_model_authorize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identifiers: list[str] = []
+
+    def fake_authorize_model(
+        identifier: str,
+    ) -> int:
+        identifiers.append(identifier)
+
+        return 31
+
+    monkeypatch.setattr(
+        application,
+        "authorize_model",
+        fake_authorize_model,
+    )
+
+    result = main(
+        (
+            "model",
+            "authorize",
+            FIRST_IDENTIFIER,
+        )
+    )
+
+    assert result == 31
+    assert identifiers == [
+        FIRST_IDENTIFIER,
+    ]
+
+
+def test_cli_model_authorize_requires_identifier(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "model",
+                "authorize",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "MODEL_IDENTIFIER" in captured.err
