@@ -10,6 +10,7 @@ from pydantic import (
     model_validator,
 )
 
+from azathoth.workflows.candidate import WorkflowCandidateSignature
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.scorecard import WorkflowScorecard
 
@@ -26,9 +27,23 @@ class WorkflowExperimentObservation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     workflow: WorkflowMetadata
+    candidate_signature: WorkflowCandidateSignature
     run_id: UUID
     evaluation_id: UUID
     scorecard: WorkflowScorecard
+
+    @model_validator(mode="after")
+    def validate_candidate_workflow_identity(
+        self,
+    ) -> "WorkflowExperimentObservation":
+        """Require candidate identity to reference the observed workflow."""
+
+        if self.candidate_signature.workflow_id != self.workflow.id:
+            raise ValueError(
+                "Workflow experiment candidate signature must reference the observed workflow."
+            )
+
+        return self
 
 
 class WorkflowExperimentRecord(BaseModel):

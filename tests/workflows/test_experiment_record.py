@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from azathoth.workflows import (
+    WorkflowCandidateSignature,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowMetadata,
@@ -14,6 +15,9 @@ from azathoth.workflows import (
 )
 
 EXPERIMENT_ID = UUID("11111111-1111-1111-1111-111111111111")
+
+FIRST_STRATEGY_ID = UUID("88888888-8888-8888-8888-888888888888")
+SECOND_STRATEGY_ID = UUID("99999999-9999-9999-9999-999999999999")
 
 FIRST_WORKFLOW_ID = UUID("22222222-2222-2222-2222-222222222222")
 SECOND_WORKFLOW_ID = UUID("33333333-3333-3333-3333-333333333333")
@@ -53,6 +57,7 @@ def create_observation(
     *,
     workflow_id: UUID,
     workflow_name: str,
+    strategy_id: UUID,
     run_id: UUID,
     evaluation_id: UUID,
     score: float,
@@ -66,6 +71,10 @@ def create_observation(
             description=f"Execute {workflow_name}.",
             version="1.0.0",
         ),
+        candidate_signature=WorkflowCandidateSignature(
+            workflow_id=workflow_id,
+            strategy_ids=(strategy_id,),
+        ),
         run_id=run_id,
         evaluation_id=evaluation_id,
         scorecard=create_scorecard(score),
@@ -78,6 +87,7 @@ def create_first_observation() -> WorkflowExperimentObservation:
     return create_observation(
         workflow_id=FIRST_WORKFLOW_ID,
         workflow_name="first workflow",
+        strategy_id=FIRST_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
         score=0.75,
@@ -90,6 +100,7 @@ def create_second_observation() -> WorkflowExperimentObservation:
     return create_observation(
         workflow_id=SECOND_WORKFLOW_ID,
         workflow_name="second workflow",
+        strategy_id=SECOND_STRATEGY_ID,
         run_id=SECOND_RUN_ID,
         evaluation_id=SECOND_EVALUATION_ID,
         score=0.95,
@@ -146,7 +157,7 @@ def test_experiment_finds_observation_by_run() -> None:
 def test_experiment_returns_none_for_unknown_run() -> None:
     experiment = create_experiment()
 
-    assert experiment.observation_for_run(UUID("88888888-8888-8888-8888-888888888888")) is None
+    assert experiment.observation_for_run(UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")) is None
 
 
 def test_experiment_rejects_duplicate_run_ids() -> None:
@@ -155,6 +166,7 @@ def test_experiment_rejects_duplicate_run_ids() -> None:
     duplicate = create_observation(
         workflow_id=SECOND_WORKFLOW_ID,
         workflow_name="second workflow",
+        strategy_id=SECOND_STRATEGY_ID,
         run_id=FIRST_RUN_ID,
         evaluation_id=SECOND_EVALUATION_ID,
         score=0.95,
@@ -179,6 +191,7 @@ def test_experiment_rejects_duplicate_evaluation_ids() -> None:
     duplicate = create_observation(
         workflow_id=SECOND_WORKFLOW_ID,
         workflow_name="second workflow",
+        strategy_id=SECOND_STRATEGY_ID,
         run_id=SECOND_RUN_ID,
         evaluation_id=FIRST_EVALUATION_ID,
         score=0.95,
@@ -247,3 +260,39 @@ def test_experiment_is_immutable() -> None:
             FIRST_RUN_ID,
             SECOND_RUN_ID,
         )
+
+
+def test_experiment_observation_requires_candidate_workflow_identity() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="candidate signature must reference the observed workflow",
+    ):
+        WorkflowExperimentObservation(
+            workflow=WorkflowMetadata(
+                id=FIRST_WORKFLOW_ID,
+                name="first workflow",
+                description="Execute first workflow.",
+                version="1.0.0",
+            ),
+            candidate_signature=WorkflowCandidateSignature(
+                workflow_id=SECOND_WORKFLOW_ID,
+                strategy_ids=(FIRST_STRATEGY_ID,),
+            ),
+            run_id=FIRST_RUN_ID,
+            evaluation_id=FIRST_EVALUATION_ID,
+            scorecard=create_scorecard(0.75),
+        )
+
+
+def test_experiment_records_candidate_identity() -> None:
+    experiment = create_experiment()
+
+    assert experiment.observations[0].candidate_signature == WorkflowCandidateSignature(
+        workflow_id=FIRST_WORKFLOW_ID,
+        strategy_ids=(FIRST_STRATEGY_ID,),
+    )
+
+    assert experiment.observations[1].candidate_signature == WorkflowCandidateSignature(
+        workflow_id=SECOND_WORKFLOW_ID,
+        strategy_ids=(SECOND_STRATEGY_ID,),
+    )

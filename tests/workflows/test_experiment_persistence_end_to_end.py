@@ -31,6 +31,8 @@ from azathoth.workflows import (
     SQLiteWorkflowRepository,
     SQLiteWorkflowRunEvaluationRepository,
     SQLiteWorkflowRunRepository,
+    WorkflowCandidate,
+    WorkflowCandidateSignature,
     WorkflowCatalogLoader,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
@@ -240,7 +242,7 @@ def execute_workflow(
     workflow_id: UUID,
     model: str,
     response_text: str,
-) -> WorkflowRun:
+) -> tuple[WorkflowCandidate, WorkflowRun]:
     """Reconstruct and execute one persisted workflow."""
 
     specification = load_workflow(
@@ -257,12 +259,14 @@ def execute_workflow(
         ),
     )
 
-    return asyncio.run(
+    run = asyncio.run(
         WorkflowRunner().run(
             candidate,
             Context(),
         )
     )
+
+    return candidate, run
 
 
 def evaluate_run(
@@ -298,6 +302,7 @@ def create_run_evaluation(
 
 def create_observation(
     *,
+    candidate: WorkflowCandidate,
     run: WorkflowRun,
     evaluation: EvaluationResult,
     scorecard: WorkflowScorecard,
@@ -306,6 +311,7 @@ def create_observation(
 
     return WorkflowExperimentObservation(
         workflow=run.workflow,
+        candidate_signature=candidate.signature,
         run_id=run.id,
         evaluation_id=evaluation.id,
         scorecard=scorecard,
@@ -339,14 +345,14 @@ def test_durable_experiment_reconstructs_complete_source_evidence(
 
     persist_workflows(workflow_database)
 
-    passing_run = execute_workflow(
+    passing_candidate, passing_run = execute_workflow(
         workflow_database=workflow_database,
         workflow_id=PASSING_WORKFLOW_ID,
         model=PASSING_MODEL,
         response_text="positive",
     )
 
-    failing_run = execute_workflow(
+    failing_candidate, failing_run = execute_workflow(
         workflow_database=workflow_database,
         workflow_id=FAILING_WORKFLOW_ID,
         model=FAILING_MODEL,
@@ -370,11 +376,13 @@ def test_durable_experiment_reconstructs_complete_source_evidence(
 
     observations = (
         create_observation(
+            candidate=passing_candidate,
             run=passing_run,
             evaluation=passing_evaluation,
             scorecard=passing_scorecard,
         ),
         create_observation(
+            candidate=failing_candidate,
             run=failing_run,
             evaluation=failing_evaluation,
             scorecard=failing_scorecard,
@@ -432,6 +440,11 @@ def test_durable_experiment_reconstructs_complete_source_evidence(
     assert restored_experiment == experiment
     assert restored_experiment is not experiment
 
+    assert restored_experiment.observations[0].candidate_signature == passing_candidate.signature
+    assert restored_experiment.observations[1].candidate_signature == failing_candidate.signature
+
+    assert restored_experiment.winner.candidate_signature == passing_candidate.signature
+
     assert restored_experiment.winner.run_id == passing_run.id
 
     restored_passing_run = SQLiteWorkflowRunRepository(evidence_database).get(
@@ -460,14 +473,14 @@ def test_experiment_ranking_preserves_empirical_winner(
 
     persist_workflows(workflow_database)
 
-    passing_run = execute_workflow(
+    passing_candidate, passing_run = execute_workflow(
         workflow_database=workflow_database,
         workflow_id=PASSING_WORKFLOW_ID,
         model=PASSING_MODEL,
         response_text="positive",
     )
 
-    failing_run = execute_workflow(
+    failing_candidate, failing_run = execute_workflow(
         workflow_database=workflow_database,
         workflow_id=FAILING_WORKFLOW_ID,
         model=FAILING_MODEL,
@@ -496,11 +509,13 @@ def test_experiment_ranking_preserves_empirical_winner(
 
     observations = (
         create_observation(
+            candidate=passing_candidate,
             run=passing_run,
             evaluation=passing_evaluation,
             scorecard=passing_scorecard,
         ),
         create_observation(
+            candidate=failing_candidate,
             run=failing_run,
             evaluation=failing_evaluation,
             scorecard=failing_scorecard,
@@ -555,7 +570,7 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
 
     persist_workflows(workflow_database)
 
-    runs = (
+    executions = (
         execute_workflow(
             workflow_database=workflow_database,
             workflow_id=PASSING_WORKFLOW_ID,
@@ -569,6 +584,10 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
             response_text="negative",
         ),
     )
+
+    candidates = tuple(candidate for candidate, _run in executions)
+
+    runs = tuple(run for _candidate, run in executions)
 
     evaluations = tuple(evaluate_run(run) for run in runs)
 
@@ -588,11 +607,13 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
 
     observations = tuple(
         create_observation(
+            candidate=candidate,
             run=run,
             evaluation=evaluation,
             scorecard=scorecard,
         )
-        for run, evaluation, scorecard in zip(
+        for candidate, run, evaluation, scorecard in zip(
+            candidates,
             runs,
             evaluations,
             scorecards,
@@ -616,6 +637,7 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
     )
 
     run_repository = SQLiteWorkflowRunRepository(evidence_database)
+
     evaluation_repository = SQLiteWorkflowRunEvaluationRepository(evidence_database)
 
     for run, evaluation in zip(
@@ -654,6 +676,10 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
         assert persisted_evaluation.id == observation.evaluation_id
         assert persisted_evaluation.run_id == observation.run_id
 
+    assert tuple(observation.candidate_signature for observation in restored.observations) == tuple(
+        candidate.signature for candidate in candidates
+    )
+
 
 def test_experiment_can_be_discovered_from_workflow_identity(
     tmp_path: Path,
@@ -662,6 +688,10 @@ def test_experiment_can_be_discovered_from_workflow_identity(
 
     passing_observation = WorkflowExperimentObservation(
         workflow=create_passing_workflow().metadata,
+        candidate_signature=WorkflowCandidateSignature(
+            workflow_id=PASSING_WORKFLOW_ID,
+            strategy_ids=(PASSING_STRATEGY_ID,),
+        ),
         run_id=UUID("88888888-8888-8888-8888-888888888888"),
         evaluation_id=UUID("99999999-9999-9999-9999-999999999999"),
         scorecard=WorkflowScorecard(
@@ -676,6 +706,10 @@ def test_experiment_can_be_discovered_from_workflow_identity(
 
     failing_observation = WorkflowExperimentObservation(
         workflow=create_failing_workflow().metadata,
+        candidate_signature=WorkflowCandidateSignature(
+            workflow_id=FAILING_WORKFLOW_ID,
+            strategy_ids=(FAILING_STRATEGY_ID,),
+        ),
         run_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
         evaluation_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
         scorecard=WorkflowScorecard(

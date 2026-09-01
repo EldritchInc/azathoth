@@ -1,13 +1,13 @@
-"""Tests for SQLite workflow experiment persistence."""
+"""Tests for workflow experiment repositories."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 from uuid import UUID
 
 import pytest
 
 from azathoth.workflows import (
-    SQLiteWorkflowExperimentRepository,
+    InMemoryWorkflowExperimentRepository,
+    WorkflowCandidateSignature,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowExperimentRepository,
@@ -28,6 +28,9 @@ SECOND_RUN_ID = UUID("66666666-6666-6666-6666-666666666666")
 FIRST_EVALUATION_ID = UUID("77777777-7777-7777-7777-777777777777")
 SECOND_EVALUATION_ID = UUID("88888888-8888-8888-8888-888888888888")
 
+FIRST_STRATEGY_ID = UUID("99999999-9999-9999-9999-999999999999")
+SECOND_STRATEGY_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
 RECORDED_AT = datetime(
     2026,
     8,
@@ -38,123 +41,105 @@ RECORDED_AT = datetime(
 )
 
 
-def create_scorecard(
-    score: float,
-) -> WorkflowScorecard:
-    """Create deterministic workflow score evidence."""
-
-    return WorkflowScorecard(
-        quality_score=score,
-        reliability_score=score,
-        latency_score=score,
-        cost_score=score,
-        overall_score=score,
-        rationale="Deterministic experiment score.",
-    )
-
-
 def create_observation(
     *,
     workflow_id: UUID,
-    workflow_name: str,
+    strategy_id: UUID,
     run_id: UUID,
     evaluation_id: UUID,
     score: float,
 ) -> WorkflowExperimentObservation:
-    """Create one deterministic experiment observation."""
+    """Create deterministic experiment evidence."""
 
     return WorkflowExperimentObservation(
         workflow=WorkflowMetadata(
             id=workflow_id,
-            name=workflow_name,
-            description=f"Execute {workflow_name}.",
+            name=f"workflow-{workflow_id}",
+            description="Execute a deterministic workflow.",
             version="1.0.0",
+        ),
+        candidate_signature=WorkflowCandidateSignature(
+            workflow_id=workflow_id,
+            strategy_ids=(strategy_id,),
         ),
         run_id=run_id,
         evaluation_id=evaluation_id,
-        scorecard=create_scorecard(score),
+        scorecard=WorkflowScorecard(
+            quality_score=score,
+            reliability_score=score,
+            latency_score=score,
+            cost_score=score,
+            overall_score=score,
+            rationale="Deterministic test score.",
+        ),
     )
 
 
 def create_experiment(
     *,
-    experiment_id: UUID = FIRST_EXPERIMENT_ID,
+    experiment_id: UUID,
+    workflow_id: UUID,
+    strategy_id: UUID,
+    run_id: UUID,
+    evaluation_id: UUID,
 ) -> WorkflowExperimentRecord:
-    """Create one durable experiment with two observations."""
+    """Create one deterministic workflow experiment."""
 
-    first = create_observation(
-        workflow_id=FIRST_WORKFLOW_ID,
-        workflow_name="first workflow",
-        run_id=FIRST_RUN_ID,
-        evaluation_id=FIRST_EVALUATION_ID,
-        score=0.75,
-    )
-
-    second = create_observation(
-        workflow_id=SECOND_WORKFLOW_ID,
-        workflow_name="second workflow",
-        run_id=SECOND_RUN_ID,
-        evaluation_id=SECOND_EVALUATION_ID,
-        score=0.95,
+    observation = create_observation(
+        workflow_id=workflow_id,
+        strategy_id=strategy_id,
+        run_id=run_id,
+        evaluation_id=evaluation_id,
+        score=1.0,
     )
 
     return WorkflowExperimentRecord(
         id=experiment_id,
-        observations=(
-            first,
-            second,
-        ),
-        ranking=(
-            SECOND_RUN_ID,
-            FIRST_RUN_ID,
-        ),
+        observations=(observation,),
+        ranking=(run_id,),
         recorded_at=RECORDED_AT,
     )
 
 
-def test_sqlite_experiment_repository_saves_and_gets_experiment(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+def test_in_memory_experiment_repository_saves_and_gets_experiment() -> None:
+    repository = InMemoryWorkflowExperimentRepository()
 
-    experiment = create_experiment()
+    experiment = create_experiment(
+        experiment_id=FIRST_EXPERIMENT_ID,
+        workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
+        run_id=FIRST_RUN_ID,
+        evaluation_id=FIRST_EVALUATION_ID,
+    )
 
     repository.save(experiment)
 
-    restored = repository.get(FIRST_EXPERIMENT_ID)
-
-    assert restored == experiment
-    assert restored is not experiment
+    assert repository.get(FIRST_EXPERIMENT_ID) is experiment
 
 
-def test_sqlite_experiment_repository_returns_none_for_unknown_id(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+def test_in_memory_experiment_repository_returns_none_for_unknown_id() -> None:
+    repository = InMemoryWorkflowExperimentRepository()
 
     assert repository.get(FIRST_EXPERIMENT_ID) is None
 
 
-def test_sqlite_experiment_repository_preserves_insertion_order(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+def test_in_memory_experiment_repository_preserves_insertion_order() -> None:
+    repository = InMemoryWorkflowExperimentRepository()
 
-    first = create_experiment()
+    first = create_experiment(
+        experiment_id=FIRST_EXPERIMENT_ID,
+        workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
+        run_id=FIRST_RUN_ID,
+        evaluation_id=FIRST_EVALUATION_ID,
+    )
 
-    second = WorkflowExperimentRecord(
-        id=SECOND_EXPERIMENT_ID,
-        observations=(
-            create_observation(
-                workflow_id=FIRST_WORKFLOW_ID,
-                workflow_name="first workflow",
-                run_id=UUID("99999999-9999-9999-9999-999999999999"),
-                evaluation_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                score=1.0,
-            ),
-        ),
-        ranking=(UUID("99999999-9999-9999-9999-999999999999"),),
-        recorded_at=RECORDED_AT,
+    second = create_experiment(
+        experiment_id=SECOND_EXPERIMENT_ID,
+        workflow_id=SECOND_WORKFLOW_ID,
+        strategy_id=SECOND_STRATEGY_ID,
+        run_id=SECOND_RUN_ID,
+        evaluation_id=SECOND_EVALUATION_ID,
     )
 
     repository.save(first)
@@ -166,36 +151,42 @@ def test_sqlite_experiment_repository_preserves_insertion_order(
     )
 
 
-def test_sqlite_experiment_repository_filters_by_workflow(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+def test_in_memory_experiment_repository_filters_by_workflow() -> None:
+    repository = InMemoryWorkflowExperimentRepository()
 
-    experiment = create_experiment()
+    first = create_experiment(
+        experiment_id=FIRST_EXPERIMENT_ID,
+        workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
+        run_id=FIRST_RUN_ID,
+        evaluation_id=FIRST_EVALUATION_ID,
+    )
 
-    repository.save(experiment)
+    second = create_experiment(
+        experiment_id=SECOND_EXPERIMENT_ID,
+        workflow_id=SECOND_WORKFLOW_ID,
+        strategy_id=SECOND_STRATEGY_ID,
+        run_id=SECOND_RUN_ID,
+        evaluation_id=SECOND_EVALUATION_ID,
+    )
 
-    assert repository.experiments_for_workflow(FIRST_WORKFLOW_ID) == (experiment,)
+    repository.save(first)
+    repository.save(second)
 
-    assert repository.experiments_for_workflow(SECOND_WORKFLOW_ID) == (experiment,)
-
-
-def test_sqlite_experiment_repository_returns_empty_for_unknown_workflow(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
-
-    repository.save(create_experiment())
-
-    assert repository.experiments_for_workflow(UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")) == ()
+    assert repository.experiments_for_workflow(FIRST_WORKFLOW_ID) == (first,)
+    assert repository.experiments_for_workflow(SECOND_WORKFLOW_ID) == (second,)
 
 
-def test_sqlite_experiment_repository_rejects_duplicate_experiment(
-    tmp_path: Path,
-) -> None:
-    repository = SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+def test_in_memory_experiment_repository_rejects_duplicate_experiment() -> None:
+    repository = InMemoryWorkflowExperimentRepository()
 
-    experiment = create_experiment()
+    experiment = create_experiment(
+        experiment_id=FIRST_EXPERIMENT_ID,
+        workflow_id=FIRST_WORKFLOW_ID,
+        strategy_id=FIRST_STRATEGY_ID,
+        run_id=FIRST_RUN_ID,
+        evaluation_id=FIRST_EVALUATION_ID,
+    )
 
     repository.save(experiment)
 
@@ -206,87 +197,9 @@ def test_sqlite_experiment_repository_rejects_duplicate_experiment(
         repository.save(experiment)
 
 
-def test_sqlite_experiment_survives_repository_reconstruction(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "experiments.db"
-
-    experiment = create_experiment()
-
-    SQLiteWorkflowExperimentRepository(database).save(experiment)
-
-    restored = SQLiteWorkflowExperimentRepository(database).get(FIRST_EXPERIMENT_ID)
-
-    assert restored == experiment
-    assert restored is not experiment
-
-    assert restored is not None
-    assert restored.id == FIRST_EXPERIMENT_ID
-    assert restored.recorded_at == RECORDED_AT
-
-    assert restored.ranking == (
-        SECOND_RUN_ID,
-        FIRST_RUN_ID,
-    )
-
-    assert restored.winner.run_id == SECOND_RUN_ID
-
-    assert restored.observation_for_run(FIRST_RUN_ID) == experiment.observation_for_run(
-        FIRST_RUN_ID
-    )
-
-
-def test_sqlite_experiment_preserves_evidence_references(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "experiments.db"
-
-    experiment = create_experiment()
-
-    SQLiteWorkflowExperimentRepository(database).save(experiment)
-
-    restored = SQLiteWorkflowExperimentRepository(database).get(FIRST_EXPERIMENT_ID)
-
-    assert restored is not None
-
-    first = restored.observation_for_run(FIRST_RUN_ID)
-    second = restored.observation_for_run(SECOND_RUN_ID)
-
-    assert first is not None
-    assert second is not None
-
-    assert first.workflow.id == FIRST_WORKFLOW_ID
-    assert first.run_id == FIRST_RUN_ID
-    assert first.evaluation_id == FIRST_EVALUATION_ID
-
-    assert second.workflow.id == SECOND_WORKFLOW_ID
-    assert second.run_id == SECOND_RUN_ID
-    assert second.evaluation_id == SECOND_EVALUATION_ID
-
-
-def test_sqlite_experiment_preserves_scorecards(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "experiments.db"
-
-    experiment = create_experiment()
-
-    SQLiteWorkflowExperimentRepository(database).save(experiment)
-
-    restored = SQLiteWorkflowExperimentRepository(database).get(FIRST_EXPERIMENT_ID)
-
-    assert restored is not None
-
-    assert restored.observations[0].scorecard == create_scorecard(0.75)
-
-    assert restored.observations[1].scorecard == create_scorecard(0.95)
-
-
-def test_sqlite_experiment_repository_satisfies_protocol(
-    tmp_path: Path,
-) -> None:
+def test_experiment_repository_satisfies_protocol() -> None:
     repository: WorkflowExperimentRepository = require_workflow_experiment_repository(
-        SQLiteWorkflowExperimentRepository(tmp_path / "experiments.db")
+        InMemoryWorkflowExperimentRepository()
     )
 
     assert repository.experiments() == ()
