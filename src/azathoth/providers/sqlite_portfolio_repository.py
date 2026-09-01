@@ -83,6 +83,31 @@ class SQLiteModelPortfolioRepository:
 
         return self._deserialize_payload(row[0])
 
+    def delete(
+        self,
+        identifier: str,
+    ) -> None:
+        """Delete one authorized model entry."""
+
+        connection = sqlite3.connect(self._database)
+
+        try:
+            cursor = connection.execute(
+                """
+                DELETE FROM model_portfolio_entries
+                WHERE identifier = ?
+                """,
+                (identifier,),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Model portfolio entry {identifier!r} does not exist.")
+
+            connection.commit()
+
+        finally:
+            connection.close()
+
     def entries(
         self,
     ) -> tuple[
