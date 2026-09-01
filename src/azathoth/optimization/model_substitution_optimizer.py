@@ -1,5 +1,8 @@
 """Reference workflow optimization through cheaper model substitution."""
 
+from azathoth.optimization.candidate_resolution import (
+    resolve_workflow_experiment_winner,
+)
 from azathoth.optimization.model_substitution import (
     generate_model_substitutions,
 )
@@ -20,7 +23,7 @@ from azathoth.workflows import (
 
 
 class ModelSubstitutionWorkflowOptimizer:
-    """Generate cheaper legal model substitutions for workflow candidates."""
+    """Explore cheaper legal model substitutions from empirical winners."""
 
     def __init__(
         self,
@@ -42,36 +45,38 @@ class ModelSubstitutionWorkflowOptimizer:
         candidates: tuple[WorkflowCandidate, ...],
         generation: int,
     ) -> WorkflowOptimizationResult:
-        """Preserve the population and add unique cheaper substitutions."""
+        """Preserve the population and expand only the empirical winner."""
 
-        next_candidates: list[WorkflowCandidate] = []
-        seen: set[WorkflowCandidateSignature] = set()
+        winner = resolve_workflow_experiment_winner(
+            experiment=experiment,
+            candidates=candidates,
+        )
 
-        for candidate in candidates:
-            specification = self._workflows.get(candidate.metadata.id)
+        specification = self._workflows.get(winner.metadata.id)
 
-            if specification is None:
-                raise ValueError(
-                    "Workflow candidate must reference a configured workflow specification."
-                )
-
-            proposals = (
-                candidate,
-                *generate_model_substitutions(
-                    specification=specification,
-                    candidate=candidate,
-                    catalog=self._models,
-                    portfolio=self._portfolio,
-                    registry=self._registry,
-                ),
+        if specification is None:
+            raise ValueError(
+                "Workflow candidate must reference a configured workflow specification."
             )
 
-            for proposal in proposals:
-                if proposal.signature in seen:
-                    continue
+        next_candidates = list(candidates)
 
-                seen.add(proposal.signature)
-                next_candidates.append(proposal)
+        seen: set[WorkflowCandidateSignature] = {candidate.signature for candidate in candidates}
+
+        substitutions = generate_model_substitutions(
+            specification=specification,
+            candidate=winner,
+            catalog=self._models,
+            portfolio=self._portfolio,
+            registry=self._registry,
+        )
+
+        for proposal in substitutions:
+            if proposal.signature in seen:
+                continue
+
+            seen.add(proposal.signature)
+            next_candidates.append(proposal)
 
         return WorkflowOptimizationResult(
             generation=generation,
