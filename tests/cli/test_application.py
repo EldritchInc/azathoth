@@ -194,3 +194,32 @@ def test_cli_model_show_requires_identifier(
     assert raised.value.code == 2
     assert captured.out == ""
     assert "MODEL_IDENTIFIER" in captured.err
+
+
+def test_cli_dispatches_model_portfolio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def fake_list_portfolio_models() -> int:
+        nonlocal called
+
+        called = True
+
+        return 29
+
+    monkeypatch.setattr(
+        application,
+        "list_portfolio_models",
+        fake_list_portfolio_models,
+    )
+
+    result = main(
+        (
+            "model",
+            "portfolio",
+        )
+    )
+
+    assert result == 29
+    assert called

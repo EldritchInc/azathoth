@@ -96,3 +96,15 @@ def _render_optional_integer(
         return "unknown"
 
     return str(value)
+
+
+def list_portfolio_models() -> int:
+    """List models authorized for organizational model selection."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    runtime = load_runtime(configuration)
+
+    for entry in runtime.portfolio.entries:
+        print(entry.identifier)
+
+    return 0

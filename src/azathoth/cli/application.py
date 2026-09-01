@@ -12,6 +12,7 @@ from uuid import UUID
 from azathoth import __version__
 from azathoth.cli.models import (
     list_models,
+    list_portfolio_models,
     show_model,
 )
 from azathoth.cli.workflows import (
@@ -27,6 +28,7 @@ MODEL_COMMAND = "model"
 
 MODEL_ACTION_ATTRIBUTE = "model_action"
 MODEL_LIST_ACTION = "list"
+MODEL_PORTFOLIO_ACTION = "portfolio"
 MODEL_SHOW_ACTION = "show"
 
 MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
@@ -126,6 +128,11 @@ def build_parser() -> ArgumentParser:
     model_show_parser = model_actions.add_parser(
         MODEL_SHOW_ACTION,
         help="Show one currently available provider model.",
+    )
+
+    model_actions.add_parser(
+        MODEL_PORTFOLIO_ACTION,
+        help="List models authorized for organizational selection.",
     )
 
     model_show_parser.add_argument(
@@ -241,6 +248,9 @@ def _dispatch(
             )
 
             return show_model(model_identifier)
+
+        if action == MODEL_PORTFOLIO_ACTION:
+            return list_portfolio_models()
 
         return None
 

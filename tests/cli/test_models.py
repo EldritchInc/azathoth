@@ -6,21 +6,50 @@ import pytest
 
 import azathoth.cli.models as model_commands
 from azathoth.cli import (
-    CliRuntimeConfiguration,
     list_models,
+    list_portfolio_models,
     show_model,
+)
+from azathoth.cli.configuration import (
+    CliRuntimeConfiguration,
 )
 from azathoth.providers import (
     ModelCapability,
     ModelCatalog,
     ModelMetadata,
     ModelModality,
+    ModelPortfolio,
+    ModelPortfolioEntry,
     ModelPricing,
 )
 
 FIRST_IDENTIFIER = "provider-a/example/alpha"
 SECOND_IDENTIFIER = "provider-b/example/beta"
 UNKNOWN_IDENTIFIER = "provider-a/example/missing"
+
+AUTHORIZED_FIRST_IDENTIFIER = "openrouter/example/authorized-alpha"
+AUTHORIZED_SECOND_IDENTIFIER = "openrouter/example/authorized-beta"
+
+
+def configure_portfolio(
+    monkeypatch: pytest.MonkeyPatch,
+    portfolio: ModelPortfolio,
+) -> None:
+    """Configure deterministic organizational model authorization."""
+
+    monkeypatch.setattr(
+        CliRuntimeConfiguration,
+        "from_environment",
+        lambda: object(),
+    )
+
+    monkeypatch.setattr(
+        model_commands,
+        "load_runtime",
+        lambda _configuration: SimpleNamespace(
+            portfolio=portfolio,
+        ),
+    )
 
 
 def create_first_model() -> ModelMetadata:
@@ -75,22 +104,18 @@ def configure_models(
 ) -> None:
     """Configure deterministic current runtime model state."""
 
-    def load_test_runtime(
-        configuration: CliRuntimeConfiguration,
-    ) -> SimpleNamespace:
-        assert isinstance(
-            configuration,
-            CliRuntimeConfiguration,
-        )
-
-        return SimpleNamespace(
-            models=catalog,
-        )
+    monkeypatch.setattr(
+        CliRuntimeConfiguration,
+        "from_environment",
+        lambda: object(),
+    )
 
     monkeypatch.setattr(
         model_commands,
         "load_runtime",
-        load_test_runtime,
+        lambda _configuration: SimpleNamespace(
+            models=catalog,
+        ),
     )
 
 
@@ -244,3 +269,120 @@ def test_model_show_reports_model_not_currently_available(
     assert captured.out == ""
 
     assert captured.err == (f"Model {UNKNOWN_IDENTIFIER!r} is not currently available.\n")
+
+
+def test_model_portfolio_prints_authorized_models(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    portfolio = ModelPortfolio(
+        entries=(
+            ModelPortfolioEntry(
+                provider="openrouter",
+                model="example/authorized-alpha",
+            ),
+            ModelPortfolioEntry(
+                provider="openrouter",
+                model="example/authorized-beta",
+            ),
+        )
+    )
+
+    configure_portfolio(
+        monkeypatch,
+        portfolio,
+    )
+
+    result = list_portfolio_models()
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+
+    assert captured.out == (f"{AUTHORIZED_FIRST_IDENTIFIER}\n{AUTHORIZED_SECOND_IDENTIFIER}\n")
+
+    assert captured.err == ""
+
+
+def test_model_portfolio_preserves_authorization_order(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    portfolio = ModelPortfolio(
+        entries=(
+            ModelPortfolioEntry(
+                provider="openrouter",
+                model="example/authorized-beta",
+            ),
+            ModelPortfolioEntry(
+                provider="openrouter",
+                model="example/authorized-alpha",
+            ),
+        )
+    )
+
+    configure_portfolio(
+        monkeypatch,
+        portfolio,
+    )
+
+    result = list_portfolio_models()
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+
+    assert captured.out == (f"{AUTHORIZED_SECOND_IDENTIFIER}\n{AUTHORIZED_FIRST_IDENTIFIER}\n")
+
+
+def test_model_portfolio_prints_nothing_when_no_models_are_authorized(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_portfolio(
+        monkeypatch,
+        ModelPortfolio(),
+    )
+
+    result = list_portfolio_models()
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_model_portfolio_does_not_require_current_model_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    entry = ModelPortfolioEntry(
+        provider="openrouter",
+        model="example/unavailable",
+    )
+
+    monkeypatch.setattr(
+        CliRuntimeConfiguration,
+        "from_environment",
+        lambda: object(),
+    )
+
+    monkeypatch.setattr(
+        model_commands,
+        "load_runtime",
+        lambda _configuration: SimpleNamespace(
+            portfolio=ModelPortfolio(
+                entries=(entry,),
+            ),
+            models=ModelCatalog(),
+        ),
+    )
+
+    result = list_portfolio_models()
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out == f"{entry.identifier}\n"
+    assert captured.err == ""

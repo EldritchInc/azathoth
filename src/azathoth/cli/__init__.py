@@ -14,6 +14,7 @@ from azathoth.cli.configuration import (
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.models import (
     list_models,
+    list_portfolio_models,
     show_model,
 )
 from azathoth.cli.rendering import render_workflow_run
@@ -33,6 +34,7 @@ __all__ = [
     "execute_configured_workflow",
     "import_workflow",
     "list_models",
+    "list_portfolio_models",
     "list_workflows",
     "load_runtime",
     "main",
