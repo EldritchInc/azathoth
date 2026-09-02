@@ -11,6 +11,7 @@ from azathoth.cli import (
     load_runtime,
 )
 from azathoth.prompting import (
+    FixedModelSelection,
     PortfolioModelSelection,
     PromptStrategySpec,
 )
@@ -129,8 +130,38 @@ def create_workflow() -> WorkflowSpecification:
 def create_production_state() -> WorkflowProductionState:
     """Create one durable active production workflow state."""
 
+    configured = create_workflow()
+
+    prompt = configured.steps[0].specification
+
+    assert isinstance(
+        prompt,
+        PromptStrategySpec,
+    )
+
+    production_prompt = prompt.model_copy(
+        update={
+            "model_selection": FixedModelSelection(
+                provider="openrouter",
+                model="example/model",
+            ),
+        }
+    )
+
+    production_step = configured.steps[0].model_copy(
+        update={
+            "specification": production_prompt,
+        }
+    )
+
+    production = configured.model_copy(
+        update={
+            "steps": (production_step,),
+        }
+    )
+
     return WorkflowProductionState(
-        specification=create_workflow(),
+        specification=production,
     )
 
 

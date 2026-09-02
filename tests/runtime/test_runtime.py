@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 
 from azathoth.prompting import (
+    FixedModelSelection,
     PortfolioModelSelection,
     PromptStrategySpec,
 )
@@ -90,10 +91,38 @@ def create_workflow_catalog() -> WorkflowCatalog:
 def create_production_state() -> WorkflowProductionState:
     """Create deterministic active workflow production state."""
 
-    workflow = create_workflow_catalog().specifications[0]
+    configured = create_workflow_catalog().specifications[0]
+
+    prompt = configured.steps[0].specification
+
+    assert isinstance(
+        prompt,
+        PromptStrategySpec,
+    )
+
+    production_prompt = prompt.model_copy(
+        update={
+            "model_selection": FixedModelSelection(
+                provider="test",
+                model="example",
+            ),
+        }
+    )
+
+    production_step = configured.steps[0].model_copy(
+        update={
+            "specification": production_prompt,
+        }
+    )
+
+    production = configured.model_copy(
+        update={
+            "steps": (production_step,),
+        }
+    )
 
     return WorkflowProductionState(
-        specification=workflow,
+        specification=production,
     )
 
 

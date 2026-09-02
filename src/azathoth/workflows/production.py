@@ -1,8 +1,43 @@
 """Durable production state for workflows."""
 
-from pydantic import BaseModel, ConfigDict
+from uuid import UUID
 
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
+
+from azathoth.prompting import (
+    FixedModelSelection,
+    PromptStrategySpec,
+)
 from azathoth.workflows.models import WorkflowSpecification
+
+
+class WorkflowProductionModelSubstitution(BaseModel):
+    """Define explicitly approved fallback models for one production step."""
+
+    model_config = ConfigDict(frozen=True)
+
+    step_id: UUID
+    substitutes: tuple[FixedModelSelection, ...] = Field(
+        min_length=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_substitutes(
+        self,
+    ) -> "WorkflowProductionModelSubstitution":
+        """Require each fallback model to appear at most once."""
+
+        identifiers = tuple(substitute.identifier for substitute in self.substitutes)
+
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("Production model substitutes must be unique.")
+
+        return self
 
 
 class WorkflowProductionState(BaseModel):
@@ -11,3 +46,59 @@ class WorkflowProductionState(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     specification: WorkflowSpecification
+    model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_production_configuration(
+        self,
+    ) -> "WorkflowProductionState":
+        """Validate fixed production bindings and explicit substitutions."""
+
+        primary_models: dict[
+            UUID,
+            FixedModelSelection,
+        ] = {}
+
+        for step in self.specification.steps:
+            specification = step.specification
+
+            if not isinstance(
+                specification,
+                PromptStrategySpec,
+            ):
+                continue
+
+            model_selection = specification.model_selection
+
+            if not isinstance(
+                model_selection,
+                FixedModelSelection,
+            ):
+                raise ValueError("Production workflow prompt steps must use FixedModelSelection.")
+
+            primary_models[step.id] = model_selection
+
+        substitution_step_ids = tuple(
+            substitution.step_id for substitution in self.model_substitutions
+        )
+
+        if len(substitution_step_ids) != len(set(substitution_step_ids)):
+            raise ValueError("Production model substitutions must reference unique workflow steps.")
+
+        for substitution in self.model_substitutions:
+            primary = primary_models.get(substitution.step_id)
+
+            if primary is None:
+                raise ValueError(
+                    "Production model substitutions must reference prompt-backed workflow steps."
+                )
+
+            if any(
+                substitute.identifier == primary.identifier
+                for substitute in substitution.substitutes
+            ):
+                raise ValueError(
+                    "Production model substitutes cannot include the step's primary model."
+                )
+
+        return self
