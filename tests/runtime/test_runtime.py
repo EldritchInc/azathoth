@@ -2,6 +2,8 @@
 
 from uuid import UUID
 
+import pytest
+
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
@@ -30,6 +32,7 @@ from azathoth.tools import (
 from azathoth.workflows import (
     WorkflowCatalog,
     WorkflowMetadata,
+    WorkflowProductionState,
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
@@ -82,6 +85,16 @@ def create_workflow_catalog() -> WorkflowCatalog:
     )
 
     return WorkflowCatalog(specifications=(workflow,))
+
+
+def create_production_state() -> WorkflowProductionState:
+    """Create deterministic active workflow production state."""
+
+    workflow = create_workflow_catalog().specifications[0]
+
+    return WorkflowProductionState(
+        specification=workflow,
+    )
 
 
 def create_model_catalog() -> ModelCatalog:
@@ -235,3 +248,87 @@ def test_runtime_reuses_tool_implementation_resolver() -> None:
     )
 
     assert runtime.tool_implementation_resolver is runtime.tool_implementation_resolver
+
+
+def test_runtime_exposes_production_states() -> None:
+    models = create_model_catalog()
+
+    state = create_production_state()
+
+    runtime = AzathothRuntime(
+        workflows=create_workflow_catalog(),
+        production_states=(state,),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
+        language_models=create_language_model_registry(),
+    )
+
+    assert runtime.production_states == (state,)
+
+
+def test_runtime_resolves_production_state_by_workflow_identity() -> None:
+    models = create_model_catalog()
+
+    state = create_production_state()
+
+    runtime = AzathothRuntime(
+        workflows=create_workflow_catalog(),
+        production_states=(state,),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
+        language_models=create_language_model_registry(),
+    )
+
+    assert (
+        runtime.production_state(
+            WORKFLOW_ID,
+        )
+        is state
+    )
+
+
+def test_runtime_returns_none_for_unknown_production_state() -> None:
+    models = create_model_catalog()
+
+    runtime = AzathothRuntime(
+        workflows=create_workflow_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
+        language_models=create_language_model_registry(),
+    )
+
+    assert runtime.production_state(UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")) is None
+
+
+def test_runtime_defaults_to_no_production_states() -> None:
+    models = create_model_catalog()
+
+    runtime = AzathothRuntime(
+        workflows=create_workflow_catalog(),
+        models=models,
+        portfolio=portfolio_for_catalog(models),
+        language_models=create_language_model_registry(),
+    )
+
+    assert runtime.production_states == ()
+
+
+def test_runtime_rejects_duplicate_production_workflow_identity() -> None:
+    models = create_model_catalog()
+
+    state = create_production_state()
+
+    with pytest.raises(
+        ValueError,
+        match=("Runtime production states must contain unique workflow identifiers"),
+    ):
+        AzathothRuntime(
+            workflows=create_workflow_catalog(),
+            production_states=(
+                state,
+                state,
+            ),
+            models=models,
+            portfolio=portfolio_for_catalog(models),
+            language_models=create_language_model_registry(),
+        )

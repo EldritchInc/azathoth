@@ -33,8 +33,10 @@ from azathoth.tools import (
     ToolOutputSchema,
 )
 from azathoth.workflows import (
+    SQLiteWorkflowProductionStateRepository,
     SQLiteWorkflowRepository,
     WorkflowMetadata,
+    WorkflowProductionState,
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
@@ -124,6 +126,14 @@ def create_workflow() -> WorkflowSpecification:
     )
 
 
+def create_production_state() -> WorkflowProductionState:
+    """Create one durable active production workflow state."""
+
+    return WorkflowProductionState(
+        specification=create_workflow(),
+    )
+
+
 def create_provider_model() -> ProviderModel:
     """Create deterministic current OpenRouter model state."""
 
@@ -188,6 +198,8 @@ def persist_configuration(
     """Persist durable CLI runtime configuration."""
 
     SQLiteWorkflowRepository(database).save(create_workflow())
+
+    SQLiteWorkflowProductionStateRepository(database).set(create_production_state())
 
     SQLiteModelPortfolioRepository(database).save(
         ModelPortfolioEntry(
@@ -350,6 +362,7 @@ def test_cli_bootstrap_handles_empty_database(
     assert runtime.tools.definitions == ()
     assert runtime.tool_implementations.implementations == ()
     assert runtime.portfolio.identifiers == ()
+    assert runtime.production_states == ()
 
 
 def test_cli_bootstrap_uses_one_database_for_durable_state_and_observations(
@@ -401,3 +414,26 @@ def test_cli_bootstrap_reconstructs_model_portfolio(
     runtime = load_runtime(CliRuntimeConfiguration(database=database))
 
     assert runtime.portfolio.identifiers == (OPENROUTER_IDENTIFIER,)
+
+
+def test_cli_bootstrap_reconstructs_production_workflow_state(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    persist_configuration(database)
+
+    runtime = load_runtime(
+        CliRuntimeConfiguration(
+            database=database,
+        )
+    )
+
+    assert runtime.production_states == (create_production_state(),)
+
+    assert (
+        runtime.production_state(
+            WORKFLOW_ID,
+        )
+        == create_production_state()
+    )

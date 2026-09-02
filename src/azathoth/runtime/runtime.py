@@ -17,6 +17,7 @@ from azathoth.tools import (
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCatalog,
+    WorkflowProductionState,
     generate_workflow_candidate,
 )
 
@@ -31,10 +32,21 @@ class AzathothRuntime:
         models: ModelCatalog,
         portfolio: ModelPortfolio,
         language_models: LanguageModelRegistry,
+        production_states: tuple[WorkflowProductionState, ...] = (),
         tools: ToolCatalog | None = None,
         tool_implementations: ToolImplementationCatalog | None = None,
     ) -> None:
         self._workflows = workflows
+
+        production_workflow_ids = tuple(
+            state.specification.metadata.id for state in production_states
+        )
+
+        if len(production_workflow_ids) != len(set(production_workflow_ids)):
+            raise ValueError("Runtime production states must contain unique workflow identifiers.")
+
+        self._production_states = production_states
+
         self._models = models
         self._portfolio = portfolio
         self._language_models = language_models
@@ -56,6 +68,29 @@ class AzathothRuntime:
         """Return configured durable workflow specifications."""
 
         return self._workflows
+
+    @property
+    def production_states(
+        self,
+    ) -> tuple[WorkflowProductionState, ...]:
+        """Return durable workflow states currently active in production."""
+
+        return self._production_states
+
+    def production_state(
+        self,
+        workflow_id: UUID,
+    ) -> WorkflowProductionState | None:
+        """Return active production state for one workflow."""
+
+        return next(
+            (
+                state
+                for state in self._production_states
+                if state.specification.metadata.id == workflow_id
+            ),
+            None,
+        )
 
     @property
     def models(self) -> ModelCatalog:

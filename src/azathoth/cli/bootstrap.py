@@ -21,6 +21,7 @@ from azathoth.tools import (
     ToolCatalogLoader,
 )
 from azathoth.workflows import (
+    SQLiteWorkflowProductionStateRepository,
     SQLiteWorkflowRepository,
     WorkflowCatalogLoader,
 )
@@ -34,6 +35,8 @@ def load_runtime(
     workflows = WorkflowCatalogLoader(
         SQLiteWorkflowRepository(configuration.database)
     ).load_catalog()
+
+    production_states = SQLiteWorkflowProductionStateRepository(configuration.database).states()
 
     models = _load_current_models(configuration)
 
@@ -54,6 +57,7 @@ def load_runtime(
 
     return AzathothRuntime(
         workflows=workflows,
+        production_states=production_states,
         models=models,
         portfolio=portfolio,
         language_models=language_models,
