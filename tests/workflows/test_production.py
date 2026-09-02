@@ -15,7 +15,9 @@ from azathoth.providers import (
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
+from azathoth.tools import ToolRequirement
 from azathoth.workflows import (
+    ToolStepSpecification,
     WorkflowMetadata,
     WorkflowProductionState,
     WorkflowSpecification,
@@ -24,14 +26,17 @@ from azathoth.workflows import (
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
-STEP_ID = UUID("22222222-2222-2222-2222-222222222222")
+PROMPT_STEP_ID = UUID("22222222-2222-2222-2222-222222222222")
 
-STRATEGY_ID = UUID("33333333-3333-3333-3333-333333333333")
+TOOL_STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
+
+STRATEGY_ID = UUID("44444444-4444-4444-4444-444444444444")
 
 
 def create_workflow(
     *,
-    fixed: bool = False,
+    fixed: bool = True,
+    include_tool: bool = False,
 ) -> WorkflowSpecification:
     """Create one deterministic durable workflow specification."""
 
@@ -46,6 +51,38 @@ def create_workflow(
         )
     )
 
+    steps: list[WorkflowStepSpecification] = [
+        WorkflowStepSpecification(
+            id=PROMPT_STEP_ID,
+            specification=PromptStrategySpec(
+                metadata=StrategyMetadata(
+                    id=STRATEGY_ID,
+                    name="production-prompt",
+                    description="Exercise production workflow state.",
+                    version="1.0.0",
+                ),
+                prompt=Prompt(
+                    text="Return success.",
+                ),
+                model_selection=model_selection,
+            ),
+        )
+    ]
+
+    if include_tool:
+        steps.append(
+            WorkflowStepSpecification(
+                id=TOOL_STEP_ID,
+                specification=ToolStepSpecification(
+                    requirement=ToolRequirement(
+                        name="production-tool",
+                        runtime="python",
+                    ),
+                ),
+                depends_on=(PROMPT_STEP_ID,),
+            )
+        )
+
     return WorkflowSpecification(
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
@@ -53,23 +90,7 @@ def create_workflow(
             description="Exercise durable production state.",
             version="1.0.0",
         ),
-        steps=(
-            WorkflowStepSpecification(
-                id=STEP_ID,
-                specification=PromptStrategySpec(
-                    metadata=StrategyMetadata(
-                        id=STRATEGY_ID,
-                        name="production-prompt",
-                        description="Exercise production workflow state.",
-                        version="1.0.0",
-                    ),
-                    prompt=Prompt(
-                        text="Return success.",
-                    ),
-                    model_selection=model_selection,
-                ),
-            ),
-        ),
+        steps=tuple(steps),
     )
 
 
@@ -92,12 +113,8 @@ def test_production_state_preserves_workflow_identity() -> None:
 
 
 def test_production_state_accepts_fixed_model_selection() -> None:
-    specification = create_workflow(
-        fixed=True,
-    )
-
     state = WorkflowProductionState(
-        specification=specification,
+        specification=create_workflow(),
     )
 
     prompt = state.specification.steps[0].specification
@@ -115,24 +132,33 @@ def test_production_state_accepts_fixed_model_selection() -> None:
     assert prompt.model_selection.identifier == ("test-provider/production-model")
 
 
-def test_production_state_does_not_require_fixed_model_selection() -> None:
-    specification = create_workflow()
+def test_production_state_rejects_portfolio_model_selection() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=("Production workflow prompt steps must use FixedModelSelection"),
+    ):
+        WorkflowProductionState(
+            specification=create_workflow(
+                fixed=False,
+            ),
+        )
 
+
+def test_production_state_allows_tool_steps() -> None:
     state = WorkflowProductionState(
-        specification=specification,
+        specification=create_workflow(
+            include_tool=True,
+        ),
     )
 
-    prompt = state.specification.steps[0].specification
-
-    assert isinstance(
-        prompt,
-        PromptStrategySpec,
-    )
+    tool = state.specification.steps[1].specification
 
     assert isinstance(
-        prompt.model_selection,
-        PortfolioModelSelection,
+        tool,
+        ToolStepSpecification,
     )
+
+    assert tool.requirement.name == "production-tool"
 
 
 def test_production_state_is_immutable() -> None:
@@ -144,15 +170,13 @@ def test_production_state_is_immutable() -> None:
         ValidationError,
         match="Instance is frozen",
     ):
-        state.specification = create_workflow(
-            fixed=True,
-        )
+        state.specification = create_workflow()
 
 
 def test_production_state_round_trips_through_json() -> None:
     state = WorkflowProductionState(
         specification=create_workflow(
-            fixed=True,
+            include_tool=True,
         ),
     )
 

@@ -4,11 +4,9 @@ from uuid import UUID
 
 from azathoth.prompting import (
     FixedModelSelection,
-    PortfolioModelSelection,
     PromptStrategySpec,
 )
 from azathoth.providers import (
-    ModelRequirements,
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
@@ -40,20 +38,9 @@ def create_state(
     workflow_id: UUID = FIRST_WORKFLOW_ID,
     step_id: UUID = FIRST_STEP_ID,
     strategy_id: UUID = FIRST_STRATEGY_ID,
-    model: str | None = None,
+    model: str = "production-model",
 ) -> WorkflowProductionState:
     """Create deterministic workflow production state."""
-
-    model_selection = (
-        FixedModelSelection(
-            provider="test-provider",
-            model=model,
-        )
-        if model is not None
-        else PortfolioModelSelection(
-            requirements=ModelRequirements(),
-        )
-    )
 
     return WorkflowProductionState(
         specification=WorkflowSpecification(
@@ -76,7 +63,10 @@ def create_state(
                         prompt=Prompt(
                             text="Return success.",
                         ),
-                        model_selection=model_selection,
+                        model_selection=FixedModelSelection(
+                            provider="test-provider",
+                            model=model,
+                        ),
                     ),
                 ),
             ),
@@ -163,10 +153,12 @@ def test_in_memory_production_repository_preserves_order_when_replacing() -> Non
     )
 
 
-def test_in_memory_production_repository_preserves_portfolio_selection() -> None:
+def test_in_memory_production_repository_preserves_fixed_selection() -> None:
     repository = InMemoryWorkflowProductionStateRepository()
 
-    state = create_state()
+    state = create_state(
+        model="production-model",
+    )
 
     repository.set(state)
 
@@ -185,5 +177,7 @@ def test_in_memory_production_repository_preserves_portfolio_selection() -> None
 
     assert isinstance(
         specification.model_selection,
-        PortfolioModelSelection,
+        FixedModelSelection,
     )
+
+    assert specification.model_selection.identifier == ("test-provider/production-model")

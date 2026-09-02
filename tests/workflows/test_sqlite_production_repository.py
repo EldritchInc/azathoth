@@ -5,11 +5,9 @@ from uuid import UUID
 
 from azathoth.prompting import (
     FixedModelSelection,
-    PortfolioModelSelection,
     PromptStrategySpec,
 )
 from azathoth.providers import (
-    ModelRequirements,
     Prompt,
 )
 from azathoth.strategies import StrategyMetadata
@@ -39,20 +37,9 @@ def create_state(
     workflow_id: UUID = FIRST_WORKFLOW_ID,
     step_id: UUID = FIRST_STEP_ID,
     strategy_id: UUID = FIRST_STRATEGY_ID,
-    model: str | None = None,
+    model: str = "production-model",
 ) -> WorkflowProductionState:
     """Create deterministic workflow production state."""
-
-    model_selection = (
-        FixedModelSelection(
-            provider="test-provider",
-            model=model,
-        )
-        if model is not None
-        else PortfolioModelSelection(
-            requirements=ModelRequirements(),
-        )
-    )
 
     return WorkflowProductionState(
         specification=WorkflowSpecification(
@@ -75,7 +62,10 @@ def create_state(
                         prompt=Prompt(
                             text="Return success.",
                         ),
-                        model_selection=model_selection,
+                        model_selection=FixedModelSelection(
+                            provider="test-provider",
+                            model=model,
+                        ),
                     ),
                 ),
             ),
@@ -192,12 +182,14 @@ def test_sqlite_production_repository_survives_restart(
     assert reconstructed == state
 
 
-def test_sqlite_production_repository_preserves_portfolio_selection_after_restart(
+def test_sqlite_production_repository_preserves_fixed_selection_after_restart(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "production.db"
 
-    state = create_state()
+    state = create_state(
+        model="production-model",
+    )
 
     SQLiteWorkflowProductionStateRepository(
         database,
@@ -222,5 +214,7 @@ def test_sqlite_production_repository_preserves_portfolio_selection_after_restar
 
     assert isinstance(
         specification.model_selection,
-        PortfolioModelSelection,
+        FixedModelSelection,
     )
+
+    assert specification.model_selection.identifier == ("test-provider/production-model")
