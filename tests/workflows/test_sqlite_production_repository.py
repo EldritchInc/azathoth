@@ -14,6 +14,7 @@ from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     SQLiteWorkflowProductionStateRepository,
     WorkflowMetadata,
+    WorkflowProductionModelSubstitution,
     WorkflowProductionState,
     WorkflowSpecification,
     WorkflowStepSpecification,
@@ -218,3 +219,53 @@ def test_sqlite_production_repository_preserves_fixed_selection_after_restart(
     )
 
     assert specification.model_selection.identifier == ("test-provider/production-model")
+
+
+def test_sqlite_production_repository_preserves_model_substitutions_after_restart(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "production.db"
+
+    base_state = create_state(
+        model="production-model",
+    )
+
+    state = WorkflowProductionState(
+        specification=base_state.specification,
+        model_substitutions=(
+            WorkflowProductionModelSubstitution(
+                step_id=FIRST_STEP_ID,
+                substitutes=(
+                    FixedModelSelection(
+                        provider="fallback-provider",
+                        model="first-fallback",
+                    ),
+                    FixedModelSelection(
+                        provider="fallback-provider",
+                        model="second-fallback",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    SQLiteWorkflowProductionStateRepository(
+        database,
+    ).set(
+        state,
+    )
+
+    restored = SQLiteWorkflowProductionStateRepository(
+        database,
+    ).get(
+        FIRST_WORKFLOW_ID,
+    )
+
+    assert restored == state
+
+    assert restored is not None
+
+    assert tuple(model.identifier for model in restored.model_substitutions[0].substitutes) == (
+        "fallback-provider/first-fallback",
+        "fallback-provider/second-fallback",
+    )
