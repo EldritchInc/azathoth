@@ -88,6 +88,7 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.production import WorkflowProductionState
 from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.ranking import (
     RankedWorkflow,
@@ -187,6 +188,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowProductionState",
     "WorkflowRanker",
     "WorkflowRanking",
     "WorkflowReliabilityMetrics",
