@@ -96,6 +96,9 @@ from azathoth.workflows.production import WorkflowProductionState
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
 )
+from azathoth.workflows.promotion import (
+    materialize_workflow_candidate,
+)
 from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.ranking import (
     RankedWorkflow,
@@ -232,6 +235,7 @@ __all__ = [
     "decode_workflow_document",
     "encode_workflow_document",
     "generate_workflow_candidate",
+    "materialize_workflow_candidate",
     "require_workflow_experiment_repository",
     "require_workflow_production_state_repository",
     "require_workflow_repository",
