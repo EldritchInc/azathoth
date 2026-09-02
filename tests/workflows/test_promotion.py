@@ -4,6 +4,7 @@ from dataclasses import replace
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from azathoth.prompting import (
     FixedModelSelection,
@@ -32,12 +33,15 @@ from azathoth.tools import (
     ToolResolver,
 )
 from azathoth.workflows import (
+    InMemoryWorkflowProductionStateRepository,
     ToolStepSpecification,
     WorkflowCandidate,
     WorkflowMetadata,
+    WorkflowProductionModelSubstitution,
     WorkflowSpecification,
     WorkflowStepSpecification,
     materialize_workflow_candidate,
+    promote_workflow_candidate,
 )
 from tests.model_authorization import generate_workflow_candidate
 
@@ -432,3 +436,200 @@ def test_materialization_rejects_different_step_identity() -> None:
             specification=specification,
             candidate=mismatched,
         )
+
+
+def test_promotion_sets_active_production_state() -> None:
+    specification = create_workflow()
+
+    candidate = create_candidate(
+        specification,
+    )
+
+    repository = InMemoryWorkflowProductionStateRepository()
+
+    state = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=repository,
+    )
+
+    assert (
+        repository.get(
+            WORKFLOW_ID,
+        )
+        == state
+    )
+
+    assert state.specification.metadata.id == WORKFLOW_ID
+
+
+def test_promotion_pins_selected_candidate_model() -> None:
+    specification = create_workflow()
+
+    candidate = create_candidate(
+        specification,
+    )
+
+    state = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=InMemoryWorkflowProductionStateRepository(),
+    )
+
+    prompt = require_prompt(
+        state.specification,
+    )
+
+    assert isinstance(
+        prompt.model_selection,
+        FixedModelSelection,
+    )
+
+    assert prompt.model_selection.identifier == (MODEL_IDENTIFIER)
+
+
+def test_promotion_preserves_explicit_model_substitutions() -> None:
+    specification = create_workflow()
+
+    substitution = WorkflowProductionModelSubstitution(
+        step_id=PROMPT_STEP_ID,
+        substitutes=(
+            FixedModelSelection(
+                provider="fallback-provider",
+                model="first-fallback",
+            ),
+            FixedModelSelection(
+                provider="fallback-provider",
+                model="second-fallback",
+            ),
+        ),
+    )
+
+    state = promote_workflow_candidate(
+        specification=specification,
+        candidate=create_candidate(
+            specification,
+        ),
+        repository=InMemoryWorkflowProductionStateRepository(),
+        model_substitutions=(substitution,),
+    )
+
+    assert state.model_substitutions == (substitution,)
+
+
+def test_promotion_replaces_active_state_for_same_workflow() -> None:
+    specification = create_workflow()
+
+    candidate = create_candidate(
+        specification,
+    )
+
+    repository = InMemoryWorkflowProductionStateRepository()
+
+    first = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=repository,
+    )
+
+    substitution = WorkflowProductionModelSubstitution(
+        step_id=PROMPT_STEP_ID,
+        substitutes=(
+            FixedModelSelection(
+                provider="fallback-provider",
+                model="replacement-fallback",
+            ),
+        ),
+    )
+
+    second = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=repository,
+        model_substitutions=(substitution,),
+    )
+
+    assert first != second
+
+    assert repository.states() == (second,)
+
+    assert (
+        repository.get(
+            WORKFLOW_ID,
+        )
+        == second
+    )
+
+
+def test_promotion_does_not_mutate_configured_workflow() -> None:
+    specification = create_workflow()
+
+    state = promote_workflow_candidate(
+        specification=specification,
+        candidate=create_candidate(
+            specification,
+        ),
+        repository=InMemoryWorkflowProductionStateRepository(),
+    )
+
+    configured_prompt = require_prompt(
+        specification,
+    )
+
+    production_prompt = require_prompt(
+        state.specification,
+    )
+
+    assert isinstance(
+        configured_prompt.model_selection,
+        PortfolioModelSelection,
+    )
+
+    assert isinstance(
+        production_prompt.model_selection,
+        FixedModelSelection,
+    )
+
+
+def test_failed_promotion_does_not_replace_active_state() -> None:
+    specification = create_workflow()
+
+    candidate = create_candidate(
+        specification,
+    )
+
+    repository = InMemoryWorkflowProductionStateRepository()
+
+    existing = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=repository,
+    )
+
+    invalid_substitution = WorkflowProductionModelSubstitution(
+        step_id=PROMPT_STEP_ID,
+        substitutes=(
+            FixedModelSelection(
+                provider="test",
+                model="promoted-model",
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match=("Production model substitutes cannot include the step's primary model"),
+    ):
+        promote_workflow_candidate(
+            specification=specification,
+            candidate=candidate,
+            repository=repository,
+            model_substitutions=(invalid_substitution,),
+        )
+
+    assert (
+        repository.get(
+            WORKFLOW_ID,
+        )
+        == existing
+    )

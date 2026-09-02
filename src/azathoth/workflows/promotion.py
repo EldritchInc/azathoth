@@ -7,6 +7,13 @@ from azathoth.prompting import (
 from azathoth.strategies import Strategy
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.models import WorkflowSpecification
+from azathoth.workflows.production import (
+    WorkflowProductionModelSubstitution,
+    WorkflowProductionState,
+)
+from azathoth.workflows.production_repository import (
+    WorkflowProductionStateRepository,
+)
 from azathoth.workflows.steps import (
     ToolStepSpecification,
     WorkflowStepSpecification,
@@ -95,3 +102,29 @@ def _materialize_step(
             "specification": promoted_prompt,
         }
     )
+
+
+def promote_workflow_candidate(
+    *,
+    specification: WorkflowSpecification,
+    candidate: WorkflowCandidate,
+    repository: WorkflowProductionStateRepository,
+    model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = (),
+) -> WorkflowProductionState:
+    """Promote one explicitly selected workflow candidate to production."""
+
+    promoted_specification = materialize_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+    )
+
+    state = WorkflowProductionState(
+        specification=promoted_specification,
+        model_substitutions=model_substitutions,
+    )
+
+    repository.set(
+        state,
+    )
+
+    return state
