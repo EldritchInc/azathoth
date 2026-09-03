@@ -117,6 +117,12 @@ from azathoth.workflows.production_invocation import (
 from azathoth.workflows.production_invocation_repository import (
     ProductionInvocationRepository,
 )
+from azathoth.workflows.production_model_resolution import (
+    ProductionModelResolutionError,
+    ProductionModelSubstitutesUnavailableError,
+    ProductionPrimaryModelUnavailableError,
+    resolve_production_model_selection,
+)
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
 )
@@ -206,6 +212,9 @@ __all__ = [
     "ProductionInvocationRepository",
     "ProductionInvocationResult",
     "ProductionInvocationSuccess",
+    "ProductionModelResolutionError",
+    "ProductionModelSubstitutesUnavailableError",
+    "ProductionPrimaryModelUnavailableError",
     "RankedWorkflow",
     "SQLiteProductionInvocationRepository",
     "SQLiteWorkflowExperimentRepository",
@@ -294,4 +303,5 @@ __all__ = [
     "require_workflow_run_evaluation_repository",
     "require_workflow_run_feedback_repository",
     "require_workflow_run_repository",
+    "resolve_production_model_selection",
 ]
