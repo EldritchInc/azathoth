@@ -110,6 +110,9 @@ from azathoth.workflows.production import (
     WorkflowProductionState,
 )
 from azathoth.workflows.production_execution import (
+    ProductionEmissionError,
+    complete_production_invocation,
+    emit_production_result,
     execute_production_invocation,
 )
 from azathoth.workflows.production_generation import (
@@ -225,6 +228,7 @@ __all__ = [
     "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
     "InMemoryWorkflowRunRepository",
+    "ProductionEmissionError",
     "ProductionInvocation",
     "ProductionInvocationErrorCode",
     "ProductionInvocationFailure",
@@ -311,8 +315,10 @@ __all__ = [
     "WorkflowValueBinding",
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
+    "complete_production_invocation",
     "create_production_invocation",
     "decode_workflow_document",
+    "emit_production_result",
     "encode_workflow_document",
     "execute_production_invocation",
     "generate_production_workflow_candidate",

@@ -30,15 +30,20 @@ from azathoth.strategies import (
     StrategyMetadata,
 )
 from azathoth.workflows import (
+    InMemoryProductionInvocationRepository,
     InMemoryProductionInvocationRunRepository,
     InMemoryWorkflowRunRepository,
     ProductionInvocation,
+    ProductionInvocationErrorCode,
+    ProductionInvocationFailure,
+    ProductionInvocationSuccess,
     WorkflowMetadata,
     WorkflowProductionRevision,
     WorkflowProductionState,
     WorkflowRunner,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    complete_production_invocation,
     execute_production_invocation,
 )
 
@@ -378,3 +383,135 @@ def test_execute_production_invocation_rejects_wrong_workflow() -> None:
 
     assert run_repository.runs() == ()
     assert invocation_run_repository.associations() == ()
+
+
+def test_complete_production_invocation_persists_success_result() -> None:
+    revision = create_revision()
+
+    invocation = create_invocation()
+
+    invocation_repository = InMemoryProductionInvocationRepository()
+
+    invocation_repository.save(
+        invocation,
+    )
+
+    result = asyncio.run(
+        complete_production_invocation(
+            invocation=invocation,
+            revision=revision,
+            catalog=create_catalog(),
+            registry=create_registry(),
+            runner=WorkflowRunner(),
+            run_repository=InMemoryWorkflowRunRepository(),
+            invocation_repository=invocation_repository,
+            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+        )
+    )
+
+    assert isinstance(
+        result,
+        ProductionInvocationSuccess,
+    )
+
+    assert result.invocation_id == invocation.id
+
+    assert invocation_repository.result(invocation.id) == result
+
+
+def test_complete_production_invocation_returns_empty_object_when_nothing_is_emitted() -> None:
+    revision = create_revision()
+
+    invocation = create_invocation()
+
+    invocation_repository = InMemoryProductionInvocationRepository()
+
+    invocation_repository.save(
+        invocation,
+    )
+
+    result = asyncio.run(
+        complete_production_invocation(
+            invocation=invocation,
+            revision=revision,
+            catalog=create_catalog(),
+            registry=create_registry(),
+            runner=WorkflowRunner(),
+            run_repository=InMemoryWorkflowRunRepository(),
+            invocation_repository=invocation_repository,
+            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+        )
+    )
+
+    assert isinstance(
+        result,
+        ProductionInvocationSuccess,
+    )
+
+    assert result.result == {}
+
+
+def test_complete_production_invocation_maps_unavailable_primary_model() -> None:
+    revision = create_revision()
+
+    invocation = create_invocation()
+
+    invocation_repository = InMemoryProductionInvocationRepository()
+
+    invocation_repository.save(
+        invocation,
+    )
+
+    result = asyncio.run(
+        complete_production_invocation(
+            invocation=invocation,
+            revision=revision,
+            catalog=ModelCatalog(),
+            registry=LanguageModelRegistry(),
+            runner=WorkflowRunner(),
+            run_repository=InMemoryWorkflowRunRepository(),
+            invocation_repository=invocation_repository,
+            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+        )
+    )
+
+    assert isinstance(
+        result,
+        ProductionInvocationFailure,
+    )
+
+    assert result.error_code is (ProductionInvocationErrorCode.MODEL_UNAVAILABLE)
+
+    assert invocation_repository.result(invocation.id) == result
+
+
+def test_complete_production_invocation_does_not_leak_internal_exception_message() -> None:
+    revision = create_revision()
+
+    invocation = create_invocation()
+
+    invocation_repository = InMemoryProductionInvocationRepository()
+
+    invocation_repository.save(
+        invocation,
+    )
+
+    result = asyncio.run(
+        complete_production_invocation(
+            invocation=invocation,
+            revision=revision,
+            catalog=ModelCatalog(),
+            registry=LanguageModelRegistry(),
+            runner=WorkflowRunner(),
+            run_repository=InMemoryWorkflowRunRepository(),
+            invocation_repository=invocation_repository,
+            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+        )
+    )
+
+    assert isinstance(
+        result,
+        ProductionInvocationFailure,
+    )
+
+    assert PRIMARY.identifier not in result.message
