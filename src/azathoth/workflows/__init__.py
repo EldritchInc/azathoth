@@ -76,6 +76,9 @@ from azathoth.workflows.memory_production_invocation_repository import (
     InMemoryProductionInvocationRepository,
     require_production_invocation_repository,
 )
+from azathoth.workflows.memory_production_invocation_run_repository import (
+    InMemoryProductionInvocationRunRepository,
+)
 from azathoth.workflows.memory_production_repository import (
     InMemoryWorkflowProductionStateRepository,
     require_workflow_production_state_repository,
@@ -119,6 +122,12 @@ from azathoth.workflows.production_invocation import (
 )
 from azathoth.workflows.production_invocation_repository import (
     ProductionInvocationRepository,
+)
+from azathoth.workflows.production_invocation_run import (
+    ProductionInvocationRun,
+)
+from azathoth.workflows.production_invocation_run_repository import (
+    ProductionInvocationRunRepository,
 )
 from azathoth.workflows.production_model_resolution import (
     ProductionModelResolutionError,
@@ -172,6 +181,9 @@ from azathoth.workflows.sqlite_feedback_repository import (
 from azathoth.workflows.sqlite_production_invocation_repository import (
     SQLiteProductionInvocationRepository,
 )
+from azathoth.workflows.sqlite_production_invocation_run_repository import (
+    SQLiteProductionInvocationRunRepository,
+)
 from azathoth.workflows.sqlite_production_repository import (
     SQLiteWorkflowProductionStateRepository,
 )
@@ -202,6 +214,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "InMemoryProductionInvocationRepository",
+    "InMemoryProductionInvocationRunRepository",
     "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
@@ -214,12 +227,15 @@ __all__ = [
     "ProductionInvocationFailure",
     "ProductionInvocationRepository",
     "ProductionInvocationResult",
+    "ProductionInvocationRun",
+    "ProductionInvocationRunRepository",
     "ProductionInvocationSuccess",
     "ProductionModelResolutionError",
     "ProductionModelSubstitutesUnavailableError",
     "ProductionPrimaryModelUnavailableError",
     "RankedWorkflow",
     "SQLiteProductionInvocationRepository",
+    "SQLiteProductionInvocationRunRepository",
     "SQLiteWorkflowExperimentRepository",
     "SQLiteWorkflowProductionRevisionRepository",
     "SQLiteWorkflowProductionStateRepository",
