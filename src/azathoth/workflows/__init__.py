@@ -76,6 +76,10 @@ from azathoth.workflows.memory_production_repository import (
     InMemoryWorkflowProductionStateRepository,
     require_workflow_production_state_repository,
 )
+from azathoth.workflows.memory_production_revision_repository import (
+    InMemoryWorkflowProductionRevisionRepository,
+    require_workflow_production_revision_repository,
+)
 from azathoth.workflows.memory_repository import (
     InMemoryWorkflowRepository,
     require_workflow_repository,
@@ -99,6 +103,9 @@ from azathoth.workflows.production import (
 )
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
+)
+from azathoth.workflows.production_revision_repository import (
+    WorkflowProductionRevisionRepository,
 )
 from azathoth.workflows.promotion import (
     materialize_workflow_candidate,
@@ -140,6 +147,9 @@ from azathoth.workflows.sqlite_feedback_repository import (
 from azathoth.workflows.sqlite_production_repository import (
     SQLiteWorkflowProductionStateRepository,
 )
+from azathoth.workflows.sqlite_production_revision_repository import (
+    SQLiteWorkflowProductionRevisionRepository,
+)
 from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
 from azathoth.workflows.sqlite_run_evaluation_repository import (
     SQLiteWorkflowRunEvaluationRepository,
@@ -167,10 +177,12 @@ __all__ = [
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
     "InMemoryWorkflowExperimentRepository",
+    "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
     "InMemoryWorkflowRunRepository",
     "RankedWorkflow",
     "SQLiteWorkflowExperimentRepository",
+    "SQLiteWorkflowProductionRevisionRepository",
     "SQLiteWorkflowProductionStateRepository",
     "SQLiteWorkflowRepository",
     "SQLiteWorkflowRunEvaluationRepository",
@@ -210,6 +222,7 @@ __all__ = [
     "WorkflowMetadata",
     "WorkflowProductionModelSubstitution",
     "WorkflowProductionRevision",
+    "WorkflowProductionRevisionRepository",
     "WorkflowProductionState",
     "WorkflowProductionStateRepository",
     "WorkflowRanker",
@@ -245,6 +258,7 @@ __all__ = [
     "materialize_workflow_candidate",
     "promote_workflow_candidate",
     "require_workflow_experiment_repository",
+    "require_workflow_production_revision_repository",
     "require_workflow_production_state_repository",
     "require_workflow_repository",
     "require_workflow_run_evaluation_repository",
