@@ -101,6 +101,14 @@ from azathoth.workflows.production import (
     WorkflowProductionRevision,
     WorkflowProductionState,
 )
+from azathoth.workflows.production_invocation import (
+    ProductionInvocation,
+    ProductionInvocationErrorCode,
+    ProductionInvocationFailure,
+    ProductionInvocationResult,
+    ProductionInvocationSuccess,
+    create_production_invocation,
+)
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
 )
@@ -180,6 +188,11 @@ __all__ = [
     "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
     "InMemoryWorkflowRunRepository",
+    "ProductionInvocation",
+    "ProductionInvocationErrorCode",
+    "ProductionInvocationFailure",
+    "ProductionInvocationResult",
+    "ProductionInvocationSuccess",
     "RankedWorkflow",
     "SQLiteWorkflowExperimentRepository",
     "SQLiteWorkflowProductionRevisionRepository",
@@ -252,6 +265,7 @@ __all__ = [
     "WorkflowValueBinding",
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
+    "create_production_invocation",
     "decode_workflow_document",
     "encode_workflow_document",
     "generate_workflow_candidate",
