@@ -1,6 +1,7 @@
 """Durable production state for workflows."""
 
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from pydantic import (
     BaseModel,
@@ -14,6 +15,12 @@ from azathoth.prompting import (
     PromptStrategySpec,
 )
 from azathoth.workflows.models import WorkflowSpecification
+
+
+def utc_now() -> datetime:
+    """Return the current time as a timezone-aware UTC datetime."""
+
+    return datetime.now(UTC)
 
 
 class WorkflowProductionModelSubstitution(BaseModel):
@@ -102,3 +109,21 @@ class WorkflowProductionState(BaseModel):
                 )
 
         return self
+
+
+class WorkflowProductionRevision(BaseModel):
+    """Identify one immutable historical workflow production deployment."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID = Field(default_factory=uuid4)
+    state: WorkflowProductionState
+    created_at: datetime = Field(default_factory=utc_now)
+
+    @property
+    def workflow_id(
+        self,
+    ) -> UUID:
+        """Return the workflow identity represented by this production revision."""
+
+        return self.state.specification.metadata.id

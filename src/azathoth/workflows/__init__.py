@@ -94,6 +94,7 @@ from azathoth.workflows.models import (
 )
 from azathoth.workflows.production import (
     WorkflowProductionModelSubstitution,
+    WorkflowProductionRevision,
     WorkflowProductionState,
 )
 from azathoth.workflows.production_repository import (
@@ -208,6 +209,7 @@ __all__ = [
     "WorkflowInputBinding",
     "WorkflowMetadata",
     "WorkflowProductionModelSubstitution",
+    "WorkflowProductionRevision",
     "WorkflowProductionState",
     "WorkflowProductionStateRepository",
     "WorkflowRanker",
