@@ -101,6 +101,7 @@ from azathoth.workflows.models import (
     WorkflowSpecification,
 )
 from azathoth.workflows.production import (
+    WorkflowProductionEmission,
     WorkflowProductionModelSubstitution,
     WorkflowProductionRevision,
     WorkflowProductionState,
@@ -246,6 +247,7 @@ __all__ = [
     "WorkflowGenerationError",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowProductionEmission",
     "WorkflowProductionModelSubstitution",
     "WorkflowProductionRevision",
     "WorkflowProductionRevisionRepository",
