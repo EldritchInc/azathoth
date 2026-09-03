@@ -109,6 +109,9 @@ from azathoth.workflows.production import (
     WorkflowProductionRevision,
     WorkflowProductionState,
 )
+from azathoth.workflows.production_execution import (
+    execute_production_invocation,
+)
 from azathoth.workflows.production_generation import (
     generate_production_workflow_candidate,
 )
@@ -311,6 +314,7 @@ __all__ = [
     "create_production_invocation",
     "decode_workflow_document",
     "encode_workflow_document",
+    "execute_production_invocation",
     "generate_production_workflow_candidate",
     "generate_workflow_candidate",
     "materialize_workflow_candidate",
