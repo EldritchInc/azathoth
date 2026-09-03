@@ -43,14 +43,6 @@ class ProductionInvocationRepository(Protocol):
 
         ...
 
-    def invocations_for_revision(
-        self,
-        production_revision_id: UUID,
-    ) -> tuple[ProductionInvocation, ...]:
-        """Return invocations for one production revision in insertion order."""
-
-        ...
-
     def save_result(
         self,
         result: ProductionInvocationResult,

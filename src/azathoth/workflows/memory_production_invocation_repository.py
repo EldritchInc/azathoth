@@ -58,18 +58,6 @@ class InMemoryProductionInvocationRepository:
             if invocation.workflow_id == workflow_id
         )
 
-    def invocations_for_revision(
-        self,
-        production_revision_id: UUID,
-    ) -> tuple[ProductionInvocation, ...]:
-        """Return invocations for one production revision in insertion order."""
-
-        return tuple(
-            invocation
-            for invocation in self._invocations.values()
-            if invocation.production_revision_id == production_revision_id
-        )
-
     def save_result(
         self,
         result: ProductionInvocationResult,

@@ -11,7 +11,6 @@ from azathoth.context import (
     Context,
     ContextEvent,
 )
-from azathoth.workflows.production import WorkflowProductionRevision
 
 PRODUCTION_INVOCATION_EVENT_TYPE = "production.invocation.received"
 PRODUCTION_INVOCATION_PRODUCER = "azathoth.production"
@@ -36,13 +35,12 @@ class ProductionInvocationErrorCode(StrEnum):
 
 
 class ProductionInvocation(BaseModel):
-    """Identify one external call against one exact production revision."""
+    """Identify one external call against one production workflow."""
 
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
     workflow_id: UUID
-    production_revision_id: UUID
     initial_context: Context
     caller_metadata: dict[str, JsonValue] = Field(
         default_factory=dict,
@@ -77,7 +75,7 @@ ProductionInvocationResult = ProductionInvocationSuccess | ProductionInvocationF
 
 def create_production_invocation(
     *,
-    revision: WorkflowProductionRevision,
+    workflow_id: UUID,
     payload: JsonValue,
     caller_metadata: Mapping[str, JsonValue] | None = None,
 ) -> ProductionInvocation:
@@ -101,8 +99,7 @@ def create_production_invocation(
 
     return ProductionInvocation(
         id=invocation_id,
-        workflow_id=revision.workflow_id,
-        production_revision_id=revision.id,
+        workflow_id=workflow_id,
         initial_context=initial_context,
         caller_metadata=(dict(caller_metadata) if caller_metadata is not None else {}),
         created_at=created_at,

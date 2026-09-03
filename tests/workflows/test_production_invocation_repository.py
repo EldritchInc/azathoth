@@ -21,9 +21,6 @@ SECOND_INVOCATION_ID = UUID("22222222-2222-2222-2222-222222222222")
 FIRST_WORKFLOW_ID = UUID("33333333-3333-3333-3333-333333333333")
 SECOND_WORKFLOW_ID = UUID("44444444-4444-4444-4444-444444444444")
 
-FIRST_REVISION_ID = UUID("55555555-5555-5555-5555-555555555555")
-SECOND_REVISION_ID = UUID("66666666-6666-6666-6666-666666666666")
-
 UNKNOWN_INVOCATION_ID = UUID("77777777-7777-7777-7777-777777777777")
 
 
@@ -31,14 +28,12 @@ def create_invocation(
     *,
     invocation_id: UUID = FIRST_INVOCATION_ID,
     workflow_id: UUID = FIRST_WORKFLOW_ID,
-    revision_id: UUID = FIRST_REVISION_ID,
 ) -> ProductionInvocation:
     """Create deterministic production invocation."""
 
     return ProductionInvocation(
         id=invocation_id,
         workflow_id=workflow_id,
-        production_revision_id=revision_id,
         initial_context=Context(),
     )
 
@@ -83,7 +78,6 @@ def test_in_memory_repository_preserves_invocation_insertion_order() -> None:
     second = create_invocation(
         invocation_id=SECOND_INVOCATION_ID,
         workflow_id=SECOND_WORKFLOW_ID,
-        revision_id=SECOND_REVISION_ID,
     )
 
     repository.save(first)
@@ -117,7 +111,6 @@ def test_in_memory_repository_filters_invocations_by_workflow() -> None:
     second = create_invocation(
         invocation_id=SECOND_INVOCATION_ID,
         workflow_id=SECOND_WORKFLOW_ID,
-        revision_id=SECOND_REVISION_ID,
     )
 
     repository.save(first)
@@ -125,23 +118,6 @@ def test_in_memory_repository_filters_invocations_by_workflow() -> None:
 
     assert repository.invocations_for_workflow(FIRST_WORKFLOW_ID) == (first,)
     assert repository.invocations_for_workflow(SECOND_WORKFLOW_ID) == (second,)
-
-
-def test_in_memory_repository_filters_invocations_by_revision() -> None:
-    repository = InMemoryProductionInvocationRepository()
-
-    first = create_invocation()
-
-    second = create_invocation(
-        invocation_id=SECOND_INVOCATION_ID,
-        revision_id=SECOND_REVISION_ID,
-    )
-
-    repository.save(first)
-    repository.save(second)
-
-    assert repository.invocations_for_revision(FIRST_REVISION_ID) == (first,)
-    assert repository.invocations_for_revision(SECOND_REVISION_ID) == (second,)
 
 
 def test_in_memory_repository_saves_success_result() -> None:
