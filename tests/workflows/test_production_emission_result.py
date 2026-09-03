@@ -17,7 +17,6 @@ from azathoth.workflows import (
     ProductionEmissionError,
     WorkflowMetadata,
     WorkflowProductionEmission,
-    WorkflowProductionRevision,
     WorkflowProductionState,
     WorkflowRun,
     WorkflowSpecification,
@@ -39,8 +38,6 @@ SECOND_STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
 
 STRATEGY_ID = UUID("44444444-4444-4444-4444-444444444444")
 
-REVISION_ID = UUID("55555555-5555-5555-5555-555555555555")
-
 RECORDED_AT = datetime(
     2026,
     9,
@@ -51,94 +48,53 @@ RECORDED_AT = datetime(
 )
 
 
-def create_revision(
+def create_state(
     *,
     emissions: tuple[
         WorkflowProductionEmission,
         ...,
     ],
-) -> WorkflowProductionRevision:
-    """Create deterministic production revision."""
+) -> WorkflowProductionState:
+    """Create deterministic production state."""
 
-    return WorkflowProductionRevision(
-        id=REVISION_ID,
-        state=WorkflowProductionState(
-            specification=WorkflowSpecification(
-                metadata=WorkflowMetadata(
-                    id=WORKFLOW_ID,
-                    name="production-emission",
-                    description="Exercise safe production emission.",
-                    version="1.0.0",
-                ),
-                steps=(
-                    WorkflowStepSpecification(
-                        id=STEP_ID,
-                        specification=PromptStrategySpec(
-                            metadata=StrategyMetadata(
-                                id=STRATEGY_ID,
-                                name="classify",
-                                description="Classify production input.",
-                                version="1.0.0",
-                            ),
-                            prompt=Prompt(
-                                text="Classify.",
-                            ),
-                            model_selection=FixedModelSelection(
-                                provider="test-provider",
-                                model="production-model",
-                            ),
+    return WorkflowProductionState(
+        specification=WorkflowSpecification(
+            metadata=WorkflowMetadata(
+                id=WORKFLOW_ID,
+                name="production-emission",
+                description="Exercise safe production emission.",
+                version="1.0.0",
+            ),
+            steps=(
+                WorkflowStepSpecification(
+                    id=STEP_ID,
+                    specification=PromptStrategySpec(
+                        metadata=StrategyMetadata(
+                            id=STRATEGY_ID,
+                            name="classify",
+                            description="Classify production input.",
+                            version="1.0.0",
                         ),
-                        outputs=(
-                            WorkflowValueBinding(
-                                name="classification",
-                            ),
-                            WorkflowValueBinding(
-                                name="internal_analysis",
-                            ),
+                        prompt=Prompt(
+                            text="Classify.",
+                        ),
+                        model_selection=FixedModelSelection(
+                            provider="test-provider",
+                            model="production-model",
+                        ),
+                    ),
+                    outputs=(
+                        WorkflowValueBinding(
+                            name="classification",
+                        ),
+                        WorkflowValueBinding(
+                            name="internal_analysis",
                         ),
                     ),
                 ),
             ),
-            emissions=emissions,
         ),
-    )
-
-
-def test_empty_emission_policy_returns_empty_result() -> None:
-    revision = create_revision(
-        emissions=(),
-    )
-
-    run = create_run(
-        values=(
-            WorkflowValue(
-                name="classification",
-                value="positive",
-                producer_step_id=STEP_ID,
-            ),
-        ),
-    )
-
-    assert (
-        emit_production_result(
-            revision=revision,
-            run=run,
-        )
-        == {}
-    )
-
-
-def test_emission_returns_only_explicit_value() -> None:
-    create_revision(
-        emissions=(
-            WorkflowProductionEmission(
-                name="label",
-                source=WorkflowValueReference(
-                    producer_step_id=STEP_ID,
-                    name="classification",
-                ),
-            ),
-        ),
+        emissions=emissions,
     )
 
 
@@ -195,8 +151,68 @@ def create_run(
     )
 
 
+def test_empty_emission_policy_returns_empty_result() -> None:
+    state = create_state(
+        emissions=(),
+    )
+
+    run = create_run(
+        values=(
+            WorkflowValue(
+                name="classification",
+                value="positive",
+                producer_step_id=STEP_ID,
+            ),
+        ),
+    )
+
+    assert (
+        emit_production_result(
+            state=state,
+            run=run,
+        )
+        == {}
+    )
+
+
+def test_emission_returns_only_explicit_value() -> None:
+    state = create_state(
+        emissions=(
+            WorkflowProductionEmission(
+                name="label",
+                source=WorkflowValueReference(
+                    producer_step_id=STEP_ID,
+                    name="classification",
+                ),
+            ),
+        ),
+    )
+
+    run = create_run(
+        values=(
+            WorkflowValue(
+                name="classification",
+                value="positive",
+                producer_step_id=STEP_ID,
+            ),
+            WorkflowValue(
+                name="internal_analysis",
+                value="private reasoning",
+                producer_step_id=STEP_ID,
+            ),
+        ),
+    )
+
+    assert emit_production_result(
+        state=state,
+        run=run,
+    ) == {
+        "label": "positive",
+    }
+
+
 def test_emission_uses_exact_producer_step() -> None:
-    revision = create_revision(
+    state = create_state(
         emissions=(
             WorkflowProductionEmission(
                 name="label",
@@ -224,7 +240,7 @@ def test_emission_uses_exact_producer_step() -> None:
     )
 
     assert emit_production_result(
-        revision=revision,
+        state=state,
         run=run,
     ) == {
         "label": "selected",
@@ -232,7 +248,7 @@ def test_emission_uses_exact_producer_step() -> None:
 
 
 def test_emission_renames_internal_value() -> None:
-    revision = create_revision(
+    state = create_state(
         emissions=(
             WorkflowProductionEmission(
                 name="public_label",
@@ -255,7 +271,7 @@ def test_emission_renames_internal_value() -> None:
     )
 
     assert emit_production_result(
-        revision=revision,
+        state=state,
         run=run,
     ) == {
         "public_label": "positive",
@@ -263,7 +279,7 @@ def test_emission_renames_internal_value() -> None:
 
 
 def test_missing_declared_emission_fails() -> None:
-    revision = create_revision(
+    state = create_state(
         emissions=(
             WorkflowProductionEmission(
                 name="label",
@@ -284,6 +300,6 @@ def test_missing_declared_emission_fails() -> None:
         match="was not produced uniquely",
     ):
         emit_production_result(
-            revision=revision,
+            state=state,
             run=run,
         )
