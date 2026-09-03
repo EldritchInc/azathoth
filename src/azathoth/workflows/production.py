@@ -15,6 +15,7 @@ from azathoth.prompting import (
     PromptStrategySpec,
 )
 from azathoth.workflows.models import WorkflowSpecification
+from azathoth.workflows.value import WorkflowValueReference
 
 
 def utc_now() -> datetime:
@@ -37,7 +38,7 @@ class WorkflowProductionModelSubstitution(BaseModel):
     def validate_unique_substitutes(
         self,
     ) -> "WorkflowProductionModelSubstitution":
-        """Require each fallback model to appear at most once."""
+        """Require unique ordered fallback model identities."""
 
         identifiers = tuple(substitute.identifier for substitute in self.substitutes)
 
@@ -47,19 +48,37 @@ class WorkflowProductionModelSubstitution(BaseModel):
         return self
 
 
+class WorkflowProductionEmission(BaseModel):
+    """Expose one explicitly selected workflow value to production callers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    source: WorkflowValueReference
+
+
 class WorkflowProductionState(BaseModel):
     """Represent the durable workflow configuration active in production."""
 
     model_config = ConfigDict(frozen=True)
 
     specification: WorkflowSpecification
-    model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = ()
+
+    model_substitutions: tuple[
+        WorkflowProductionModelSubstitution,
+        ...,
+    ] = ()
+
+    emissions: tuple[
+        WorkflowProductionEmission,
+        ...,
+    ] = ()
 
     @model_validator(mode="after")
     def validate_production_configuration(
         self,
     ) -> "WorkflowProductionState":
-        """Validate fixed production bindings and explicit substitutions."""
+        """Validate fixed production bindings, substitutions, and emissions."""
 
         primary_models: dict[
             UUID,
@@ -107,6 +126,24 @@ class WorkflowProductionState(BaseModel):
                 raise ValueError(
                     "Production model substitutes cannot include the step's primary model."
                 )
+
+        emission_names = tuple(emission.name for emission in self.emissions)
+
+        if len(emission_names) != len(set(emission_names)):
+            raise ValueError("Production emission names must be unique.")
+
+        steps_by_id = {step.id: step for step in self.specification.steps}
+
+        for emission in self.emissions:
+            producer = steps_by_id.get(emission.source.producer_step_id)
+
+            if producer is None:
+                raise ValueError("Production emissions must reference workflow steps.")
+
+            declared_output_names = {output.name for output in producer.outputs}
+
+            if emission.source.name not in declared_output_names:
+                raise ValueError("Production emissions must reference declared workflow outputs.")
 
         return self
 
