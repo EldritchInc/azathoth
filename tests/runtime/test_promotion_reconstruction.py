@@ -22,6 +22,7 @@ from azathoth.providers import (
 )
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
+    SQLiteWorkflowProductionRevisionRepository,
     SQLiteWorkflowProductionStateRepository,
     SQLiteWorkflowRepository,
     WorkflowMetadata,
@@ -52,7 +53,7 @@ def create_configured_workflow() -> WorkflowSpecification:
         metadata=WorkflowMetadata(
             id=WORKFLOW_ID,
             name="promotion-reconstruction",
-            description=("Prove explicit promotion survives durable reconstruction."),
+            description="Prove explicit promotion survives durable reconstruction.",
             version="1.0.0",
         ),
         steps=(
@@ -62,7 +63,7 @@ def create_configured_workflow() -> WorkflowSpecification:
                     metadata=StrategyMetadata(
                         id=STRATEGY_ID,
                         name="promotion-prompt",
-                        description=("Exercise end-to-end promotion reconstruction."),
+                        description="Exercise end-to-end promotion reconstruction.",
                         version="1.0.0",
                     ),
                     prompt=Prompt(
@@ -177,19 +178,27 @@ def test_promoted_workflow_survives_runtime_reconstruction(
         database,
     )
 
-    promoted = promote_workflow_candidate(
+    revision_repository = SQLiteWorkflowProductionRevisionRepository(
+        database,
+    )
+
+    revision = promote_workflow_candidate(
         specification=configured,
         candidate=candidate,
         repository=production_repository,
+        revision_repository=revision_repository,
         model_substitutions=create_substitutions(),
     )
 
-    assert (
-        production_repository.get(
-            WORKFLOW_ID,
-        )
-        == promoted
+    assert production_repository.get(WORKFLOW_ID) == revision.state
+
+    restored_revision = SQLiteWorkflowProductionRevisionRepository(
+        database,
+    ).get(
+        revision.id,
     )
+
+    assert restored_revision == revision
 
     reconstructed = load_runtime(
         CliRuntimeConfiguration(
@@ -206,7 +215,8 @@ def test_promoted_workflow_survives_runtime_reconstruction(
     )
 
     assert reconstructed_configured == configured
-    assert reconstructed_production == promoted
+
+    assert reconstructed_production == revision.state
 
     assert reconstructed_production is not None
 
@@ -228,7 +238,7 @@ def test_promoted_workflow_survives_runtime_reconstruction(
         FixedModelSelection,
     )
 
-    assert production_prompt.model_selection.identifier == (PRIMARY_IDENTIFIER)
+    assert production_prompt.model_selection.identifier == PRIMARY_IDENTIFIER
 
     assert tuple(
         substitution.step_id for substitution in reconstructed_production.model_substitutions
@@ -249,7 +259,7 @@ def test_promoted_workflow_survives_runtime_reconstruction(
     )
 
 
-def test_repromotion_replaces_only_production_state_after_restart(
+def test_repromotion_preserves_history_and_replaces_only_production_state_after_restart(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "azathoth.db"
@@ -268,14 +278,19 @@ def test_repromotion_replaces_only_production_state_after_restart(
         registry=create_model_registry(),
     )
 
-    repository = SQLiteWorkflowProductionStateRepository(
+    state_repository = SQLiteWorkflowProductionStateRepository(
+        database,
+    )
+
+    revision_repository = SQLiteWorkflowProductionRevisionRepository(
         database,
     )
 
     first = promote_workflow_candidate(
         specification=configured,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
     )
 
     first_runtime = load_runtime(
@@ -287,7 +302,8 @@ def test_repromotion_replaces_only_production_state_after_restart(
     second = promote_workflow_candidate(
         specification=configured,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
         model_substitutions=create_substitutions(),
     )
 
@@ -305,10 +321,13 @@ def test_repromotion_replaces_only_production_state_after_restart(
         WORKFLOW_ID,
     )
 
-    assert first_production == first
-    assert second_production == second
+    assert first_production == first.state
 
-    assert first != second
+    assert second_production == second.state
+
+    assert first.id != second.id
+
+    assert first.state != second.state
 
     assert (
         first_runtime.workflows.get(
@@ -329,11 +348,22 @@ def test_repromotion_replaces_only_production_state_after_restart(
 
     assert first_production.model_substitutions == ()
 
-    assert second_production.model_substitutions == (create_substitutions())
+    assert second_production.model_substitutions == create_substitutions()
 
     assert (
         first_runtime.production_state(
             WORKFLOW_ID,
         )
-        == first
+        == first.state
+    )
+
+    reconstructed_history = SQLiteWorkflowProductionRevisionRepository(
+        database,
+    ).revisions_for_workflow(
+        WORKFLOW_ID,
+    )
+
+    assert reconstructed_history == (
+        first,
+        second,
     )

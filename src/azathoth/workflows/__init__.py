@@ -72,9 +72,17 @@ from azathoth.workflows.memory_feedback_repository import (
     InMemoryWorkflowRunFeedbackRepository,
     require_workflow_run_feedback_repository,
 )
+from azathoth.workflows.memory_production_invocation_repository import (
+    InMemoryProductionInvocationRepository,
+    require_production_invocation_repository,
+)
 from azathoth.workflows.memory_production_repository import (
     InMemoryWorkflowProductionStateRepository,
     require_workflow_production_state_repository,
+)
+from azathoth.workflows.memory_production_revision_repository import (
+    InMemoryWorkflowProductionRevisionRepository,
+    require_workflow_production_revision_repository,
 )
 from azathoth.workflows.memory_repository import (
     InMemoryWorkflowRepository,
@@ -94,10 +102,25 @@ from azathoth.workflows.models import (
 )
 from azathoth.workflows.production import (
     WorkflowProductionModelSubstitution,
+    WorkflowProductionRevision,
     WorkflowProductionState,
+)
+from azathoth.workflows.production_invocation import (
+    ProductionInvocation,
+    ProductionInvocationErrorCode,
+    ProductionInvocationFailure,
+    ProductionInvocationResult,
+    ProductionInvocationSuccess,
+    create_production_invocation,
+)
+from azathoth.workflows.production_invocation_repository import (
+    ProductionInvocationRepository,
 )
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
+)
+from azathoth.workflows.production_revision_repository import (
+    WorkflowProductionRevisionRepository,
 )
 from azathoth.workflows.promotion import (
     materialize_workflow_candidate,
@@ -136,8 +159,14 @@ from azathoth.workflows.sqlite_experiment_repository import (
 from azathoth.workflows.sqlite_feedback_repository import (
     SQLiteWorkflowRunFeedbackRepository,
 )
+from azathoth.workflows.sqlite_production_invocation_repository import (
+    SQLiteProductionInvocationRepository,
+)
 from azathoth.workflows.sqlite_production_repository import (
     SQLiteWorkflowProductionStateRepository,
+)
+from azathoth.workflows.sqlite_production_revision_repository import (
+    SQLiteWorkflowProductionRevisionRepository,
 )
 from azathoth.workflows.sqlite_repository import SQLiteWorkflowRepository
 from azathoth.workflows.sqlite_run_evaluation_repository import (
@@ -162,14 +191,24 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "InMemoryProductionInvocationRepository",
     "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
     "InMemoryWorkflowExperimentRepository",
+    "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
     "InMemoryWorkflowRunRepository",
+    "ProductionInvocation",
+    "ProductionInvocationErrorCode",
+    "ProductionInvocationFailure",
+    "ProductionInvocationRepository",
+    "ProductionInvocationResult",
+    "ProductionInvocationSuccess",
     "RankedWorkflow",
+    "SQLiteProductionInvocationRepository",
     "SQLiteWorkflowExperimentRepository",
+    "SQLiteWorkflowProductionRevisionRepository",
     "SQLiteWorkflowProductionStateRepository",
     "SQLiteWorkflowRepository",
     "SQLiteWorkflowRunEvaluationRepository",
@@ -208,6 +247,8 @@ __all__ = [
     "WorkflowInputBinding",
     "WorkflowMetadata",
     "WorkflowProductionModelSubstitution",
+    "WorkflowProductionRevision",
+    "WorkflowProductionRevisionRepository",
     "WorkflowProductionState",
     "WorkflowProductionStateRepository",
     "WorkflowRanker",
@@ -237,12 +278,15 @@ __all__ = [
     "WorkflowValueBinding",
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
+    "create_production_invocation",
     "decode_workflow_document",
     "encode_workflow_document",
     "generate_workflow_candidate",
     "materialize_workflow_candidate",
     "promote_workflow_candidate",
+    "require_production_invocation_repository",
     "require_workflow_experiment_repository",
+    "require_workflow_production_revision_repository",
     "require_workflow_production_state_repository",
     "require_workflow_repository",
     "require_workflow_run_evaluation_repository",

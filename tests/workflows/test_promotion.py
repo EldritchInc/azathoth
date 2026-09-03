@@ -33,6 +33,7 @@ from azathoth.tools import (
     ToolResolver,
 )
 from azathoth.workflows import (
+    InMemoryWorkflowProductionRevisionRepository,
     InMemoryWorkflowProductionStateRepository,
     ToolStepSpecification,
     WorkflowCandidate,
@@ -257,7 +258,7 @@ def test_materialization_pins_candidate_prompt_model() -> None:
         FixedModelSelection,
     )
 
-    assert prompt.model_selection.identifier == (MODEL_IDENTIFIER)
+    assert prompt.model_selection.identifier == MODEL_IDENTIFIER
 
 
 def test_materialization_uses_candidate_model_binding() -> None:
@@ -290,7 +291,7 @@ def test_materialization_uses_candidate_model_binding() -> None:
         FixedModelSelection,
     )
 
-    assert prompt.model_selection.identifier == (strategy.model_binding.identifier)
+    assert prompt.model_selection.identifier == strategy.model_binding.identifier
 
 
 def test_materialization_preserves_provider_native_model_path() -> None:
@@ -309,12 +310,10 @@ def test_materialization_preserves_provider_native_model_path() -> None:
 
     registry = LanguageModelRegistry(
         models={
-            "test/organization/model": (
-                DeterministicLanguageModel(
-                    provider="test",
-                    model="organization/model",
-                    response_text="success",
-                )
+            "test/organization/model": DeterministicLanguageModel(
+                provider="test",
+                model="organization/model",
+                response_text="success",
             ),
         }
     )
@@ -445,22 +444,42 @@ def test_promotion_sets_active_production_state() -> None:
         specification,
     )
 
-    repository = InMemoryWorkflowProductionStateRepository()
+    state_repository = InMemoryWorkflowProductionStateRepository()
+    revision_repository = InMemoryWorkflowProductionRevisionRepository()
 
-    state = promote_workflow_candidate(
+    revision = promote_workflow_candidate(
         specification=specification,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
     )
 
-    assert (
-        repository.get(
-            WORKFLOW_ID,
-        )
-        == state
+    assert state_repository.get(WORKFLOW_ID) == revision.state
+
+    assert revision.state.specification.metadata.id == WORKFLOW_ID
+
+
+def test_promotion_records_immutable_production_revision() -> None:
+    specification = create_workflow()
+
+    candidate = create_candidate(
+        specification,
     )
 
-    assert state.specification.metadata.id == WORKFLOW_ID
+    revision_repository = InMemoryWorkflowProductionRevisionRepository()
+
+    revision = promote_workflow_candidate(
+        specification=specification,
+        candidate=candidate,
+        repository=InMemoryWorkflowProductionStateRepository(),
+        revision_repository=revision_repository,
+    )
+
+    assert revision_repository.get(revision.id) is revision
+
+    assert revision_repository.revisions() == (revision,)
+
+    assert revision.workflow_id == WORKFLOW_ID
 
 
 def test_promotion_pins_selected_candidate_model() -> None:
@@ -470,14 +489,15 @@ def test_promotion_pins_selected_candidate_model() -> None:
         specification,
     )
 
-    state = promote_workflow_candidate(
+    revision = promote_workflow_candidate(
         specification=specification,
         candidate=candidate,
         repository=InMemoryWorkflowProductionStateRepository(),
+        revision_repository=InMemoryWorkflowProductionRevisionRepository(),
     )
 
     prompt = require_prompt(
-        state.specification,
+        revision.state.specification,
     )
 
     assert isinstance(
@@ -485,7 +505,7 @@ def test_promotion_pins_selected_candidate_model() -> None:
         FixedModelSelection,
     )
 
-    assert prompt.model_selection.identifier == (MODEL_IDENTIFIER)
+    assert prompt.model_selection.identifier == MODEL_IDENTIFIER
 
 
 def test_promotion_preserves_explicit_model_substitutions() -> None:
@@ -505,31 +525,34 @@ def test_promotion_preserves_explicit_model_substitutions() -> None:
         ),
     )
 
-    state = promote_workflow_candidate(
+    revision = promote_workflow_candidate(
         specification=specification,
         candidate=create_candidate(
             specification,
         ),
         repository=InMemoryWorkflowProductionStateRepository(),
+        revision_repository=InMemoryWorkflowProductionRevisionRepository(),
         model_substitutions=(substitution,),
     )
 
-    assert state.model_substitutions == (substitution,)
+    assert revision.state.model_substitutions == (substitution,)
 
 
-def test_promotion_replaces_active_state_for_same_workflow() -> None:
+def test_promotion_replaces_active_state_and_preserves_revision_history() -> None:
     specification = create_workflow()
 
     candidate = create_candidate(
         specification,
     )
 
-    repository = InMemoryWorkflowProductionStateRepository()
+    state_repository = InMemoryWorkflowProductionStateRepository()
+    revision_repository = InMemoryWorkflowProductionRevisionRepository()
 
     first = promote_workflow_candidate(
         specification=specification,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
     )
 
     substitution = WorkflowProductionModelSubstitution(
@@ -545,31 +568,39 @@ def test_promotion_replaces_active_state_for_same_workflow() -> None:
     second = promote_workflow_candidate(
         specification=specification,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
         model_substitutions=(substitution,),
     )
 
-    assert first != second
+    assert first.id != second.id
 
-    assert repository.states() == (second,)
+    assert first.state != second.state
 
-    assert (
-        repository.get(
-            WORKFLOW_ID,
-        )
-        == second
+    assert state_repository.states() == (second.state,)
+
+    assert state_repository.get(WORKFLOW_ID) == second.state
+
+    assert revision_repository.revisions_for_workflow(WORKFLOW_ID) == (
+        first,
+        second,
     )
+
+    assert first.state.model_substitutions == ()
+
+    assert second.state.model_substitutions == (substitution,)
 
 
 def test_promotion_does_not_mutate_configured_workflow() -> None:
     specification = create_workflow()
 
-    state = promote_workflow_candidate(
+    revision = promote_workflow_candidate(
         specification=specification,
         candidate=create_candidate(
             specification,
         ),
         repository=InMemoryWorkflowProductionStateRepository(),
+        revision_repository=InMemoryWorkflowProductionRevisionRepository(),
     )
 
     configured_prompt = require_prompt(
@@ -577,7 +608,7 @@ def test_promotion_does_not_mutate_configured_workflow() -> None:
     )
 
     production_prompt = require_prompt(
-        state.specification,
+        revision.state.specification,
     )
 
     assert isinstance(
@@ -591,19 +622,21 @@ def test_promotion_does_not_mutate_configured_workflow() -> None:
     )
 
 
-def test_failed_promotion_does_not_replace_active_state() -> None:
+def test_failed_promotion_does_not_replace_active_state_or_record_revision() -> None:
     specification = create_workflow()
 
     candidate = create_candidate(
         specification,
     )
 
-    repository = InMemoryWorkflowProductionStateRepository()
+    state_repository = InMemoryWorkflowProductionStateRepository()
+    revision_repository = InMemoryWorkflowProductionRevisionRepository()
 
     existing = promote_workflow_candidate(
         specification=specification,
         candidate=candidate,
-        repository=repository,
+        repository=state_repository,
+        revision_repository=revision_repository,
     )
 
     invalid_substitution = WorkflowProductionModelSubstitution(
@@ -623,13 +656,11 @@ def test_failed_promotion_does_not_replace_active_state() -> None:
         promote_workflow_candidate(
             specification=specification,
             candidate=candidate,
-            repository=repository,
+            repository=state_repository,
+            revision_repository=revision_repository,
             model_substitutions=(invalid_substitution,),
         )
 
-    assert (
-        repository.get(
-            WORKFLOW_ID,
-        )
-        == existing
-    )
+    assert state_repository.get(WORKFLOW_ID) == existing.state
+
+    assert revision_repository.revisions() == (existing,)

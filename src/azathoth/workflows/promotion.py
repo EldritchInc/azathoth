@@ -9,10 +9,14 @@ from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.production import (
     WorkflowProductionModelSubstitution,
+    WorkflowProductionRevision,
     WorkflowProductionState,
 )
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
+)
+from azathoth.workflows.production_revision_repository import (
+    WorkflowProductionRevisionRepository,
 )
 from azathoth.workflows.steps import (
     ToolStepSpecification,
@@ -109,8 +113,9 @@ def promote_workflow_candidate(
     specification: WorkflowSpecification,
     candidate: WorkflowCandidate,
     repository: WorkflowProductionStateRepository,
+    revision_repository: WorkflowProductionRevisionRepository,
     model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = (),
-) -> WorkflowProductionState:
+) -> WorkflowProductionRevision:
     """Promote one explicitly selected workflow candidate to production."""
 
     promoted_specification = materialize_workflow_candidate(
@@ -123,8 +128,16 @@ def promote_workflow_candidate(
         model_substitutions=model_substitutions,
     )
 
+    revision = WorkflowProductionRevision(
+        state=state,
+    )
+
+    revision_repository.save(
+        revision,
+    )
+
     repository.set(
         state,
     )
 
-    return state
+    return revision
