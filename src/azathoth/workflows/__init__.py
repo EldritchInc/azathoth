@@ -72,6 +72,10 @@ from azathoth.workflows.memory_feedback_repository import (
     InMemoryWorkflowRunFeedbackRepository,
     require_workflow_run_feedback_repository,
 )
+from azathoth.workflows.memory_production_invocation_repository import (
+    InMemoryProductionInvocationRepository,
+    require_production_invocation_repository,
+)
 from azathoth.workflows.memory_production_repository import (
     InMemoryWorkflowProductionStateRepository,
     require_workflow_production_state_repository,
@@ -108,6 +112,9 @@ from azathoth.workflows.production_invocation import (
     ProductionInvocationResult,
     ProductionInvocationSuccess,
     create_production_invocation,
+)
+from azathoth.workflows.production_invocation_repository import (
+    ProductionInvocationRepository,
 )
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
@@ -152,6 +159,9 @@ from azathoth.workflows.sqlite_experiment_repository import (
 from azathoth.workflows.sqlite_feedback_repository import (
     SQLiteWorkflowRunFeedbackRepository,
 )
+from azathoth.workflows.sqlite_production_invocation_repository import (
+    SQLiteProductionInvocationRepository,
+)
 from azathoth.workflows.sqlite_production_repository import (
     SQLiteWorkflowProductionStateRepository,
 )
@@ -181,6 +191,7 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "InMemoryProductionInvocationRepository",
     "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
@@ -191,9 +202,11 @@ __all__ = [
     "ProductionInvocation",
     "ProductionInvocationErrorCode",
     "ProductionInvocationFailure",
+    "ProductionInvocationRepository",
     "ProductionInvocationResult",
     "ProductionInvocationSuccess",
     "RankedWorkflow",
+    "SQLiteProductionInvocationRepository",
     "SQLiteWorkflowExperimentRepository",
     "SQLiteWorkflowProductionRevisionRepository",
     "SQLiteWorkflowProductionStateRepository",
@@ -271,6 +284,7 @@ __all__ = [
     "generate_workflow_candidate",
     "materialize_workflow_candidate",
     "promote_workflow_candidate",
+    "require_production_invocation_repository",
     "require_workflow_experiment_repository",
     "require_workflow_production_revision_repository",
     "require_workflow_production_state_repository",
