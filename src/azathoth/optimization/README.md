@@ -1,399 +1,67 @@
 # Optimization
 
-`azathoth.optimization` provides the empirical optimization layer for Azathoth.
+`azathoth.optimization` defines Azathoth's empirical optimization layer.
 
-It contains the models, orchestration, ranking, workflow optimization contracts, and multi-generation session infrastructure used to compare candidate behavior and produce future candidate populations.
+Optimization operates on evidence.
 
-Optimization answers the question:
+It does not decide that a workflow is better because an algorithm generated a
+different candidate, and it does not silently deploy anything to production.
 
-> Given reproducible evidence about competing candidates, what should be tried next?
+At the workflow level, the central optimization question is:
 
-It intentionally does not own low-level strategy execution or workflow execution.
-
-## Purpose
-
-Azathoth is designed around empirical optimization.
-
-Instead of choosing prompts, models, strategies, or workflows based on intuition alone, Azathoth creates reproducible evidence:
+> Given empirical evidence about the current candidate population, what should
+> Azathoth try next?
 
 ```text
-Candidate
-    │
-    ▼
-Execute
-    │
-    ▼
-Evaluate
-    │
-    ▼
-Score
-    │
-    ▼
-Compare
-    │
-    ▼
-Optimize
+WorkflowCandidate population
+          │
+          ▼
+execution
+          │
+          ▼
+evaluation
+          │
+          ▼
+scoring
+          │
+          ▼
+ranking
+          │
+          ▼
+WorkflowExperimentResult
+          │
+          ▼
+WorkflowOptimizer
+          │
+          ▼
+next WorkflowCandidate population
 ```
 
-The optimization package provides the abstractions required to make that process repeatable.
-
-It currently supports two related optimization paths:
-
-- strategy-level optimization using reproducible examples; and
-- workflow-level optimization using workflow experiment evidence.
-
-These paths share the same architectural philosophy while operating on different candidate types.
-
-## Optimization Architecture
-
-At a high level:
-
-```text
-                   azathoth.optimization
-
-        ┌──────────────────┴──────────────────┐
-        │                                     │
-        ▼                                     ▼
-Strategy Optimization                 Workflow Optimization
-        │                                     │
-OptimizationExample                   WorkflowExperimentResult
-        │                                     │
-OptimizationRunner                    WorkflowOptimizer
-        │                                     │
-OptimizationRun                       WorkflowOptimizationResult
-        │                                     │
-ExperimentRunner                      Optimization Session
-        │                                     │
-StrategyScorecard                     Generation History
-        │
-StrategyRanker
-        │
-StrategyRanking
-```
-
-Strategy optimization measures competing strategies against reproducible examples.
-
-Workflow optimization consumes the richer experiment evidence produced by the workflow package and generates future workflow populations.
-
-## OptimizationExample
-
-`OptimizationExample` describes one reproducible optimization case.
-
-It contains:
-
-- an identifier;
-- a name;
-- a goal;
-- an initial context;
-- an expected outcome; and
-- optional tags.
-
-```python
-from azathoth.context import Context
-from azathoth.evaluation import (
-    ExpectedOutcome,
-    OutcomeComparison,
-)
-from azathoth.goals import Goal
-from azathoth.optimization import OptimizationExample
-
-example = OptimizationExample(
-    name="exact-answer",
-    goal=Goal(
-        name="Return the expected result",
-        description="Produce the required deterministic output.",
-        success_criteria=("The output matches the expected value.",),
-    ),
-    context=Context(),
-    expected_outcome=ExpectedOutcome(
-        description="Return success.",
-        value="success",
-        comparison=OutcomeComparison.EXACT,
-    ),
-)
-```
-
-Optimization examples are immutable.
-
-They allow several candidate strategies to be compared against exactly the same goal, context, and expectation.
-
-### Durable Goal Sources
-
-Optimization examples may be constructed from goals reconstructed through the
-goal persistence subsystem.
-
-```text
-SQLiteGoalRepository
-        │
-        ▼
-GoalCatalogLoader
-        │
-        ▼
-Goal
-        │
-        ▼
-OptimizationExample
-```
-
-The resulting optimization example embeds the complete immutable goal.
-
-Repository access is therefore needed when selecting or constructing the
-example, not when interpreting the example later.
-
-This preserves goal snapshot semantics across historical optimization
-evidence.
-
-## OptimizationRunner
-
-`OptimizationRunner` executes and evaluates one strategy against one optimization example.
-
-```text
-OptimizationExample
-        +
-Strategy
-        +
-Evaluator
-        │
-        ▼
-OptimizationRunner
-        │
-        ├── Strategy Execution
-        └── Evaluation
-        │
-        ▼
-OptimizationRun
-```
-
-Example:
-
-```python
-from azathoth.optimization import OptimizationRunner
-
-run = await OptimizationRunner().run(
-    example=example,
-    strategy=strategy,
-    evaluator=evaluator,
-)
-```
-
-The runner composes existing execution and evaluation infrastructure.
-
-It does not implement strategy behavior or evaluator logic itself.
-
-## OptimizationRun
-
-An `OptimizationRun` records the complete result of executing and evaluating one strategy against one example.
-
-It contains:
-
-- its own identifier;
-- optimization example identifier;
-- `ExecutionResult`;
-- `EvaluationResult`;
-- start time; and
-- completion time.
-
-```text
-OptimizationRun
-├── example_id
-├── execution
-├── evaluation
-├── started_at
-└── completed_at
-```
-
-The run also exposes whether the evaluation passed.
-
-```python
-if run.passed:
-    ...
-```
-
-Optimization runs are immutable.
-
-## Strategy Experiments
-
-The optimization package includes `ExperimentRunner` for strategy-level experiments.
-
-It executes every supplied strategy against every supplied optimization example.
-
-```text
-Examples
-   +
-Strategies
-   +
-Evaluator
-   │
-   ▼
-ExperimentRunner
-   │
-   ▼
-StrategyScorecards
-```
-
-Conceptually:
-
-```text
-Strategy A
-├── Example 1
-├── Example 2
-└── Example 3
-
-Strategy B
-├── Example 1
-├── Example 2
-└── Example 3
-```
-
-Each strategy receives its own scorecard containing the complete set of evaluated runs.
-
-## StrategyScorecard
-
-`StrategyScorecard` aggregates optimization evidence for one strategy.
-
-It contains:
-
-- strategy metadata; and
-- one or more optimization runs.
-
-Derived properties include:
-
-- run count;
-- passed count;
-- pass rate; and
-- mean evaluation score.
-
-```text
-StrategyScorecard
-├── StrategyMetadata
-├── OptimizationRun
-├── OptimizationRun
-├── OptimizationRun
-│
-├── run_count
-├── passed_count
-├── pass_rate
-└── mean_score
-```
-
-The scorecard validates that every recorded execution belongs to the strategy represented by the scorecard.
-
-This prevents evidence from different strategies from being accidentally mixed.
-
-## Strategy Ranking
-
-`StrategyRanker` deterministically compares strategy scorecards.
-
-```python
-from azathoth.optimization import StrategyRanker
-
-ranking = StrategyRanker().rank(scorecards)
-```
-
-The canonical ranking currently considers:
-
-1. pass rate;
-2. mean evaluation score;
-3. run count;
-4. strategy identifier; and
-5. strategy version.
-
-```text
-StrategyScorecards
-        │
-        ▼
-StrategyRanker
-        │
-        ▼
-StrategyRanking
-```
-
-The additional identity-based tie breakers ensure deterministic ordering.
-
-## RankedStrategy
-
-Each ranked entry contains:
-
-- its rank; and
-- the corresponding strategy scorecard.
-
-```text
-RankedStrategy
-├── rank
-└── scorecard
-```
-
-Ranks are positive and consecutive.
-
-## StrategyRanking
-
-`StrategyRanking` contains the ordered comparison of strategy scorecards.
-
-```python
-winner = ranking.winner
-```
-
-The winner is the scorecard at rank one.
-
-Ranking remains separate from experiment execution so alternative ranking behavior can evolve independently.
-
-## Strategy Optimization Flow
-
-The current strategy-level optimization flow is:
-
-```text
-Goal
- │
- ▼
-OptimizationExample
- │
- ├── Context
- └── ExpectedOutcome
-        │
-        ▼
-Candidate Strategies
-        │
-        ▼
-OptimizationRunner
-        │
-        ▼
-OptimizationRuns
-        │
-        ▼
-ExperimentRunner
-        │
-        ▼
-StrategyScorecards
-        │
-        ▼
-StrategyRanker
-        │
-        ▼
-StrategyRanking
-        │
-        ▼
-Winner
-```
-
-This path provides empirical comparison of strategies without requiring workflow orchestration.
-
-## Workflow Optimization
-
-Workflow optimization begins after the workflow package has completed an experiment.
-
-The workflow package owns:
-
-- workflow specification;
-- workflow candidate generation;
-- execution;
-- evaluation orchestration;
-- scoring;
-- ranking; and
-- workflow experiments.
-
-The optimization package begins at the next decision:
-
-> What candidate population should be evaluated next?
+The new population must itself be executed and evaluated before any claim of
+improvement is justified.
+
+## Architectural Boundary
+
+Workflow optimization begins after `azathoth.workflows` has produced empirical
+experiment evidence.
+
+The workflow subsystem owns:
+
+- workflow specifications
+- workflow candidate generation
+- workflow execution
+- workflow evaluations
+- workflow scoring
+- workflow ranking
+- workflow experiments
+
+The optimization subsystem owns:
+
+- resolving experiment evidence back to executable candidates
+- producing future candidate populations
+- optimization-generation results
+- optimization sessions
+- concrete optimization algorithms
 
 ```text
 azathoth.workflows
@@ -405,28 +73,60 @@ WorkflowExperimentResult
 azathoth.optimization
         │
         ▼
-WorkflowOptimizer
-        │
-        ▼
 WorkflowOptimizationResult
 ```
 
-This boundary prevents optimization algorithms from becoming coupled to workflow execution internals.
+This separation prevents optimization algorithms from becoming workflow
+execution engines.
+
+## Optimization Is Empirical
+
+An optimizer proposes candidate behavior.
+
+Evidence establishes whether that behavior is better.
+
+```text
+proposal
+   │
+   ▼
+candidate
+   │
+   ▼
+execute
+   │
+   ▼
+evaluate
+   │
+   ▼
+score
+   │
+   ▼
+compare
+```
+
+Therefore:
+
+```text
+generated candidate ≠ improved candidate
+```
+
+and:
+
+```text
+optimizer opinion ≠ empirical result
+```
+
+A proposed candidate must survive the same execution and evaluation machinery
+as every other candidate.
 
 ## WorkflowOptimizer
 
-`WorkflowOptimizer` is the common protocol for workflow optimization algorithms.
+`WorkflowOptimizer` is the common protocol for workflow optimization
+algorithms.
+
+Conceptually:
 
 ```python
-from typing import Protocol
-
-from azathoth.optimization import WorkflowOptimizationResult
-from azathoth.workflows import (
-    WorkflowCandidate,
-    WorkflowExperimentResult,
-)
-
-
 class WorkflowOptimizer(Protocol):
     def optimize(
         self,
@@ -439,31 +139,107 @@ class WorkflowOptimizer(Protocol):
 
 An optimizer receives:
 
-- the experiment evidence for the current population;
-- the current executable candidate population; and
-- the generation number being produced.
+- empirical evidence from the previous workflow experiment
+- the executable candidate population that produced that evidence
+- the generation number being produced
 
-It returns the candidate population for the new generation.
+It returns a `WorkflowOptimizationResult`.
 
-## Why Experiment and Candidates Are Separate Inputs
+The optimizer does not execute the returned candidates.
 
-`WorkflowExperimentResult` intentionally contains scorecards and ranking evidence rather than executable workflow candidates.
+## Why Evidence and Candidates Are Separate
+
+`WorkflowExperimentResult` is empirical evidence.
+
+`WorkflowCandidate` contains executable runtime behavior.
+
+Those are deliberately different objects.
+
+```text
+WorkflowExperimentResult
+        empirical evidence
+
+WorkflowCandidate
+        executable artifact
+```
 
 Optimization therefore receives both:
 
 ```text
-Experiment Evidence
+experiment evidence
         +
-Source Candidate Population
+source candidate population
         │
         ▼
 WorkflowOptimizer
 ```
 
-This keeps experiment results focused on empirical evidence while still giving optimizers access to the executable candidates they may transform.
+This allows experiment records to remain focused on observed results without
+embedding live executable strategy objects inside the evidence model.
 
-Future durable representations may provide stable candidate identity without
-forcing live strategy objects into experiment evidence.
+## Candidate Identity
+
+Workflow experiment evidence identifies candidates through
+`WorkflowCandidateSignature`.
+
+The optimization package provides:
+
+- `resolve_workflow_candidate`
+- `resolve_workflow_experiment_evidence`
+- `resolve_workflow_experiment_winner`
+
+These functions reconnect empirical evidence with the executable candidate
+population supplied to the optimizer.
+
+```text
+WorkflowExperimentEvidence
+        │
+        └── WorkflowCandidateSignature
+                    │
+                    ▼
+            candidate resolution
+                    │
+                    ▼
+             WorkflowCandidate
+```
+
+Resolution requires exactly one matching executable candidate.
+
+Missing or ambiguous candidate identity fails explicitly.
+
+## Empirical Winner Resolution
+
+`resolve_workflow_experiment_winner` resolves the highest-ranked experiment
+evidence back to the executable candidate that produced it.
+
+```text
+WorkflowExperimentResult
+        │
+        ▼
+winner_evidence
+        │
+        ▼
+WorkflowCandidateSignature
+        │
+        ▼
+source population
+        │
+        ▼
+winning WorkflowCandidate
+```
+
+This preserves a critical distinction:
+
+```text
+ranking evidence
+    identifies the empirical winner
+
+optimizer
+    decides what to propose from that evidence
+```
+
+The optimizer does not independently redefine which candidate won the
+experiment.
 
 ## WorkflowOptimizationResult
 
@@ -471,9 +247,9 @@ forcing live strategy objects into experiment evidence.
 
 It contains:
 
-- generation number;
-- the previous workflow experiment; and
-- the candidate population produced for the new generation.
+- the generation number
+- the previous experiment
+- the candidate population produced for the new generation
 
 ```text
 WorkflowOptimizationResult
@@ -482,562 +258,328 @@ WorkflowOptimizationResult
 └── candidates
 ```
 
-Generation numbering begins at one.
+Generation zero is the externally supplied initial population.
+
+Optimizer-produced populations begin at generation one.
 
 ```text
 Generation 0
-    = externally supplied initial population
+    initial candidate population
 
 Generation 1
-    = first optimizer-produced population
+    first optimizer-produced population
 
 Generation 2
-    = second optimizer-produced population
+    second optimizer-produced population
 
 ...
 ```
 
-The result is immutable.
+The optimization result records what was proposed next.
 
-## Runtime Candidate Artifacts
+It is not evidence that the proposal improved anything.
 
-Workflow candidates contain executable strategy implementations.
+## Replay Optimization
 
-Because those strategies are live runtime objects, workflow optimization results are currently runtime-facing artifacts rather than portable serialized workflow specifications.
-
-Azathoth does not pretend that arbitrary executable Python strategy instances can be faithfully reconstructed from JSON.
-
-A future durable candidate representation can provide serialization and provenance without weakening the runtime execution model.
-
-## ReplayWorkflowOptimizer
-
-`ReplayWorkflowOptimizer` is the first workflow optimizer implementation.
-
-It intentionally performs no optimization.
-
-```text
-Current Candidates
-        │
-        ▼
-ReplayWorkflowOptimizer
-        │
-        ▼
-Same Candidates
-```
-
-Example:
-
-```python
-from azathoth.optimization import ReplayWorkflowOptimizer
-
-result = ReplayWorkflowOptimizer().optimize(
-    experiment=experiment,
-    candidates=candidates,
-    generation=1,
-)
-```
-
-The result preserves:
-
-- the experiment evidence;
-- candidate order;
-- candidate instances; and
-- the requested generation number.
-
-## Why Replay Exists
-
-Replay optimization establishes the optimizer contract without introducing optimization heuristics.
-
-That gives Azathoth a deterministic baseline capable of proving:
-
-- package boundaries;
-- population propagation;
-- generation tracking;
-- optimization orchestration; and
-- multi-generation session behavior.
-
-Only after these mechanics are trustworthy does adaptive optimization need to be introduced.
-
-## Model Substitution Optimization
-
-`ModelSubstitutionWorkflowOptimizer` is Azathoth's reference optimizer that
-produces genuinely different workflow candidates.
+`ReplayWorkflowOptimizer` is the deterministic baseline optimizer.
 
 ```text
 current population
+       │
+       ▼
+ReplayWorkflowOptimizer
+       │
+       ▼
+same population
+```
+
+Replay preserves:
+
+- the source experiment
+- candidate identity
+- candidate order
+- the requested generation
+
+Its purpose is to exercise optimization orchestration without changing
+candidate behavior.
+
+This provides a useful baseline for tests, application composition, and
+multi-generation optimization sessions.
+
+## Model Substitution Optimization
+
+`ModelSubstitutionWorkflowOptimizer` provides V1's concrete adaptive workflow
+optimization behavior.
+
+Its optimization strategy is intentionally mechanical and explainable:
+
+> Starting from empirically successful workflow behavior, try compatible models
+> that are strictly cheaper.
+
+At a high level:
+
+```text
+current candidate population
+        │
+        ▼
+previous experiment
+        │
+        ▼
+empirical winner
         │
         ▼
 ModelSubstitutionWorkflowOptimizer
         │
-        ▼
-baseline candidates
-        +
-strictly cheaper model substitutions
+        ├── preserve baseline candidate
         │
-        ▼
-next population
+        └── generate cheaper substitutions
+                    │
+                    ▼
+            next candidate population
 ```
 
-The optimizer is intentionally mechanical.
+The resulting substitutions are proposals.
 
-For each prompt-backed workflow step, it:
+Their quality is not assumed.
 
-1. reads the step's declared `ModelRequirements`;
-2. finds compatible models in the `ModelCatalog`;
-3. requires an executable implementation in the `LanguageModelRegistry`;
-4. retains only models with comparable configured pricing;
-5. retains only models that are strictly cheaper than the current binding; and
-6. generates a new workflow candidate for each surviving substitution.
+They must be evaluated in a subsequent experiment.
 
-A target model is strictly cheaper when neither its input nor output token
-price is higher and at least one is lower.
+## Model Substitution Inputs
+
+Model substitution operates using the existing provider and workflow
+boundaries.
+
+It receives:
 
 ```text
-target input  <= current input
-target output <= current output
+WorkflowSpecification
+WorkflowCandidate
+ModelCatalog
+ModelPortfolio
+LanguageModelRegistry
+```
 
-and
+These provide distinct forms of authority:
 
-target input < current input
+```text
+WorkflowSpecification
+    durable workflow requirements
+
+ModelCatalog
+    current normalized model metadata
+
+ModelPortfolio
+    organizational selection authorization
+
+LanguageModelRegistry
+    executable implementations
+```
+
+Optimization does not collapse these concepts into a single model list.
+
+## Eligible Model Substitutions
+
+For prompt-backed workflow steps, model substitution considers models that:
+
+1. satisfy the workflow step's declared model requirements;
+2. are authorized by the `ModelPortfolio`;
+3. exist in the current `ModelCatalog`;
+4. have an executable implementation in the `LanguageModelRegistry`;
+5. have comparable configured pricing; and
+6. are strictly cheaper than the current model binding.
+
+Conceptually:
+
+```text
+ModelRequirements
+       +
+ModelPortfolio
+       +
+ModelCatalog
+       +
+LanguageModelRegistry
+       │
+       ▼
+eligible executable models
+       │
+       ▼
+strictly cheaper models
+```
+
+Availability alone does not make a substitution eligible.
+
+Authorization alone does not make a substitution executable.
+
+## Strictly Cheaper
+
+V1 model substitution uses a conservative Pareto pricing rule.
+
+A target model is strictly cheaper when:
+
+```text
+target input price  <= current input price
+target output price <= current output price
+```
+
+and at least one is strictly lower:
+
+```text
+target input price  < current input price
 or
-target output < current output
+target output price < current output price
 ```
 
-This Pareto criterion deliberately avoids assumptions about workload-specific
-input/output token ratios.
+This avoids inventing assumptions about the relative number of input and output
+tokens a particular workload will consume.
 
-### One-Step Substitutions
+A model that is cheaper on input but more expensive on output is therefore not
+automatically treated as cheaper.
 
-Each generated candidate changes one model-backed step.
+## One-Step Candidate Mutation
 
-```text
-Candidate
-├── Step A → Model X
-├── Step B → Model Y
-└── Step C → Model Z
+Model substitution generates new workflow candidates by changing eligible model
+bindings while preserving the rest of the executable workflow behavior.
 
-              ↓
-
-Candidate'
-├── Step A → Model X
-├── Step B → Model Y'
-└── Step C → Model Z
-```
-
-The replacement prompt strategy is regenerated through the normal prompt
-candidate-generation path.
-
-Executable strategies are not mutated in place.
-
-### Baseline Preservation
-
-Existing candidates remain in the next population.
+Conceptually:
 
 ```text
-current candidate
+winning candidate
       │
-      ├───────────────┐
-      ▼               ▼
-baseline          substitution
+      ├── step A
+      ├── step B
+      └── step C
+             │
+             ▼
+       replace one eligible
+       model binding
+             │
+             ▼
+      candidate variant
 ```
 
-A lower configured model price does not prove that a workflow is better.
+Each generated candidate remains a complete executable
+`WorkflowCandidate`.
 
-Preserving the baseline allows the next experiment to reject substitutions
-that reduce quality, reliability, latency, or overall score.
+Optimization does not mutate the source candidate in place.
 
-### Deduplication
+## Preserve the Baseline
 
-Equivalent resolved workflow configurations are deduplicated before the next
-population is returned.
-
-The candidate signature is the ordered sequence of resolved step strategy
-identities.
-
-This prevents multiple parent candidates from causing the same executable
-configuration to be evaluated repeatedly.
-
-### Empirical Improvement
-
-The reference optimizer does not assign success to its proposals.
+The source candidate remains part of the next population.
 
 ```text
-optimizer proposes
+next population
+├── baseline candidate
+├── cheaper candidate A
+├── cheaper candidate B
+└── ...
+```
+
+This matters empirically.
+
+A proposed cheaper model may reduce cost while also reducing quality,
+reliability, or some other measured property.
+
+Keeping the baseline allows the next experiment to compare the proposals
+against known behavior rather than assuming every generated mutation is an
+improvement.
+
+## Expand From Empirical Evidence
+
+Adaptive optimization is driven by the previous experiment.
+
+The optimizer resolves the empirical winner and expands from that candidate
+rather than treating every candidate in the previous population as equally
+successful.
+
+```text
+previous population
        │
        ▼
-experiment executes
+experiment
        │
        ▼
-evaluator judges
+ranking
        │
        ▼
-scorer measures
+winner
        │
        ▼
-ranker compares
+candidate expansion
 ```
 
-Azathoth's end-to-end optimization coverage demonstrates a case where:
+This keeps candidate generation connected to measured performance.
+
+## Workflow Optimization Sessions
+
+`WorkflowOptimizationSessionRunner` coordinates iterative optimization across
+multiple generations.
+
+Conceptually:
 
 ```text
-Generation 0
-
-expensive model
-quality = passing
-cost    = high
-
-        ↓
-
-Generation 1
-
-expensive baseline
-cheaper model
-cheapest model
-
-        ↓
-
-all retain passing quality
-
-        ↓
-
-cheaper execution records lower cost
-
-        ↓
-
-workflow scoring improves
-
-        ↓
-
-cheapest passing execution ranks first
+Generation 0 candidates
+        │
+        ▼
+experiment
+        │
+        ▼
+optimizer
+        │
+        ▼
+Generation 1 candidates
+        │
+        ▼
+experiment
+        │
+        ▼
+optimizer
+        │
+        ▼
+Generation 2 candidates
+        │
+       ...
 ```
 
-The improvement is therefore derived from normal execution evidence and
-workflow scoring rather than asserted by the optimizer.
+The accumulated result is represented by `WorkflowOptimizationSession`.
 
-### Reference Policy Boundary
+A session provides the history of iterative empirical optimization rather than
+only the final candidate population.
 
-`ModelSubstitutionWorkflowOptimizer` deliberately does not perform:
+## Session Meaning
 
-- failure clustering;
-- context partition discovery;
-- routing synthesis;
-- prompt mutation;
-- tool insertion;
-- workflow topology mutation;
-- learned search;
-- model-quality prediction; or
-- LLM-guided optimization.
-
-It answers only:
-
-> Which strictly cheaper legal model bindings could be empirically tried next?
-
-More sophisticated optimizers can implement the same `WorkflowOptimizer`
-protocol without changing experiment orchestration.
-
-## Optimization Sessions
-
-One optimization result represents one generation.
-
-A `WorkflowOptimizationSession` records the entire optimization campaign.
+An optimization session records a sequence of:
 
 ```text
-WorkflowOptimizationSession
-├── initial_candidates
-└── generations
-    ├── WorkflowOptimizationResult 1
-    ├── WorkflowOptimizationResult 2
-    └── WorkflowOptimizationResult N
+candidate population
+        │
+        ▼
+empirical experiment
+        │
+        ▼
+optimizer proposal
 ```
 
-The session preserves:
+This history matters because optimization is not modeled as one opaque
+transformation.
 
-- the initial externally supplied population; and
-- every optimizer-produced generation.
+Each generation has evidence connecting it to the generation that follows.
 
-Optimization sessions are immutable.
+## Strategy-Level Optimization
 
-## Generation Invariants
+The optimization package also contains a lower-level empirical optimization
+path for standalone strategies.
 
-Recorded generations must be consecutive and begin at one.
+The strategy-level path uses:
 
-Valid histories include:
+- `OptimizationExample`
+- `OptimizationRunner`
+- `OptimizationRun`
+- `ExperimentRunner`
+- `StrategyScorecard`
+- `StrategyRanker`
+- `StrategyRanking`
 
-```text
-()
-(1)
-(1, 2)
-(1, 2, 3)
-```
-
-Invalid histories include:
-
-```text
-(2)
-(1, 3)
-(2, 3)
-```
-
-A session with no completed generations is valid as a model, representing an initialized campaign before optimization has begun.
-
-The session runner itself requires at least one generation when executing a session.
-
-## WorkflowOptimizationSessionRunner
-
-`WorkflowOptimizationSessionRunner` orchestrates iterative optimization.
-
-Its responsibility is deliberately small:
-
-```text
-Experiment
-   │
-   ▼
-Optimize
-   │
-   ▼
-New Population
-   │
-   └──────────────┐
-                  │
-                  ▼
-              Experiment
-```
-
-Example:
-
-```python
-from azathoth.optimization import (
-    WorkflowOptimizationSessionRunner,
-)
-
-session = await WorkflowOptimizationSessionRunner(
-    experiment_runner=experiment_runner,
-    optimizer=optimizer,
-).run(
-    initial_candidates=candidates,
-    context=context,
-    evaluator=evaluator,
-    expected_outcome=expected,
-    max_generations=5,
-)
-```
-
-The session runner repeatedly:
-
-1. runs an experiment over the current population;
-2. gives the resulting evidence to the optimizer;
-3. records the returned generation;
-4. uses the returned candidates as the next population; and
-5. repeats until the requested generation limit is reached.
-
-## Population Propagation
-
-Optimizer output becomes experiment input for the following generation.
-
-```text
-Initial Population
-        │
-        ▼
-Experiment 0
-        │
-        ▼
-Optimizer
-        │
-        ▼
-Generation 1 Population
-        │
-        ▼
-Experiment 1
-        │
-        ▼
-Optimizer
-        │
-        ▼
-Generation 2 Population
-```
-
-The session runner never assumes that optimizer output resembles its input.
-
-The session runner does not assume that optimizer output is identical to its
-input.
-
-Optimizer-produced populations remain opaque to the orchestration layer as long
-as they satisfy the public optimizer contract.
-
-The orchestration layer remains unchanged.
-
-## Experiment and Optimization Separation
-
-This boundary is one of the most important in Azathoth.
-
-Experiments ask:
-
-> How did this population perform?
-
-Optimizers ask:
-
-> Given that evidence, what should the next population be?
-
-```text
-Experiment
-   │
-   │ evidence
-   ▼
-Optimizer
-   │
-   │ candidates
-   ▼
-Next Experiment
-```
-
-An experiment should not mutate candidates.
-
-An optimizer should not execute workflows.
-
-Keeping these concerns separate makes both independently testable and replaceable.
-
-## Optimization Is Not Execution
-
-The optimization package never needs to know how a strategy or workflow actually performs its work.
-
-It consumes durable evidence produced by lower layers.
-
-```text
-Execution
-    │
-    ▼
-Evaluation
-    │
-    ▼
-Evidence
-    │
-    ▼
-Optimization
-```
-
-This makes optimization compatible with future execution mechanisms without coupling optimization algorithms to them.
-
-## Optimization Is Empirical
-
-Azathoth's optimization philosophy is evidence-driven.
-
-A candidate is not considered better because an optimizer claims it should be better.
-
-It must be executed and measured.
-
-```text
-Generate Candidate
-        │
-        ▼
-Execute Candidate
-        │
-        ▼
-Evaluate Candidate
-        │
-        ▼
-Compare Evidence
-        │
-        ├── improved → preserve signal
-        │
-        └── worse    → reject or deprioritize
-```
-
-Optimization proposes.
-
-Experiments decide.
-
-## Current Optimization Boundary
-
-The current workflow optimization stack is intentionally conservative.
-
-```text
-Workflow Candidates
-        │
-        ▼
-WorkflowExperimentRunner
-        │
-        ▼
-WorkflowExperimentResult
-        │
-        ▼
-ReplayWorkflowOptimizer
-        │
-        ▼
-WorkflowOptimizationResult
-        │
-        ▼
-WorkflowOptimizationSessionRunner
-        │
-        ▼
-WorkflowOptimizationSession
-```
-
-The replay optimizer does not yet improve candidates.
-
-This is deliberate.
-
-The current infrastructure proves that the full iterative empirical loop works before introducing adaptive behavior.
-
-## Cost-Aware Evidence
-
-Execution evidence records estimated cost.
-
-Workflow scorecards normalize cost relative to explicit targets.
-
-```text
-Quality
-   ▲
-   │
-   │
-   └────────► Cost
-```
-
-## Replaceable Optimizers
-
-`WorkflowOptimizer` is the extension boundary for application-defined
-optimization behavior.
-
-```text
-Experiment Evidence
-        +
-Current Population
-        │
-        ▼
-WorkflowOptimizer
-        │
-        ▼
-Next Population
-```
-
-Azathoth does not prescribe how an optimizer chooses the next population.
-
-Applications may provide optimization implementations through this interface
-without changing the deterministic execution, evaluation, scoring, ranking, or
-experiment infrastructure.
-
-Optimizer proposals receive no special trust. Improvement must be established by
-subsequent execution and evaluation.
-
-## Design Principles
-
-The optimization domain is intentionally:
-
-- empirical;
-- deterministic around optimizer behavior where possible;
-- immutable in its recorded artifacts;
-- independent of execution internals;
-- generation based;
-- optimizer agnostic;
-- evidence driven; and
-- designed for replaceable optimization algorithms.
-
-Optimization proposes future candidates.
-
-It does not decide that those candidates are better merely because they were generated.
-
-Improvement must be demonstrated through subsequent experiments.
-
-## Complete Strategy Optimization Flow
+Its flow is:
 
 ```text
 Goal
@@ -1046,40 +588,356 @@ Goal
 OptimizationExample
  │
  ▼
-Candidate Strategies
+candidate Strategies
  │
  ▼
 OptimizationRunner
  │
  ▼
-OptimizationRuns
+OptimizationRun
  │
  ▼
 ExperimentRunner
  │
  ▼
-StrategyScorecards
+StrategyScorecard
  │
  ▼
 StrategyRanker
  │
  ▼
 StrategyRanking
- │
- ▼
-Winner
 ```
 
-## Complete Workflow Optimization Flow
+This path allows strategy behavior to be empirically compared without requiring
+a complete workflow.
+
+## OptimizationExample
+
+`OptimizationExample` represents one reproducible strategy-level optimization
+case.
+
+It contains:
+
+- identity
+- name
+- goal
+- initial context
+- expected outcome
+- optional tags
+
+The same example can be executed against multiple candidate strategies,
+allowing them to be measured against equivalent conditions.
+
+## OptimizationRunner
+
+`OptimizationRunner` executes one strategy against one optimization example and
+records the resulting optimization evidence.
+
+It combines existing execution and evaluation boundaries rather than embedding
+strategy-specific judgment inside the candidate.
+
+## ExperimentRunner
+
+The strategy-level `ExperimentRunner` runs candidate strategies across a
+collection of optimization examples.
+
+Conceptually:
 
 ```text
-Workflow Specifications
+strategies × examples
+       │
+       ▼
+OptimizationRun*
+       │
+       ▼
+StrategyScorecard*
+```
+
+This creates a reproducible body of evidence for strategy ranking.
+
+## Strategy Ranking
+
+`StrategyRanker` orders strategy scorecards into a `StrategyRanking`.
+
+Ranking is empirical comparison.
+
+It does not modify strategies and does not deploy anything.
+
+The strategy-level optimization surface therefore follows the same fundamental
+principle as workflow optimization:
+
+```text
+execute first
+measure second
+compare third
+change behavior afterward
+```
+
+## Optimization Is Not Execution
+
+Workflow execution belongs to `azathoth.workflows`.
+
+Strategy execution belongs to the existing execution/strategy boundaries.
+
+An optimizer should not call itself evidence.
+
+```text
+WorkflowCandidate
+       │
+       ▼
+WorkflowRunner
+       │
+       ▼
+WorkflowRun
+       │
+       ▼
+WorkflowExperimentResult
+       │
+       ▼
+WorkflowOptimizer
+```
+
+The optimizer begins after empirical evidence exists.
+
+## Optimization Is Not Evaluation
+
+Optimization does not decide whether an output satisfies an expected outcome.
+
+Evaluation produces that judgment.
+
+Optimization consumes the resulting evidence.
+
+```text
+observed output
+      │
+      ▼
+evaluation
+      │
+      ▼
+evidence
+      │
+      ▼
+optimization
+```
+
+Changing optimizer algorithms therefore does not require changing evaluation
+semantics.
+
+## Optimization Is Not Ranking
+
+Workflow ranking belongs to the workflow experiment infrastructure.
+
+Optimization consumes the ranking.
+
+```text
+WorkflowScorecards
         │
         ▼
-Workflow Candidates
+WorkflowRanker
+        │
+        ▼
+WorkflowRanking
+        │
+        ▼
+WorkflowExperimentResult
+        │
+        ▼
+WorkflowOptimizer
+```
+
+This prevents an optimizer from quietly redefining success in order to justify
+its own proposals.
+
+## Optimization Is Not Model Authorization
+
+Model optimization operates within organizational authorization.
+
+`ModelPortfolio` remains authoritative for models Azathoth may select during
+general optimization.
+
+```text
+optimizer
+   │
+   ▼
+ModelPortfolio
+   │
+   ▼
+authorized search space
+```
+
+An optimization algorithm does not gain authority to execute arbitrary provider
+models merely because they are discoverable.
+
+## Optimization Is Not Production Authority
+
+Optimization and production deployment are explicitly separate.
+
+```text
+WorkflowOptimizer
+       │
+       ▼
+WorkflowOptimizationResult
+       │
+       ▼
+candidate population
+```
+
+does **not** imply:
+
+```text
+WorkflowProductionState
+```
+
+Production state changes only through explicit promotion.
+
+```text
+selected WorkflowCandidate
+        │
+        ▼
+explicit promotion
+        │
+        ▼
+WorkflowProductionState
+```
+
+An optimizer may discover a candidate that appears empirically superior.
+
+That does not authorize the optimizer to deploy it.
+
+## Optimization Does Not Promote Winners
+
+There is intentionally no automatic path:
+
+```text
+experiment winner
+      │
+      ▼
+production
+```
+
+Instead:
+
+```text
+experiment winner
+      │
+      ▼
+empirical evidence
+      │
+      ▼
+explicit operator/application choice
+      │
+      ▼
+promotion
+      │
+      ▼
+WorkflowProductionState
+```
+
+This keeps optimization policy separate from deployment authority.
+
+## Optimization Does Not Modify Active Production
+
+A running optimization session does not mutate current production state.
+
+These lifecycles may exist independently:
+
+```text
+ACTIVE PRODUCTION
+WorkflowProductionState
+        │
+        ▼
+production invocation
+```
+
+while simultaneously:
+
+```text
+EXPERIMENTATION
+WorkflowCandidate population
+        │
+        ▼
+experiments
+        │
+        ▼
+optimization generations
+```
+
+Production remains stable until an explicit promotion replaces its durable
+state.
+
+## Optimization Is Replaceable
+
+`WorkflowOptimizer` is the extension point for alternative optimization
+algorithms.
+
+An application may provide a different optimizer that proposes candidate
+populations using another algorithm while keeping the rest of the empirical
+stack unchanged.
+
+```text
+WorkflowExperimentResult
+        +
+current candidates
+        │
+        ▼
+custom WorkflowOptimizer
+        │
+        ▼
+next candidates
+```
+
+The optimizer may change.
+
+The requirement for empirical validation does not.
+
+## Runtime-Facing Candidate Artifacts
+
+`WorkflowCandidate` contains executable strategy implementations.
+
+Optimization results therefore operate on runtime-facing executable artifacts.
+
+Azathoth does not pretend that arbitrary live Python strategy implementations
+are automatically portable serialized configuration.
+
+Durable workflow intent remains represented separately by
+`WorkflowSpecification`.
+
+This preserves:
+
+```text
+WorkflowSpecification
+    durable intent
+
+WorkflowCandidate
+    executable realization
+
+WorkflowOptimizationResult
+    proposed executable generation
+```
+
+without weakening those boundaries for serialization convenience.
+
+## Complete V1 Workflow Optimization Loop
+
+The complete workflow optimization loop is:
+
+```text
+WorkflowSpecification
+        │
+        ▼
+candidate generation
+        │
+        ▼
+WorkflowCandidate population
         │
         ▼
 WorkflowExperimentRunner
+        │
+        ├── execute
+        ├── evaluate
+        ├── score
+        └── rank
         │
         ▼
 WorkflowExperimentResult
@@ -1091,38 +949,58 @@ WorkflowOptimizer
 WorkflowOptimizationResult
         │
         ▼
-Next Candidate Population
+next WorkflowCandidate population
         │
         ▼
 WorkflowExperimentRunner
         │
         ▼
-        ...
+...
         │
         ▼
 WorkflowOptimizationSession
 ```
 
-This loop provides the iterative empirical execution model exposed by the optimization package.
+Production remains outside this loop.
 
-## Relationship to Other Packages
+```text
+optimization session
+        │
+        ▼
+candidate chosen explicitly
+        │
+        ▼
+promotion
+        │
+        ▼
+WorkflowProductionState
+```
 
-[`azathoth.goals`](../goals/README.md) defines the stable objectives represented by optimization examples.
+## V1 Optimization Principles
 
-[`azathoth.context`](../context/README.md) supplies reproducible execution state for optimization examples and workflow experiments.
+The V1 optimization architecture follows these principles:
 
-[`azathoth.strategies`](../strategies/README.md) provides executable candidate behavior for strategy-level optimization.
+```text
+evidence before optimization
 
-[`azathoth.execution`](../execution/README.md) records the durable execution evidence consumed by optimization.
+candidate proposals are not trusted automatically
 
-[`azathoth.evaluation`](../evaluation/README.md) determines whether candidate outputs satisfy expected outcomes.
+experiments determine observed performance
 
-[`azathoth.prompting`](../prompting/README.md) provides prompt-backed strategies that can participate in optimization.
+ranking remains separate from mutation
 
-[`azathoth.providers`](../providers/README.md) provides model metadata,
-requirements, pricing, discovery, and executable model implementations used by
-model-backed candidates.
+authorization bounds the model search space
 
-[`azathoth.workflows`](../workflows/README.md) owns workflow execution, scoring, ranking, and experiments and supplies the evidence consumed by workflow optimizers.
+executable candidates remain distinct from durable specifications
 
-See the [project README](../../../README.md) for the complete Azathoth architecture.
+optimization remains distinct from production deployment
+```
+
+The central rule is:
+
+> Azathoth may propose that something should be better. It must measure whether
+> it actually is.
+
+That rule allows optimization algorithms to become increasingly sophisticated
+without giving those algorithms implicit authority over execution evidence,
+organizational policy, or production behavior.
