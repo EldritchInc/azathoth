@@ -148,9 +148,7 @@ def configure_cli_runtime(
     monkeypatch.setattr(
         cli_bootstrap,
         "_load_language_models",
-        lambda *,
-        configuration,
-        models: create_registry(),
+        lambda *, configuration, models: create_registry(),
     )
 
 
@@ -310,17 +308,11 @@ def test_cli_undeployed_production_invocation_persists_terminal_failure(
         ProductionInvocationFailure,
     )
 
-    assert (
-        terminal_result.error_code
-        is ProductionInvocationErrorCode.WORKFLOW_NOT_DEPLOYED
-    )
+    assert terminal_result.error_code is ProductionInvocationErrorCode.WORKFLOW_NOT_DEPLOYED
 
     assert f"Invocation ID: {invocation.id}\n" in captured.err
     assert "Status: failed\n" in captured.err
-    assert (
-        f"Error: {ProductionInvocationErrorCode.WORKFLOW_NOT_DEPLOYED.value}\n"
-        in captured.err
-    )
+    assert f"Error: {ProductionInvocationErrorCode.WORKFLOW_NOT_DEPLOYED.value}\n" in captured.err
 
     assert run_repository.runs() == ()
     assert invocation_run_repository.associations() == ()
