@@ -3,6 +3,7 @@
 import json
 from argparse import (
     ArgumentParser,
+    ArgumentTypeError,
     Namespace,
 )
 from collections.abc import Sequence
@@ -22,6 +23,7 @@ from azathoth.cli.models import (
 )
 from azathoth.cli.workflows import (
     import_workflow,
+    invoke_workflow,
     list_workflows,
     optimize_workflow,
     run_workflow,
@@ -33,12 +35,14 @@ COMMAND_ATTRIBUTE = "command"
 WORKFLOW_COMMAND = "workflow"
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 WORKFLOW_IMPORT_ACTION = "import"
+WORKFLOW_INVOKE_ACTION = "invoke"
 WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_OPTIMIZE_ACTION = "optimize"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_SHOW_ACTION = "show"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
+WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
 
 EXPECTED_VALUE_ATTRIBUTE = "expected_value"
 TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
@@ -63,7 +67,7 @@ def _json_value(
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Expected value must be valid JSON: {exc.msg}") from exc
+        raise ArgumentTypeError(f"Expected value must be valid JSON: {exc.msg}") from exc
 
     return cast(
         JsonValue,
@@ -137,6 +141,27 @@ def build_parser() -> ArgumentParser:
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to execute.",
+    )
+
+    workflow_invoke_parser = workflow_actions.add_parser(
+        WORKFLOW_INVOKE_ACTION,
+        help="Invoke one active production workflow.",
+    )
+
+    workflow_invoke_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Production workflow UUID to invoke.",
+    )
+
+    workflow_invoke_parser.add_argument(
+        "--input",
+        dest=WORKFLOW_INPUT_ATTRIBUTE,
+        required=True,
+        type=_json_value,
+        metavar="JSON",
+        help="Production workflow input as JSON.",
     )
 
     workflow_optimize_parser = workflow_actions.add_parser(
@@ -320,6 +345,24 @@ def _dispatch(
             )
 
             return run_workflow(workflow_id)
+
+        if action == WORKFLOW_INVOKE_ACTION:
+            return invoke_workflow(
+                workflow_id=cast(
+                    UUID,
+                    getattr(
+                        arguments,
+                        WORKFLOW_ID_ATTRIBUTE,
+                    ),
+                ),
+                payload=cast(
+                    JsonValue,
+                    getattr(
+                        arguments,
+                        WORKFLOW_INPUT_ATTRIBUTE,
+                    ),
+                ),
+            )
 
         if action == WORKFLOW_OPTIMIZE_ACTION:
             return optimize_workflow(
