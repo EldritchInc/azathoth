@@ -1,998 +1,568 @@
 # Providers
 
-`azathoth.providers` defines the provider-neutral language model infrastructure used by Azathoth.
+`azathoth.providers` defines Azathoth's provider-neutral model ontology,
+discovery infrastructure, organizational model authorization, executable model
+registry, and provider integrations.
 
-It separates model capabilities, pricing, discovery, and execution from any specific vendor implementation.
-
-The provider package answers two different questions:
-
-> Which configured models are eligible for this workload?
-
-and:
-
-> Which executable language model implementation should handle the request?
-
-Those responsibilities are intentionally separate.
-
-## Purpose
-
-Model-backed strategies should not hard-code assumptions about:
-
-- provider names;
-- model names;
-- pricing;
-- context windows;
-- modalities;
-- capabilities; or
-- runtime client implementations.
-
-Instead, workloads declare what they require.
-
-Azathoth then discovers eligible models from a catalog and resolves executable implementations from a registry.
+The package deliberately separates several concepts that are often collapsed
+into a single "available models" collection.
 
 ```text
-Workload Requirements
-        │
-        ▼
-    ModelQuery
-        │
-        ▼
-   ModelCatalog
-        │
-        ▼
- Eligible Models
-        │
-        ▼
+provider
+   │
+   │ discovery
+   ▼
+ProviderModel
+   │
+   ├──────────────► ProviderModelObservation
+   │                    historical evidence
+   │
+   │ normalization
+   ▼
+ModelMetadata
+   │
+   ▼
+ModelCatalog
+   │
+   │ intersect with
+   ▼
+ModelPortfolio
+   │
+   ▼
+authorized current models
+```
+
+Executable model implementations are represented separately:
+
+```text
 LanguageModelRegistry
         │
         ▼
-Executable Model
+process-local executable models
 ```
 
-This keeps optimization and workflow logic independent from provider-specific code.
+These boundaries distinguish provider truth, historical observation,
+organizational authorization, normalized runtime metadata, and executable
+process state.
 
-## LanguageModel Protocol
+## Provider-Neutral Identity
 
-Executable language model implementations satisfy the `LanguageModel` protocol.
-
-```python
-from azathoth.providers import (
-    ModelResponse,
-    Prompt,
-)
-
-
-class LanguageModel:
-    async def complete(
-        self,
-        prompt: Prompt,
-    ) -> ModelResponse: ...
-```
-
-A concrete implementation may call:
-
-- a hosted API;
-- a local model;
-- a test double;
-- a gateway;
-- or any future model runtime.
-
-Higher-level Azathoth code only depends on the protocol.
-
-## OpenRouterLanguageModel
-
-`OpenRouterLanguageModel` is the first production implementation of the
-`LanguageModel` protocol.
-
-```text
-Prompt
-   │
-   ▼
-OpenRouterLanguageModel
-   │
-   ▼
-OpenRouter
-   │
-   ▼
-ModelResponse
-```
-
-The implementation maps provider-neutral prompts onto the OpenRouter chat
-completion API.
-
-Responses are translated into immutable `ModelResponse` objects so higher-level
-execution, evaluation, and optimization remain provider independent.
-
-## Workflow Integration
-
-OpenRouter integrates through the existing provider abstraction.
-
-```text
-WorkflowRunner
-       │
-       ▼
-PromptStrategy
-       │
-       ▼
-LanguageModel
-       │
-       ▼
-OpenRouterLanguageModel
-       │
-       ▼
-OpenRouter
-```
-
-The provider package remains responsible only for model execution.
-
-Workflow orchestration, execution history, evaluation, and optimization remain
-outside the provider layer.
-
-## ModelExecutor
-
-`ModelExecutor` executes durable model requests through executable language
-models.
-
-```text
-ModelRequest
-      │
-      ▼
-ModelExecutor
-      │
-      ▼
-LanguageModel
-      │
-      ▼
-ModelResponse
-```
-
-The executor bridges durable request models to the existing prompt-based
-provider protocol.
-
-This allows request models to evolve independently from provider
-implementations.
-
-Unsupported execution controls are rejected explicitly rather than ignored.
-
-## Prompt
-
-`Prompt` represents the rendered request supplied to a language model.
-
-```python
-from azathoth.providers import Prompt
-
-prompt = Prompt(
-    text="Return exactly success.",
-)
-```
-
-Prompts are immutable.
-
-Prompt construction belongs to the prompting package.
-
-The provider layer only receives rendered prompts ready for execution.
-
-## Model Request Execution
-
-Provider-neutral execution now proceeds through a `ModelExecutor`.
-
-```text
-ModelRequest
-      │
-      ▼
-ModelExecutor
-      │
-      ▼
-LanguageModel
-      │
-      ▼
-ModelResponse
-```
-
-The executor bridges durable request models to executable language model
-implementations.
-
-Current language model implementations continue to execute rendered prompts,
-preserving compatibility with the existing provider protocol.
-
-## ModelRequest
-
-`ModelRequest` represents a durable execution request for a rendered prompt.
-
-```python
-from azathoth.providers import (
-    ModelRequest,
-    Prompt,
-)
-
-request = ModelRequest(
-    prompt=Prompt(
-        text="Return exactly success.",
-    ),
-)
-```
-
-A model request packages:
-
-- the rendered prompt; and
-- optional provider-neutral execution parameters.
-
-Current execution supports prompt-only requests.
-
-Advanced generation controls are intentionally rejected until supported by
-provider implementations.
-
-Model requests establish a stable execution boundary for future provider
-integrations while preserving compatibility with the existing language model
-protocol.
-
-## ModelResponse
-
-Language model execution returns a `ModelResponse`.
-
-```python
-from azathoth.providers import ModelResponse
-
-response = ModelResponse(
-    text="success",
-    provider="example-provider",
-    model="example-model",
-    prompt_tokens=10,
-    completion_tokens=1,
-    total_tokens=11,
-    latency_ms=100,
-    estimated_cost_usd=0.001,
-)
-```
-
-A response records:
-
-- generated text;
-- provider;
-- model;
-- prompt token count;
-- completion token count;
-- total token count;
-- latency; and
-- estimated cost.
-
-These measurements are provider-neutral so downstream execution and optimization code can compare models consistently.
-
-## Model Metadata
-
-`ModelMetadata` describes one configured model.
-
-```python
-from azathoth.providers import ModelMetadata
-
-model = ModelMetadata(
-    provider="example-provider",
-    model="example-model",
-    display_name="Example Model",
-    context_window_tokens=128_000,
-)
-```
-
-Metadata may describe:
-
-- provider;
-- model identifier;
-- display name;
-- supported input modalities;
-- supported output modalities;
-- capabilities;
-- context window;
-- maximum output tokens; and
-- pricing.
-
-The provider-qualified identifier is derived from:
+Models are identified throughout Azathoth using provider-qualified identifiers:
 
 ```text
 provider/model
 ```
 
-For example:
+Both `ModelMetadata` and `ModelPortfolioEntry` expose this identity through
+their `identifier` properties.
+
+Provider qualification prevents model-native names from becoming globally
+ambiguous and allows model policy to remain independent of any single provider.
+
+## Provider Model State
+
+`ProviderModel` describes facts currently reported by a model provider.
+
+It includes:
+
+- provider identity
+- provider-native model identity
+- display name
+- supported input modalities
+- supported output modalities
+- capabilities
+- context-window limits
+- maximum output limits
+- pricing
+
+A `ProviderModel` represents current provider truth at discovery time.
+
+It is not organizational authorization.
+
+It is not historical evidence.
+
+It is not an executable language model implementation.
+
+Provider model facts expose a deterministic `fingerprint` derived from their
+normalized content.
+
+## Provider Discovery
+
+`ProviderModelDirectory` defines the provider-neutral contract for discovering
+current provider model state.
+
+A directory exposes:
 
 ```text
-example-provider/example-model
+provider
+models()
+model(identifier)
 ```
 
-This identifier is used consistently across catalogs, registries, model bindings, and candidate generation.
+The directory answers what the external provider currently exposes.
 
-## Model Modalities
+Provider-specific implementations translate external provider APIs into
+`ProviderModel` values.
 
-Models declare supported input and output modalities.
+V1 includes `OpenRouterModelDirectory` for OpenRouter discovery.
 
-Current modality types include:
+Provider discovery can fail explicitly with `ModelDiscoveryError`.
 
-- text;
-- image;
-- audio; and
-- video.
+## Provider Observations
+
+External model catalogs change over time.
+
+`ProviderModelObservation` records provider model facts observed by Azathoth at
+one moment.
 
 ```text
-ModelMetadata
-├── input_modalities
-└── output_modalities
+ProviderModel
+      │
+      ▼
+ProviderModelObservation
+      │
+      ▼
+ProviderModelObservationRepository
 ```
 
-Workloads can require particular modalities without knowing which provider satisfies them.
+An observation contains:
 
-## Model Capabilities
+- a unique observation identity
+- an observation timestamp
+- the complete normalized `ProviderModel`
 
-Models may also advertise discrete capabilities.
+Observations are historical evidence.
 
-Current capabilities include:
+They are not the current model catalog.
 
-- structured output;
-- tool use;
-- vision; and
-- streaming.
+## Change-Aware Observation
 
-A workload can require any subset of these capabilities.
+`ProviderModelObserver` coordinates discovery with durable observation history.
+
+For each discovered model it compares the current provider-model fingerprint
+with the latest persisted observation.
 
 ```text
-Required Capabilities
-        │
-        ▼
-    ModelQuery
-        │
-        ▼
-Eligible ModelMetadata
+discover model
+     │
+     ▼
+compare fingerprint
+     │
+     ├── unchanged ──► reuse latest observation
+     │
+     └── changed ────► persist new observation
 ```
 
-## Model Pricing
+The result is represented by `ProviderModelObservationUpdate`, which contains
+the observation and whether a new historical record was created.
 
-Optional `ModelPricing` records configured token pricing.
+The observer also validates that:
 
-```python
-from azathoth.providers import ModelPricing
+- discovered models belong to the expected provider
+- a provider directory does not return duplicate model identities
 
-pricing = ModelPricing(
-    input_usd_per_million_tokens=1.0,
-    output_usd_per_million_tokens=4.0,
-)
-```
+Observation history therefore records meaningful provider-state changes
+without becoming the source of current runtime truth.
 
-Pricing is expressed per million tokens for consistent comparison.
+## Current Model Catalog
 
-Pricing data is configuration, not live billing data.
+`ModelCatalog` is an immutable inventory of normalized model metadata available
+to Azathoth.
 
-Azathoth uses it to reason about workload eligibility and future cost-aware optimization.
-
-### Pricing and Optimization
-
-Configured model pricing and observed execution cost serve different purposes.
-
-```text
-ModelMetadata.pricing
-        │
-        ▼
-candidate search space
-```
-
-Reference model-substitution optimization uses configured input and output
-token pricing to identify strictly cheaper eligible model bindings.
-
-Actual execution produces independent empirical evidence.
-
-```text
-ModelResponse.estimated_cost_usd
-        │
-        ▼
-StrategyExecutionMetrics
-        │
-        ▼
-WorkflowRun
-        │
-        ▼
-WorkflowScorer
-```
-
-A model being cheaper according to configured pricing therefore makes it
-eligible for exploration.
-
-It does not establish that the resulting workflow is better.
-
-The workflow must execute and be evaluated normally before its observed cost
-can contribute to empirical scoring and ranking.
-
-## ModelRequirements
-
-Model-backed workloads declare provider-neutral requirements using `ModelRequirements`.
-
-```python
-from azathoth.providers import (
-    ModelCapability,
-    ModelRequirements,
-)
-
-requirements = ModelRequirements(
-    required_capabilities=frozenset(
-        {
-            ModelCapability.STRUCTURED_OUTPUT,
-        }
-    ),
-    minimum_context_window_tokens=32_000,
-)
-```
-
-Requirements can constrain:
-
-- required capabilities;
-- input modalities;
-- output modalities;
-- minimum context window;
-- minimum output size;
-- maximum input price;
-- maximum output price; and
-- whether pricing must be known.
-
-This is one of the most important abstractions in the provider package.
-
-The workload says:
-
-> I need a model with these characteristics.
-
-It does not say:
-
-> Use this specific vendor model.
-
-## ModelQuery
-
-`ModelQuery` performs discovery against model metadata.
-
-Queries may be created directly or derived from workload requirements.
-
-```python
-from azathoth.providers import ModelQuery
-
-query = ModelQuery.from_requirements(
-    requirements,
-)
-```
-
-A query can additionally restrict providers:
-
-```python
-query = ModelQuery.from_requirements(
-    requirements,
-    providers=frozenset(
-        {
-            "example-provider",
-        }
-    ),
-)
-```
-
-Queries remain pure domain objects.
-
-They do not perform network calls or instantiate provider clients.
-
-## ModelCatalog
-
-`ModelCatalog` is an immutable inventory of configured models.
-
-```python
-from azathoth.providers import ModelCatalog
-
-catalog = ModelCatalog(
-    models=(
-        model_a,
-        model_b,
-        model_c,
-    ),
-)
-```
+It contains ordered `ModelMetadata` values and rejects duplicate
+provider-qualified identifiers.
 
 The catalog supports:
 
-- lookup by provider-qualified identifier;
-- discovery by provider;
-- provider enumeration; and
-- requirement-based filtering.
-
-```python
-eligible_models = catalog.find(query)
-```
-
-Catalog order is preserved.
-
-This becomes important when higher-level systems deliberately use configured model order as a deterministic selection policy.
-
-## Model Persistence
-
-Configured model metadata can be persisted outside application source.
-
-`ModelRepository` provides the storage-neutral persistence boundary.
-
-Current implementations include:
-
-- `InMemoryModelRepository`; and
-- `SQLiteModelRepository`.
+- lookup by provider-qualified identifier
+- provider-specific filtering
+- requirement-based queries
+- deterministic identifier ordering
 
 ```text
-ModelMetadata
-      │
-      ▼
-ModelRepository
-      │
-      ├── InMemoryModelRepository
-      └── SQLiteModelRepository
+ModelCatalog
+    │
+    ├── get(identifier)
+    ├── models_for_provider(provider)
+    └── find(query)
 ```
 
-Repositories persist `ModelMetadata`, not executable language model
+`ModelMetadata` describes normalized model identity and capabilities.
+
+It includes:
+
+- provider
+- model
+- display name
+- input modalities
+- output modalities
+- capabilities
+- context-window limits
+- maximum output limits
+- pricing
+
+`ModelCatalog` describes model metadata.
+
+It does not contain executable model clients.
+
+## Building Current Catalogs From Providers
+
+`ProviderModelCatalogSynchronizer` builds a current runtime catalog from
+provider discovery.
+
+```text
+ProviderModelDirectory
+        │
+        ▼
+ProviderModelObserver
+        │
+        ├────────────► observation history
+        │
+        ▼
+ProviderModel
+        │
+        ▼
+model_metadata_from_provider_model
+        │
+        ▼
+ModelMetadata
+        │
+        ▼
+ModelCatalog
+```
+
+The synchronizer uses current discovery results to construct the returned
+catalog.
+
+Historical observations do not determine which models remain current.
+
+If a model disappears from current provider discovery, its historical
+observations may remain durable while the model is absent from the newly
+constructed current catalog.
+
+This distinction is intentional:
+
+```text
+observation history ≠ current availability
+```
+
+## Durable Model Metadata
+
+Azathoth also defines `ModelRepository` for durable `ModelMetadata`
+persistence.
+
+`ModelCatalogLoader` reconstructs an immutable catalog from repository state.
+
+Repository implementations include:
+
+- `InMemoryModelRepository`
+- `SQLiteModelRepository`
+
+This persistence boundary stores normalized model metadata without owning
+provider discovery or executable provider clients.
+
+## Model Requirements and Queries
+
+Model eligibility is expressed through provider-neutral requirements.
+
+`ModelRequirements` describes capability requirements used when selecting
+models for executable strategies.
+
+`ModelQuery` provides catalog filtering across:
+
+- providers
+- required capabilities
+- required input modalities
+- required output modalities
+- minimum context-window size
+- minimum output size
+- maximum input pricing
+- maximum output pricing
+- known-pricing requirements
+
+Queries operate on normalized `ModelMetadata`.
+
+They do not call providers and do not change authorization policy.
+
+## Organizational Authorization
+
+`ModelPortfolio` describes the ordered models an organization has explicitly
+authorized for general Azathoth selection.
+
+A portfolio contains immutable `ModelPortfolioEntry` values.
+
+Each entry identifies exactly one:
+
+```text
+provider/model
+```
+
+The distinction between catalog and portfolio is fundamental:
+
+```text
+ModelCatalog
+    what models are available
+
+ModelPortfolio
+    what models Azathoth is authorized to select
+```
+
+A model being available does not authorize Azathoth to choose it.
+
+A model being authorized does not guarantee that it is currently available.
+
+## Portfolio Persistence
+
+`ModelPortfolioRepository` persists organizational model authorization.
+
+Implementations include:
+
+- `InMemoryModelPortfolioRepository`
+- `SQLiteModelPortfolioRepository`
+
+`ModelPortfolioLoader` reconstructs the immutable ordered portfolio from
+repository state.
+
+Portfolio authorization is durable policy.
+
+It is independent of provider discovery.
+
+## Authorized Current Models
+
+`model_catalog_for_portfolio` explicitly composes current availability with
+organizational authorization.
+
+```text
+ModelCatalog
+ current models
+      │
+      ├──────────┐
+      │          │
+      │     ModelPortfolio
+      │      authorized models
+      │          │
+      └────┬─────┘
+           ▼
+    ModelCatalog
+ authorized AND current
+```
+
+Portfolio order determines the order of the resulting catalog.
+
+Authorized models that are absent from the current catalog are omitted.
+
+Current models that are absent from the portfolio are not added.
+
+This intersection is explicit rather than implicit.
+
+## Model Selection Authority
+
+Azathoth distinguishes between models that may be selected dynamically and
+models that have already been fixed by durable workflow intent.
+
+General candidate generation may use organizational portfolio authorization
+when resolving model requirements.
+
+Production workflow prompt steps use exact fixed model selections materialized
+during explicit promotion.
+
+Therefore:
+
+```text
+development / experimentation
+    model requirements
+          +
+    current catalog
+          +
+    portfolio authorization
+          │
+          ▼
+    executable selection
+```
+
+while production uses:
+
+```text
+WorkflowProductionState
+          │
+          ▼
+fixed primary model
+          │
+          ├── executable ──► use primary
+          │
+          ▼
+explicit ordered production substitutes
+```
+
+The provider package supplies model truth and authorization primitives.
+
+It does not silently expand production model authority.
+
+## Executable Language Models
+
+`LanguageModel` is the provider-neutral protocol for executable language model
 implementations.
 
-### Model Catalog Reconstruction
+Its execution boundary is intentionally small:
 
-`ModelCatalogLoader` reconstructs an immutable `ModelCatalog` from repository
-state.
+```python
+async def complete(
+    prompt: Prompt,
+) -> ModelResponse: ...
+```
+
+Provider-specific implementations satisfy this protocol.
+
+V1 includes:
+
+- `OpenRouterLanguageModel`
+- `DeterministicLanguageModel`
+
+`DeterministicLanguageModel` provides predictable execution for tests and local
+composition.
+
+## Language Model Registry
+
+`LanguageModelRegistry` contains process-local executable `LanguageModel`
+implementations keyed by provider-qualified identifier.
+
+This is distinct from `ModelCatalog`.
+
+```text
+ModelCatalog
+    metadata describing models
+
+LanguageModelRegistry
+    executable implementations
+```
+
+A model may therefore be represented in metadata without an executable client
+being present in a particular process.
+
+Runtime generation and production resolution can require both current metadata
+and executable registry presence before a model can actually execute.
+
+## Provider-Neutral Requests and Responses
+
+`Prompt` represents rendered prompt text sent to a language model.
+
+`ModelRequest` represents a provider-neutral request.
+
+`ModelResponse` records provider-neutral execution evidence including:
+
+- response text
+- provider
+- model
+- resolved model when supplied
+- prompt token count
+- completion token count
+- total token count
+- latency
+- estimated cost
+
+These values allow higher-level Azathoth systems to reason about model
+execution without depending on provider-specific response formats.
+
+## Model Executor
+
+`ModelExecutor` executes durable provider-neutral `ModelRequest` values through
+a `LanguageModel`.
+
+The executor validates whether request controls are supported by the current
+provider boundary before invoking the language model.
+
+Unsupported controls fail explicitly with
+`UnsupportedModelRequestError`.
+
+Provider execution failures use `ModelExecutionError`.
+
+The execution abstraction therefore avoids silently ignoring unsupported
+request semantics.
+
+## OpenRouter
+
+V1 includes an OpenRouter integration for both execution and model discovery.
+
+`OpenRouterConfiguration` contains:
+
+- API key
+- API base URL
+- request timeout
+
+`OpenRouterModelDirectory` translates OpenRouter's current model catalog into
+provider-neutral `ProviderModel` values.
+
+`OpenRouterLanguageModel` translates prompt execution into provider-neutral
+`ModelResponse` evidence.
+
+`OpenRouterModelRegistryLoader` constructs executable OpenRouter language model
+implementations for OpenRouter models represented in a `ModelCatalog`.
+
+Provider-specific translation remains behind the provider-neutral domain
+interfaces.
+
+## Persistence Boundaries
+
+The provider package defines independent persistence contracts for:
 
 ```text
 ModelRepository
-      │
-      ▼
-ModelCatalogLoader
-      │
-      ▼
-ModelCatalog
+    normalized model metadata
+
+ModelPortfolioRepository
+    organizational authorization
+
+ProviderModelObservationRepository
+    historical provider observations
 ```
 
-Repository order becomes catalog order.
+These repositories intentionally store different kinds of truth.
 
-This preserves deterministic discovery behavior across process restarts.
+They should not be treated as interchangeable model inventories.
 
-### Persisted Versus Runtime State
+## Architectural Boundaries
 
-Model persistence records configured model knowledge.
-
-```text
-persisted
-├── provider
-├── model identity
-├── modalities
-├── capabilities
-├── context limits
-└── pricing
-```
-
-Provider runtime objects remain process-local.
+The V1 provider architecture deliberately maintains the following distinctions:
 
 ```text
-runtime
-├── provider credentials
-├── HTTP clients
-├── transports
-├── LanguageModel implementations
-└── LanguageModelRegistry
-```
+ProviderModel
+    current facts reported by a provider
 
-Provider credentials are not persisted by `ModelRepository`.
+ProviderModelObservation
+    immutable historical provider evidence
 
-For OpenRouter, reconstructed model metadata can be combined with runtime
-provider configuration after restart.
-
-```text
-SQLiteModelRepository
-        │
-        ▼
-ModelCatalogLoader
-        │
-        ▼
-ModelCatalog
-        │
-        +
-OpenRouterConfiguration
-        │
-        ▼
-OpenRouterModelRegistryLoader
-        │
-        ▼
-LanguageModelRegistry
-```
-
-This preserves the separation between model knowledge and provider access.
-
-## Catalog Versus Registry
-
-Azathoth intentionally separates model metadata from executable implementations.
-
-```text
-ModelCatalog
-    │
-    │ describes
-    ▼
 ModelMetadata
+    normalized provider-neutral model metadata
 
-LanguageModelRegistry
-    │
-    │ resolves
-    ▼
-LanguageModel
-```
-
-The catalog answers:
-
-> What models are available and what can they do?
-
-The registry answers:
-
-> Which executable implementation corresponds to this model identifier?
-
-This distinction prevents runtime provider objects from leaking into immutable configuration models.
-
-## LanguageModelRegistry
-
-`LanguageModelRegistry` maps provider-qualified identifiers to executable language model implementations.
-
-```python
-from azathoth.providers import LanguageModelRegistry
-
-registry = LanguageModelRegistry(
-    {
-        "example-provider/example-model": language_model,
-    }
-)
-```
-
-Models are resolved using the same identifier exposed by `ModelMetadata`.
-
-```python
-language_model = registry.get("example-provider/example-model")
-```
-
-A catalog entry without a corresponding registry entry is valid configuration, but it cannot become an executable candidate.
-
-This allows Azathoth to distinguish:
-
-- known models;
-- eligible models; and
-- executable models.
-
-## Registry Composition
-
-Executable language model registries can be composed.
-
-```python
-registry = LanguageModelRegistry.compose(
-    (
-        openrouter_registry,
-        local_registry,
-        other_registry,
-    )
-)
-```
-
-Composition preserves registry and model order.
-
-Provider-qualified model identifiers must remain unique across the combined
-registries.
-
-```text
-Registry A
-├── provider-a/model-1
-└── provider-a/model-2
-
-Registry B
-├── provider-b/model-3
-└── provider-b/model-4
-
-        │
-        ▼
-     compose
-        │
-        ▼
-Combined Registry
-├── provider-a/model-1
-├── provider-a/model-2
-├── provider-b/model-3
-└── provider-b/model-4
-```
-
-Source registries remain unchanged.
-
-Registry composition introduces no model-selection policy.
-
-## OpenRouter Configuration
-
-`OpenRouterConfiguration` records the immutable configuration required to
-communicate with the OpenRouter API.
-
-Configuration includes:
-
-- API key;
-- base URL; and
-- request timeout.
-
-Sensitive credentials are represented using `SecretStr` to reduce accidental
-exposure through logging or serialization.
-
-## Multi-Model Live Verification
-
-Multi-model OpenRouter execution has optional live verification.
-
-Live tests remain disabled by default and consume no provider credits during
-normal development or CI.
-
-```text
-AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
-```
-
-The multi-model smoke test reads a comma-separated test population from:
-
-```text
-OPENROUTER_TEST_MODELS
-```
-
-For example:
-
-```text
-provider/model-a,provider/model-b
-```
-
-This variable configures only the opt-in live test population.
-
-It is not a production model-selection mechanism.
-
-## Multi-Model OpenRouter Runtime
-
-One `OpenRouterConfiguration` can back multiple executable OpenRouter models.
-
-`OpenRouterModelRegistryLoader` creates runtime registrations for the
-OpenRouter models present in a `ModelCatalog`.
-
-```text
-OpenRouterConfiguration
-          +
-     ModelCatalog
-          │
-          ▼
-OpenRouterModelRegistryLoader
-          │
-          ▼
-LanguageModelRegistry
-├── openrouter/model-a
-├── openrouter/model-b
-└── openrouter/model-c
-```
-
-Provider configuration supplies API access.
-
-It does not select one global OpenRouter model.
-
-Each model remains independently identified by its provider-qualified model
-identifier.
-
-The resulting OpenRouter registry can also be composed with registries from
-other providers.
-
-```text
-OpenRouter Registry
-        +
-Other Provider Registry
-        │
-        ▼
-LanguageModelRegistry.compose(...)
-        │
-        ▼
-Unified Executable Runtime
-```
-
-### Durable OpenRouter Model Catalogs
-
-OpenRouter model metadata may be reconstructed from a `ModelRepository` before
-runtime assembly.
-
-```text
-SQLite
-  │
-  ▼
 ModelCatalog
-  │
-  ▼
-OpenRouterModelRegistryLoader
-  │
-  ▼
-multiple executable OpenRouter models
-```
+    immutable model inventory
 
-The reconstructed catalog retains configured model identity, capabilities,
-pricing, and deterministic order.
+ModelPortfolioEntry
+    durable authorization of one model
 
-The OpenRouter API key remains runtime configuration and is not stored with the
-model catalog.
+ModelPortfolio
+    ordered organizational authorization
 
-### Per-Workload Selection
-
-Model selection remains driven by workload requirements.
-
-```text
-ModelRequirements
-        │
-        ▼
-    ModelCatalog
-        │
-        ▼
-eligible models
-        │
-        ▼
-LanguageModelRegistry
-        │
-        ▼
-executable candidates
-```
-
-For example, one workload may require inexpensive models while another requires
-structured-output capability.
-
-```text
-cheap workload
-      │
-      ▼
-cheap OpenRouter model
-
-structured workload
-      │
-      ▼
-structured-output OpenRouter model
-```
-
-No OpenRouter-specific model name needs to be embedded in the workload
-specification.
-
-### Requested and Resolved Models
-
-OpenRouter responses preserve both the configured model and the model identity
-reported by OpenRouter.
-
-```text
-ModelResponse.model
-    configured model
-
-ModelResponse.resolved_model
-    OpenRouter-reported model
-```
-
-This is useful when OpenRouter resolves aliases or routed model identifiers to
-a concrete served model.
-
-## DeterministicLanguageModel
-
-The provider package includes a deterministic language model implementation for
-testing and local execution.
-
-```python
-from azathoth.providers import (
-    DeterministicLanguageModel,
-    Prompt,
-)
-
-model = DeterministicLanguageModel()
-
-response = await model.complete(
-    Prompt(
-        text="Hello",
-    )
-)
-```
-
-The deterministic implementation satisfies the `LanguageModel` protocol without
-performing any network communication.
-
-It provides repeatable execution for unit tests, integration tests, and
-end-to-end workflow verification.
-
-Future provider implementations, including OpenRouter, will satisfy the same
-protocol.
-
-## Discovery and Execution
-
-The complete provider flow looks like this:
-
-```text
-ModelRequirements
-        │
-        ▼
-    ModelQuery
-        │
-        ▼
-   ModelCatalog
-        │
-        ▼
- ModelMetadata
-        │
-        ▼
-provider/model identifier
-        │
-        ▼
-LanguageModelRegistry
-        │
-        ▼
 LanguageModel
-   ┌───────────────┐
-   ▼               ▼
-Deterministic   OpenRouter
-        ▲
-        │
- ModelExecutor
-        ▲
-        │
- ModelRequest
-        │
-        ▼
-     Prompt
-        │
-        ▼
- ModelResponse
+    executable provider-neutral model protocol
+
+LanguageModelRegistry
+    process-local executable implementations
 ```
 
-Each stage has one responsibility.
-
-## Provider Independence
-
-Provider independence is a core Azathoth design principle.
-
-Higher-level code should not need to know whether execution uses:
-
-- OpenAI;
-- Anthropic;
-- Google;
-- a local model;
-- an internal gateway;
-- or a future provider that does not exist yet.
-
-As long as the implementation satisfies `LanguageModel`, it can participate in the same execution and optimization infrastructure.
-
-## Selection Is Not Execution
-
-Model discovery and model execution are intentionally separate.
-
-The catalog may identify several eligible models.
+The most important consequences are:
 
 ```text
-requirements
-    │
-    ▼
-model A
-model B
-model C
+history ≠ current provider state
+
+availability ≠ authorization
+
+metadata ≠ executable implementation
+
+authorization ≠ production execution authority
 ```
 
-Candidate generation decides which of those models should become executable strategies.
-
-The registry then supplies their runtime implementations.
-
-The provider package itself does not decide which candidate should win.
-
-That responsibility belongs to higher-level experimentation and optimization.
-
-## Design Principles
-
-The provider domain is intentionally:
-
-- provider neutral;
-- immutable where configuration is concerned;
-- explicit about capabilities;
-- explicit about pricing;
-- separate from runtime implementations;
-- deterministic during discovery; and
-- independent of workflow and optimization policy.
-
-Providers describe and execute models.
-
-They do not evaluate outputs, score workflows, rank candidates, or optimize populations.
-
-## Relationship to Other Packages
-
-[`azathoth.prompting`](../prompting/README.md) uses model requirements, catalogs, registries, prompts, and language models to construct executable prompt strategies.
-
-[`azathoth.strategies`](../strategies/README.md) provides the common execution abstraction that model-backed strategies implement.
-
-[`azathoth.execution`](../execution/README.md) records provider-neutral metrics returned by model-backed strategies.
-
-[`azathoth.workflows`](../workflows/README.md) uses provider discovery indirectly when generating executable workflow candidates.
-
-[`azathoth.optimization`](../optimization/README.md) can compare model-backed strategies and workflows using quality, latency, and cost evidence without depending on a specific provider.
-
-See the [project README](../../../README.md) for the complete Azathoth architecture.
+These boundaries allow external provider state, organizational policy,
+runtime composition, experimentation, optimization, and production deployment
+to evolve independently without silently changing what Azathoth is authorized
+to execute.
