@@ -555,3 +555,52 @@ def test_cli_workflow_optimize_rejects_invalid_expected_json(
         )
 
     capsys.readouterr()
+
+
+def test_workflow_promote_parser_accepts_workflow_id() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "workflow",
+            "promote",
+            str(WORKFLOW_ID),
+        )
+    )
+
+    assert arguments.workflow_action == "promote"
+    assert arguments.workflow_id == WORKFLOW_ID
+
+
+def test_workflow_promote_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    promoted: list[UUID] = []
+
+    def fake_promote_workflow(
+        workflow_id: UUID,
+    ) -> int:
+        promoted.append(
+            workflow_id,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "promote_workflow",
+        fake_promote_workflow,
+    )
+
+    result = main(
+        (
+            "workflow",
+            "promote",
+            str(WORKFLOW_ID),
+        )
+    )
+
+    assert result == 0
+    assert promoted == [
+        WORKFLOW_ID,
+    ]

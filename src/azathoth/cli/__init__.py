@@ -33,6 +33,7 @@ from azathoth.cli.workflows import (
     invoke_workflow,
     list_workflows,
     optimize_workflow,
+    promote_workflow,
     run_workflow,
     show_workflow,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "optimize_configured_workflow",
     "optimize_workflow",
     "promote_configured_workflow",
+    "promote_workflow",
     "render_production_invocation_result",
     "render_workflow_optimization_session",
     "render_workflow_promotion",

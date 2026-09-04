@@ -26,6 +26,7 @@ from azathoth.cli.workflows import (
     invoke_workflow,
     list_workflows,
     optimize_workflow,
+    promote_workflow,
     run_workflow,
     show_workflow,
 )
@@ -38,6 +39,7 @@ WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_INVOKE_ACTION = "invoke"
 WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_OPTIMIZE_ACTION = "optimize"
+WORKFLOW_PROMOTE_ACTION = "promote"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_SHOW_ACTION = "show"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
@@ -212,6 +214,18 @@ def build_parser() -> ArgumentParser:
         help="Number of empirical optimization generations.",
     )
 
+    workflow_promote_parser = workflow_actions.add_parser(
+        WORKFLOW_PROMOTE_ACTION,
+        help="Promote one configured workflow to active production.",
+    )
+
+    workflow_promote_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID to promote.",
+    )
+
     model_parser = commands.add_parser(
         MODEL_COMMAND,
         help="Inspect and operate provider models.",
@@ -362,6 +376,19 @@ def _dispatch(
                         WORKFLOW_INPUT_ATTRIBUTE,
                     ),
                 ),
+            )
+
+        if action == WORKFLOW_PROMOTE_ACTION:
+            workflow_id = cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            )
+
+            return promote_workflow(
+                workflow_id,
             )
 
         if action == WORKFLOW_OPTIMIZE_ACTION:
