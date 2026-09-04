@@ -12,7 +12,7 @@ from azathoth.tools import (
 )
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.generation import WorkflowGenerationError
-from azathoth.workflows.production import WorkflowProductionRevision
+from azathoth.workflows.production import WorkflowProductionState
 from azathoth.workflows.production_generation import (
     generate_production_workflow_candidate,
 )
@@ -47,7 +47,7 @@ class ProductionEmissionError(RuntimeError):
 async def execute_production_invocation(
     *,
     invocation: ProductionInvocation,
-    revision: WorkflowProductionRevision,
+    state: WorkflowProductionState,
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
     runner: WorkflowRunner,
@@ -56,15 +56,15 @@ async def execute_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
 ) -> WorkflowRun:
-    """Execute one production invocation against its exact revision."""
+    """Execute one production invocation against current production state."""
 
-    _validate_invocation_revision(
+    _validate_invocation_state(
         invocation=invocation,
-        revision=revision,
+        state=state,
     )
 
     candidate = generate_production_workflow_candidate(
-        state=revision.state,
+        state=state,
         catalog=catalog,
         registry=registry,
         tool_resolver=tool_resolver,
@@ -93,7 +93,7 @@ async def execute_production_invocation(
 async def complete_production_invocation(
     *,
     invocation: ProductionInvocation,
-    revision: WorkflowProductionRevision,
+    state: WorkflowProductionState,
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
     runner: WorkflowRunner,
@@ -108,7 +108,7 @@ async def complete_production_invocation(
     try:
         run = await execute_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=catalog,
             registry=registry,
             runner=runner,
@@ -121,20 +121,20 @@ async def complete_production_invocation(
         if run.failed:
             result: ProductionInvocationResult = ProductionInvocationFailure(
                 invocation_id=invocation.id,
-                error_code=(ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED),
+                error_code=ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED,
                 message="Production workflow execution failed.",
             )
         else:
             try:
                 emitted = emit_production_result(
-                    revision=revision,
+                    state=state,
                     run=run,
                 )
             except ProductionEmissionError:
                 result = ProductionInvocationFailure(
                     invocation_id=invocation.id,
-                    error_code=(ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED),
-                    message=("Production workflow did not produce its declared result."),
+                    error_code=ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED,
+                    message="Production workflow did not produce its declared result.",
                 )
             else:
                 result = ProductionInvocationSuccess(
@@ -152,21 +152,21 @@ async def complete_production_invocation(
     except ProductionModelSubstitutesUnavailableError:
         result = ProductionInvocationFailure(
             invocation_id=invocation.id,
-            error_code=(ProductionInvocationErrorCode.NO_APPROVED_MODEL_SUBSTITUTE),
-            message=("No approved production model substitute is available."),
+            error_code=ProductionInvocationErrorCode.NO_APPROVED_MODEL_SUBSTITUTE,
+            message="No approved production model substitute is available.",
         )
 
     except WorkflowGenerationError:
         result = ProductionInvocationFailure(
             invocation_id=invocation.id,
             error_code=ProductionInvocationErrorCode.TOOL_UNAVAILABLE,
-            message=("A required production workflow capability is unavailable."),
+            message="A required production workflow capability is unavailable.",
         )
 
     except Exception:
         result = ProductionInvocationFailure(
             invocation_id=invocation.id,
-            error_code=(ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED),
+            error_code=ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED,
             message="Production workflow execution failed.",
         )
 
@@ -179,7 +179,7 @@ async def complete_production_invocation(
 
 def emit_production_result(
     *,
-    revision: WorkflowProductionRevision,
+    state: WorkflowProductionState,
     run: WorkflowRun,
 ) -> dict[str, JsonValue]:
     """Return only workflow values explicitly exposed by production policy."""
@@ -189,7 +189,7 @@ def emit_production_result(
         JsonValue,
     ] = {}
 
-    for emission in revision.state.emissions:
+    for emission in state.emissions:
         matches = tuple(
             value
             for value in run.values_from(emission.source.producer_step_id)
@@ -204,19 +204,14 @@ def emit_production_result(
     return result
 
 
-def _validate_invocation_revision(
+def _validate_invocation_state(
     *,
     invocation: ProductionInvocation,
-    revision: WorkflowProductionRevision,
+    state: WorkflowProductionState,
 ) -> None:
-    """Require invocation identity to match the supplied production revision."""
+    """Require invocation workflow identity to match production state."""
 
-    if invocation.production_revision_id != revision.id:
+    if invocation.workflow_id != state.specification.metadata.id:
         raise ValueError(
-            "Production invocation does not reference the supplied production revision."
-        )
-
-    if invocation.workflow_id != revision.workflow_id:
-        raise ValueError(
-            "Production invocation workflow does not match the supplied production revision."
+            "Production invocation workflow does not match the supplied production state."
         )

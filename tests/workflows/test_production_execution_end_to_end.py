@@ -70,55 +70,52 @@ def create_model_metadata(
     )
 
 
-def create_revision() -> WorkflowProductionRevision:
-    """Create deterministic persisted production revision."""
+def create_state() -> WorkflowProductionState:
+    """Create deterministic active production state."""
 
-    return WorkflowProductionRevision(
-        id=REVISION_ID,
-        state=WorkflowProductionState(
-            specification=WorkflowSpecification(
-                metadata=WorkflowMetadata(
-                    id=WORKFLOW_ID,
-                    name="production-execution-end-to-end",
-                    description=("Prove durable production execution across reconstruction."),
-                    version="1.0.0",
-                ),
-                steps=(
-                    WorkflowStepSpecification(
-                        id=STEP_ID,
-                        specification=PromptStrategySpec(
-                            metadata=StrategyMetadata(
-                                id=STRATEGY_ID,
-                                name="production-classifier",
-                                description=("Classify the production request."),
-                                version="1.0.0",
-                            ),
-                            prompt=Prompt(
-                                text="Classify the production request.",
-                            ),
-                            model_selection=PRIMARY,
+    return WorkflowProductionState(
+        specification=WorkflowSpecification(
+            metadata=WorkflowMetadata(
+                id=WORKFLOW_ID,
+                name="production-execution-end-to-end",
+                description="Prove durable production execution across reconstruction.",
+                version="1.0.0",
+            ),
+            steps=(
+                WorkflowStepSpecification(
+                    id=STEP_ID,
+                    specification=PromptStrategySpec(
+                        metadata=StrategyMetadata(
+                            id=STRATEGY_ID,
+                            name="production-classifier",
+                            description="Classify the production request.",
+                            version="1.0.0",
                         ),
-                        outputs=(
-                            WorkflowValueBinding(
-                                name="classification",
-                            ),
+                        prompt=Prompt(
+                            text="Classify the production request.",
+                        ),
+                        model_selection=PRIMARY,
+                    ),
+                    outputs=(
+                        WorkflowValueBinding(
+                            name="classification",
                         ),
                     ),
                 ),
             ),
-            model_substitutions=(
-                WorkflowProductionModelSubstitution(
-                    step_id=STEP_ID,
-                    substitutes=(SUBSTITUTE,),
-                ),
+        ),
+        model_substitutions=(
+            WorkflowProductionModelSubstitution(
+                step_id=STEP_ID,
+                substitutes=(SUBSTITUTE,),
             ),
-            emissions=(
-                WorkflowProductionEmission(
-                    name="label",
-                    source=WorkflowValueReference(
-                        producer_step_id=STEP_ID,
-                        name="classification",
-                    ),
+        ),
+        emissions=(
+            WorkflowProductionEmission(
+                name="label",
+                source=WorkflowValueReference(
+                    producer_step_id=STEP_ID,
+                    name="classification",
                 ),
             ),
         ),
@@ -176,18 +173,23 @@ def test_production_execution_survives_persistence_and_reconstruction(
         database,
     )
 
-    revision = create_revision()
+    state = create_state()
+
+    revision = WorkflowProductionRevision(
+        id=REVISION_ID,
+        state=state,
+    )
 
     revision_repository.save(
         revision,
     )
 
     production_state_repository.set(
-        revision.state,
+        state,
     )
 
     invocation = create_production_invocation(
-        revision=revision,
+        workflow_id=WORKFLOW_ID,
         payload={
             "text": "This came from production.",
             "private": "do not expose me",
@@ -202,16 +204,16 @@ def test_production_execution_survives_persistence_and_reconstruction(
         invocation,
     )
 
-    persisted_revision = revision_repository.get(
-        revision.id,
+    persisted_state = production_state_repository.get(
+        WORKFLOW_ID,
     )
 
-    assert persisted_revision is not None
+    assert persisted_state is not None
 
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=persisted_revision,
+            state=persisted_state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(),
@@ -267,7 +269,7 @@ def test_production_execution_survives_persistence_and_reconstruction(
     )
 
     assert reconstructed_revision == revision
-    assert reconstructed_state == revision.state
+    assert reconstructed_state == state
     assert reconstructed_invocation == invocation
     assert reconstructed_result == result
 
@@ -280,11 +282,10 @@ def test_production_execution_survives_persistence_and_reconstruction(
     assert reconstructed_run is not None
 
     assert reconstructed_run.workflow.id == WORKFLOW_ID
-    assert reconstructed_run.initial_context == (invocation.initial_context)
+    assert reconstructed_run.initial_context == invocation.initial_context
 
-    assert reconstructed_association.invocation_id == (invocation.id)
-
-    assert reconstructed_result.invocation_id == (invocation.id)
+    assert reconstructed_association.invocation_id == invocation.id
+    assert reconstructed_result.invocation_id == invocation.id
 
     assert reconstructed_result.result == {
         "label": "positive",
@@ -297,7 +298,7 @@ def test_production_execution_survives_persistence_and_reconstruction(
         "tenant_id": "tenant-456",
     }
 
-    reconstructed_prompt = reconstructed_revision.state.specification.steps[0].specification
+    reconstructed_prompt = reconstructed_state.specification.steps[0].specification
 
     assert isinstance(
         reconstructed_prompt,
@@ -305,8 +306,10 @@ def test_production_execution_survives_persistence_and_reconstruction(
     )
 
     assert reconstructed_prompt.model_selection == PRIMARY
+    assert reconstructed_state.model_substitutions[0].substitutes == (SUBSTITUTE,)
 
-    assert reconstructed_revision.state.model_substitutions[0].substitutes == (SUBSTITUTE,)
+    assert reconstructed_revision is not None
+    assert reconstructed_revision.state == reconstructed_state
 
 
 def test_failed_production_invocation_persists_terminal_failure(
@@ -314,7 +317,7 @@ def test_failed_production_invocation_persists_terminal_failure(
 ) -> None:
     database = tmp_path / "azathoth.db"
 
-    revision_repository = SQLiteWorkflowProductionRevisionRepository(
+    production_state_repository = SQLiteWorkflowProductionStateRepository(
         database,
     )
 
@@ -330,14 +333,14 @@ def test_failed_production_invocation_persists_terminal_failure(
         database,
     )
 
-    revision = create_revision()
+    state = create_state()
 
-    revision_repository.save(
-        revision,
+    production_state_repository.set(
+        state,
     )
 
     invocation = create_production_invocation(
-        revision=revision,
+        workflow_id=WORKFLOW_ID,
         payload={
             "text": "Nothing executable is available.",
         },
@@ -347,10 +350,16 @@ def test_failed_production_invocation_persists_terminal_failure(
         invocation,
     )
 
+    persisted_state = production_state_repository.get(
+        WORKFLOW_ID,
+    )
+
+    assert persisted_state is not None
+
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=persisted_state,
             catalog=ModelCatalog(),
             registry=LanguageModelRegistry(),
             runner=WorkflowRunner(),

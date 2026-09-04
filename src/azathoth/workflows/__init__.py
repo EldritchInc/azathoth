@@ -135,6 +135,9 @@ from azathoth.workflows.production_invocation_run import (
 from azathoth.workflows.production_invocation_run_repository import (
     ProductionInvocationRunRepository,
 )
+from azathoth.workflows.production_invocation_service import (
+    invoke_production_workflow,
+)
 from azathoth.workflows.production_model_resolution import (
     ProductionModelResolutionError,
     ProductionModelSubstitutesUnavailableError,
@@ -321,6 +324,7 @@ __all__ = [
     "emit_production_result",
     "encode_workflow_document",
     "execute_production_invocation",
+    "invoke_production_workflow",
     "generate_production_workflow_candidate",
     "generate_workflow_candidate",
     "materialize_workflow_candidate",

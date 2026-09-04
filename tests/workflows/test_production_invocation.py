@@ -5,86 +5,43 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.prompting import (
-    FixedModelSelection,
-    PromptStrategySpec,
-)
-from azathoth.providers import Prompt
-from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
+    ProductionInvocation,
     ProductionInvocationErrorCode,
     ProductionInvocationFailure,
     ProductionInvocationSuccess,
-    WorkflowMetadata,
-    WorkflowProductionRevision,
-    WorkflowProductionState,
-    WorkflowSpecification,
-    WorkflowStepSpecification,
     create_production_invocation,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
-REVISION_ID = UUID("22222222-2222-2222-2222-222222222222")
 STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
-STRATEGY_ID = UUID("44444444-4444-4444-4444-444444444444")
 INVOCATION_ID = UUID("55555555-5555-5555-5555-555555555555")
 
 
-def create_revision() -> WorkflowProductionRevision:
-    """Create deterministic production revision configuration."""
-
-    return WorkflowProductionRevision(
-        id=REVISION_ID,
-        state=WorkflowProductionState(
-            specification=WorkflowSpecification(
-                metadata=WorkflowMetadata(
-                    id=WORKFLOW_ID,
-                    name="production-invocation-workflow",
-                    description="Exercise production invocation contracts.",
-                    version="1.0.0",
-                ),
-                steps=(
-                    WorkflowStepSpecification(
-                        id=STEP_ID,
-                        specification=PromptStrategySpec(
-                            metadata=StrategyMetadata(
-                                id=STRATEGY_ID,
-                                name="production-prompt",
-                                description="Exercise production invocation input.",
-                                version="1.0.0",
-                            ),
-                            prompt=Prompt(
-                                text="Process the invocation.",
-                            ),
-                            model_selection=FixedModelSelection(
-                                provider="test-provider",
-                                model="production-model",
-                            ),
-                        ),
-                    ),
-                ),
-            )
-        ),
-    )
-
-
-def test_production_invocation_references_exact_revision() -> None:
-    revision = create_revision()
-
+def test_production_invocation_references_workflow() -> None:
     invocation = create_production_invocation(
-        revision=revision,
+        workflow_id=WORKFLOW_ID,
         payload={
             "request": "hello",
         },
     )
 
     assert invocation.workflow_id == WORKFLOW_ID
-    assert invocation.production_revision_id == REVISION_ID
+
+
+def test_production_invocation_contains_no_revision_identity() -> None:
+    assert set(ProductionInvocation.model_fields) == {
+        "id",
+        "workflow_id",
+        "initial_context",
+        "caller_metadata",
+        "created_at",
+    }
 
 
 def test_production_invocation_normalizes_object_payload_into_context() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload={
             "request": "hello",
             "count": 3,
@@ -107,7 +64,7 @@ def test_production_invocation_normalizes_object_payload_into_context() -> None:
 
 def test_production_invocation_normalizes_scalar_payload_into_context() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload="hello",
     )
 
@@ -120,7 +77,7 @@ def test_production_invocation_normalizes_scalar_payload_into_context() -> None:
 
 def test_production_invocation_normalizes_array_payload_into_context() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload=[
             "one",
             "two",
@@ -141,7 +98,7 @@ def test_production_invocation_normalizes_array_payload_into_context() -> None:
 
 def test_production_invocation_uses_creation_time_for_input_event() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload={
             "request": "hello",
         },
@@ -159,7 +116,7 @@ def test_production_invocation_keeps_caller_metadata_outside_context() -> None:
     }
 
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload={
             "request": "hello",
         },
@@ -182,7 +139,7 @@ def test_production_invocation_keeps_caller_metadata_outside_context() -> None:
 
 def test_production_invocation_defaults_to_empty_caller_metadata() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload=None,
     )
 
@@ -190,15 +147,13 @@ def test_production_invocation_defaults_to_empty_caller_metadata() -> None:
 
 
 def test_production_invocations_receive_independent_identity() -> None:
-    revision = create_revision()
-
     first = create_production_invocation(
-        revision=revision,
+        workflow_id=WORKFLOW_ID,
         payload="same input",
     )
 
     second = create_production_invocation(
-        revision=revision,
+        workflow_id=WORKFLOW_ID,
         payload="same input",
     )
 
@@ -207,7 +162,7 @@ def test_production_invocations_receive_independent_identity() -> None:
 
 def test_production_invocation_is_immutable() -> None:
     invocation = create_production_invocation(
-        revision=create_revision(),
+        workflow_id=WORKFLOW_ID,
         payload="hello",
     )
 
@@ -254,6 +209,7 @@ def test_production_invocation_failure_records_stable_error_contract() -> None:
     )
 
     assert result.invocation_id == INVOCATION_ID
+
     assert result.error_code is ProductionInvocationErrorCode.MODEL_UNAVAILABLE
 
     assert result.message == ("The configured production model is unavailable.")

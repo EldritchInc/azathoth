@@ -10,9 +10,6 @@ from azathoth.workflows.production_invocation import (
     ProductionInvocation,
     ProductionInvocationResult,
 )
-from azathoth.workflows.production_invocation_repository import (
-    ProductionInvocationRepository,
-)
 
 _RESULT_ADAPTER: TypeAdapter[ProductionInvocationResult] = TypeAdapter(ProductionInvocationResult)
 
@@ -44,15 +41,13 @@ class SQLiteProductionInvocationRepository:
                     INSERT INTO production_invocations (
                         invocation_id,
                         workflow_id,
-                        production_revision_id,
                         payload
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?)
                     """,
                     (
                         str(invocation.id),
                         str(invocation.workflow_id),
-                        str(invocation.production_revision_id),
                         invocation.model_dump_json(),
                     ),
                 )
@@ -133,31 +128,6 @@ class SQLiteProductionInvocationRepository:
                 ORDER BY sequence
                 """,
                 (str(workflow_id),),
-            ).fetchall()
-        finally:
-            connection.close()
-
-        return tuple(self._deserialize_invocation(row[0]) for row in rows)
-
-    def invocations_for_revision(
-        self,
-        production_revision_id: UUID,
-    ) -> tuple[ProductionInvocation, ...]:
-        """Return invocations for one production revision in insertion order."""
-
-        connection = sqlite3.connect(
-            self._database,
-        )
-
-        try:
-            rows = connection.execute(
-                """
-                SELECT payload
-                FROM production_invocations
-                WHERE production_revision_id = ?
-                ORDER BY sequence
-                """,
-                (str(production_revision_id),),
             ).fetchall()
         finally:
             connection.close()
@@ -274,20 +244,26 @@ class SQLiteProductionInvocationRepository:
     def _initialize(
         self,
     ) -> None:
-        """Create repository tables when they do not already exist."""
+        """Create repository tables and migrate obsolete invocation schema."""
 
         connection = sqlite3.connect(
             self._database,
         )
 
         try:
+            if self._requires_revision_column_migration(
+                connection,
+            ):
+                self._migrate_revision_column(
+                    connection,
+                )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS production_invocations (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     invocation_id TEXT NOT NULL UNIQUE,
                     workflow_id TEXT NOT NULL,
-                    production_revision_id TEXT NOT NULL,
                     payload TEXT NOT NULL
                 )
                 """
@@ -299,17 +275,6 @@ class SQLiteProductionInvocationRepository:
                     production_invocations_workflow_id_sequence
                 ON production_invocations (
                     workflow_id,
-                    sequence
-                )
-                """
-            )
-
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                    production_invocations_revision_id_sequence
-                ON production_invocations (
-                    production_revision_id,
                     sequence
                 )
                 """
@@ -330,10 +295,64 @@ class SQLiteProductionInvocationRepository:
         finally:
             connection.close()
 
+    @staticmethod
+    def _requires_revision_column_migration(
+        connection: sqlite3.Connection,
+    ) -> bool:
+        """Return whether the invocation table retains obsolete revision identity."""
 
-def require_production_invocation_repository(
-    repository: ProductionInvocationRepository,
-) -> ProductionInvocationRepository:
-    """Return a repository after static protocol validation."""
+        columns = connection.execute(
+            """
+            PRAGMA table_info(production_invocations)
+            """
+        ).fetchall()
 
-    return repository
+        return any(row[1] == "production_revision_id" for row in columns)
+
+    @staticmethod
+    def _migrate_revision_column(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Remove obsolete revision identity while preserving invocation history."""
+
+        connection.execute(
+            """
+            ALTER TABLE production_invocations
+            RENAME TO production_invocations_with_revision
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE production_invocations (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                invocation_id TEXT NOT NULL UNIQUE,
+                workflow_id TEXT NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            INSERT INTO production_invocations (
+                sequence,
+                invocation_id,
+                workflow_id,
+                payload
+            )
+            SELECT
+                sequence,
+                invocation_id,
+                workflow_id,
+                payload
+            FROM production_invocations_with_revision
+            ORDER BY sequence
+            """
+        )
+
+        connection.execute(
+            """
+            DROP TABLE production_invocations_with_revision
+            """
+        )

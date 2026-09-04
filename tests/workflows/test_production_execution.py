@@ -38,7 +38,6 @@ from azathoth.workflows import (
     ProductionInvocationFailure,
     ProductionInvocationSuccess,
     WorkflowMetadata,
-    WorkflowProductionRevision,
     WorkflowProductionState,
     WorkflowRunner,
     WorkflowSpecification,
@@ -52,8 +51,6 @@ WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 STEP_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 STRATEGY_ID = UUID("33333333-3333-3333-3333-333333333333")
-
-REVISION_ID = UUID("44444444-4444-4444-4444-444444444444")
 
 INVOCATION_ID = UUID("55555555-5555-5555-5555-555555555555")
 
@@ -126,44 +123,40 @@ class RecordingExecutor(StrategyExecutor):
         )
 
 
-def create_revision() -> WorkflowProductionRevision:
-    """Create deterministic production revision."""
+def create_state() -> WorkflowProductionState:
+    """Create deterministic production state."""
 
-    return WorkflowProductionRevision(
-        id=REVISION_ID,
-        state=WorkflowProductionState(
-            specification=WorkflowSpecification(
-                metadata=WorkflowMetadata(
-                    id=WORKFLOW_ID,
-                    name="production-execution",
-                    description="Exercise production execution.",
-                    version="1.0.0",
-                ),
-                steps=(
-                    WorkflowStepSpecification(
-                        id=STEP_ID,
-                        specification=PromptStrategySpec(
-                            metadata=StrategyMetadata(
-                                id=STRATEGY_ID,
-                                name="production-prompt",
-                                description="Exercise production execution.",
-                                version="1.0.0",
-                            ),
-                            prompt=Prompt(
-                                text="Process the production request.",
-                            ),
-                            model_selection=PRIMARY,
+    return WorkflowProductionState(
+        specification=WorkflowSpecification(
+            metadata=WorkflowMetadata(
+                id=WORKFLOW_ID,
+                name="production-execution",
+                description="Exercise production execution.",
+                version="1.0.0",
+            ),
+            steps=(
+                WorkflowStepSpecification(
+                    id=STEP_ID,
+                    specification=PromptStrategySpec(
+                        metadata=StrategyMetadata(
+                            id=STRATEGY_ID,
+                            name="production-prompt",
+                            description="Exercise production execution.",
+                            version="1.0.0",
                         ),
+                        prompt=Prompt(
+                            text="Process the production request.",
+                        ),
+                        model_selection=PRIMARY,
                     ),
                 ),
-            )
-        ),
+            ),
+        )
     )
 
 
 def create_invocation(
     *,
-    revision_id: UUID = REVISION_ID,
     workflow_id: UUID = WORKFLOW_ID,
 ) -> ProductionInvocation:
     """Create deterministic production invocation."""
@@ -171,7 +164,6 @@ def create_invocation(
     return ProductionInvocation(
         id=INVOCATION_ID,
         workflow_id=workflow_id,
-        production_revision_id=revision_id,
         initial_context=Context(),
     )
 
@@ -204,20 +196,20 @@ def create_registry() -> LanguageModelRegistry:
 
 
 def test_execute_production_invocation_returns_workflow_run() -> None:
-    revision = create_revision()
+    state = create_state()
     invocation = create_invocation()
 
     run = asyncio.run(
         execute_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(
                 executor=RecordingExecutor(),
             ),
             run_repository=InMemoryWorkflowRunRepository(),
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
@@ -225,7 +217,7 @@ def test_execute_production_invocation_returns_workflow_run() -> None:
 
 
 def test_execute_production_invocation_uses_invocation_context() -> None:
-    revision = create_revision()
+    state = create_state()
 
     initial_context = Context(
         events=(
@@ -244,7 +236,6 @@ def test_execute_production_invocation_uses_invocation_context() -> None:
     invocation = ProductionInvocation(
         id=INVOCATION_ID,
         workflow_id=WORKFLOW_ID,
-        production_revision_id=REVISION_ID,
         initial_context=initial_context,
     )
 
@@ -253,24 +244,23 @@ def test_execute_production_invocation_uses_invocation_context() -> None:
     run = asyncio.run(
         execute_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(
                 executor=executor,
             ),
             run_repository=InMemoryWorkflowRunRepository(),
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
     assert run.initial_context == invocation.initial_context
-
     assert executor.calls[0][1] == invocation.initial_context
 
 
 def test_execute_production_invocation_persists_workflow_run() -> None:
-    revision = create_revision()
+    state = create_state()
     invocation = create_invocation()
 
     run_repository = InMemoryWorkflowRunRepository()
@@ -278,14 +268,14 @@ def test_execute_production_invocation_persists_workflow_run() -> None:
     run = asyncio.run(
         execute_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(
                 executor=RecordingExecutor(),
             ),
             run_repository=run_repository,
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
@@ -293,7 +283,7 @@ def test_execute_production_invocation_persists_workflow_run() -> None:
 
 
 def test_execute_production_invocation_records_run_association() -> None:
-    revision = create_revision()
+    state = create_state()
     invocation = create_invocation()
 
     invocation_run_repository = InMemoryProductionInvocationRunRepository()
@@ -301,7 +291,7 @@ def test_execute_production_invocation_records_run_association() -> None:
     run = asyncio.run(
         execute_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(
@@ -319,58 +309,24 @@ def test_execute_production_invocation_records_run_association() -> None:
     assert association.run_id == run.id
 
 
-def test_execute_production_invocation_rejects_wrong_revision() -> None:
-    revision = create_revision()
-
-    invocation = create_invocation(
-        revision_id=UUID("66666666-6666-6666-6666-666666666666"),
-    )
-
-    run_repository = InMemoryWorkflowRunRepository()
-
-    invocation_run_repository = InMemoryProductionInvocationRunRepository()
-
-    with pytest.raises(
-        ValueError,
-        match=("Production invocation does not reference the supplied production revision"),
-    ):
-        asyncio.run(
-            execute_production_invocation(
-                invocation=invocation,
-                revision=revision,
-                catalog=create_catalog(),
-                registry=create_registry(),
-                runner=WorkflowRunner(
-                    executor=RecordingExecutor(),
-                ),
-                run_repository=run_repository,
-                invocation_run_repository=invocation_run_repository,
-            )
-        )
-
-    assert run_repository.runs() == ()
-    assert invocation_run_repository.associations() == ()
-
-
 def test_execute_production_invocation_rejects_wrong_workflow() -> None:
-    revision = create_revision()
+    state = create_state()
 
     invocation = create_invocation(
         workflow_id=UUID("77777777-7777-7777-7777-777777777777"),
     )
 
     run_repository = InMemoryWorkflowRunRepository()
-
     invocation_run_repository = InMemoryProductionInvocationRunRepository()
 
     with pytest.raises(
         ValueError,
-        match=("Production invocation workflow does not match the supplied production revision"),
+        match="Production invocation workflow does not match the supplied production state",
     ):
         asyncio.run(
             execute_production_invocation(
                 invocation=invocation,
-                revision=revision,
+                state=state,
                 catalog=create_catalog(),
                 registry=create_registry(),
                 runner=WorkflowRunner(
@@ -386,8 +342,7 @@ def test_execute_production_invocation_rejects_wrong_workflow() -> None:
 
 
 def test_complete_production_invocation_persists_success_result() -> None:
-    revision = create_revision()
-
+    state = create_state()
     invocation = create_invocation()
 
     invocation_repository = InMemoryProductionInvocationRepository()
@@ -399,13 +354,13 @@ def test_complete_production_invocation_persists_success_result() -> None:
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(),
             run_repository=InMemoryWorkflowRunRepository(),
             invocation_repository=invocation_repository,
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
@@ -415,13 +370,11 @@ def test_complete_production_invocation_persists_success_result() -> None:
     )
 
     assert result.invocation_id == invocation.id
-
     assert invocation_repository.result(invocation.id) == result
 
 
 def test_complete_production_invocation_returns_empty_object_when_nothing_is_emitted() -> None:
-    revision = create_revision()
-
+    state = create_state()
     invocation = create_invocation()
 
     invocation_repository = InMemoryProductionInvocationRepository()
@@ -433,13 +386,13 @@ def test_complete_production_invocation_returns_empty_object_when_nothing_is_emi
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=create_catalog(),
             registry=create_registry(),
             runner=WorkflowRunner(),
             run_repository=InMemoryWorkflowRunRepository(),
             invocation_repository=invocation_repository,
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
@@ -452,8 +405,7 @@ def test_complete_production_invocation_returns_empty_object_when_nothing_is_emi
 
 
 def test_complete_production_invocation_maps_unavailable_primary_model() -> None:
-    revision = create_revision()
-
+    state = create_state()
     invocation = create_invocation()
 
     invocation_repository = InMemoryProductionInvocationRepository()
@@ -465,13 +417,13 @@ def test_complete_production_invocation_maps_unavailable_primary_model() -> None
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=ModelCatalog(),
             registry=LanguageModelRegistry(),
             runner=WorkflowRunner(),
             run_repository=InMemoryWorkflowRunRepository(),
             invocation_repository=invocation_repository,
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
@@ -480,14 +432,12 @@ def test_complete_production_invocation_maps_unavailable_primary_model() -> None
         ProductionInvocationFailure,
     )
 
-    assert result.error_code is (ProductionInvocationErrorCode.MODEL_UNAVAILABLE)
-
+    assert result.error_code is ProductionInvocationErrorCode.MODEL_UNAVAILABLE
     assert invocation_repository.result(invocation.id) == result
 
 
 def test_complete_production_invocation_does_not_leak_internal_exception_message() -> None:
-    revision = create_revision()
-
+    state = create_state()
     invocation = create_invocation()
 
     invocation_repository = InMemoryProductionInvocationRepository()
@@ -499,13 +449,13 @@ def test_complete_production_invocation_does_not_leak_internal_exception_message
     result = asyncio.run(
         complete_production_invocation(
             invocation=invocation,
-            revision=revision,
+            state=state,
             catalog=ModelCatalog(),
             registry=LanguageModelRegistry(),
             runner=WorkflowRunner(),
             run_repository=InMemoryWorkflowRunRepository(),
             invocation_repository=invocation_repository,
-            invocation_run_repository=(InMemoryProductionInvocationRunRepository()),
+            invocation_run_repository=InMemoryProductionInvocationRunRepository(),
         )
     )
 
