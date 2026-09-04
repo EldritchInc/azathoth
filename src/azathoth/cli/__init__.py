@@ -21,6 +21,7 @@ from azathoth.cli.models import (
 )
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.production import invoke_active_production_workflow
+from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
     render_production_invocation_result,
     render_workflow_optimization_session,
@@ -54,6 +55,7 @@ __all__ = [
     "main",
     "optimize_configured_workflow",
     "optimize_workflow",
+    "promote_configured_workflow",
     "render_production_invocation_result",
     "render_workflow_optimization_session",
     "render_workflow_run",
