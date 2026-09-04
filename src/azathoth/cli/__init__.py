@@ -28,6 +28,7 @@ from azathoth.cli.rendering import (
 )
 from azathoth.cli.workflows import (
     import_workflow,
+    invoke_workflow,
     list_workflows,
     optimize_workflow,
     run_workflow,
@@ -45,6 +46,7 @@ __all__ = [
     "execute_configured_workflow",
     "import_workflow",
     "invoke_active_production_workflow",
+    "invoke_workflow",
     "list_models",
     "list_portfolio_models",
     "list_workflows",

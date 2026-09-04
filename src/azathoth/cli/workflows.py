@@ -11,7 +11,9 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.optimization import optimize_configured_workflow
+from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.rendering import (
+    render_production_invocation_result,
     render_workflow_optimization_session,
     render_workflow_run,
 )
@@ -22,7 +24,11 @@ from azathoth.evaluation import (
 from azathoth.prompting import PromptStrategySpec
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
+    ProductionInvocationFailure,
+    SQLiteProductionInvocationRepository,
+    SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowRepository,
+    SQLiteWorkflowRunRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
     WorkflowGenerationError,
@@ -82,8 +88,11 @@ def show_workflow(
         start=1,
     ):
         print()
+
         print(f"Step {index}")
+
         print(f"ID: {step.id}")
+
         print(f"Type: {_step_type(step.specification)}")
 
         if isinstance(
@@ -186,6 +195,54 @@ def run_workflow(
     print(render_workflow_run(run))
 
     return 0 if run.succeeded else 1
+
+
+def invoke_workflow(
+    *,
+    workflow_id: UUID,
+    payload: JsonValue,
+) -> int:
+    """Invoke one active production workflow."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    runtime = load_runtime(configuration)
+
+    result = asyncio.run(
+        invoke_active_production_workflow(
+            runtime=runtime,
+            workflow_id=workflow_id,
+            payload=payload,
+            invocation_repository=SQLiteProductionInvocationRepository(
+                configuration.database,
+            ),
+            run_repository=SQLiteWorkflowRunRepository(
+                configuration.database,
+            ),
+            invocation_run_repository=SQLiteProductionInvocationRunRepository(
+                configuration.database,
+            ),
+        )
+    )
+
+    rendered = render_production_invocation_result(
+        result,
+    )
+
+    if isinstance(
+        result,
+        ProductionInvocationFailure,
+    ):
+        print(
+            rendered,
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(rendered)
+
+    return 0
 
 
 def optimize_workflow(
