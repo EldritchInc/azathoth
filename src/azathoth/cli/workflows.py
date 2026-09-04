@@ -12,9 +12,11 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.production import invoke_active_production_workflow
+from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
     render_production_invocation_result,
     render_workflow_optimization_session,
+    render_workflow_promotion,
     render_workflow_run,
 )
 from azathoth.evaluation import (
@@ -27,6 +29,8 @@ from azathoth.workflows import (
     ProductionInvocationFailure,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
+    SQLiteWorkflowProductionRevisionRepository,
+    SQLiteWorkflowProductionStateRepository,
     SQLiteWorkflowRepository,
     SQLiteWorkflowRunRepository,
     ToolStepSpecification,
@@ -195,6 +199,46 @@ def run_workflow(
     print(render_workflow_run(run))
 
     return 0 if run.succeeded else 1
+
+
+def promote_workflow(
+    workflow_id: UUID,
+) -> int:
+    """Promote one configured workflow to active production."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    runtime = load_runtime(configuration)
+
+    try:
+        revision = promote_configured_workflow(
+            runtime=runtime,
+            workflow_id=workflow_id,
+            production_repository=SQLiteWorkflowProductionStateRepository(
+                configuration.database,
+            ),
+            revision_repository=SQLiteWorkflowProductionRevisionRepository(
+                configuration.database,
+            ),
+        )
+    except (
+        WorkflowNotConfiguredError,
+        WorkflowGenerationError,
+    ) as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(
+        render_workflow_promotion(
+            revision,
+        )
+    )
+
+    return 0
 
 
 def invoke_workflow(
