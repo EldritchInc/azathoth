@@ -20,6 +20,7 @@ from azathoth.cli.models import (
     show_model,
 )
 from azathoth.cli.optimization import optimize_configured_workflow
+from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_run,
@@ -42,6 +43,7 @@ __all__ = [
     "deauthorize_model",
     "execute_configured_workflow",
     "import_workflow",
+    "invoke_active_production_workflow",
     "list_models",
     "list_portfolio_models",
     "list_workflows",
