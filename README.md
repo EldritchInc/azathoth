@@ -1110,7 +1110,13 @@ Import, list, and show require no provider credentials.
 
 The repository tests this lifecycle through the installed `azathoth` console script against the same checked-in example.
 
-Provider-dependent execution begins when Azathoth must generate executable prompt-backed candidates.
+Provider-dependent execution begins when Azathoth must generate executable
+prompt-backed candidates.
+
+For the complete clean-checkout journey from installation through provider
+configuration, model authorization, configured execution, empirical
+optimization, explicit promotion, and production invocation, see
+[Getting Started](docs/getting-started.md).
 
 ## Configured Workflow Execution
 
