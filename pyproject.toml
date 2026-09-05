@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "An empirical optimization engine for context-aware AI workflows."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "TBD" }
+license = { text = "MIT" }
 authors = [
     { name = "Eris Discordia Montano" }
 ]
@@ -22,8 +22,11 @@ keywords = [
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Typing :: Typed"
 ]
 dependencies = [

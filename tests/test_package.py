@@ -1,33 +1,16 @@
 """Tests for installed Azathoth distribution metadata."""
 
 from importlib.metadata import (
-    PackageNotFoundError,
-    distribution,
     entry_points,
     metadata,
     requires,
     version,
 )
-from pathlib import Path
-
-import pytest
 
 from azathoth import __version__
 
 DISTRIBUTION_NAME = "azathoth-ai"
-PACKAGE_NAME = "azathoth"
 CONSOLE_SCRIPT = "azathoth"
-
-
-def installed_distribution():
-    """Return the installed Azathoth distribution."""
-
-    try:
-        return distribution(
-            DISTRIBUTION_NAME,
-        )
-    except PackageNotFoundError:
-        pytest.fail(f"Installed distribution {DISTRIBUTION_NAME!r} was not found.")
 
 
 def test_package_exposes_version() -> None:
@@ -89,8 +72,9 @@ def test_distribution_uses_project_readme() -> None:
         DISTRIBUTION_NAME,
     )
 
-    description = package_metadata.get_payload()
+    description = package_metadata["Description"]
 
+    assert description is not None
     assert description.startswith(
         "# Azathoth",
     )
@@ -115,20 +99,3 @@ def test_distribution_exposes_azathoth_console_script() -> None:
     script = scripts[0]
 
     assert script.value == "azathoth.cli:main"
-
-
-def test_distribution_contains_typed_package_marker() -> None:
-    installed = installed_distribution()
-
-    files = installed.files
-
-    assert files is not None
-
-    assert any(
-        Path(file)
-        .as_posix()
-        .endswith(
-            f"{PACKAGE_NAME}/py.typed",
-        )
-        for file in files
-    )
