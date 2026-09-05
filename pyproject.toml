@@ -51,6 +51,8 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "setuptools>=68",
+    "wheel",
 ]
 
 [tool.pytest.ini_options]
