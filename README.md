@@ -2,7 +2,7 @@
 
 > Empirical optimization for context-aware AI workflows.
 
-Azathoth is an experimental Python framework for building AI systems that improve through measured evidence rather than intuition.
+Azathoth is an open-source Python framework for building AI systems that improve through measured evidence rather than intuition.
 
 Instead of asking:
 
@@ -10,9 +10,48 @@ Instead of asking:
 
 Azathoth asks:
 
-> Given this problem, which combination of workflow, strategy, prompt, model, and execution policy consistently produces the best result?
+> Given this problem, which combination of workflow, strategy, prompt, model, tool, and execution policy consistently produces the best result?
 
-Azathoth separates specification, execution, evaluation, experimentation, and optimization so each layer can evolve independently while remaining deterministic and testable.
+Azathoth provides infrastructure for defining, executing, evaluating, experimenting with, optimizing, and operating production AI workflows while keeping each architectural responsibility explicit.
+
+A workflow in Azathoth is durable intent.
+
+Its executable realization is generated from current runtime capabilities.
+
+Its behavior becomes evidence.
+
+That evidence can be evaluated, scored, ranked, and optimized.
+
+Moving new behavior into production is a separate explicit operation.
+
+```text
+define
+  │
+  ▼
+generate
+  │
+  ▼
+execute
+  │
+  ▼
+evaluate
+  │
+  ▼
+experiment
+  │
+  ▼
+optimize
+  │
+  ▼
+promote
+  │
+  ▼
+invoke production
+```
+
+Azathoth is built around one core rule:
+
+> **Persist what should happen. Compose what can execute. Record what actually happened. Change production deliberately.**
 
 ## Why Azathoth?
 
@@ -21,16 +60,51 @@ AI applications routinely make decisions such as:
 - which model should handle a request;
 - which prompt should be used;
 - how context should be constructed;
-- whether retrieval or tools are required;
+- whether tools are required;
 - how a task should be decomposed;
-- what should happen when a step fails; and
+- what should happen when a step fails;
+- which model substitutions remain legal;
+- how candidate workflows compare;
+- what should be promoted; and
 - which workflow performs best under quality, reliability, latency, and cost constraints.
 
-Those decisions are usually encoded manually.
+Those decisions are usually encoded manually or buried inside one mutable agent loop.
 
-Azathoth treats them as empirical optimization problems.
+Azathoth treats them as explicit empirical and operational problems.
 
-The long-term goal is a system capable of generating candidate solutions, executing them against reproducible examples, measuring their behavior, comparing the evidence, and iteratively producing better candidates.
+The framework separates durable intent, runtime composition, execution, evaluation, experimentation, optimization, and production authority so each layer can evolve independently while remaining reproducible, inspectable, and testable.
+
+The important distinctions are:
+
+```text
+durable intent
+    ≠
+runtime implementation
+
+execution
+    ≠
+evaluation
+
+evaluation
+    ≠
+scoring
+
+scoring
+    ≠
+optimization
+
+optimization
+    ≠
+promotion
+
+promotion
+    ≠
+production invocation
+
+historical deployment
+    ≠
+current production authority
+```
 
 ## Who Is This For?
 
@@ -38,13 +112,13 @@ Azathoth is for people building AI systems who want to replace hand-tuned intuit
 
 It is particularly relevant for:
 
-- **AI and LLM engineers** comparing prompts, models, providers, and execution strategies;
+- **AI and LLM engineers** comparing prompts, models, providers, tools, and execution strategies;
 - **agent and workflow developers** building multi-step systems that need measurable reliability;
 - **researchers** experimenting with automated optimization, evaluation, and adaptive AI systems;
 - **platform engineers** building provider-independent infrastructure for model selection and execution; and
 - **developers exploring self-improving systems** where candidate solutions are generated, tested, measured, and iteratively improved.
 
-Azathoth is not intended to prescribe a single model, provider, prompting technique, or optimization algorithm.
+Azathoth does not prescribe a single model, provider, prompting technique, workflow architecture, or optimization algorithm.
 
 Instead, it provides the infrastructure to ask a more useful question:
 
@@ -58,112 +132,80 @@ Azathoth is built around a few core principles.
 
 Optimization decisions should be backed by recorded execution and evaluation evidence.
 
+A candidate is not better because an optimizer proposed it.
+
+It must return through execution, evaluation, scoring, and empirical comparison.
+
 ### Immutable domain models
 
-Important execution and optimization artifacts are immutable so experiments remain reproducible and inspectable.
+Important configuration, execution, evaluation, experiment, and audit artifacts are immutable so evidence remains reproducible and inspectable.
 
 ### Provider independence
 
-Workloads describe requirements rather than hard-coding model providers.
+Durable workflows describe model intent and requirements without persisting live provider clients.
+
+Provider-specific implementations are attached during runtime composition.
 
 ### Explicit boundaries
 
-Execution, evaluation, scoring, ranking, experimentation, and optimization are separate responsibilities.
+Context, strategy behavior, execution, evaluation, scoring, ranking, experimentation, optimization, runtime composition, persistence, and production authority remain separate responsibilities.
 
 ### Deterministic infrastructure
 
-The optimization substrate should remain deterministic even when the models being evaluated are not.
+The surrounding optimization substrate should remain deterministic wherever possible even when the models being evaluated are not.
 
 ### Replaceable optimization
 
-Optimization policy remains separate from deterministic execution,
-evaluation, scoring, ranking, and experimentation.
+Optimization policy remains separate from deterministic execution, evaluation, scoring, ranking, and experimentation.
 
-Applications may provide their own optimization implementations through
-Azathoth's public optimization interfaces.
+Applications may provide their own optimization implementations through Azathoth's public optimization interfaces.
 
-## Architecture
+### Explicit production authority
 
-At the highest level:
+Production does not mean:
 
 ```text
-Goal
- │
- ▼
-Context
- │
- ▼
-Strategy
- │
- ▼
-Execution
- │
- ▼
-Evaluation
- │
- ▼
-Optimization
+latest optimizer winner
+
+latest configured workflow
+
+latest historical revision
+
+currently cheapest model
 ```
 
-Workflows compose strategies into larger executable systems:
+Production means:
 
 ```text
-WorkflowSpecification
-        │
-        ▼
-WorkflowCandidate
-        │
-        ▼
-WorkflowRunner
-        │
-        ▼
-WorkflowRun
-        │
-        ├───────────────┐
-        ▼               ▼
-   Statistics      Reliability
-        │               │
-        └───────┬───────┘
-                ▼
-        EvaluationResult
-                │
-                ▼
-        WorkflowScorer
-                │
-                ▼
-       WorkflowScorecard
-                │
-                ▼
-        WorkflowRanker
-                │
-                ▼
-     WorkflowExperiment
-                │
-                ▼
-       WorkflowOptimizer
-                │
-                ▼
-  Optimization Generation
-                │
-                ▼
-  Optimization Session
+current WorkflowProductionState
 ```
 
-This separation allows execution mechanics, scoring policy, ranking behavior, and optimization algorithms to change independently.
+Changes to that state happen through explicit promotion.
 
 ## Current Capabilities
 
-Azathoth currently provides:
+Azathoth OSS V1 includes infrastructure for:
 
-- immutable event-backed context;
+- immutable event-backed execution context;
 - durable goals and expected outcomes;
 - executable strategy protocols;
 - deterministic strategy execution;
-- provider-neutral model requirements;
+- provider-neutral model metadata and requirements;
+- current provider model discovery;
+- historical provider observations;
+- organizational model authorization;
+- fixed and portfolio-based model selection;
 - model catalogs and executable model registries;
+- OpenRouter model discovery and execution;
 - prompt-backed strategies;
 - deterministic prompt candidate generation;
+- prompt templates and context bindings;
 - model binding validation;
+- durable tool capabilities;
+- durable tool implementations;
+- deterministic tool resolution;
+- trusted Python tool execution;
+- durable tool verification cases;
 - workflow specifications;
 - dependency-graph validation;
 - dependency-layer execution;
@@ -172,157 +214,181 @@ Azathoth currently provides:
 - retry policies;
 - workflow failure policies;
 - durable step-attempt history;
+- durable workflow-run evidence;
 - execution statistics;
 - normalized reliability metrics;
+- expected-outcome evaluation;
+- deterministic exact-match evaluation;
+- reusable benchmark datasets;
 - deterministic workflow scoring;
 - workflow scorecards;
 - deterministic workflow ranking;
-- workflow experiments;
+- durable workflow experiments;
 - workflow optimization protocols;
-- replay optimization; and
-- multi-generation optimization sessions.
+- replay optimization;
+- empirical cheaper-model substitution;
+- multi-generation optimization sessions;
+- explicit workflow promotion;
+- durable production state;
+- durable production revisions;
+- ordered production model substitutions;
+- durable production invocations;
+- production workflow execution; and
+- an installed CLI spanning configuration, execution, optimization, promotion, and production invocation.
 
-The current optimization substrate is intentionally conservative.
+## Architecture
 
-`ReplayWorkflowOptimizer` does not improve candidates. It exists as a deterministic reference implementation that proves the optimization boundary and iterative session orchestration before adaptive optimization strategies are introduced.
-
-## Package Guide
-
-The root README describes the system as a whole.
-
-Detailed documentation lives with each major package.
-
-| Package | Responsibility |
-| --- | --- |
-| [`azathoth.context`](src/azathoth/context/README.md) | Immutable event-backed working context |
-| [`azathoth.goals`](src/azathoth/goals/README.md) | Desired outcomes and success criteria |
-| [`azathoth.strategies`](src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
-| [`azathoth.execution`](src/azathoth/execution/README.md) | Strategy execution and durable execution results |
-| [`azathoth.evaluation`](src/azathoth/evaluation/README.md) | Expected outcomes, evaluators, and evaluation evidence |
-| [`azathoth.prompting`](src/azathoth/prompting/README.md) | Prompt strategies, templates, bindings, and candidate generation |
-| [`azathoth.providers`](src/azathoth/providers/README.md) | Provider-neutral model metadata, requirements, discovery, and registries |
-| [`azathoth.tools`](src/azathoth/tools/README.md) | executable tools callable from workflow steps. |
-| [`azathoth.workflows`](src/azathoth/workflows/README.md) | Multi-step workflow specification, execution, scoring, ranking, and experiments |
-| [`azathoth.optimization`](src/azathoth/optimization/README.md) | Empirical experiments, workflow optimization, and optimization sessions |
-
-Architectural decisions are recorded separately in [`docs/adr`](docs/adr).
-
-
-## Command-Line Application
-
-Installing Azathoth exposes the `azathoth` command.
-
-```bash
-azathoth --help
-azathoth --version
-```
-
-The command-line application separates lightweight shell behavior from runtime
-bootstrap.
+At the highest level:
 
 ```text
-azathoth
-   │
-   ├── help / version
-   │
-   └── domain commands
-            │
-            ▼
-       CLI bootstrap
-            │
-            ▼
-     AzathothRuntime
+                              GOALS
+                                │
+                                ▼
+                      durable objective intent
+                                │
+
+                         WORKFLOW DEFINITION
+                                │
+                                ▼
+                      WorkflowSpecification
+                                │
+                                ▼
+
+                         RUNTIME COMPOSITION
+                  ┌─────────────┼─────────────┐
+                  ▼             ▼             ▼
+               models         tools        context
+                  │             │             │
+                  └─────────────┼─────────────┘
+                                ▼
+                       WorkflowCandidate
+                                │
+                                ▼
+
+                            EXECUTION
+                                │
+                                ▼
+                          WorkflowRun
+                                │
+                                ▼
+
+                           EVALUATION
+                                │
+                                ▼
+                       evaluation evidence
+                                │
+                                ▼
+
+                    SCORING / EXPERIMENTATION
+                                │
+                                ▼
+                       empirical evidence
+                                │
+                                ▼
+
+                          OPTIMIZATION
+                                │
+                                ▼
+                     candidate generation
+                                │
+                                ▼
+
+                     EXPLICIT PRODUCTION
+                                │
+                   ┌────────────┴────────────┐
+                   ▼                         ▼
+       WorkflowProductionState   WorkflowProductionRevision
+           execution authority         audit history
+                   │
+                   ▼
+          ProductionInvocation
+                   │
+                   ▼
+              WorkflowRun
 ```
 
-Runtime bootstrap reconstructs durable workflow, model, and tool configuration
-from the configured SQLite database and attaches process-local provider
-implementations.
-
-The initial runtime configuration recognizes:
+The system deliberately separates:
 
 ```text
-AZATHOTH_DATABASE
-OPENROUTER_API_KEY
+WorkflowSpecification
+    durable orchestration intent
+
+WorkflowCandidate
+    executable realization
+
+WorkflowRun
+    empirical execution evidence
+
+EvaluationResult
+    judgment
+
+WorkflowOptimizationSession
+    empirical search
+
+WorkflowProductionState
+    current production authority
+
+WorkflowProductionRevision
+    deployment audit history
+
+ProductionInvocation
+    external production call
 ```
 
-Help and version operations do not require a database or provider credentials.
+Each artifact is allowed to mean one thing.
 
-Domain commands are introduced separately on top of this application boundary.
+## The Core Lifecycle
 
-### Workflow CLI
+### 1. Define
 
-Azathoth can import and inspect durable workflows entirely from the terminal.
-
-A canonical example is included:
+A `WorkflowSpecification` describes durable workflow intent.
 
 ```text
-examples/workflows/simple-prompt.json
+WorkflowSpecification
+├── metadata
+└── steps
+    ├── prompt-backed behavior
+    ├── tool-backed behavior
+    ├── dependencies
+    ├── inputs
+    ├── outputs
+    ├── conditions
+    ├── retry policy
+    └── failure policy
 ```
 
-Import it:
+The specification does not persist live provider clients or runtime implementations.
 
-```bash
-azathoth workflow import \
-    examples/workflows/simple-prompt.json
-```
+### 2. Generate
 
-List configured workflows:
-
-```bash
-azathoth workflow list
-```
-
-Inspect the imported workflow:
-
-```bash
-azathoth workflow show \
-    11111111-1111-1111-1111-111111111111
-```
-
-The lifecycle is:
+Runtime composition turns durable intent into an executable `WorkflowCandidate`.
 
 ```text
-workflow JSON
-      │
-      ▼
-domain validation
-      │
-      ▼
-durable SQLite persistence
-      │
-      ├── workflow list
-      └── workflow show
-```
-
-Workflow documents are complete serialized `WorkflowSpecification` objects.
-The checked-in example is tested against Azathoth's canonical serializer so it
-remains an accurate importable reference.
-
-Import and inspection require no provider credentials.
-
-Concrete provider resolution occurs later when a workflow is generated into an
-executable candidate.
-
-### Workflow Execution
-
-Configured workflows can be executed from the terminal:
-
-```bash
-azathoth workflow run <WORKFLOW_ID>
-```
-
-Execution uses the same runtime path as library consumers.
-
-```text
-durable WorkflowSpecification
+WorkflowSpecification
+        │
+        +
+current ModelCatalog
+        │
+        +
+authorized ModelPortfolio
+        │
+        +
+LanguageModelRegistry
+        │
+        +
+tool catalogs
         │
         ▼
-CLI runtime bootstrap
-        │
-        ▼
-candidate generation
-        │
-        ▼
+WorkflowCandidate
+```
+
+This is where durable requirements meet what the current process can actually execute.
+
+### 3. Execute
+
+`WorkflowRunner` executes the candidate and records a `WorkflowRun`.
+
+```text
 WorkflowCandidate
         │
         ▼
@@ -332,47 +398,122 @@ WorkflowRunner
 WorkflowRun
 ```
 
-The CLI renders recorded execution evidence including workflow status, duration,
-step status, retries, strategy output, and provider-neutral model metrics when
-available.
+Execution records what happened.
 
-Prompt-backed execution remains driven by each step's `ModelRequirements`.
+It does not decide whether the result was correct.
+
+### 4. Evaluate
+
+Expected outcomes and evaluators judge observed results.
 
 ```text
-ModelRequirements
-      │
-      ▼
-configured ModelCatalog
-      │
-      ▼
-executable LanguageModelRegistry
+ExpectedOutcome
+       +
+actual output
+       │
+       ▼
+Evaluator
+       │
+       ▼
+EvaluationResult
 ```
 
-There is no global CLI workflow model selection.
+Evaluation is independent from execution.
 
-Different steps may resolve to different configured models.
+### 5. Experiment
 
-A prompt-backed workflow therefore requires compatible model metadata to
-already exist in the configured database.
-
-The CLI does not yet provide model import commands, so complete fresh-user
-installed execution remains the next application milestone.
-
-The intended lifecycle is:
+Workflow experiments compose execution, evaluation, scoring, and ranking.
 
 ```text
-model import
-     +
-workflow import
-     +
-provider credentials
-     │
-     ▼
-workflow run
-     │
-     ▼
+Workflow Candidates
+        │
+        ▼
+WorkflowExperimentRunner
+        │
+        ├── execute
+        ├── evaluate
+        ├── score
+        └── rank
+        │
+        ▼
+WorkflowExperimentResult
+```
+
+Experiments produce empirical evidence about a candidate population.
+
+They do not generate new candidates.
+
+### 6. Optimize
+
+Optimization consumes experiment evidence and proposes a next population.
+
+```text
+WorkflowExperimentResult
+          +
+Current Candidates
+          │
+          ▼
+   WorkflowOptimizer
+          │
+          ▼
+WorkflowOptimizationResult
+```
+
+OSS V1 includes:
+
+```text
+ReplayWorkflowOptimizer
+
+ModelSubstitutionWorkflowOptimizer
+```
+
+Model substitution can explore strictly cheaper legal model bindings.
+
+A cheaper candidate is not automatically trusted.
+
+It must be executed and evaluated empirically.
+
+### 7. Promote
+
+Production changes are explicit.
+
+```text
+WorkflowCandidate
+        │
+        ▼
+explicit promotion
+        │
+        ├── WorkflowProductionState
+        └── WorkflowProductionRevision
+```
+
+`WorkflowProductionState` is the current durable production execution authority.
+
+`WorkflowProductionRevision` is immutable deployment history.
+
+A revision is not an active pointer.
+
+### 8. Invoke
+
+External production calls execute active production state.
+
+```text
+ProductionInvocation
+        │
+        ▼
+WorkflowProductionState
+        │
+        ▼
+production execution
+        │
+        ▼
 WorkflowRun
+        │
+        ▼
+ProductionInvocationResult
 ```
+
+The invocation is durably associated with the run it produced.
 
 ## Core Concepts
 
@@ -396,9 +537,27 @@ context = context.append(
 )
 ```
 
-Strategies receive context without mutating shared state.
+Appending information returns a new context rather than mutating shared state.
 
 See [`azathoth.context`](src/azathoth/context/README.md).
+
+### Goals
+
+`Goal` defines stable objective intent.
+
+```text
+Goal
+├── name
+├── description
+├── success criteria
+└── constraints
+```
+
+Goals describe what should be achieved.
+
+They do not contain executable strategy, evaluator, workflow, model, or optimizer policy.
+
+See [`azathoth.goals`](src/azathoth/goals/README.md).
 
 ### Strategies
 
@@ -414,9 +573,31 @@ Strategy
 StrategyOutcome
 ```
 
-Strategies may be deterministic operations, prompt-backed model calls, or future retrieval and tool strategies.
+Strategies own behavior.
+
+They do not own workflow orchestration, retries, evaluation, ranking, or production deployment.
 
 See [`azathoth.strategies`](src/azathoth/strategies/README.md).
+
+### Execution
+
+`StrategyExecutor` records successful strategy execution.
+
+```text
+Strategy
+   │
+   ▼
+StrategyExecutor
+   │
+   ▼
+ExecutionResult
+```
+
+Execution results record strategy identity, output, metrics, context transition, and timing.
+
+Execution says what happened.
+
+See [`azathoth.execution`](src/azathoth/execution/README.md).
 
 ### Evaluation
 
@@ -428,388 +609,166 @@ ExpectedOutcome
 Actual Result
        │
        ▼
-   Evaluator
+Evaluator
        │
        ▼
 EvaluationResult
 ```
 
-Evaluation answers whether an output satisfied an expectation.
+Evaluation says how well an observed output satisfied an expectation.
 
-It is separate from workflow scoring, which interprets broader execution evidence such as reliability, latency, and cost.
+It remains separate from workflow scoring.
 
 See [`azathoth.evaluation`](src/azathoth/evaluation/README.md).
 
-## Workflow Benchmarks
+## Prompting and Models
 
-Azathoth can execute reusable benchmark datasets against multiple workflow
-candidates.
-
-```text
-Benchmark Dataset
-        │
-        ▼
-Workflow Candidates
-        │
-        ▼
-Workflow Execution
-        │
-        ▼
-Workflow Evaluation
-        │
-        ▼
-Workflow Scorecards
-        │
-        ▼
-Workflow Ranking
-```
-
-Benchmark execution reuses the same deterministic workflow execution,
-evaluation, and ranking infrastructure already used elsewhere throughout the
-system.
-
-This provides the objective evidence required for provider comparison, routing,
-and future optimization.
-
-### Durable Goals
-
-Reusable goals can be persisted and reconstructed independently from runtime
-strategies and evaluators.
+Prompt-backed steps separate durable intent from executable provider behavior.
 
 ```text
-Goal
- │
- ▼
-GoalRepository
- │
- ▼
-GoalCatalogLoader
- │
- ▼
-GoalCatalog
-```
-
-Persisted goals retain stable identity, success criteria, and constraints.
-
-A reconstructed goal can be embedded into new optimization examples, which
-retain immutable snapshots of the objective under which they were defined.
-
-# Providers
-
-The providers package separates durable execution requests from provider
-implementations.
-
-```text
-Prompt
-   │
-   ▼
-ModelRequest
-   │
-   ▼
-ModelExecutor
-   │
-   ▼
-LanguageModel
-   ├──────────────┐
-   ▼              ▼
-Deterministic  Future OpenRouter
-   │
-   ▼
-ModelResponse
-```
-
-Model requests establish a stable execution boundary for future provider
-integrations.
-
-Execution remains deterministic while allowing future providers to introduce
-additional execution capabilities without changing higher-level workflow
-execution.
-
-### Heterogeneous Model Execution
-
-Model-backed workflow steps declare requirements rather than one global model.
-
-```text
-Workflow
-│
-├── Step A
-│   └── ModelRequirements A
-│       └── model A
-│
-├── Step B
-│   └── ModelRequirements B
-│       └── model C
-│
-└── Step C
-    └── ModelRequirements C
-        └── model B
-```
-
-`ModelCatalog` describes available models.
-
-`LanguageModelRegistry` supplies executable implementations.
-
-Registries can be composed across runtime sources, and one OpenRouter
-configuration can provide executable registrations for multiple OpenRouter
-models.
-
-Concrete model binding occurs during candidate generation independently for
-each prompt-backed workflow step.
-
-There is no global workflow model requirement.
-
-### Durable Model Catalogs
-
-Configured model metadata can be persisted and reconstructed independently from
-provider runtime objects.
-
-```text
-ModelMetadata
-      │
-      ▼
-ModelRepository
-      │
-      ▼
-ModelCatalogLoader
-      │
-      ▼
-ModelCatalog
-```
-
-Persisted metadata includes model identity, capabilities, context limits, and
-pricing.
-
-Provider credentials and executable clients remain runtime configuration.
-
-This allows durable workflow requirements and durable model catalogs to be
-reconstructed together before normal candidate generation.
-
-```text
-Persisted Workflow
-        +
-Persisted Model Catalog
+PromptStrategySpec
         │
         ▼
-runtime provider assembly
+model selection
         │
         ▼
 candidate generation
         │
         ▼
-execution
+PromptStrategy
 ```
 
-### Durable Benchmark Workloads
-
-Reusable benchmark datasets can be persisted and reconstructed independently
-from workflow runtime objects.
+Configured prompt steps may use:
 
 ```text
-BenchmarkDataset
-       │
-       ▼
-BenchmarkRepository
-       │
-       ▼
-BenchmarkCatalogLoader
-       │
-       ▼
-WorkflowBenchmarkRunner
+PortfolioModelSelection
+
+FixedModelSelection
 ```
 
-A persisted benchmark retains its version, case identities, inputs, expected
-outcomes, and case metadata.
+Portfolio selection allows Azathoth to choose among authorized, current, executable models satisfying the declared requirements.
 
-This allows the same empirical workload to be loaded after process restart and
-executed through the normal workflow runtime.
+Fixed selection means exactly the requested provider/model identity.
 
-## OpenRouter
+Fixed intent does not silently fall back to the portfolio.
 
-Azathoth's first production language model provider is OpenRouter.
+See [`azathoth.prompting`](src/azathoth/prompting/README.md).
+
+## Providers
+
+The provider architecture distinguishes current provider truth, historical observation, organizational authorization, metadata, and executable implementations.
 
 ```text
-Prompt
-   │
-   ▼
-ModelRequest
-   │
-   ▼
-ModelExecutor
-   │
-   ▼
-OpenRouterLanguageModel
-   │
-   ▼
-OpenRouter
-   │
-   ▼
-ModelResponse
+ProviderModel
+    current provider truth
+
+ProviderModelObservation
+    historical provider evidence
+
+ModelCatalog
+    current normalized metadata
+
+ModelPortfolio
+    organizational authorization
+
+LanguageModelRegistry
+    executable implementations
 ```
 
-Normal automated tests remain deterministic through mocked HTTP transports.
+Therefore:
 
-Live OpenRouter verification is available through an explicit opt-in smoke test,
-allowing development and continuous integration to execute without consuming API
-credits.
+```text
+history
+    ≠
+current state
+
+availability
+    ≠
+authorization
+
+metadata
+    ≠
+executability
+```
+
+OSS V1 includes OpenRouter provider discovery and execution behind provider-neutral interfaces.
 
 See [`azathoth.providers`](src/azathoth/providers/README.md).
 
-## Workflow Execution
+## Heterogeneous Model Execution
 
-Azathoth workflows now execute against production language models through the
-provider abstraction.
+Model-backed workflow steps do not share one required global model.
 
 ```text
-Workflow Specification
-          │
-          ▼
-Workflow Candidate
-          │
-          ▼
-Workflow Runner
-          │
-          ▼
-Prompt Strategy
-          │
-          ▼
-Language Model
-          │
-          ▼
-OpenRouter
-          │
-          ▼
-Workflow Run
+Workflow
+│
+├── Step A
+│   └── model selection A
+│
+├── Step B
+│   └── model selection B
+│
+└── Step C
+    └── model selection C
 ```
 
-Provider-backed workflow execution preserves the same deterministic execution,
-evaluation, and scorecard infrastructure already used by deterministic language
-models.
+Candidate generation resolves each prompt-backed step independently.
 
-Normal automated tests remain fully deterministic.
+This allows one workflow to use different models for different responsibilities.
 
-Production execution is verified through explicit opt-in smoke tests.
+## Tools
 
-### Tool-Backed Workflows
+The tools package separates capability contracts from executable implementations.
 
-Durable tools can execute as normal workflow steps.
+```text
+ToolRequirement
+       │
+       ▼
+ToolDefinition
+       │
+       ▼
+ToolImplementation
+       │
+       ▼
+ToolExecutor
+       │
+       ▼
+ToolStrategy
+```
+
+Capability resolution determines what capability satisfies a requirement.
+
+Implementation resolution determines how that capability can execute.
+
+The subsystem also supports durable tool test cases and deterministic verification.
+
+See [`azathoth.tools`](src/azathoth/tools/README.md).
+
+## Tool-Backed Workflows
+
+Durable tools can execute as ordinary workflow steps.
 
 ```text
 ToolRequirement
       │
       ▼
-Persisted Tool Definition
+ToolDefinition
       │
       ▼
-Resolved Implementation
+resolved ToolImplementation
       │
       ▼
 ToolStrategy
       │
       ▼
 WorkflowValue
-      │
-      ▼
-WorkflowCondition
 ```
 
-Workflow specifications reference tool capabilities rather than concrete
-implementations.
+Tool-backed steps participate in the same dependency, value-binding, retry, failure, and conditional-execution infrastructure as prompt-backed steps.
 
-Candidate generation resolves executable implementations before runtime.
+## Workflows
 
-Tool-backed steps then participate in the same dependency, input-binding,
-output-binding, retry, failure, and conditional-execution infrastructure as
-other workflow strategies.
-
-This allows deterministic persisted capabilities to participate in workflows
-without baking their implementation source into Azathoth.
-
-# Tools
-
-The tools package separates capability contracts from executable
-implementations.
-
-```text
-ToolRequirement
-       │
-       ▼
- ToolResolver
-       │
-       ▼
-ToolDefinition
-       │
-       ▼
-ToolImplementationResolver
-       │
-       ▼
-ToolImplementation
-       │
-       ▼
-PythonToolExecutor
-       │
-       ▼
- ToolVerifier
-       │
-       ▼
-ToolVerification
-```
-
-Capability resolution identifies *what* satisfies a required capability.
-
-Implementation resolution identifies *how* that capability can be executed.
-
-Execution and verification remain deterministic and independent of
-optimization.
-
-This architecture keeps capability identity, implementation resolution,
-execution, and verification independent so applications can extend tool
-behavior without coupling it to workflow execution.
-
-See [`azathoth.tools`](src/azathoth/tools/README.md).
-
-## Persistent Tools
-
-Azathoth tools can exist as durable data rather than application-specific source
-files.
-
-```text
-Tool Definition
-      +
-Implementation Source
-      +
-Test Cases
-      │
-      ▼
-Persistent Repository
-      │
-      ▼
-Immutable Tool Catalogs
-      │
-      ▼
-Resolution
-      │
-      ▼
-Execution and Verification
-```
-
-The current repository implementations include in-memory storage and SQLite.
-
-Persisted tools retain:
-
-- capability identity and schemas;
-- executable runtime and source;
-- implementation version;
-- deterministic verification cases.
-
-Tool catalogs and resolvers remain storage independent.
-
-This establishes the foundation for dynamically registered, synthesized, and
-eventually optimizer-generated tools without requiring those tools to be baked
-into the Azathoth codebase.
-
-### Workflows
-
-A workflow specification describes a dependency graph without embedding executable model instances.
+A workflow specification describes a dependency graph without embedding executable runtime instances.
 
 ```text
 WorkflowSpecification
@@ -836,98 +795,26 @@ Workflow steps can declare:
 - retry policies; and
 - failure policies.
 
-Execution proceeds in dependency-safe layers while preserving deterministic commit order.
+Execution proceeds in dependency-safe layers while preserving deterministic evidence ordering.
 
 See [`azathoth.workflows`](src/azathoth/workflows/README.md).
 
-### Durable Workflows
+## Durable Execution Evidence
 
-Workflow specifications can be persisted independently from executable runtime
-objects.
-
-```text
-SQLite
-  │
-  ▼
-WorkflowSpecification
-  │
-  ▼
-WorkflowCatalog
-  │
-  ▼
-Candidate Generation
-  │
-  ▼
-WorkflowRunner
-```
-
-Persisted workflows retain their dependency graph, bindings, conditions,
-retries, failure policies, prompt requirements, and tool requirements.
-
-Executable model and tool implementations are resolved only when a persisted
-specification becomes a workflow candidate.
-
-This keeps durable workflow configuration independent from runtime provider and
-tool objects.
-
-### Durable Execution Evidence
-
-Completed workflow executions can be persisted independently from workflow
-definitions.
-
-```text
-WorkflowSpecification
-        │
-        ▼
-WorkflowRunner
-        │
-        ▼
-WorkflowRun
-        │
-        ▼
-WorkflowRunRepository
-        │
-        ▼
-Persistent Evidence
-```
-
-Each `WorkflowRun` has a stable identifier and retains step execution results,
-attempts, values, contexts, and timing.
-
-Later human or application feedback is stored separately.
+Completed workflow runs are durable evidence.
 
 ```text
 WorkflowRun
     │
-    │ run_id
-    ▼
-WorkflowRunFeedback
-├── good / bad
-├── reason
-└── corrected output
+    ├── step execution results
+    ├── attempts
+    ├── failures
+    ├── values
+    ├── contexts
+    └── timing
 ```
 
-Feedback does not modify the original execution record.
-
-This keeps observed runtime behavior separate from later judgments about that
-behavior.
-
-Machine evaluation can also be associated durably with a specific run.
-
-```text
-WorkflowRun
-    │
-    │ run_id
-    ▼
-WorkflowRunEvaluation
-    │
-    ▼
-EvaluationResult
-```
-
-A run may have multiple independent evaluations.
-
-Evaluator judgments remain separate from human or application feedback.
+Later judgments remain separate artifacts.
 
 ```text
                     WorkflowRun
@@ -937,158 +824,97 @@ Evaluator judgments remain separate from human or application feedback.
           machine judgment  human/app judgment
 ```
 
-All three artifacts can be persisted and reconstructed independently.
+Recording later feedback or evaluation does not mutate the original execution evidence.
 
-Recording a later judgment never modifies the original execution evidence.
+## Workflow Benchmarks
 
-### Durable Experiments
-
-Completed workflow comparisons can be persisted with references to the exact
-execution and evaluation evidence used to produce their scorecards and ranking.
+Azathoth can execute reusable benchmark datasets against workflow candidates.
 
 ```text
-WorkflowRun
-    +
-EvaluationResult
-    │
-    ▼
-WorkflowScorecard
-    │
-    ▼
-WorkflowExperimentRecord
-    │
-    ▼
-Persistent Storage
-```
-
-Experiment records preserve:
-
-- workflow identity;
-- run identity;
-- evaluation identity;
-- scorecards; and
-- final ranking.
-
-Runs and evaluations remain independently durable rather than being duplicated
-inside experiment records.
-
-Persisted experiments record completed empirical comparisons. They do not define
-how future candidates are generated.
-
-### Workflow Experiments
-
-Workflow experiments compose execution, evaluation, scoring, and ranking.
-
-```text
+BenchmarkDataset
+        │
+        ▼
 Workflow Candidates
         │
         ▼
-WorkflowExperimentRunner
+Execution
         │
-        ├── execute
-        ├── evaluate
-        ├── score
-        └── rank
+        ▼
+Evaluation
+        │
+        ▼
+Workflow Scorecards
+        │
+        ▼
+Ranking
+```
+
+Benchmark datasets preserve versioned reusable workloads consisting of inputs, expected outcomes, case identity, and metadata.
+
+See [`azathoth.evaluation`](src/azathoth/evaluation/README.md).
+
+## Workflow Experiments
+
+Workflow experiments record empirical comparisons between candidate workflows.
+
+```text
+candidate executions
+        +
+evaluations
+        │
+        ▼
+scorecards
+        │
+        ▼
+ranking
         │
         ▼
 WorkflowExperimentResult
-        │
-        ▼
-      winner
 ```
 
-Experiments contain no candidate-generation or mutation logic.
+Experiments produce evidence.
 
-Their job is to produce empirical evidence about a candidate population.
+They do not mutate candidate definitions or choose what production executes.
 
-### Optimization
+## Empirical Workflow Optimization
 
-Optimization consumes experiment evidence and proposes the next population.
-
-```text
-WorkflowExperimentResult
-          +
-Current Candidates
-          │
-          ▼
-   WorkflowOptimizer
-          │
-          ▼
-WorkflowOptimizationResult
-          │
-          ▼
- Next Generation
-```
-
-Optimization sessions repeat this process across generations:
+Azathoth includes a model-substitution optimizer capable of exploring strictly cheaper legal model bindings.
 
 ```text
-Initial Population
-        │
-        ▼
-Experiment
-        │
-        ▼
-Optimizer
-        │
-        ▼
-Generation 1
-        │
-        ▼
-Experiment
-        │
-        ▼
-Optimizer
-        │
-        ▼
-Generation 2
-        │
-        ▼
-       ...
-```
-
-See [`azathoth.optimization`](src/azathoth/optimization/README.md).
-
-### Empirical Workflow Optimization
-
-Azathoth includes a reference model-substitution optimizer that can explore
-strictly cheaper compatible model bindings.
-
-```text
-workflow
-   │
-   ▼
+empirical winner
+      │
+      ▼
 cheaper legal substitutions
-   │
-   ▼
+      │
+      ▼
 execute
-   │
-   ▼
+      │
+      ▼
 evaluate
-   │
-   ▼
+      │
+      ▼
 score
-   │
-   ▼
+      │
+      ▼
 rank
 ```
 
 The optimizer does not declare its proposals better.
 
-Existing workflow experiments execute both the baseline and proposed
-candidates, preserve quality and reliability evidence, measure runtime cost,
-and rank the resulting scorecards.
+Existing experiment infrastructure must prove that empirically.
 
-This allows Azathoth to demonstrate real empirical improvement while keeping
-optimization policy replaceable through the `WorkflowOptimizer` protocol.
+Optimization policy remains replaceable through the `WorkflowOptimizer` protocol.
 
-### Runtime Composition
+See [`azathoth.optimization`](src/azathoth/optimization/README.md).
 
-Durable configuration and process-local implementations can be composed through
-`AzathothRuntime`.
+## Runtime Composition
+
+Durable configuration and process-local implementations are composed through `AzathothRuntime`.
 
 ```text
 reconstructed catalogs
+        +
+current provider state
         +
 runtime implementations
         │
@@ -1100,16 +926,330 @@ workflow ID
         │
         ▼
 WorkflowCandidate
+```
+
+The runtime does not own persistence.
+
+It does not execute workflows.
+
+It provides one immutable process-local composition snapshot for turning configured workflow identities into executable candidates.
+
+See [`azathoth.runtime`](src/azathoth/runtime/README.md).
+
+## Production
+
+Azathoth's production model is deliberately explicit.
+
+### Production State
+
+`WorkflowProductionState` records current intended production behavior.
+
+For prompt-backed production steps:
+
+```text
+fixed primary model
+        │
+        ├── available ──► execute
+        │
+        ▼
+ordered explicit substitutes
+        │
+        ├── available ──► execute
+        │
+        ▼
+explicit failure
+```
+
+Production does not silently return to portfolio selection.
+
+### Production Revisions
+
+Promotion also records immutable deployment history:
+
+```text
+WorkflowProductionRevision
+```
+
+But:
+
+```text
+WorkflowProductionRevision
+    ≠
+execution authority
+```
+
+Revisions are the audit log of deployments.
+
+`WorkflowProductionState` is what production executes.
+
+### Production Invocations
+
+Production calls are represented by durable `ProductionInvocation` objects.
+
+```text
+ProductionInvocation
+        │
+        ▼
+WorkflowProductionState
+        │
+        ▼
+WorkflowRun
+```
+
+Azathoth records the durable relationship between the external invocation and the run it produced.
+
+## Command-Line Application
+
+Installing Azathoth exposes the `azathoth` command.
+
+```bash
+azathoth --help
+azathoth --version
+```
+
+The V1 command hierarchy is:
+
+```text
+azathoth
+│
+├── workflow
+│   ├── import
+│   ├── list
+│   ├── show
+│   ├── run
+│   ├── optimize
+│   ├── promote
+│   └── invoke
+│
+└── model
+    ├── list
+    ├── show
+    ├── authorize
+    ├── deauthorize
+    └── portfolio
+```
+
+The most important distinctions are:
+
+```text
+workflow run
+    configured workflow execution
+
+workflow invoke
+    active production execution
+
+
+workflow optimize
+    empirical search
+
+workflow promote
+    explicit production transition
+
+
+model list
+    current provider availability
+
+model portfolio
+    organizational authorization
+```
+
+See [`azathoth.cli`](src/azathoth/cli/README.md).
+
+## CLI Configuration
+
+The command-line application recognizes:
+
+```text
+AZATHOTH_DATABASE
+OPENROUTER_API_KEY
+```
+
+`AZATHOTH_DATABASE` selects the SQLite application database.
+
+When absent, Azathoth uses:
+
+```text
+azathoth.db
+```
+
+`OPENROUTER_API_KEY` supplies process-local OpenRouter credentials for provider discovery and executable model composition.
+
+Credentials are not durable workflow configuration.
+
+## First Look
+
+Azathoth includes a canonical prompt-backed workflow:
+
+```text
+examples/workflows/simple-prompt.json
+```
+
+It is the actual serialized `WorkflowSpecification` representation used by the framework.
+
+Import it:
+
+```bash
+azathoth workflow import \
+    examples/workflows/simple-prompt.json
+```
+
+List configured workflows:
+
+```bash
+azathoth workflow list
+```
+
+Inspect the imported workflow:
+
+```bash
+azathoth workflow show \
+    11111111-1111-1111-1111-111111111111
+```
+
+Import, list, and show require no provider credentials.
+
+The repository tests this lifecycle through the installed `azathoth` console script against the same checked-in example.
+
+Provider-dependent execution begins when Azathoth must generate executable prompt-backed candidates.
+
+## Configured Workflow Execution
+
+Execute a configured workflow with:
+
+```bash
+azathoth workflow run <WORKFLOW_ID>
+```
+
+This executes the configured workflow path:
+
+```text
+WorkflowSpecification
+        │
+        ▼
+candidate generation
+        │
+        ▼
+WorkflowCandidate
         │
         ▼
 WorkflowRunner
+        │
+        ▼
+WorkflowRun
 ```
 
-The runtime does not own persistence or workflow execution.
+It does not invoke active production state.
 
-It provides one supported boundary for turning configured workflow identities
-into executable candidates using the existing model and tool resolution
-infrastructure.
+## Workflow Optimization
+
+Run empirical workflow optimization with:
+
+```bash
+azathoth workflow optimize <WORKFLOW_ID> \
+    --expected '<JSON>' \
+    --target-latency <SECONDS> \
+    --target-cost <USD>
+```
+
+Optional:
+
+```bash
+--generations <COUNT>
+```
+
+The CLI constructs an exact expected outcome from `--expected` and uses the supplied latency and cost targets as workflow scoring inputs.
+
+Optimization does not promote its result.
+
+## Production Promotion
+
+Explicitly promote a configured workflow:
+
+```bash
+azathoth workflow promote <WORKFLOW_ID>
+```
+
+Promotion persists:
+
+```text
+WorkflowProductionState
+    current execution authority
+
+WorkflowProductionRevision
+    immutable audit history
+```
+
+Configured portfolio-based prompt selections are materialized into fixed production model selections.
+
+## Production Invocation
+
+Invoke active production behavior:
+
+```bash
+azathoth workflow invoke <WORKFLOW_ID> \
+    --input '<JSON>'
+```
+
+This command executes `WorkflowProductionState`.
+
+It does not regenerate the configured workflow and does not silently fall back to configured behavior when the workflow has not been deployed.
+
+## Model Operations
+
+Inspect currently available provider models:
+
+```bash
+azathoth model list
+```
+
+Inspect one model:
+
+```bash
+azathoth model show <MODEL_IDENTIFIER>
+```
+
+Authorize a currently available model:
+
+```bash
+azathoth model authorize <MODEL_IDENTIFIER>
+```
+
+Remove organizational authorization:
+
+```bash
+azathoth model deauthorize <MODEL_IDENTIFIER>
+```
+
+Inspect the authorized portfolio:
+
+```bash
+azathoth model portfolio
+```
+
+Availability and authorization remain separate concepts.
+
+## Package Guide
+
+The root README describes Azathoth as a complete system.
+
+Detailed architecture lives with each major package.
+
+| Package | Responsibility |
+| --- | --- |
+| [`azathoth.cli`](src/azathoth/cli/README.md) | Installed operator surface and runtime bootstrap |
+| [`azathoth.context`](src/azathoth/context/README.md) | Immutable event-backed working context |
+| [`azathoth.goals`](src/azathoth/goals/README.md) | Durable objective intent |
+| [`azathoth.strategies`](src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
+| [`azathoth.execution`](src/azathoth/execution/README.md) | Strategy execution evidence |
+| [`azathoth.evaluation`](src/azathoth/evaluation/README.md) | Expected outcomes, evaluators, evidence, and benchmarks |
+| [`azathoth.prompting`](src/azathoth/prompting/README.md) | Prompt specifications, bindings, model selection, and executable prompt strategies |
+| [`azathoth.providers`](src/azathoth/providers/README.md) | Provider truth, model metadata, authorization, discovery, and executable registries |
+| [`azathoth.tools`](src/azathoth/tools/README.md) | Durable tool capabilities, implementations, execution, and verification |
+| [`azathoth.workflows`](src/azathoth/workflows/README.md) | Workflow definition, execution, evidence, experiments, and production |
+| [`azathoth.optimization`](src/azathoth/optimization/README.md) | Empirical candidate generation and optimization |
+| [`azathoth.runtime`](src/azathoth/runtime/README.md) | Process-local executable composition |
+
+Architectural decisions are recorded under [`docs/adrs`](docs/adrs).
 
 ## Development
 
@@ -1138,33 +1278,68 @@ Development emphasizes:
 - test-driven development; and
 - ADR-backed design decisions.
 
+Individual checks include:
+
+```bash
+ruff format src tests
+ruff check src tests
+mypy src
+pytest
+```
+
 ## Project Status
 
-Azathoth is under active development.
+Azathoth OSS V1 is in release hardening.
 
-The deterministic execution, evaluation, benchmarking, and optimization
-substrate is established.
+The feature surface is frozen.
 
-Current public development focuses on completing the reusable runtime and its
-extension boundaries, including:
+The implemented system already spans:
 
-- durable specifications and empirical evidence;
-- tool-backed workflow execution;
-- production-oriented persistence;
-- provider and evaluator integrations;
-- command-line interfaces; and
-- reproducible end-to-end examples.
+```text
+workflow definition
+      │
+      ▼
+runtime candidate generation
+      │
+      ▼
+execution
+      │
+      ▼
+evaluation
+      │
+      ▼
+experimentation
+      │
+      ▼
+optimization
+      │
+      ▼
+explicit promotion
+      │
+      ▼
+production invocation
+```
 
-Optimization algorithms remain replaceable application-level components.
+Current release work focuses on:
+
+- public documentation;
+- fresh-user onboarding;
+- packaging;
+- release acceptance testing;
+- reproducible examples; and
+- operational clarity.
+
+The goal of release hardening is not to expand the architecture.
+
+It is to make the architecture that already exists straightforward to install, understand, verify, and operate.
 
 ## Architectural Decisions
 
-Significant architectural decisions are recorded as ADRs under
-[`docs/adrs`](docs/adrs).
+Significant architectural decisions are recorded as ADRs under [`docs/adrs`](docs/adrs).
 
 ADRs document public contracts, invariants, and subsystem boundaries.
 
-Package READMEs document the behavior of the open-source runtime.
+Package READMEs document the implemented OSS V1 architecture.
 
 ## Support the Project
 
