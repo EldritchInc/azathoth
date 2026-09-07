@@ -7,6 +7,12 @@ from azathoth.tools.definition import (
     ToolInputSchema,
     ToolOutputSchema,
 )
+from azathoth.tools.document import (
+    ToolDocument,
+    ToolDocumentError,
+    decode_tool_document,
+    encode_tool_document,
+)
 from azathoth.tools.exceptions import (
     ToolEntrypointError,
     ToolExecutionError,
@@ -44,6 +50,8 @@ __all__ = [
     "ToolCatalog",
     "ToolCatalogLoader",
     "ToolDefinition",
+    "ToolDocument",
+    "ToolDocumentError",
     "ToolEntrypointError",
     "ToolExecutionError",
     "ToolExecutor",
@@ -64,5 +72,7 @@ __all__ = [
     "ToolVerification",
     "ToolVerifier",
     "UnsupportedToolRuntimeError",
+    "decode_tool_document",
+    "encode_tool_document",
     "require_tool_repository",
 ]

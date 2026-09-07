@@ -23,28 +23,68 @@ class SQLiteToolRepository:
         self,
         definition: ToolDefinition,
     ) -> None:
-        """Persist one tool definition without replacing existing data."""
+        """Persist one exact tool definition version without replacement."""
 
-        self._insert(
-            table="tool_definitions",
-            artifact_name="tool definition",
-            artifact_id=definition.id,
-            payload=definition.model_dump_json(),
-        )
+        connection = sqlite3.connect(self._database)
+
+        try:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO tool_definitions (
+                        artifact_id,
+                        artifact_version,
+                        payload
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        str(definition.id),
+                        definition.version,
+                        definition.model_dump_json(),
+                    ),
+                )
+
+                connection.commit()
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(
+                    f"Tool definition {definition.id}@{definition.version} already exists."
+                ) from exc
+        finally:
+            connection.close()
 
     def get_definition(
         self,
-        definition_id: UUID,
+        tool_id: UUID,
+        version: str,
     ) -> ToolDefinition | None:
-        """Return a tool definition by identifier."""
+        """Return one exact tool definition version."""
 
-        payload = self._get(
-            table="tool_definitions",
-            artifact_id=definition_id,
-        )
+        connection = sqlite3.connect(self._database)
 
-        if payload is None:
+        try:
+            row = connection.execute(
+                """
+                SELECT payload
+                FROM tool_definitions
+                WHERE artifact_id = ?
+                  AND artifact_version = ?
+                """,
+                (
+                    str(tool_id),
+                    version,
+                ),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        if row is None:
             return None
+
+        payload = row[0]
+
+        if not isinstance(payload, str):
+            raise TypeError(f"Persisted tool definition {tool_id}@{version} was not text.")
 
         return ToolDefinition.model_validate_json(payload)
 
@@ -129,7 +169,7 @@ class SQLiteToolRepository:
         )
 
     def _initialize(self) -> None:
-        """Create repository tables when they do not already exist."""
+        """Create repository tables and migrate definition identity."""
 
         connection = sqlite3.connect(self._database)
 
@@ -138,8 +178,13 @@ class SQLiteToolRepository:
                 """
                 CREATE TABLE IF NOT EXISTS tool_definitions (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                    artifact_id TEXT NOT NULL UNIQUE,
-                    payload TEXT NOT NULL
+                    artifact_id TEXT NOT NULL,
+                    artifact_version TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    UNIQUE (
+                        artifact_id,
+                        artifact_version
+                    )
                 );
 
                 CREATE TABLE IF NOT EXISTS tool_implementations (
@@ -155,9 +200,81 @@ class SQLiteToolRepository:
                 );
                 """
             )
+
+            self._migrate_tool_definitions(
+                connection,
+            )
+
             connection.commit()
         finally:
             connection.close()
+
+    @staticmethod
+    def _migrate_tool_definitions(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Migrate UUID-only tool definitions to versioned references."""
+
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(tool_definitions)").fetchall()
+        }
+
+        if "artifact_version" in columns:
+            return
+
+        rows = connection.execute(
+            """
+            SELECT payload
+            FROM tool_definitions
+            ORDER BY sequence
+            """
+        ).fetchall()
+
+        definitions: list[ToolDefinition] = []
+
+        for row in rows:
+            payload = row[0]
+
+            if not isinstance(payload, str):
+                raise TypeError("Persisted tool definition payload was not text.")
+
+            definitions.append(ToolDefinition.model_validate_json(payload))
+
+        connection.execute("ALTER TABLE tool_definitions RENAME TO tool_definitions_legacy")
+
+        connection.execute(
+            """
+            CREATE TABLE tool_definitions (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                artifact_id TEXT NOT NULL,
+                artifact_version TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                UNIQUE (
+                    artifact_id,
+                    artifact_version
+                )
+            )
+            """
+        )
+
+        for definition in definitions:
+            connection.execute(
+                """
+                INSERT INTO tool_definitions (
+                    artifact_id,
+                    artifact_version,
+                    payload
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    str(definition.id),
+                    definition.version,
+                    definition.model_dump_json(),
+                ),
+            )
+
+        connection.execute("DROP TABLE tool_definitions_legacy")
 
     def _insert(
         self,
@@ -167,7 +284,7 @@ class SQLiteToolRepository:
         artifact_id: UUID,
         payload: str,
     ) -> None:
-        """Insert one append-only artifact."""
+        """Insert one append-only UUID-identified artifact."""
 
         connection = sqlite3.connect(self._database)
 
@@ -186,6 +303,7 @@ class SQLiteToolRepository:
                         payload,
                     ),
                 )
+
                 connection.commit()
             except sqlite3.IntegrityError as exc:
                 raise ValueError(
@@ -200,7 +318,7 @@ class SQLiteToolRepository:
         table: str,
         artifact_id: UUID,
     ) -> str | None:
-        """Return one serialized artifact by identifier."""
+        """Return one serialized UUID-identified artifact."""
 
         connection = sqlite3.connect(self._database)
 
