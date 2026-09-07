@@ -266,7 +266,9 @@ def create_heterogeneous_candidate() -> WorkflowCandidate:
                         text="Return the classification.",
                     ),
                     language_model=DeterministicLanguageModel(
-                        response="positive",
+                        provider="openrouter",
+                        model="example-winner",
+                        response_text="positive",
                     ),
                     model_binding=ModelBinding(
                         identifier=MODEL_IDENTIFIER,
