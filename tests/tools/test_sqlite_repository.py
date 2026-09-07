@@ -378,3 +378,86 @@ def test_sqlite_repository_keeps_artifact_types_independent(
     assert repository.definitions() == (definition,)
     assert repository.implementations() == (implementation,)
     assert repository.test_cases() == (test_case,)
+
+
+def test_sqlite_repository_persists_multiple_versions_for_one_tool(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "tools.db"
+
+    first = create_definition(
+        tool_id=TOOL_ID,
+    )
+
+    second = first.model_copy(
+        update={
+            "version": "2.0.0",
+        }
+    )
+
+    repository = SQLiteToolRepository(database)
+
+    repository.save_definition(first)
+    repository.save_definition(second)
+
+    reconstructed = SQLiteToolRepository(database)
+
+    assert reconstructed.definitions() == (
+        first,
+        second,
+    )
+
+
+def test_sqlite_repository_gets_exact_tool_definition_version(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(tmp_path)
+
+    first = create_definition(
+        tool_id=TOOL_ID,
+    )
+
+    second = first.model_copy(
+        update={
+            "version": "2.0.0",
+        }
+    )
+
+    repository.save_definition(first)
+    repository.save_definition(second)
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "1.0.0",
+        )
+        == first
+    )
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "2.0.0",
+        )
+        == second
+    )
+
+
+def test_sqlite_repository_returns_none_for_unknown_tool_definition_version(
+    tmp_path: Path,
+) -> None:
+    repository = create_repository(tmp_path)
+
+    repository.save_definition(
+        create_definition(
+            tool_id=TOOL_ID,
+        )
+    )
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "9.0.0",
+        )
+        is None
+    )

@@ -269,3 +269,76 @@ def test_repository_keeps_artifact_types_independent() -> None:
     assert repository.definitions() == (definition,)
     assert repository.implementations() == (implementation,)
     assert repository.test_cases() == (test_case,)
+
+
+def test_repository_persists_multiple_versions_for_one_tool() -> None:
+    repository = InMemoryToolRepository()
+
+    first = create_definition(
+        tool_id=TOOL_ID,
+    )
+
+    second = first.model_copy(
+        update={
+            "version": "2.0.0",
+        }
+    )
+
+    repository.save_definition(first)
+    repository.save_definition(second)
+
+    assert repository.definitions() == (
+        first,
+        second,
+    )
+
+
+def test_repository_gets_exact_tool_definition_version() -> None:
+    repository = InMemoryToolRepository()
+
+    first = create_definition(
+        tool_id=TOOL_ID,
+    )
+
+    second = first.model_copy(
+        update={
+            "version": "2.0.0",
+        }
+    )
+
+    repository.save_definition(first)
+    repository.save_definition(second)
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "1.0.0",
+        )
+        == first
+    )
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "2.0.0",
+        )
+        == second
+    )
+
+
+def test_repository_returns_none_for_unknown_tool_definition_version() -> None:
+    repository = InMemoryToolRepository()
+
+    repository.save_definition(
+        create_definition(
+            tool_id=TOOL_ID,
+        )
+    )
+
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "9.0.0",
+        )
+        is None
+    )
