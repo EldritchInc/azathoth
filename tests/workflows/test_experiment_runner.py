@@ -14,6 +14,7 @@ from azathoth.evaluation import (
     OutcomeComparison,
 )
 from azathoth.strategies import (
+    Strategy,
     StrategyExecutionMetrics,
     StrategyMetadata,
     StrategyOutcome,
@@ -94,6 +95,42 @@ class StaticStrategy:
         )
 
 
+class FailingStrategy:
+    """Raise one configured deterministic execution failure."""
+
+    def __init__(
+        self,
+        *,
+        strategy_id: UUID,
+        message: str,
+    ) -> None:
+        self._metadata = StrategyMetadata(
+            id=strategy_id,
+            name=f"failing-strategy-{strategy_id}",
+            description="Deterministic failing workflow experiment strategy.",
+        )
+        self._message = message
+        self.calls = 0
+
+    @property
+    def metadata(self) -> StrategyMetadata:
+        """Return deterministic strategy metadata."""
+
+        return self._metadata
+
+    async def run(
+        self,
+        _context: Context,
+    ) -> StrategyOutcome:
+        """Raise the configured execution failure."""
+
+        self.calls += 1
+
+        raise RuntimeError(
+            self._message,
+        )
+
+
 class RecordingEvaluator:
     """Record evaluated outputs and score exact expected matches."""
 
@@ -139,7 +176,7 @@ def create_workflow(
     *,
     workflow_id: UUID,
     step_id: UUID,
-    strategy: StaticStrategy,
+    strategy: Strategy,
     name: str,
 ) -> WorkflowCandidate:
     """Create a deterministic one-step workflow candidate."""
@@ -563,3 +600,218 @@ def test_experiment_runner_result_round_trips_through_json() -> None:
 
     assert restored == result
     assert restored.winner == result.winner
+
+
+def test_experiment_runner_continues_after_candidate_execution_failure() -> None:
+    """One failed candidate should not prevent later candidates from executing."""
+
+    strategy_a = StaticStrategy(
+        strategy_id=STRATEGY_ID_A,
+        output="failure",
+        estimated_cost_usd=0.05,
+    )
+    strategy_b = FailingStrategy(
+        strategy_id=STRATEGY_ID_B,
+        message="candidate-b failed",
+    )
+    strategy_c = StaticStrategy(
+        strategy_id=STRATEGY_ID_C,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=strategy_a,
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=strategy_b,
+            name="workflow-b",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_C,
+            step_id=STEP_ID_C,
+            strategy=strategy_c,
+            name="workflow-c",
+        ),
+    )
+
+    asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=workflows,
+            context=Context(),
+            evaluator=RecordingEvaluator(),
+            expected_outcome=create_expected_outcome(),
+        )
+    )
+
+    assert strategy_a.calls == 1
+    assert strategy_b.calls == 1
+    assert strategy_c.calls == 1
+
+
+def test_experiment_runner_does_not_evaluate_failed_candidate() -> None:
+    """A failed candidate has no successful output to evaluate."""
+
+    evaluator = RecordingEvaluator()
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_A,
+                output="failure",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_B,
+                message="candidate-b failed",
+            ),
+            name="workflow-b",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_C,
+            step_id=STEP_ID_C,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_C,
+                output="success",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-c",
+        ),
+    )
+
+    asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=workflows,
+            context=Context(),
+            evaluator=evaluator,
+            expected_outcome=create_expected_outcome(),
+        )
+    )
+
+    assert evaluator.actual_values == [
+        "failure",
+        "success",
+    ]
+
+
+def test_experiment_runner_ranks_successfully_executed_candidates_after_failure() -> None:
+    """Failed execution should not prevent viable candidates from being ranked."""
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_A,
+                output="failure",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_B,
+                message="candidate-b failed",
+            ),
+            name="workflow-b",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_C,
+            step_id=STEP_ID_C,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_C,
+                output="success",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-c",
+        ),
+    )
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=workflows,
+            context=Context(),
+            evaluator=RecordingEvaluator(),
+            expected_outcome=create_expected_outcome(),
+        )
+    )
+
+    assert len(result.scorecards) == 2
+
+    assert tuple(observation.candidate_signature for observation in result.evidence) == (
+        workflows[0].signature,
+        workflows[2].signature,
+    )
+
+    assert result.winner == result.scorecards[1]
+    assert result.winner.quality_score == pytest.approx(1.0)
+
+
+def test_experiment_runner_rejects_population_when_every_candidate_fails() -> None:
+    """An experiment cannot invent a winner when every candidate fails."""
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_A,
+                message="candidate-a failed",
+            ),
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_B,
+                message="candidate-b failed",
+            ),
+            name="workflow-b",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_C,
+            step_id=STEP_ID_C,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_C,
+                message="candidate-c failed",
+            ),
+            name="workflow-c",
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Workflow experiment produced no successful candidate executions.",
+    ):
+        asyncio.run(
+            WorkflowExperimentRunner(
+                scorer=create_scorer(),
+            ).run(
+                workflows=workflows,
+                context=Context(),
+                evaluator=RecordingEvaluator(),
+                expected_outcome=create_expected_outcome(),
+            )
+        )

@@ -34,6 +34,14 @@ class _LayerStepResult:
     execution: ExecutionResult | None
 
 
+@dataclass(frozen=True)
+class _WorkflowExecutionResult:
+    """Internal workflow execution result with optional propagated failure."""
+
+    run: WorkflowRun
+    error: Exception | None = None
+
+
 class WorkflowRunner:
     """Execute workflow candidates."""
 
@@ -243,7 +251,39 @@ class WorkflowRunner:
         workflow: WorkflowCandidate,
         context: Context,
     ) -> WorkflowRun:
-        """Execute a workflow candidate by dependency layer."""
+        """Execute a workflow candidate and propagate FAIL_WORKFLOW failures."""
+
+        result = await self._run(
+            workflow=workflow,
+            context=context,
+        )
+
+        if result.error is not None:
+            raise result.error
+
+        return result.run
+
+    async def run_recording_failures(
+        self,
+        workflow: WorkflowCandidate,
+        context: Context,
+    ) -> WorkflowRun:
+        """Execute a workflow candidate and return completed failure evidence."""
+
+        result = await self._run(
+            workflow=workflow,
+            context=context,
+        )
+
+        return result.run
+
+    async def _run(
+        self,
+        *,
+        workflow: WorkflowCandidate,
+        context: Context,
+    ) -> _WorkflowExecutionResult:
+        """Execute a workflow candidate while preserving terminal failure evidence."""
 
         started_at = datetime.now(
             tz=UTC,
@@ -251,12 +291,11 @@ class WorkflowRunner:
 
         current_context = context
         completed_steps: list[WorkflowStepRun] = []
-
         blocked_step_ids: set[UUID] = set()
+        terminal_error: Exception | None = None
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
-
             layer_results: list[
                 tuple[
                     WorkflowCandidateStep,
@@ -322,12 +361,6 @@ class WorkflowRunner:
                 )
 
                 if error is not None:
-                    if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
-                        raise error
-
-                    if step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
-                        blocked_step_ids.add(step.id)
-
                     layer_results.append(
                         (
                             step,
@@ -338,6 +371,13 @@ class WorkflowRunner:
                             WorkflowStepStatus.FAILED,
                         )
                     )
+
+                    if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
+                        terminal_error = error
+                        break
+
+                    if step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
+                        blocked_step_ids.add(step.id)
 
                     continue
 
@@ -430,15 +470,24 @@ class WorkflowRunner:
                         values=values,
                     )
                 )
+
+            if terminal_error is not None:
+                break
+
         completed_at = datetime.now(
             tz=UTC,
         )
 
-        return WorkflowRun(
+        run = WorkflowRun(
             workflow=workflow.metadata,
             steps=tuple(completed_steps),
             initial_context=context,
             final_context=current_context,
             started_at=started_at,
             completed_at=completed_at,
+        )
+
+        return _WorkflowExecutionResult(
+            run=run,
+            error=terminal_error,
         )

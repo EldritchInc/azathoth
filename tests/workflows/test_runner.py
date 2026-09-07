@@ -21,6 +21,7 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowRunner,
     WorkflowStepRun,
+    WorkflowStepStatus,
     WorkflowValueBinding,
     WorkflowValueReference,
     WorkflowValueResolutionError,
@@ -845,6 +846,102 @@ def test_failure_prevents_future_layers_from_executing() -> None:
     )
 
     assert all(strategy.metadata.name != "Reasoner" for strategy, _ in executor.calls)
+
+
+def test_runner_can_return_fail_workflow_execution_evidence() -> None:
+    candidate = create_candidate()
+    executor = RecordingExecutor(
+        fail_on="Classifier",
+    )
+    runner = WorkflowRunner(
+        executor=executor,
+    )
+
+    run = asyncio.run(
+        runner.run_recording_failures(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert run.failed
+    assert not run.succeeded
+
+    assert len(run.steps) == 1
+
+    failed_step = run.steps[0]
+
+    assert failed_step.step_id == STEP_ONE_ID
+    assert failed_step.status is WorkflowStepStatus.FAILED
+    assert failed_step.execution is None
+    assert len(failed_step.attempts) == 1
+
+    failure = failed_step.attempts[0].failure
+
+    assert failure is not None
+    assert failure.exception_type == "RuntimeError"
+    assert failure.message == "Classifier failed"
+
+    assert tuple(strategy.metadata.name for strategy, _ in executor.calls) == ("Classifier",)
+
+
+def test_runner_failure_evidence_preserves_completed_prior_layers() -> None:
+    candidate = create_three_layer_candidate()
+    executor = RecordingExecutor(
+        fail_on="Question detector",
+    )
+    runner = WorkflowRunner(
+        executor=executor,
+    )
+
+    run = asyncio.run(
+        runner.run_recording_failures(
+            workflow=candidate,
+            context=Context(),
+        )
+    )
+
+    assert run.failed
+
+    assert tuple(step.step_id for step in run.steps) == (
+        STEP_ONE_ID,
+        STEP_TWO_ID,
+        STEP_THREE_ID,
+    )
+
+    assert tuple(step.status for step in run.steps) == (
+        WorkflowStepStatus.EXECUTED,
+        WorkflowStepStatus.EXECUTED,
+        WorkflowStepStatus.FAILED,
+    )
+
+    assert tuple(strategy.metadata.name for strategy, _ in executor.calls) == (
+        "Preparation",
+        "Classifier",
+        "Question detector",
+    )
+
+    assert all(strategy.metadata.name != "Reasoner" for strategy, _ in executor.calls)
+
+
+def test_runner_normal_execution_still_propagates_fail_workflow_error() -> None:
+    candidate = create_candidate()
+    runner = WorkflowRunner(
+        executor=RecordingExecutor(
+            fail_on="Classifier",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Classifier failed",
+    ):
+        asyncio.run(
+            runner.run(
+                workflow=candidate,
+                context=Context(),
+            )
+        )
 
 
 def test_runner_records_empty_workflow_values() -> None:

@@ -50,15 +50,18 @@ class WorkflowExperimentRunner:
         evaluator: Evaluator,
         expected_outcome: ExpectedOutcome,
     ) -> WorkflowExperimentResult:
-        """Execute, evaluate, score, and rank workflow candidates."""
+        """Execute, evaluate, score, and rank successful workflow candidates."""
 
         evidence: list[WorkflowExperimentEvidence] = []
 
         for workflow in workflows:
-            run = await self._runner.run(
+            run = await self._runner.run_recording_failures(
                 workflow=workflow,
                 context=context,
             )
+
+            if run.failed:
+                continue
 
             evaluation = await evaluator.evaluate(
                 expected=expected_outcome,
@@ -76,6 +79,9 @@ class WorkflowExperimentRunner:
                     scorecard=scorecard,
                 )
             )
+
+        if workflows and not evidence:
+            raise ValueError("Workflow experiment produced no successful candidate executions.")
 
         scorecards = tuple(observation.scorecard for observation in evidence)
 
