@@ -222,6 +222,70 @@ def test_openrouter_language_model_maps_invalid_response() -> None:
         )
 
 
+def test_openrouter_language_model_rejects_null_message_content() -> None:
+    """Reject a successful HTTP response without textual completion content."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = create_response()
+        payload["choices"][0]["message"]["content"] = None
+
+        return httpx.Response(
+            200,
+            json=payload,
+            request=request,
+        )
+
+    model = OpenRouterLanguageModel(
+        create_configuration(),
+        "openai/gpt-test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(
+        ModelExecutionError,
+        match="invalid response",
+    ):
+        asyncio.run(
+            model.complete(
+                Prompt(
+                    text="Hello.",
+                )
+            )
+        )
+
+
+def test_openrouter_language_model_rejects_missing_usage() -> None:
+    """Reject a successful HTTP response without usage evidence."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = create_response()
+        del payload["usage"]
+
+        return httpx.Response(
+            200,
+            json=payload,
+            request=request,
+        )
+
+    model = OpenRouterLanguageModel(
+        create_configuration(),
+        "openai/gpt-test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(
+        ModelExecutionError,
+        match="invalid response",
+    ):
+        asyncio.run(
+            model.complete(
+                Prompt(
+                    text="Hello.",
+                )
+            )
+        )
+
+
 def test_openrouter_language_model_preserves_resolved_model() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         payload = create_response()
