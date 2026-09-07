@@ -23,6 +23,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_COMMAND,
     build_parser,
 )
+from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     import_tool,
     list_tool_implementations,
@@ -110,6 +111,7 @@ def _dispatch(
             show_tool=show_tool,
             show_tool_implementation=show_tool_implementation,
             show_tool_test_case=show_tool_test_case,
+            verify_tool=verify_tool,
         )
 
     return None

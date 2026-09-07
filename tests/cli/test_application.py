@@ -988,3 +988,79 @@ def test_tool_import_dispatches_command(
     assert received == [
         Path("word-count.json"),
     ]
+
+
+def test_tool_verify_parser_accepts_exact_version() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "verify",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert arguments.tool_action == "verify"
+    assert arguments.tool_id == TOOL_ID
+    assert arguments.tool_version == "2.0.0"
+
+
+def test_tool_verify_requires_exact_version() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            (
+                "tool",
+                "verify",
+                str(TOOL_ID),
+            )
+        )
+
+
+def test_tool_verify_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[tuple[UUID, str]] = []
+
+    def fake_verify_tool(
+        tool_id: UUID,
+        *,
+        version: str,
+    ) -> int:
+        received.append(
+            (
+                tool_id,
+                version,
+            )
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "verify_tool",
+        fake_verify_tool,
+    )
+
+    result = main(
+        (
+            "tool",
+            "verify",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        (
+            TOOL_ID,
+            "2.0.0",
+        )
+    ]

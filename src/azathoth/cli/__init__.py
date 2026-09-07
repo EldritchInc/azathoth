@@ -26,6 +26,7 @@ from azathoth.cli.rendering import (
     render_workflow_promotion,
     render_workflow_run,
 )
+from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     import_tool,
     list_tool_implementations,
@@ -82,4 +83,5 @@ __all__ = [
     "show_tool_implementation",
     "show_tool_test_case",
     "show_workflow",
+    "verify_tool",
 ]
