@@ -22,6 +22,7 @@ from azathoth.prompting import (
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelExecutionError,
     ModelMetadata,
     ModelRequirements,
     ModelResponse,
@@ -61,6 +62,7 @@ class DeterministicLanguageModel:
     ) -> None:
         self._text = text
         self._estimated_cost_usd = estimated_cost_usd
+        self.calls = 0
 
     async def complete(
         self,
@@ -69,6 +71,8 @@ class DeterministicLanguageModel:
         """Return the configured deterministic response."""
 
         assert prompt.text == "Produce the configured deterministic result."
+
+        self.calls += 1
 
         return ModelResponse(
             text=self._text,
@@ -80,6 +84,25 @@ class DeterministicLanguageModel:
             latency_ms=100,
             estimated_cost_usd=self._estimated_cost_usd,
         )
+
+
+class FailingLanguageModel:
+    """Raise one deterministic model execution failure."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(
+        self,
+        prompt: Prompt,
+    ) -> ModelResponse:
+        """Raise a deterministic provider-boundary failure."""
+
+        assert prompt.text == "Produce the configured deterministic result."
+
+        self.calls += 1
+
+        raise ModelExecutionError("Provider returned an invalid model response.")
 
 
 def create_specification(
@@ -250,3 +273,99 @@ def test_workflow_optimization_session_end_to_end() -> None:
     )
 
     assert first_generation.previous_experiment == second_generation.previous_experiment
+
+
+def test_workflow_optimization_session_survives_candidate_execution_failure() -> None:
+    """Optimization should continue when one candidate cannot execute."""
+
+    catalog = create_catalog()
+
+    failing_model = FailingLanguageModel()
+    successful_model = DeterministicLanguageModel(
+        text="success",
+        estimated_cost_usd=0.05,
+    )
+
+    failing_candidate = generate_workflow_candidate(
+        specification=create_specification(
+            workflow_id=WEAKEST_WORKFLOW_ID,
+            step_id=WEAKEST_STEP_ID,
+            strategy_id=WEAKEST_STRATEGY_ID,
+            name="failing-workflow",
+        ),
+        catalog=catalog,
+        registry=LanguageModelRegistry(
+            {
+                MODEL_IDENTIFIER: failing_model,
+            }
+        ),
+    )
+
+    successful_candidate = generate_workflow_candidate(
+        specification=create_specification(
+            workflow_id=BEST_WORKFLOW_ID,
+            step_id=BEST_STEP_ID,
+            strategy_id=BEST_STRATEGY_ID,
+            name="successful-workflow",
+        ),
+        catalog=catalog,
+        registry=LanguageModelRegistry(
+            {
+                MODEL_IDENTIFIER: successful_model,
+            }
+        ),
+    )
+
+    candidates = (
+        failing_candidate,
+        successful_candidate,
+    )
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=WorkflowExperimentRunner(
+                scorer=WorkflowScorer(
+                    policy=WorkflowScoringPolicy(
+                        target_latency_seconds=60.0,
+                        target_cost_usd=0.10,
+                    ),
+                ),
+            ),
+            optimizer=ReplayWorkflowOptimizer(),
+        ).run(
+            initial_candidates=candidates,
+            context=Context(),
+            evaluator=ExactMatchEvaluator(),
+            expected_outcome=ExpectedOutcome(
+                description="Workflow should return success.",
+                value="success",
+                comparison=OutcomeComparison.EXACT,
+            ),
+            max_generations=2,
+        )
+    )
+
+    assert session.initial_candidates == candidates
+
+    assert tuple(generation.generation for generation in session.generations) == (
+        1,
+        2,
+    )
+
+    assert failing_model.calls == 2
+    assert successful_model.calls == 2
+
+    for generation in session.generations:
+        experiment = generation.previous_experiment
+
+        assert len(experiment.evidence) == 1
+        assert len(experiment.scorecards) == 1
+
+        assert experiment.evidence[0].candidate_signature == (successful_candidate.signature)
+
+        assert experiment.winner == experiment.scorecards[0]
+        assert experiment.winner.quality_score == pytest.approx(1.0)
+        assert experiment.winner.reliability_score == pytest.approx(1.0)
+
+    assert session.generations[0].candidates == candidates
+    assert session.generations[1].candidates == candidates
