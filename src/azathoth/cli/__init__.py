@@ -1,9 +1,6 @@
 """Azathoth command-line interface."""
 
-from azathoth.cli.application import (
-    build_parser,
-    main,
-)
+from azathoth.cli.application import main
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import (
     DATABASE_ENVIRONMENT_VARIABLE,
@@ -20,6 +17,7 @@ from azathoth.cli.models import (
     show_model,
 )
 from azathoth.cli.optimization import optimize_configured_workflow
+from azathoth.cli.parsing import build_parser
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
