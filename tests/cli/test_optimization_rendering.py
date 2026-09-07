@@ -8,6 +8,14 @@ from azathoth.optimization import (
     WorkflowOptimizationResult,
     WorkflowOptimizationSession,
 )
+from azathoth.prompting import (
+    ModelBinding,
+    PromptStrategy,
+)
+from azathoth.providers import (
+    DeterministicLanguageModel,
+    Prompt,
+)
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyOutcome,
@@ -30,6 +38,16 @@ INITIAL_STRATEGY_ID = UUID("22222222-2222-2222-2222-222222222222")
 OPTIMIZED_STRATEGY_ID = UUID("33333333-3333-3333-3333-333333333333")
 
 STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
+
+MODEL_STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
+
+STATIC_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
+
+MODEL_STEP_ID = UUID("77777777-7777-7777-7777-777777777777")
+
+STATIC_STEP_ID = UUID("88888888-8888-8888-8888-888888888888")
+
+MODEL_IDENTIFIER = "openrouter/example-winner"
 
 
 class StaticStrategy:
@@ -226,6 +244,77 @@ def create_session() -> WorkflowOptimizationSession:
     )
 
 
+def create_heterogeneous_candidate() -> WorkflowCandidate:
+    """Create one winner containing model-backed and non-model steps."""
+
+    return WorkflowCandidate(
+        metadata=WorkflowMetadata(
+            id=WORKFLOW_ID,
+            name="heterogeneous-optimization-rendering",
+            description="Render heterogeneous winner bindings.",
+        ),
+        steps=(
+            WorkflowCandidateStep(
+                id=MODEL_STEP_ID,
+                strategy=PromptStrategy(
+                    metadata=StrategyMetadata(
+                        id=MODEL_STRATEGY_ID,
+                        name="classify request",
+                        description="Classify with the empirically selected model.",
+                    ),
+                    prompt=Prompt(
+                        text="Return the classification.",
+                    ),
+                    language_model=DeterministicLanguageModel(
+                        provider="openrouter",
+                        model="example-winner",
+                        response_text="positive",
+                    ),
+                    model_binding=ModelBinding(
+                        identifier=MODEL_IDENTIFIER,
+                    ),
+                ),
+            ),
+            WorkflowCandidateStep(
+                id=STATIC_STEP_ID,
+                strategy=StaticStrategy(
+                    strategy_id=STATIC_STRATEGY_ID,
+                ),
+                depends_on=(MODEL_STEP_ID,),
+            ),
+        ),
+    )
+
+
+def create_heterogeneous_session() -> WorkflowOptimizationSession:
+    """Create one optimization session with a heterogeneous winner."""
+
+    winner = create_heterogeneous_candidate()
+
+    scorecard = create_scorecard(
+        quality=1.0,
+        reliability=1.0,
+        latency=0.9,
+        cost=1.0,
+        overall=0.975,
+    )
+
+    return WorkflowOptimizationSession(
+        initial_candidates=(winner,),
+        generations=(
+            WorkflowOptimizationResult(
+                generation=1,
+                previous_experiment=create_experiment(
+                    candidates=(winner,),
+                    scorecards=(scorecard,),
+                    winner_index=0,
+                ),
+                candidates=(winner,),
+            ),
+        ),
+    )
+
+
 def test_render_workflow_optimization_session_renders_summary() -> None:
     rendered = render_workflow_optimization_session(
         create_session(),
@@ -290,3 +379,35 @@ def test_render_workflow_optimization_session_does_not_claim_proposals_improved(
 
     assert "improved" not in rendered.lower()
     assert "better" not in rendered.lower()
+
+
+def test_render_workflow_optimization_session_renders_winner_steps() -> None:
+    rendered = render_workflow_optimization_session(
+        create_heterogeneous_session(),
+    )
+
+    assert "Winner:" in rendered
+
+    assert "  Step: classify request" in rendered
+    assert f"  Step ID: {MODEL_STEP_ID}" in rendered
+    assert f"  Strategy ID: {MODEL_STRATEGY_ID}" in rendered
+
+    assert f"  Step: strategy-{STATIC_STRATEGY_ID}" in rendered
+    assert f"  Step ID: {STATIC_STEP_ID}" in rendered
+    assert f"  Strategy ID: {STATIC_STRATEGY_ID}" in rendered
+
+
+def test_render_workflow_optimization_session_renders_winner_model_bindings() -> None:
+    rendered = render_workflow_optimization_session(
+        create_heterogeneous_session(),
+    )
+
+    assert f"  Model: {MODEL_IDENTIFIER}" in rendered
+
+
+def test_render_workflow_optimization_session_only_renders_actual_model_bindings() -> None:
+    rendered = render_workflow_optimization_session(
+        create_heterogeneous_session(),
+    )
+
+    assert rendered.count("  Model:") == 1
