@@ -15,6 +15,14 @@ from azathoth.cli.parsing.benchmarks import (
     add_benchmark_parser,
 )
 from azathoth.cli.parsing.common import COMMAND_ATTRIBUTE
+from azathoth.cli.parsing.goals import (
+    GOAL_ACTION_ATTRIBUTE,
+    GOAL_COMMAND,
+    GOAL_ID_ATTRIBUTE,
+    GOAL_LIST_ACTION,
+    GOAL_SHOW_ACTION,
+    add_goal_parser,
+)
 from azathoth.cli.parsing.models import (
     MODEL_ACTION_ATTRIBUTE,
     MODEL_AUTHORIZE_ACTION,
@@ -92,6 +100,8 @@ def build_parser() -> ArgumentParser:
 
     add_benchmark_parser(commands)
 
+    add_goal_parser(commands)
+
     return parser
 
 
@@ -107,6 +117,11 @@ __all__ = [
     "COMMAND_ATTRIBUTE",
     "EXPECTED_VALUE_ATTRIBUTE",
     "GENERATIONS_ATTRIBUTE",
+    "GOAL_ACTION_ATTRIBUTE",
+    "GOAL_COMMAND",
+    "GOAL_ID_ATTRIBUTE",
+    "GOAL_LIST_ACTION",
+    "GOAL_SHOW_ACTION",
     "MODEL_ACTION_ATTRIBUTE",
     "MODEL_AUTHORIZE_ACTION",
     "MODEL_COMMAND",

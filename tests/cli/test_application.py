@@ -31,6 +31,8 @@ BENCHMARK_ID = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 
 BENCHMARK_CASE_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
+GOAL_ID = UUID("abababab-abab-abab-abab-abababababab")
+
 
 def _json_value(
     value: str,
@@ -1201,4 +1203,81 @@ def test_benchmark_case_show_dispatches_dataset_and_case(
             BENCHMARK_ID,
             BENCHMARK_CASE_ID,
         )
+    ]
+
+
+def test_goal_list_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_list_goals() -> int:
+        calls.append("list")
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_goals",
+        fake_list_goals,
+    )
+
+    result = main(
+        (
+            "goal",
+            "list",
+        )
+    )
+
+    assert result == 0
+    assert calls == ["list"]
+
+
+def test_goal_show_parser_accepts_identifier() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "goal",
+            "show",
+            str(GOAL_ID),
+        )
+    )
+
+    assert arguments.goal_action == "show"
+    assert arguments.goal_id == GOAL_ID
+
+
+def test_goal_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_goal(
+        goal_id: UUID,
+    ) -> int:
+        received.append(
+            goal_id,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_goal",
+        fake_show_goal,
+    )
+
+    result = main(
+        (
+            "goal",
+            "show",
+            str(GOAL_ID),
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        GOAL_ID,
     ]

@@ -15,6 +15,10 @@ from azathoth.cli.configuration import (
     CliRuntimeConfiguration,
 )
 from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.goals import (
+    list_goals,
+    show_goal,
+)
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
@@ -68,6 +72,7 @@ __all__ = [
     "invoke_workflow",
     "list_benchmark_cases",
     "list_benchmarks",
+    "list_goals",
     "list_models",
     "list_portfolio_models",
     "list_tool_implementations",
@@ -89,6 +94,7 @@ __all__ = [
     "show_model",
     "show_benchmark",
     "show_benchmark_case",
+    "show_goal",
     "show_tool",
     "show_tool_implementation",
     "show_tool_test_case",
