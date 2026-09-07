@@ -8,23 +8,28 @@ from uuid import UUID
 from azathoth.cli.parsing import (
     TOOL_ACTION_ATTRIBUTE,
     TOOL_ID_ATTRIBUTE,
+    TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
+    TOOL_IMPLEMENTATION_SHOW_ACTION,
+    TOOL_IMPLEMENTATIONS_ACTION,
     TOOL_LIST_ACTION,
     TOOL_SHOW_ACTION,
     TOOL_VERSION_ATTRIBUTE,
     TOOL_VERSIONS_ACTION,
 )
 
+ToolIdentifierHandler = Callable[[UUID], int]
 ToolListHandler = Callable[[], int]
-ToolShowHandler = Callable[..., int]
-ToolVersionsHandler = Callable[[UUID], int]
+ToolVersionHandler = Callable[..., int]
 
 
 def dispatch_tool_command(
     arguments: Namespace,
     *,
+    list_tool_implementations: ToolVersionHandler,
+    list_tool_versions: ToolIdentifierHandler,
     list_tools: ToolListHandler,
-    list_tool_versions: ToolVersionsHandler,
-    show_tool: ToolShowHandler,
+    show_tool: ToolVersionHandler,
+    show_tool_implementation: ToolIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed tool command."""
 
@@ -65,6 +70,35 @@ def dispatch_tool_command(
                 getattr(
                     arguments,
                     TOOL_ID_ATTRIBUTE,
+                ),
+            )
+        )
+
+    if action == TOOL_IMPLEMENTATIONS_ACTION:
+        return list_tool_implementations(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_ID_ATTRIBUTE,
+                ),
+            ),
+            version=cast(
+                str,
+                getattr(
+                    arguments,
+                    TOOL_VERSION_ATTRIBUTE,
+                ),
+            ),
+        )
+
+    if action == TOOL_IMPLEMENTATION_SHOW_ACTION:
+        return show_tool_implementation(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
                 ),
             )
         )

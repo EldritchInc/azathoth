@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 from uuid import UUID
 
 TOOL_COMMAND = "tool"
 
 TOOL_ACTION_ATTRIBUTE = "tool_action"
 
+TOOL_IMPLEMENTATIONS_ACTION = "implementations"
+TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
 TOOL_LIST_ACTION = "list"
 TOOL_SHOW_ACTION = "show"
 TOOL_VERSIONS_ACTION = "versions"
 
 TOOL_ID_ATTRIBUTE = "tool_id"
+TOOL_IMPLEMENTATION_ID_ATTRIBUTE = "tool_implementation_id"
 TOOL_VERSION_ATTRIBUTE = "tool_version"
 
 
@@ -69,4 +69,36 @@ def add_tool_parser(
         type=UUID,
         metavar="TOOL_ID",
         help="Tool capability UUID to inspect.",
+    )
+
+    tool_implementations_parser = tool_actions.add_parser(
+        TOOL_IMPLEMENTATIONS_ACTION,
+        help="List implementations for one exact tool definition version.",
+    )
+
+    tool_implementations_parser.add_argument(
+        TOOL_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TOOL_ID",
+        help="Tool capability UUID to inspect.",
+    )
+
+    tool_implementations_parser.add_argument(
+        "--version",
+        dest=TOOL_VERSION_ATTRIBUTE,
+        required=True,
+        metavar="VERSION",
+        help="Exact durable tool definition version.",
+    )
+
+    tool_implementation_show_parser = tool_actions.add_parser(
+        TOOL_IMPLEMENTATION_SHOW_ACTION,
+        help="Show one durable tool implementation.",
+    )
+
+    tool_implementation_show_parser.add_argument(
+        TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="IMPLEMENTATION_ID",
+        help="Tool implementation UUID to inspect.",
     )

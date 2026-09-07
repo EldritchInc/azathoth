@@ -8,6 +8,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
+    ToolImplementation,
 )
 
 
@@ -86,6 +87,74 @@ def list_tool_versions(
     return 0
 
 
+def list_tool_implementations(
+    tool_id: UUID,
+    *,
+    version: str,
+) -> int:
+    """List implementations for one exact durable tool definition."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    definition = repository.get_definition(
+        tool_id,
+        version,
+    )
+
+    if definition is None:
+        print(
+            f"Tool {tool_id}@{version} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    implementations = tuple(
+        implementation
+        for implementation in repository.implementations()
+        if (implementation.tool_id == tool_id and implementation.tool_version == version)
+    )
+
+    for implementation in implementations:
+        print(f"{implementation.id}  {implementation.version}  {implementation.runtime}")
+
+    return 0
+
+
+def show_tool_implementation(
+    implementation_id: UUID,
+) -> int:
+    """Show one durable tool implementation."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    implementation = repository.get_implementation(
+        implementation_id,
+    )
+
+    if implementation is None:
+        print(
+            f"Tool implementation {implementation_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    _print_tool_implementation(
+        implementation,
+    )
+
+    return 0
+
+
 def _print_tool_definition(
     definition: ToolDefinition,
 ) -> None:
@@ -115,8 +184,25 @@ def _print_tool_definition(
     )
 
 
+def _print_tool_implementation(
+    implementation: ToolImplementation,
+) -> None:
+    """Render one durable executable tool implementation."""
+
+    print(f"ID: {implementation.id}")
+    print(f"Tool ID: {implementation.tool_id}")
+    print(f"Tool Version: {implementation.tool_version}")
+    print(f"Implementation Version: {implementation.version}")
+    print(f"Runtime: {implementation.runtime}")
+    print(f"Entrypoint: {implementation.entrypoint}")
+    print("Source:")
+    print(implementation.source)
+
+
 __all__ = [
+    "list_tool_implementations",
     "list_tool_versions",
     "list_tools",
     "show_tool",
+    "show_tool_implementation",
 ]

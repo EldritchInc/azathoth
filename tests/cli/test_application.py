@@ -22,6 +22,8 @@ WORKFLOW_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
 TOOL_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
+IMPLEMENTATION_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
 
 def _json_value(
     value: str,
@@ -742,3 +744,115 @@ def test_tool_show_requires_exact_version() -> None:
                 str(TOOL_ID),
             )
         )
+
+
+def test_tool_implementations_parser_accepts_exact_version() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "implementations",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert arguments.tool_action == "implementations"
+    assert arguments.tool_id == TOOL_ID
+    assert arguments.tool_version == "2.0.0"
+
+
+def test_tool_implementations_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[tuple[UUID, str]] = []
+
+    def fake_list_tool_implementations(
+        tool_id: UUID,
+        *,
+        version: str,
+    ) -> int:
+        received.append(
+            (
+                tool_id,
+                version,
+            )
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_tool_implementations",
+        fake_list_tool_implementations,
+    )
+
+    result = main(
+        (
+            "tool",
+            "implementations",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        (
+            TOOL_ID,
+            "2.0.0",
+        )
+    ]
+
+
+def test_tool_implementation_show_parser_accepts_identifier() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "implementation-show",
+            str(IMPLEMENTATION_ID),
+        )
+    )
+
+    assert arguments.tool_action == "implementation-show"
+    assert arguments.tool_implementation_id == IMPLEMENTATION_ID
+
+
+def test_tool_implementation_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_tool_implementation(
+        implementation_id: UUID,
+    ) -> int:
+        received.append(
+            implementation_id,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_tool_implementation",
+        fake_show_tool_implementation,
+    )
+
+    result = main(
+        (
+            "tool",
+            "implementation-show",
+            str(IMPLEMENTATION_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        IMPLEMENTATION_ID,
+    ]

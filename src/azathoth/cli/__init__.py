@@ -27,9 +27,11 @@ from azathoth.cli.rendering import (
     render_workflow_run,
 )
 from azathoth.cli.tools import (
+    list_tool_implementations,
     list_tool_versions,
     list_tools,
     show_tool,
+    show_tool_implementation,
 )
 from azathoth.cli.workflows import (
     import_workflow,
@@ -55,6 +57,7 @@ __all__ = [
     "invoke_workflow",
     "list_models",
     "list_portfolio_models",
+    "list_tool_implementations",
     "list_tool_versions",
     "list_tools",
     "list_workflows",
@@ -71,5 +74,6 @@ __all__ = [
     "run_workflow",
     "show_model",
     "show_tool",
+    "show_tool_implementation",
     "show_workflow",
 ]
