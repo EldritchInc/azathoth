@@ -1,6 +1,12 @@
 """Azathoth command-line interface."""
 
 from azathoth.cli.application import main
+from azathoth.cli.benchmarks import (
+    list_benchmark_cases,
+    list_benchmarks,
+    show_benchmark,
+    show_benchmark_case,
+)
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import (
     DATABASE_ENVIRONMENT_VARIABLE,
@@ -60,6 +66,8 @@ __all__ = [
     "import_workflow",
     "invoke_active_production_workflow",
     "invoke_workflow",
+    "list_benchmark_cases",
+    "list_benchmarks",
     "list_models",
     "list_portfolio_models",
     "list_tool_implementations",
@@ -79,6 +87,8 @@ __all__ = [
     "render_workflow_run",
     "run_workflow",
     "show_model",
+    "show_benchmark",
+    "show_benchmark_case",
     "show_tool",
     "show_tool_implementation",
     "show_tool_test_case",

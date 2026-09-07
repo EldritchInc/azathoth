@@ -27,6 +27,10 @@ IMPLEMENTATION_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 TEST_CASE_ID = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
 
+BENCHMARK_ID = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+BENCHMARK_CASE_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
 
 def _json_value(
     value: str,
@@ -1062,5 +1066,139 @@ def test_tool_verify_dispatches_command(
         (
             TOOL_ID,
             "2.0.0",
+        )
+    ]
+
+
+def test_benchmark_list_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_list_benchmarks() -> int:
+        calls.append("list")
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_benchmarks",
+        fake_list_benchmarks,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "list",
+        )
+    )
+
+    assert result == 0
+    assert calls == ["list"]
+
+
+def test_benchmark_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_benchmark(
+        benchmark_id: UUID,
+    ) -> int:
+        received.append(benchmark_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_benchmark",
+        fake_show_benchmark,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "show",
+            str(BENCHMARK_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        BENCHMARK_ID,
+    ]
+
+
+def test_benchmark_cases_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_list_benchmark_cases(
+        benchmark_id: UUID,
+    ) -> int:
+        received.append(benchmark_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_benchmark_cases",
+        fake_list_benchmark_cases,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "cases",
+            str(BENCHMARK_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        BENCHMARK_ID,
+    ]
+
+
+def test_benchmark_case_show_dispatches_dataset_and_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[tuple[UUID, UUID]] = []
+
+    def fake_show_benchmark_case(
+        benchmark_id: UUID,
+        case_id: UUID,
+    ) -> int:
+        received.append(
+            (
+                benchmark_id,
+                case_id,
+            )
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_benchmark_case",
+        fake_show_benchmark_case,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "case-show",
+            str(BENCHMARK_ID),
+            str(BENCHMARK_CASE_ID),
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        (
+            BENCHMARK_ID,
+            BENCHMARK_CASE_ID,
         )
     ]

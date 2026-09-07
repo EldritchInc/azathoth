@@ -4,7 +4,14 @@ from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
 
+from azathoth.cli.benchmarks import (
+    list_benchmark_cases,
+    list_benchmarks,
+    show_benchmark,
+    show_benchmark_case,
+)
 from azathoth.cli.dispatching import (
+    dispatch_benchmark_command,
     dispatch_model_command,
     dispatch_tool_command,
     dispatch_workflow_command,
@@ -17,6 +24,7 @@ from azathoth.cli.models import (
     show_model,
 )
 from azathoth.cli.parsing import (
+    BENCHMARK_COMMAND,
     COMMAND_ATTRIBUTE,
     MODEL_COMMAND,
     TOOL_COMMAND,
@@ -77,6 +85,15 @@ def _dispatch(
             None,
         ),
     )
+
+    if command == BENCHMARK_COMMAND:
+        return dispatch_benchmark_command(
+            arguments,
+            list_benchmark_cases=list_benchmark_cases,
+            list_benchmarks=list_benchmarks,
+            show_benchmark=show_benchmark,
+            show_benchmark_case=show_benchmark_case,
+        )
 
     if command == WORKFLOW_COMMAND:
         return dispatch_workflow_command(
