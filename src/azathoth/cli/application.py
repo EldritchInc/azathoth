@@ -24,6 +24,7 @@ from azathoth.cli.parsing import (
     build_parser,
 )
 from azathoth.cli.tools import (
+    import_tool,
     list_tool_implementations,
     list_tool_test_cases,
     list_tool_versions,
@@ -101,6 +102,7 @@ def _dispatch(
     if command == TOOL_COMMAND:
         return dispatch_tool_command(
             arguments,
+            import_tool=import_tool,
             list_tool_implementations=list_tool_implementations,
             list_tool_test_cases=list_tool_test_cases,
             list_tool_versions=list_tool_versions,

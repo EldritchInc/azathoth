@@ -2,15 +2,18 @@
 
 from argparse import Namespace
 from collections.abc import Callable
+from pathlib import Path
 from typing import cast
 from uuid import UUID
 
 from azathoth.cli.parsing import (
     TOOL_ACTION_ATTRIBUTE,
+    TOOL_DOCUMENT_ATTRIBUTE,
     TOOL_ID_ATTRIBUTE,
     TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
     TOOL_IMPLEMENTATION_SHOW_ACTION,
     TOOL_IMPLEMENTATIONS_ACTION,
+    TOOL_IMPORT_ACTION,
     TOOL_LIST_ACTION,
     TOOL_SHOW_ACTION,
     TOOL_TEST_CASE_ID_ATTRIBUTE,
@@ -21,6 +24,7 @@ from azathoth.cli.parsing import (
 )
 
 ToolIdentifierHandler = Callable[[UUID], int]
+ToolImportHandler = Callable[[Path], int]
 ToolListHandler = Callable[[], int]
 ToolVersionHandler = Callable[..., int]
 
@@ -28,6 +32,7 @@ ToolVersionHandler = Callable[..., int]
 def dispatch_tool_command(
     arguments: Namespace,
     *,
+    import_tool: ToolImportHandler,
     list_tool_implementations: ToolVersionHandler,
     list_tool_test_cases: ToolIdentifierHandler,
     list_tool_versions: ToolIdentifierHandler,
@@ -49,6 +54,17 @@ def dispatch_tool_command(
 
     if action == TOOL_LIST_ACTION:
         return list_tools()
+
+    if action == TOOL_IMPORT_ACTION:
+        return import_tool(
+            cast(
+                Path,
+                getattr(
+                    arguments,
+                    TOOL_DOCUMENT_ATTRIBUTE,
+                ),
+            )
+        )
 
     if action == TOOL_SHOW_ACTION:
         return show_tool(

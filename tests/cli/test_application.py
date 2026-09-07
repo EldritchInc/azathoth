@@ -3,6 +3,7 @@
 import json
 from argparse import ArgumentTypeError
 from collections.abc import Sequence
+from pathlib import Path
 from typing import cast
 from uuid import UUID
 
@@ -936,4 +937,54 @@ def test_tool_test_case_show_dispatches_command(
     assert result == 0
     assert received == [
         TEST_CASE_ID,
+    ]
+
+
+def test_tool_import_parser_accepts_document_path() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "import",
+            "word-count.json",
+        )
+    )
+
+    assert arguments.tool_action == "import"
+    assert arguments.tool_document == Path("word-count.json")
+
+
+def test_tool_import_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[Path] = []
+
+    def fake_import_tool(
+        document_path: Path,
+    ) -> int:
+        received.append(
+            document_path,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "import_tool",
+        fake_import_tool,
+    )
+
+    result = main(
+        (
+            "tool",
+            "import",
+            "word-count.json",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        Path("word-count.json"),
     ]

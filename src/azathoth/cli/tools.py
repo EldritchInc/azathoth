@@ -2,15 +2,54 @@
 
 import json
 import sys
+from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
+    ToolDocument,
+    ToolDocumentError,
     ToolImplementation,
     ToolTestCase,
+    decode_tool_document,
 )
+
+
+def _tool_document_duplicate_error(
+    *,
+    repository: SQLiteToolRepository,
+    document: ToolDocument,
+) -> str | None:
+    """Return a duplicate-artifact error before mutating persistence."""
+
+    definition = document.definition
+
+    if (
+        repository.get_definition(
+            definition.id,
+            definition.version,
+        )
+        is not None
+    ):
+        return f"Tool definition {definition.id}@{definition.version} already exists."
+
+    existing_implementation_ids = {
+        implementation.id for implementation in repository.implementations()
+    }
+
+    for implementation in document.implementations:
+        if implementation.id in existing_implementation_ids:
+            return f"Tool implementation {implementation.id} already exists."
+
+    existing_test_case_ids = {test_case.id for test_case in repository.test_cases()}
+
+    for test_case in document.test_cases:
+        if test_case.id in existing_test_case_ids:
+            return f"Tool test case {test_case.id} already exists."
+
+    return None
 
 
 def list_tools() -> int:
@@ -292,7 +331,75 @@ def _print_tool_test_case(
     )
 
 
+def import_tool(
+    document_path: Path,
+) -> int:
+    """Import one portable durable tool document."""
+
+    try:
+        encoded = document_path.read_text(
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        print(
+            f"Unable to read tool document {document_path}: {exc}",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    try:
+        document = decode_tool_document(
+            encoded,
+        )
+    except ToolDocumentError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    duplicate_error = _tool_document_duplicate_error(
+        repository=repository,
+        document=document,
+    )
+
+    if duplicate_error is not None:
+        print(
+            duplicate_error,
+            file=sys.stderr,
+        )
+
+        return 1
+
+    repository.save_definition(
+        document.definition,
+    )
+
+    for implementation in document.implementations:
+        repository.save_implementation(
+            implementation,
+        )
+
+    for test_case in document.test_cases:
+        repository.save_test_case(
+            test_case,
+        )
+
+    print(f"Imported tool {document.definition.id}@{document.definition.version}.")
+
+    return 0
+
+
 __all__ = [
+    "import_tool",
     "list_tool_implementations",
     "list_tool_test_cases",
     "list_tool_versions",

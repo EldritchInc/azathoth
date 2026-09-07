@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
+from pathlib import Path
 from uuid import UUID
 
 TOOL_COMMAND = "tool"
@@ -11,12 +12,14 @@ TOOL_ACTION_ATTRIBUTE = "tool_action"
 
 TOOL_IMPLEMENTATIONS_ACTION = "implementations"
 TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
+TOOL_IMPORT_ACTION = "import"
 TOOL_LIST_ACTION = "list"
 TOOL_SHOW_ACTION = "show"
 TOOL_TEST_CASES_ACTION = "test-cases"
 TOOL_TEST_CASE_SHOW_ACTION = "test-case-show"
 TOOL_VERSIONS_ACTION = "versions"
 
+TOOL_DOCUMENT_ATTRIBUTE = "tool_document"
 TOOL_ID_ATTRIBUTE = "tool_id"
 TOOL_IMPLEMENTATION_ID_ATTRIBUTE = "tool_implementation_id"
 TOOL_TEST_CASE_ID_ATTRIBUTE = "tool_test_case_id"
@@ -40,6 +43,18 @@ def add_tool_parser(
     tool_actions.add_parser(
         TOOL_LIST_ACTION,
         help="List durable tool definition versions.",
+    )
+
+    tool_import_parser = tool_actions.add_parser(
+        TOOL_IMPORT_ACTION,
+        help="Import one portable durable tool document.",
+    )
+
+    tool_import_parser.add_argument(
+        TOOL_DOCUMENT_ATTRIBUTE,
+        type=Path,
+        metavar="FILE",
+        help="Portable tool JSON document to import.",
     )
 
     tool_show_parser = tool_actions.add_parser(

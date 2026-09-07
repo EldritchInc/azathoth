@@ -27,6 +27,7 @@ from azathoth.cli.rendering import (
     render_workflow_run,
 )
 from azathoth.cli.tools import (
+    import_tool,
     list_tool_implementations,
     list_tool_test_cases,
     list_tool_versions,
@@ -54,6 +55,7 @@ __all__ = [
     "build_parser",
     "deauthorize_model",
     "execute_configured_workflow",
+    "import_tool",
     "import_workflow",
     "invoke_active_production_workflow",
     "invoke_workflow",
