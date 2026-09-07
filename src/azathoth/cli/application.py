@@ -6,6 +6,7 @@ from typing import cast
 
 from azathoth.cli.dispatching import (
     dispatch_model_command,
+    dispatch_tool_command,
     dispatch_workflow_command,
 )
 from azathoth.cli.models import (
@@ -18,8 +19,14 @@ from azathoth.cli.models import (
 from azathoth.cli.parsing import (
     COMMAND_ATTRIBUTE,
     MODEL_COMMAND,
+    TOOL_COMMAND,
     WORKFLOW_COMMAND,
     build_parser,
+)
+from azathoth.cli.tools import (
+    list_tool_versions,
+    list_tools,
+    show_tool,
 )
 from azathoth.cli.workflows import (
     import_workflow,
@@ -85,6 +92,14 @@ def _dispatch(
             list_models=list_models,
             list_portfolio_models=list_portfolio_models,
             show_model=show_model,
+        )
+
+    if command == TOOL_COMMAND:
+        return dispatch_tool_command(
+            arguments,
+            list_tools=list_tools,
+            list_tool_versions=list_tool_versions,
+            show_tool=show_tool,
         )
 
     return None

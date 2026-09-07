@@ -20,6 +20,8 @@ FIRST_IDENTIFIER = "openrouter/example/model"
 
 WORKFLOW_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
+TOOL_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
 
 def _json_value(
     value: str,
@@ -604,3 +606,139 @@ def test_workflow_promote_dispatches_command(
     assert promoted == [
         WORKFLOW_ID,
     ]
+
+
+def test_tool_list_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_list_tools() -> int:
+        calls.append("list")
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_tools",
+        fake_list_tools,
+    )
+
+    result = main(
+        (
+            "tool",
+            "list",
+        )
+    )
+
+    assert result == 0
+    assert calls == [
+        "list",
+    ]
+
+
+def test_tool_show_parser_accepts_exact_version() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "show",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert arguments.tool_action == "show"
+    assert arguments.tool_id == TOOL_ID
+    assert arguments.tool_version == "2.0.0"
+
+
+def test_tool_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[tuple[UUID, str]] = []
+
+    def fake_show_tool(
+        tool_id: UUID,
+        *,
+        version: str,
+    ) -> int:
+        received.append(
+            (
+                tool_id,
+                version,
+            )
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_tool",
+        fake_show_tool,
+    )
+
+    result = main(
+        (
+            "tool",
+            "show",
+            str(TOOL_ID),
+            "--version",
+            "2.0.0",
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        (
+            TOOL_ID,
+            "2.0.0",
+        )
+    ]
+
+
+def test_tool_versions_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_list_tool_versions(
+        tool_id: UUID,
+    ) -> int:
+        received.append(tool_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_tool_versions",
+        fake_list_tool_versions,
+    )
+
+    result = main(
+        (
+            "tool",
+            "versions",
+            str(TOOL_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        TOOL_ID,
+    ]
+
+
+def test_tool_show_requires_exact_version() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            (
+                "tool",
+                "show",
+                str(TOOL_ID),
+            )
+        )

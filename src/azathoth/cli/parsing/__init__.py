@@ -15,6 +15,16 @@ from azathoth.cli.parsing.models import (
     MODEL_SHOW_ACTION,
     add_model_parser,
 )
+from azathoth.cli.parsing.tools import (
+    TOOL_ACTION_ATTRIBUTE,
+    TOOL_COMMAND,
+    TOOL_ID_ATTRIBUTE,
+    TOOL_LIST_ACTION,
+    TOOL_SHOW_ACTION,
+    TOOL_VERSION_ATTRIBUTE,
+    TOOL_VERSIONS_ACTION,
+    add_tool_parser,
+)
 from azathoth.cli.parsing.workflows import (
     EXPECTED_VALUE_ATTRIBUTE,
     GENERATIONS_ATTRIBUTE,
@@ -58,6 +68,8 @@ def build_parser() -> ArgumentParser:
 
     add_model_parser(commands)
 
+    add_tool_parser(commands)
+
     return parser
 
 
@@ -75,6 +87,13 @@ __all__ = [
     "MODEL_SHOW_ACTION",
     "TARGET_COST_ATTRIBUTE",
     "TARGET_LATENCY_ATTRIBUTE",
+    "TOOL_ACTION_ATTRIBUTE",
+    "TOOL_COMMAND",
+    "TOOL_ID_ATTRIBUTE",
+    "TOOL_LIST_ACTION",
+    "TOOL_SHOW_ACTION",
+    "TOOL_VERSION_ATTRIBUTE",
+    "TOOL_VERSIONS_ACTION",
     "WORKFLOW_ACTION_ATTRIBUTE",
     "WORKFLOW_COMMAND",
     "WORKFLOW_DOCUMENT_ATTRIBUTE",
