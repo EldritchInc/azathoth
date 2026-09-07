@@ -13,10 +13,13 @@ TOOL_IMPLEMENTATIONS_ACTION = "implementations"
 TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
 TOOL_LIST_ACTION = "list"
 TOOL_SHOW_ACTION = "show"
+TOOL_TEST_CASES_ACTION = "test-cases"
+TOOL_TEST_CASE_SHOW_ACTION = "test-case-show"
 TOOL_VERSIONS_ACTION = "versions"
 
 TOOL_ID_ATTRIBUTE = "tool_id"
 TOOL_IMPLEMENTATION_ID_ATTRIBUTE = "tool_implementation_id"
+TOOL_TEST_CASE_ID_ATTRIBUTE = "tool_test_case_id"
 TOOL_VERSION_ATTRIBUTE = "tool_version"
 
 
@@ -101,4 +104,28 @@ def add_tool_parser(
         type=UUID,
         metavar="IMPLEMENTATION_ID",
         help="Tool implementation UUID to inspect.",
+    )
+
+    tool_test_cases_parser = tool_actions.add_parser(
+        TOOL_TEST_CASES_ACTION,
+        help="List durable verification cases for one tool identity.",
+    )
+
+    tool_test_cases_parser.add_argument(
+        TOOL_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TOOL_ID",
+        help="Tool capability UUID to inspect.",
+    )
+
+    tool_test_case_show_parser = tool_actions.add_parser(
+        TOOL_TEST_CASE_SHOW_ACTION,
+        help="Show one durable tool verification case.",
+    )
+
+    tool_test_case_show_parser.add_argument(
+        TOOL_TEST_CASE_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TEST_CASE_ID",
+        help="Tool test case UUID to inspect.",
     )

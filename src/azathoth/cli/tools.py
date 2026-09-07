@@ -9,6 +9,7 @@ from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
     ToolImplementation,
+    ToolTestCase,
 )
 
 
@@ -155,6 +156,69 @@ def show_tool_implementation(
     return 0
 
 
+def list_tool_test_cases(
+    tool_id: UUID,
+) -> int:
+    """List durable verification cases for one tool identity."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    definitions = tuple(
+        definition for definition in repository.definitions() if definition.id == tool_id
+    )
+
+    if not definitions:
+        print(
+            f"Tool {tool_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    test_cases = tuple(
+        test_case for test_case in repository.test_cases() if test_case.tool_id == tool_id
+    )
+
+    for test_case in test_cases:
+        print(f"{test_case.id}  {test_case.name}")
+
+    return 0
+
+
+def show_tool_test_case(
+    test_case_id: UUID,
+) -> int:
+    """Show one durable tool verification case."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    test_case = repository.get_test_case(
+        test_case_id,
+    )
+
+    if test_case is None:
+        print(
+            f"Tool test case {test_case_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    _print_tool_test_case(
+        test_case,
+    )
+
+    return 0
+
+
 def _print_tool_definition(
     definition: ToolDefinition,
 ) -> None:
@@ -199,10 +263,41 @@ def _print_tool_implementation(
     print(implementation.source)
 
 
+def _print_tool_test_case(
+    test_case: ToolTestCase,
+) -> None:
+    """Render one durable tool verification case."""
+
+    print(f"ID: {test_case.id}")
+    print(f"Tool ID: {test_case.tool_id}")
+    print(f"Name: {test_case.name}")
+    print(f"Description: {test_case.description}")
+
+    print("Inputs:")
+    print(
+        json.dumps(
+            test_case.inputs,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+    print("Expected Output:")
+    print(
+        json.dumps(
+            test_case.expected_output,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 __all__ = [
     "list_tool_implementations",
+    "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
     "show_tool",
     "show_tool_implementation",
+    "show_tool_test_case",
 ]

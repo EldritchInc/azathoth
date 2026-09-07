@@ -24,6 +24,8 @@ TOOL_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
 IMPLEMENTATION_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
+TEST_CASE_ID = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
+
 
 def _json_value(
     value: str,
@@ -855,4 +857,83 @@ def test_tool_implementation_show_dispatches_command(
     assert result == 0
     assert received == [
         IMPLEMENTATION_ID,
+    ]
+
+
+def test_tool_test_cases_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_list_tool_test_cases(
+        tool_id: UUID,
+    ) -> int:
+        received.append(tool_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_tool_test_cases",
+        fake_list_tool_test_cases,
+    )
+
+    result = main(
+        (
+            "tool",
+            "test-cases",
+            str(TOOL_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        TOOL_ID,
+    ]
+
+
+def test_tool_test_case_show_parser_accepts_identifier() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "tool",
+            "test-case-show",
+            str(TEST_CASE_ID),
+        )
+    )
+
+    assert arguments.tool_action == "test-case-show"
+    assert arguments.tool_test_case_id == TEST_CASE_ID
+
+
+def test_tool_test_case_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_tool_test_case(
+        test_case_id: UUID,
+    ) -> int:
+        received.append(test_case_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_tool_test_case",
+        fake_show_tool_test_case,
+    )
+
+    result = main(
+        (
+            "tool",
+            "test-case-show",
+            str(TEST_CASE_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        TEST_CASE_ID,
     ]

@@ -13,6 +13,9 @@ from azathoth.cli.parsing import (
     TOOL_IMPLEMENTATIONS_ACTION,
     TOOL_LIST_ACTION,
     TOOL_SHOW_ACTION,
+    TOOL_TEST_CASE_ID_ATTRIBUTE,
+    TOOL_TEST_CASE_SHOW_ACTION,
+    TOOL_TEST_CASES_ACTION,
     TOOL_VERSION_ATTRIBUTE,
     TOOL_VERSIONS_ACTION,
 )
@@ -26,10 +29,12 @@ def dispatch_tool_command(
     arguments: Namespace,
     *,
     list_tool_implementations: ToolVersionHandler,
+    list_tool_test_cases: ToolIdentifierHandler,
     list_tool_versions: ToolIdentifierHandler,
     list_tools: ToolListHandler,
     show_tool: ToolVersionHandler,
     show_tool_implementation: ToolIdentifierHandler,
+    show_tool_test_case: ToolIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed tool command."""
 
@@ -99,6 +104,28 @@ def dispatch_tool_command(
                 getattr(
                     arguments,
                     TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
+                ),
+            )
+        )
+
+    if action == TOOL_TEST_CASES_ACTION:
+        return list_tool_test_cases(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_ID_ATTRIBUTE,
+                ),
+            )
+        )
+
+    if action == TOOL_TEST_CASE_SHOW_ACTION:
+        return show_tool_test_case(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_TEST_CASE_ID_ATTRIBUTE,
                 ),
             )
         )

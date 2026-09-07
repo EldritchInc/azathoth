@@ -25,10 +25,12 @@ from azathoth.cli.parsing import (
 )
 from azathoth.cli.tools import (
     list_tool_implementations,
+    list_tool_test_cases,
     list_tool_versions,
     list_tools,
     show_tool,
     show_tool_implementation,
+    show_tool_test_case,
 )
 from azathoth.cli.workflows import (
     import_workflow,
@@ -100,10 +102,12 @@ def _dispatch(
         return dispatch_tool_command(
             arguments,
             list_tool_implementations=list_tool_implementations,
+            list_tool_test_cases=list_tool_test_cases,
             list_tool_versions=list_tool_versions,
             list_tools=list_tools,
             show_tool=show_tool,
             show_tool_implementation=show_tool_implementation,
+            show_tool_test_case=show_tool_test_case,
         )
 
     return None

@@ -28,10 +28,12 @@ from azathoth.cli.rendering import (
 )
 from azathoth.cli.tools import (
     list_tool_implementations,
+    list_tool_test_cases,
     list_tool_versions,
     list_tools,
     show_tool,
     show_tool_implementation,
+    show_tool_test_case,
 )
 from azathoth.cli.workflows import (
     import_workflow,
@@ -58,6 +60,7 @@ __all__ = [
     "list_models",
     "list_portfolio_models",
     "list_tool_implementations",
+    "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
     "list_workflows",
@@ -75,5 +78,6 @@ __all__ = [
     "show_model",
     "show_tool",
     "show_tool_implementation",
+    "show_tool_test_case",
     "show_workflow",
 ]
