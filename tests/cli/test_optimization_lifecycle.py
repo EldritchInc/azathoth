@@ -302,6 +302,16 @@ def test_cli_workflow_optimization_empirically_selects_cheaper_candidate(
     assert "  Reliability: 1.000000" in captured.out
     assert "  Cost: 1.000000" in captured.out
 
+    assert f"  Step ID: {STEP_ID}" in captured.out
+
+    assert f"  Model: {EXPENSIVE_IDENTIFIER}" in captured.out
+    assert f"  Model: {CHEAP_IDENTIFIER}" in captured.out
+
+    assert captured.out.index(f"  Model: {EXPENSIVE_IDENTIFIER}") < captured.out.index(
+        f"  Model: {CHEAP_IDENTIFIER}"
+    )
+
+    assert captured.out.count("  Strategy ID:") == 2
     assert captured.out.count("  Overall:") == 2
 
     assert len(rendered_sessions) == 1
@@ -330,7 +340,11 @@ def test_cli_workflow_optimization_empirically_selects_cheaper_candidate(
         if candidate.signature == winner_signature
     )
 
-    assert model_identifier(winner) == CHEAP_IDENTIFIER
+    winner_model_identifier = model_identifier(winner)
+
+    assert winner_model_identifier == CHEAP_IDENTIFIER
+
+    assert f"  Model: {winner_model_identifier}" in captured.out
 
     assert second_generation.previous_experiment.winner.quality_score == 1.0
 
