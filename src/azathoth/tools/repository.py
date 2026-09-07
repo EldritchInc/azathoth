@@ -15,15 +15,16 @@ class ToolRepository(Protocol):
         self,
         definition: ToolDefinition,
     ) -> None:
-        """Persist one tool definition."""
+        """Persist one exact tool definition version."""
 
         ...
 
     def get_definition(
         self,
-        definition_id: UUID,
+        tool_id: UUID,
+        version: str,
     ) -> ToolDefinition | None:
-        """Return a tool definition by identifier."""
+        """Return one exact tool definition version."""
 
         ...
 

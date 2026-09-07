@@ -8,12 +8,17 @@ from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.repository import ToolRepository
 from azathoth.tools.testing import ToolTestCase
 
+ToolDefinitionReference = tuple[UUID, str]
+
 
 class InMemoryToolRepository:
     """Store durable tool artifacts in insertion order."""
 
     def __init__(self) -> None:
-        self._definitions: dict[UUID, ToolDefinition] = {}
+        self._definitions: dict[
+            ToolDefinitionReference,
+            ToolDefinition,
+        ] = {}
         self._implementations: dict[UUID, ToolImplementation] = {}
         self._test_cases: dict[UUID, ToolTestCase] = {}
 
@@ -21,23 +26,33 @@ class InMemoryToolRepository:
         self,
         definition: ToolDefinition,
     ) -> None:
-        """Persist one tool definition without replacing existing data."""
+        """Persist one exact tool definition version without replacement."""
 
-        self._reject_duplicate(
-            artifact_name="tool definition",
-            artifact_id=definition.id,
-            existing=self._definitions,
+        reference = (
+            definition.id,
+            definition.version,
         )
 
-        self._definitions[definition.id] = definition
+        if reference in self._definitions:
+            raise ValueError(
+                f"Tool definition {definition.id}@{definition.version} already exists."
+            )
+
+        self._definitions[reference] = definition
 
     def get_definition(
         self,
-        definition_id: UUID,
+        tool_id: UUID,
+        version: str,
     ) -> ToolDefinition | None:
-        """Return a tool definition by identifier."""
+        """Return one exact tool definition version."""
 
-        return self._definitions.get(definition_id)
+        return self._definitions.get(
+            (
+                tool_id,
+                version,
+            )
+        )
 
     def definitions(self) -> tuple[ToolDefinition, ...]:
         """Return all persisted tool definitions in insertion order."""

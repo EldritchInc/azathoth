@@ -1,5 +1,6 @@
 """Tests for SQLite-backed durable tool persistence."""
 
+import sqlite3
 from pathlib import Path
 from uuid import UUID
 
@@ -152,7 +153,10 @@ def test_sqlite_repository_round_trips_definition(
 
     repository.save_definition(definition)
 
-    restored = repository.get_definition(definition.id)
+    restored = repository.get_definition(
+        definition.id,
+        definition.version,
+    )
 
     assert restored == definition
 
@@ -162,7 +166,13 @@ def test_sqlite_repository_returns_none_for_unknown_definition(
 ) -> None:
     repository = create_repository(tmp_path)
 
-    assert repository.get_definition(TOOL_ID) is None
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "1.0.0",
+        )
+        is None
+    )
 
 
 def test_sqlite_repository_preserves_definition_insertion_order(
@@ -185,7 +195,7 @@ def test_sqlite_repository_preserves_definition_insertion_order(
     )
 
 
-def test_sqlite_repository_rejects_duplicate_definition(
+def test_sqlite_repository_rejects_duplicate_definition_reference(
     tmp_path: Path,
 ) -> None:
     repository = create_repository(tmp_path)
@@ -347,7 +357,10 @@ def test_sqlite_repository_preserves_artifact_json_fidelity(
     repository.save_implementation(implementation)
     repository.save_test_case(test_case)
 
-    restored_definition = repository.get_definition(definition.id)
+    restored_definition = repository.get_definition(
+        definition.id,
+        definition.version,
+    )
     restored_implementation = repository.get_implementation(
         implementation.id,
     )
@@ -460,4 +473,52 @@ def test_sqlite_repository_returns_none_for_unknown_tool_definition_version(
             "9.0.0",
         )
         is None
+    )
+
+
+def test_sqlite_repository_migrates_uuid_only_definition_schema(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "tools.db"
+    definition = create_definition()
+
+    connection = sqlite3.connect(database)
+
+    try:
+        connection.execute(
+            """
+            CREATE TABLE tool_definitions (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                artifact_id TEXT NOT NULL UNIQUE,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            INSERT INTO tool_definitions (
+                artifact_id,
+                payload
+            )
+            VALUES (?, ?)
+            """,
+            (
+                str(definition.id),
+                definition.model_dump_json(),
+            ),
+        )
+
+        connection.commit()
+    finally:
+        connection.close()
+
+    repository = SQLiteToolRepository(database)
+
+    assert (
+        repository.get_definition(
+            definition.id,
+            definition.version,
+        )
+        == definition
     )

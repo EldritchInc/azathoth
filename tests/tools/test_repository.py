@@ -125,13 +125,25 @@ def test_repository_saves_and_gets_definition() -> None:
 
     repository.save_definition(definition)
 
-    assert repository.get_definition(TOOL_ID) == definition
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            definition.version,
+        )
+        == definition
+    )
 
 
 def test_repository_returns_none_for_unknown_definition() -> None:
     repository = InMemoryToolRepository()
 
-    assert repository.get_definition(TOOL_ID) is None
+    assert (
+        repository.get_definition(
+            TOOL_ID,
+            "1.0.0",
+        )
+        is None
+    )
 
 
 def test_repository_preserves_definition_insertion_order() -> None:
@@ -152,7 +164,7 @@ def test_repository_preserves_definition_insertion_order() -> None:
     )
 
 
-def test_repository_rejects_duplicate_definition_identifier() -> None:
+def test_repository_rejects_duplicate_definition_reference() -> None:
     repository = InMemoryToolRepository()
     definition = create_definition()
 
