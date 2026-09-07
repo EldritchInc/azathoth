@@ -1,11 +1,6 @@
 """Command-line application for Azathoth."""
 
-import json
-from argparse import (
-    ArgumentParser,
-    ArgumentTypeError,
-    Namespace,
-)
+from argparse import Namespace
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
@@ -13,13 +8,40 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
-from azathoth import __version__
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
     list_models,
     list_portfolio_models,
     show_model,
+)
+from azathoth.cli.parsing import (
+    COMMAND_ATTRIBUTE,
+    EXPECTED_VALUE_ATTRIBUTE,
+    GENERATIONS_ATTRIBUTE,
+    MODEL_ACTION_ATTRIBUTE,
+    MODEL_AUTHORIZE_ACTION,
+    MODEL_COMMAND,
+    MODEL_DEAUTHORIZE_ACTION,
+    MODEL_IDENTIFIER_ATTRIBUTE,
+    MODEL_LIST_ACTION,
+    MODEL_PORTFOLIO_ACTION,
+    MODEL_SHOW_ACTION,
+    TARGET_COST_ATTRIBUTE,
+    TARGET_LATENCY_ATTRIBUTE,
+    WORKFLOW_ACTION_ATTRIBUTE,
+    WORKFLOW_COMMAND,
+    WORKFLOW_DOCUMENT_ATTRIBUTE,
+    WORKFLOW_ID_ATTRIBUTE,
+    WORKFLOW_IMPORT_ACTION,
+    WORKFLOW_INPUT_ATTRIBUTE,
+    WORKFLOW_INVOKE_ACTION,
+    WORKFLOW_LIST_ACTION,
+    WORKFLOW_OPTIMIZE_ACTION,
+    WORKFLOW_PROMOTE_ACTION,
+    WORKFLOW_RUN_ACTION,
+    WORKFLOW_SHOW_ACTION,
+    build_parser,
 )
 from azathoth.cli.workflows import (
     import_workflow,
@@ -30,255 +52,6 @@ from azathoth.cli.workflows import (
     run_workflow,
     show_workflow,
 )
-
-COMMAND_ATTRIBUTE = "command"
-
-WORKFLOW_COMMAND = "workflow"
-WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
-WORKFLOW_IMPORT_ACTION = "import"
-WORKFLOW_INVOKE_ACTION = "invoke"
-WORKFLOW_LIST_ACTION = "list"
-WORKFLOW_OPTIMIZE_ACTION = "optimize"
-WORKFLOW_PROMOTE_ACTION = "promote"
-WORKFLOW_RUN_ACTION = "run"
-WORKFLOW_SHOW_ACTION = "show"
-WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
-WORKFLOW_ID_ATTRIBUTE = "workflow_id"
-WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
-
-EXPECTED_VALUE_ATTRIBUTE = "expected_value"
-TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
-TARGET_COST_ATTRIBUTE = "target_cost_usd"
-GENERATIONS_ATTRIBUTE = "generations"
-
-MODEL_COMMAND = "model"
-MODEL_ACTION_ATTRIBUTE = "model_action"
-MODEL_AUTHORIZE_ACTION = "authorize"
-MODEL_DEAUTHORIZE_ACTION = "deauthorize"
-MODEL_LIST_ACTION = "list"
-MODEL_PORTFOLIO_ACTION = "portfolio"
-MODEL_SHOW_ACTION = "show"
-MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
-
-
-def _json_value(
-    value: str,
-) -> JsonValue:
-    """Parse one JSON-compatible command-line value."""
-
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise ArgumentTypeError(f"Expected value must be valid JSON: {exc.msg}") from exc
-
-    return cast(
-        JsonValue,
-        parsed,
-    )
-
-
-def build_parser() -> ArgumentParser:
-    """Build the Azathoth command-line parser."""
-
-    parser = ArgumentParser(
-        prog="azathoth",
-        description="Empirical optimization for context-aware AI workflows.",
-    )
-
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
-
-    commands = parser.add_subparsers(
-        dest=COMMAND_ATTRIBUTE,
-    )
-
-    workflow_parser = commands.add_parser(
-        WORKFLOW_COMMAND,
-        help="Inspect and operate configured workflows.",
-    )
-
-    workflow_actions = workflow_parser.add_subparsers(
-        dest=WORKFLOW_ACTION_ATTRIBUTE,
-    )
-
-    workflow_actions.add_parser(
-        WORKFLOW_LIST_ACTION,
-        help="List configured workflows.",
-    )
-
-    workflow_show_parser = workflow_actions.add_parser(
-        WORKFLOW_SHOW_ACTION,
-        help="Show one configured workflow.",
-    )
-
-    workflow_show_parser.add_argument(
-        WORKFLOW_ID_ATTRIBUTE,
-        type=UUID,
-        metavar="WORKFLOW_ID",
-        help="Workflow UUID to inspect.",
-    )
-
-    workflow_import_parser = workflow_actions.add_parser(
-        WORKFLOW_IMPORT_ACTION,
-        help="Import a workflow JSON document.",
-    )
-
-    workflow_import_parser.add_argument(
-        WORKFLOW_DOCUMENT_ATTRIBUTE,
-        type=Path,
-        metavar="FILE",
-        help="JSON workflow document to import.",
-    )
-
-    workflow_run_parser = workflow_actions.add_parser(
-        WORKFLOW_RUN_ACTION,
-        help="Execute one configured workflow.",
-    )
-
-    workflow_run_parser.add_argument(
-        WORKFLOW_ID_ATTRIBUTE,
-        type=UUID,
-        metavar="WORKFLOW_ID",
-        help="Workflow UUID to execute.",
-    )
-
-    workflow_invoke_parser = workflow_actions.add_parser(
-        WORKFLOW_INVOKE_ACTION,
-        help="Invoke one active production workflow.",
-    )
-
-    workflow_invoke_parser.add_argument(
-        WORKFLOW_ID_ATTRIBUTE,
-        type=UUID,
-        metavar="WORKFLOW_ID",
-        help="Production workflow UUID to invoke.",
-    )
-
-    workflow_invoke_parser.add_argument(
-        "--input",
-        dest=WORKFLOW_INPUT_ATTRIBUTE,
-        required=True,
-        type=_json_value,
-        metavar="JSON",
-        help="Production workflow input as JSON.",
-    )
-
-    workflow_optimize_parser = workflow_actions.add_parser(
-        WORKFLOW_OPTIMIZE_ACTION,
-        help="Empirically optimize one configured workflow.",
-    )
-
-    workflow_optimize_parser.add_argument(
-        WORKFLOW_ID_ATTRIBUTE,
-        type=UUID,
-        metavar="WORKFLOW_ID",
-        help="Workflow UUID to optimize.",
-    )
-
-    workflow_optimize_parser.add_argument(
-        "--expected",
-        dest=EXPECTED_VALUE_ATTRIBUTE,
-        required=True,
-        type=_json_value,
-        metavar="JSON",
-        help="Expected workflow output as JSON.",
-    )
-
-    workflow_optimize_parser.add_argument(
-        "--target-latency",
-        dest=TARGET_LATENCY_ATTRIBUTE,
-        required=True,
-        type=float,
-        metavar="SECONDS",
-        help="Target workflow latency in seconds.",
-    )
-
-    workflow_optimize_parser.add_argument(
-        "--target-cost",
-        dest=TARGET_COST_ATTRIBUTE,
-        required=True,
-        type=float,
-        metavar="USD",
-        help="Target workflow execution cost in USD.",
-    )
-
-    workflow_optimize_parser.add_argument(
-        "--generations",
-        dest=GENERATIONS_ATTRIBUTE,
-        type=int,
-        default=1,
-        metavar="COUNT",
-        help="Number of empirical optimization generations.",
-    )
-
-    workflow_promote_parser = workflow_actions.add_parser(
-        WORKFLOW_PROMOTE_ACTION,
-        help="Promote one configured workflow to active production.",
-    )
-
-    workflow_promote_parser.add_argument(
-        WORKFLOW_ID_ATTRIBUTE,
-        type=UUID,
-        metavar="WORKFLOW_ID",
-        help="Workflow UUID to promote.",
-    )
-
-    model_parser = commands.add_parser(
-        MODEL_COMMAND,
-        help="Inspect and operate provider models.",
-    )
-
-    model_actions = model_parser.add_subparsers(
-        dest=MODEL_ACTION_ATTRIBUTE,
-    )
-
-    model_authorize_parser = model_actions.add_parser(
-        MODEL_AUTHORIZE_ACTION,
-        help="Authorize one currently available provider model.",
-    )
-
-    model_authorize_parser.add_argument(
-        MODEL_IDENTIFIER_ATTRIBUTE,
-        metavar="MODEL_IDENTIFIER",
-        help="Provider-qualified model identifier to authorize.",
-    )
-
-    model_deauthorize_parser = model_actions.add_parser(
-        MODEL_DEAUTHORIZE_ACTION,
-        help="Remove one model from organizational authorization.",
-    )
-
-    model_deauthorize_parser.add_argument(
-        MODEL_IDENTIFIER_ATTRIBUTE,
-        metavar="MODEL_IDENTIFIER",
-        help="Provider-qualified model identifier to deauthorize.",
-    )
-
-    model_actions.add_parser(
-        MODEL_LIST_ACTION,
-        help="List currently available provider models.",
-    )
-
-    model_actions.add_parser(
-        MODEL_PORTFOLIO_ACTION,
-        help="List models authorized for organizational selection.",
-    )
-
-    model_show_parser = model_actions.add_parser(
-        MODEL_SHOW_ACTION,
-        help="Show one currently available provider model.",
-    )
-
-    model_show_parser.add_argument(
-        MODEL_IDENTIFIER_ATTRIBUTE,
-        metavar="MODEL_IDENTIFIER",
-        help="Provider-qualified model identifier to inspect.",
-    )
-
-    return parser
 
 
 def main(
