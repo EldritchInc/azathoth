@@ -1,0 +1,13 @@
+{
+  "id": "44444444-4444-4444-4444-444444444444",
+  "name": "Answer accurately",
+  "description": "Produce the correct answer for the supplied request.",
+  "success_criteria": [
+    "The answer matches the expected result.",
+    "The answer remains factual."
+  ],
+  "constraints": [
+    "Do not rely on unavailable external state.",
+    "Remain provider independent."
+  ]
+}
