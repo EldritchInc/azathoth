@@ -2,6 +2,7 @@
 
 from azathoth.cli.application import main
 from azathoth.cli.benchmarks import (
+    import_benchmark,
     list_benchmark_cases,
     list_benchmarks,
     show_benchmark,
@@ -16,6 +17,7 @@ from azathoth.cli.configuration import (
 )
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.goals import (
+    import_goal,
     list_goals,
     show_goal,
 )
@@ -66,6 +68,8 @@ __all__ = [
     "build_parser",
     "deauthorize_model",
     "execute_configured_workflow",
+    "import_benchmark",
+    "import_goal",
     "import_tool",
     "import_workflow",
     "invoke_active_production_workflow",

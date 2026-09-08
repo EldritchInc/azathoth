@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
+from pathlib import Path
 from uuid import UUID
 
 BENCHMARK_COMMAND = "benchmark"
@@ -11,6 +12,8 @@ BENCHMARK_ACTION_ATTRIBUTE = "benchmark_action"
 
 BENCHMARK_CASES_ACTION = "cases"
 BENCHMARK_CASE_SHOW_ACTION = "case-show"
+BENCHMARK_IMPORT_ACTION = "import"
+BENCHMARK_DOCUMENT_ATTRIBUTE = "benchmark_document"
 BENCHMARK_LIST_ACTION = "list"
 BENCHMARK_SHOW_ACTION = "show"
 
@@ -78,4 +81,16 @@ def add_benchmark_parser(
         type=UUID,
         metavar="CASE_ID",
         help="Benchmark case UUID to inspect.",
+    )
+
+    benchmark_import_parser = benchmark_actions.add_parser(
+        BENCHMARK_IMPORT_ACTION,
+        help="Import one durable benchmark dataset.",
+    )
+
+    benchmark_import_parser.add_argument(
+        BENCHMARK_DOCUMENT_ATTRIBUTE,
+        type=Path,
+        metavar="FILE",
+        help="Benchmark dataset JSON document to import.",
     )

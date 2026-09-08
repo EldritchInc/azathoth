@@ -1281,3 +1281,103 @@ def test_goal_show_dispatches_command(
     assert received == [
         GOAL_ID,
     ]
+
+
+def test_benchmark_import_parser_accepts_document_path() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "benchmark",
+            "import",
+            "classification.json",
+        )
+    )
+
+    assert arguments.benchmark_action == "import"
+    assert arguments.benchmark_document == Path("classification.json")
+
+
+def test_benchmark_import_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[Path] = []
+
+    def fake_import_benchmark(
+        document_path: Path,
+    ) -> int:
+        received.append(
+            document_path,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "import_benchmark",
+        fake_import_benchmark,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "import",
+            "classification.json",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        Path("classification.json"),
+    ]
+
+
+def test_goal_import_parser_accepts_document_path() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "goal",
+            "import",
+            "accuracy.json",
+        )
+    )
+
+    assert arguments.goal_action == "import"
+    assert arguments.goal_document == Path("accuracy.json")
+
+
+def test_goal_import_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[Path] = []
+
+    def fake_import_goal(
+        document_path: Path,
+    ) -> int:
+        received.append(
+            document_path,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "import_goal",
+        fake_import_goal,
+    )
+
+    result = main(
+        (
+            "goal",
+            "import",
+            "accuracy.json",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        Path("accuracy.json"),
+    ]

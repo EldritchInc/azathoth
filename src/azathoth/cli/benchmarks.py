@@ -2,13 +2,16 @@
 
 import json
 import sys
+from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
+    BenchmarkDocumentError,
     SQLiteBenchmarkRepository,
+    decode_benchmark_document,
 )
 
 
@@ -193,7 +196,60 @@ def _indent(
     return "\n".join(f"{prefix}{line}" for line in value.splitlines())
 
 
+def import_benchmark(
+    document_path: Path,
+) -> int:
+    """Import one durable benchmark dataset from a JSON document."""
+
+    try:
+        document = document_path.read_text(
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        print(
+            f"Unable to read benchmark document {document_path}: {exc}",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    try:
+        dataset = decode_benchmark_document(
+            document,
+        )
+    except BenchmarkDocumentError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteBenchmarkRepository(
+        configuration.database,
+    )
+
+    try:
+        repository.save(
+            dataset,
+        )
+    except ValueError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(f"Imported benchmark dataset {dataset.id}.")
+
+    return 0
+
+
 __all__ = [
+    "import_benchmark",
     "list_benchmark_cases",
     "list_benchmarks",
     "show_benchmark",

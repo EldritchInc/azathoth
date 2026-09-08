@@ -3,6 +3,11 @@
 from azathoth.evaluation.benchmark import BenchmarkCase, BenchmarkDataset
 from azathoth.evaluation.benchmark_catalog import BenchmarkCatalog
 from azathoth.evaluation.benchmark_catalog_loader import BenchmarkCatalogLoader
+from azathoth.evaluation.benchmark_document import (
+    BenchmarkDocumentError,
+    decode_benchmark_document,
+    encode_benchmark_document,
+)
 from azathoth.evaluation.benchmark_repository import BenchmarkRepository
 from azathoth.evaluation.exact import ExactMatchEvaluator
 from azathoth.evaluation.memory_benchmark_repository import (
@@ -26,6 +31,7 @@ __all__ = [
     "BenchmarkCatalog",
     "BenchmarkCatalogLoader",
     "BenchmarkDataset",
+    "BenchmarkDocumentError",
     "BenchmarkRepository",
     "EvaluationEvidence",
     "EvaluationResult",
@@ -37,5 +43,7 @@ __all__ = [
     "InMemoryBenchmarkRepository",
     "OutcomeComparison",
     "SQLiteBenchmarkRepository",
+    "decode_benchmark_document",
+    "encode_benchmark_document",
     "require_benchmark_repository",
 ]

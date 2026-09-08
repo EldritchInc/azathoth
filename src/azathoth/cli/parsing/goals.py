@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
+from pathlib import Path
 from uuid import UUID
 
 GOAL_COMMAND = "goal"
 
 GOAL_ACTION_ATTRIBUTE = "goal_action"
+
+GOAL_IMPORT_ACTION = "import"
+GOAL_DOCUMENT_ATTRIBUTE = "goal_document"
 
 GOAL_LIST_ACTION = "list"
 GOAL_SHOW_ACTION = "show"
@@ -44,4 +48,16 @@ def add_goal_parser(
         type=UUID,
         metavar="GOAL_ID",
         help="Goal UUID to inspect.",
+    )
+
+    goal_import_parser = goal_actions.add_parser(
+        GOAL_IMPORT_ACTION,
+        help="Import one durable reusable goal.",
+    )
+
+    goal_import_parser.add_argument(
+        GOAL_DOCUMENT_ATTRIBUTE,
+        type=Path,
+        metavar="FILE",
+        help="Reusable goal JSON document to import.",
     )
