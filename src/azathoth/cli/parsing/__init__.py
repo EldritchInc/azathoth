@@ -3,7 +3,30 @@
 from argparse import ArgumentParser
 
 from azathoth import __version__
+from azathoth.cli.parsing.benchmarks import (
+    BENCHMARK_ACTION_ATTRIBUTE,
+    BENCHMARK_CASE_ID_ATTRIBUTE,
+    BENCHMARK_CASE_SHOW_ACTION,
+    BENCHMARK_CASES_ACTION,
+    BENCHMARK_COMMAND,
+    BENCHMARK_DOCUMENT_ATTRIBUTE,
+    BENCHMARK_ID_ATTRIBUTE,
+    BENCHMARK_IMPORT_ACTION,
+    BENCHMARK_LIST_ACTION,
+    BENCHMARK_SHOW_ACTION,
+    add_benchmark_parser,
+)
 from azathoth.cli.parsing.common import COMMAND_ATTRIBUTE
+from azathoth.cli.parsing.goals import (
+    GOAL_ACTION_ATTRIBUTE,
+    GOAL_COMMAND,
+    GOAL_DOCUMENT_ATTRIBUTE,
+    GOAL_ID_ATTRIBUTE,
+    GOAL_IMPORT_ACTION,
+    GOAL_LIST_ACTION,
+    GOAL_SHOW_ACTION,
+    add_goal_parser,
+)
 from azathoth.cli.parsing.models import (
     MODEL_ACTION_ATTRIBUTE,
     MODEL_AUTHORIZE_ACTION,
@@ -79,13 +102,34 @@ def build_parser() -> ArgumentParser:
 
     add_tool_parser(commands)
 
+    add_benchmark_parser(commands)
+
+    add_goal_parser(commands)
+
     return parser
 
 
 __all__ = [
+    "BENCHMARK_ACTION_ATTRIBUTE",
+    "BENCHMARK_CASES_ACTION",
+    "BENCHMARK_CASE_ID_ATTRIBUTE",
+    "BENCHMARK_CASE_SHOW_ACTION",
+    "BENCHMARK_COMMAND",
+    "BENCHMARK_DOCUMENT_ATTRIBUTE",
+    "BENCHMARK_ID_ATTRIBUTE",
+    "BENCHMARK_IMPORT_ACTION",
+    "BENCHMARK_LIST_ACTION",
+    "BENCHMARK_SHOW_ACTION",
     "COMMAND_ATTRIBUTE",
     "EXPECTED_VALUE_ATTRIBUTE",
     "GENERATIONS_ATTRIBUTE",
+    "GOAL_ACTION_ATTRIBUTE",
+    "GOAL_COMMAND",
+    "GOAL_DOCUMENT_ATTRIBUTE",
+    "GOAL_ID_ATTRIBUTE",
+    "GOAL_IMPORT_ACTION",
+    "GOAL_LIST_ACTION",
+    "GOAL_SHOW_ACTION",
     "MODEL_ACTION_ATTRIBUTE",
     "MODEL_AUTHORIZE_ACTION",
     "MODEL_COMMAND",
@@ -124,5 +168,6 @@ __all__ = [
     "WORKFLOW_PROMOTE_ACTION",
     "WORKFLOW_RUN_ACTION",
     "WORKFLOW_SHOW_ACTION",
+    "add_benchmark_parser",
     "build_parser",
 ]

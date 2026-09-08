@@ -27,6 +27,12 @@ IMPLEMENTATION_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 TEST_CASE_ID = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
 
+BENCHMARK_ID = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+BENCHMARK_CASE_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+GOAL_ID = UUID("abababab-abab-abab-abab-abababababab")
+
 
 def _json_value(
     value: str,
@@ -1063,4 +1069,315 @@ def test_tool_verify_dispatches_command(
             TOOL_ID,
             "2.0.0",
         )
+    ]
+
+
+def test_benchmark_list_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_list_benchmarks() -> int:
+        calls.append("list")
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_benchmarks",
+        fake_list_benchmarks,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "list",
+        )
+    )
+
+    assert result == 0
+    assert calls == ["list"]
+
+
+def test_benchmark_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_benchmark(
+        benchmark_id: UUID,
+    ) -> int:
+        received.append(benchmark_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_benchmark",
+        fake_show_benchmark,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "show",
+            str(BENCHMARK_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        BENCHMARK_ID,
+    ]
+
+
+def test_benchmark_cases_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_list_benchmark_cases(
+        benchmark_id: UUID,
+    ) -> int:
+        received.append(benchmark_id)
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_benchmark_cases",
+        fake_list_benchmark_cases,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "cases",
+            str(BENCHMARK_ID),
+        )
+    )
+
+    assert result == 0
+    assert received == [
+        BENCHMARK_ID,
+    ]
+
+
+def test_benchmark_case_show_dispatches_dataset_and_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[tuple[UUID, UUID]] = []
+
+    def fake_show_benchmark_case(
+        benchmark_id: UUID,
+        case_id: UUID,
+    ) -> int:
+        received.append(
+            (
+                benchmark_id,
+                case_id,
+            )
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_benchmark_case",
+        fake_show_benchmark_case,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "case-show",
+            str(BENCHMARK_ID),
+            str(BENCHMARK_CASE_ID),
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        (
+            BENCHMARK_ID,
+            BENCHMARK_CASE_ID,
+        )
+    ]
+
+
+def test_goal_list_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_list_goals() -> int:
+        calls.append("list")
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "list_goals",
+        fake_list_goals,
+    )
+
+    result = main(
+        (
+            "goal",
+            "list",
+        )
+    )
+
+    assert result == 0
+    assert calls == ["list"]
+
+
+def test_goal_show_parser_accepts_identifier() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "goal",
+            "show",
+            str(GOAL_ID),
+        )
+    )
+
+    assert arguments.goal_action == "show"
+    assert arguments.goal_id == GOAL_ID
+
+
+def test_goal_show_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[UUID] = []
+
+    def fake_show_goal(
+        goal_id: UUID,
+    ) -> int:
+        received.append(
+            goal_id,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "show_goal",
+        fake_show_goal,
+    )
+
+    result = main(
+        (
+            "goal",
+            "show",
+            str(GOAL_ID),
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        GOAL_ID,
+    ]
+
+
+def test_benchmark_import_parser_accepts_document_path() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "benchmark",
+            "import",
+            "classification.json",
+        )
+    )
+
+    assert arguments.benchmark_action == "import"
+    assert arguments.benchmark_document == Path("classification.json")
+
+
+def test_benchmark_import_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[Path] = []
+
+    def fake_import_benchmark(
+        document_path: Path,
+    ) -> int:
+        received.append(
+            document_path,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "import_benchmark",
+        fake_import_benchmark,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "import",
+            "classification.json",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        Path("classification.json"),
+    ]
+
+
+def test_goal_import_parser_accepts_document_path() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "goal",
+            "import",
+            "accuracy.json",
+        )
+    )
+
+    assert arguments.goal_action == "import"
+    assert arguments.goal_document == Path("accuracy.json")
+
+
+def test_goal_import_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[Path] = []
+
+    def fake_import_goal(
+        document_path: Path,
+    ) -> int:
+        received.append(
+            document_path,
+        )
+
+        return 0
+
+    monkeypatch.setattr(
+        application,
+        "import_goal",
+        fake_import_goal,
+    )
+
+    result = main(
+        (
+            "goal",
+            "import",
+            "accuracy.json",
+        )
+    )
+
+    assert result == 0
+
+    assert received == [
+        Path("accuracy.json"),
     ]

@@ -4,10 +4,24 @@ from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
 
+from azathoth.cli.benchmarks import (
+    import_benchmark,
+    list_benchmark_cases,
+    list_benchmarks,
+    show_benchmark,
+    show_benchmark_case,
+)
 from azathoth.cli.dispatching import (
+    dispatch_benchmark_command,
+    dispatch_goal_command,
     dispatch_model_command,
     dispatch_tool_command,
     dispatch_workflow_command,
+)
+from azathoth.cli.goals import (
+    import_goal,
+    list_goals,
+    show_goal,
 )
 from azathoth.cli.models import (
     authorize_model,
@@ -17,7 +31,9 @@ from azathoth.cli.models import (
     show_model,
 )
 from azathoth.cli.parsing import (
+    BENCHMARK_COMMAND,
     COMMAND_ATTRIBUTE,
+    GOAL_COMMAND,
     MODEL_COMMAND,
     TOOL_COMMAND,
     WORKFLOW_COMMAND,
@@ -77,6 +93,24 @@ def _dispatch(
             None,
         ),
     )
+
+    if command == BENCHMARK_COMMAND:
+        return dispatch_benchmark_command(
+            arguments,
+            import_benchmark=import_benchmark,
+            list_benchmark_cases=list_benchmark_cases,
+            list_benchmarks=list_benchmarks,
+            show_benchmark=show_benchmark,
+            show_benchmark_case=show_benchmark_case,
+        )
+
+    if command == GOAL_COMMAND:
+        return dispatch_goal_command(
+            arguments,
+            import_goal=import_goal,
+            list_goals=list_goals,
+            show_goal=show_goal,
+        )
 
     if command == WORKFLOW_COMMAND:
         return dispatch_workflow_command(
