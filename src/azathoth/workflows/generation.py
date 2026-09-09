@@ -1,6 +1,9 @@
 """Generate executable workflow candidates."""
 
-from azathoth.prompting import generate_prompt_candidates
+from azathoth.prompting import (
+    ContextPromptStrategySpec,
+    generate_prompt_candidates,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -54,6 +57,13 @@ def generate_workflow_candidate(
                 step_specification,
                 tool_resolver=tool_resolver,
                 tool_implementation_resolver=tool_implementation_resolver,
+            )
+        elif isinstance(
+            step_specification,
+            ContextPromptStrategySpec,
+        ):
+            raise WorkflowGenerationError(
+                "Context-aware prompt workflow steps are not executable yet."
             )
         else:
             prompt_candidates = generate_prompt_candidates(

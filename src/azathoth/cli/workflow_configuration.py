@@ -6,7 +6,10 @@ from uuid import UUID
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    ContextPromptStrategySpec,
+    PromptStrategySpec,
+)
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
@@ -75,7 +78,10 @@ def show_workflow(
 
         if isinstance(
             step.specification,
-            PromptStrategySpec,
+            (
+                PromptStrategySpec,
+                ContextPromptStrategySpec,
+            ),
         ):
             print(f"Strategy: {step.specification.metadata.name}")
 
@@ -144,13 +150,16 @@ def import_workflow(
 
 
 def _step_type(
-    specification: PromptStrategySpec | ToolStepSpecification,
+    specification: (PromptStrategySpec | ContextPromptStrategySpec | ToolStepSpecification),
 ) -> str:
     """Return the stable CLI name for one workflow step type."""
 
     if isinstance(
         specification,
-        PromptStrategySpec,
+        (
+            PromptStrategySpec,
+            ContextPromptStrategySpec,
+        ),
     ):
         return "prompt"
 
