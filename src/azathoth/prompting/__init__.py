@@ -1,7 +1,14 @@
 """Prompt-based Azathoth strategies."""
 
-from azathoth.prompting.candidates import generate_prompt_candidates
-from azathoth.prompting.context_strategy import ContextPromptStrategy
+from azathoth.prompting.candidates import (
+    generate_prompt_candidates,
+)
+from azathoth.prompting.context_candidates import (
+    generate_context_prompt_candidates,
+)
+from azathoth.prompting.context_strategy import (
+    ContextPromptStrategy,
+)
 from azathoth.prompting.exceptions import (
     ModelBindingMismatchError,
     PromptBindingError,
@@ -19,11 +26,15 @@ from azathoth.prompting.models import (
     PromptBinding,
     PromptTemplate,
 )
-from azathoth.prompting.specifications import PromptStrategySpec
+from azathoth.prompting.specifications import (
+    ContextPromptStrategySpec,
+    PromptStrategySpec,
+)
 from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
     "ContextPromptStrategy",
+    "ContextPromptStrategySpec",
     "FixedModelSelection",
     "ModelBinding",
     "ModelBindingMismatchError",
@@ -34,8 +45,9 @@ __all__ = [
     "PromptBindingEventNotFoundError",
     "PromptBindingFieldNotFoundError",
     "PromptStrategy",
+    "PromptStrategySpec",
     "PromptTemplate",
     "PromptingError",
-    "PromptStrategySpec",
+    "generate_context_prompt_candidates",
     "generate_prompt_candidates",
 ]
