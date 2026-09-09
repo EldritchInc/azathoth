@@ -23,6 +23,7 @@ from azathoth.workflows.execution import (
 from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import (
+    WorkflowContextReference,
     WorkflowValue,
     WorkflowValueReference,
 )
@@ -122,21 +123,61 @@ class WorkflowRunner:
         for binding in step.inputs:
             source = binding.source
 
-            if not isinstance(
+            if isinstance(
                 source,
                 WorkflowValueReference,
             ):
-                raise RuntimeError("Context-backed workflow inputs are not executable yet.")
+                value = cls._find_workflow_value(
+                    completed_steps=completed_steps,
+                    producer_step_id=source.producer_step_id,
+                    name=source.name,
+                )
 
-            value = cls._find_workflow_value(
-                completed_steps=completed_steps,
-                producer_step_id=source.producer_step_id,
-                name=source.name,
+                if value is None:
+                    raise RuntimeError(
+                        "Validated workflow input could not resolve a committed workflow value."
+                    )
+
+                step_context = step_context.append(
+                    ContextEvent(
+                        event_type="workflow.input.bound",
+                        payload={
+                            "name": binding.name,
+                            "value": value.value,
+                            "producer_step_id": str(
+                                value.producer_step_id,
+                            ),
+                            "source_name": value.name,
+                        },
+                        producer="workflow-runner",
+                    )
+                )
+
+                continue
+
+            if not isinstance(
+                source,
+                WorkflowContextReference,
+            ):
+                raise RuntimeError("Workflow input binding contains an unsupported source type.")
+
+            event = layer_context.latest(
+                source.event_type,
             )
 
-            if value is None:
+            if event is None:
                 raise RuntimeError(
-                    "Validated workflow input could not resolve a committed workflow value."
+                    f"Workflow context input {binding.name!r} "
+                    "could not resolve event type "
+                    f"{source.event_type!r}."
+                )
+
+            if source.field_name not in event.payload:
+                raise RuntimeError(
+                    f"Workflow context input {binding.name!r} "
+                    "could not resolve field "
+                    f"{source.field_name!r} from event type "
+                    f"{source.event_type!r}."
                 )
 
             step_context = step_context.append(
@@ -144,9 +185,9 @@ class WorkflowRunner:
                     event_type="workflow.input.bound",
                     payload={
                         "name": binding.name,
-                        "value": value.value,
-                        "producer_step_id": str(value.producer_step_id),
-                        "source_name": value.name,
+                        "value": event.payload[source.field_name],
+                        "source_event_type": source.event_type,
+                        "source_field_name": source.field_name,
                     },
                     producer="workflow-runner",
                 )
