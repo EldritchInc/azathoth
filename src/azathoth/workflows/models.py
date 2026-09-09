@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from azathoth.workflows.steps import WorkflowStepSpecification
+from azathoth.workflows.value import WorkflowValueReference
 
 
 class WorkflowMetadata(BaseModel):
@@ -74,13 +75,17 @@ class WorkflowSpecification(BaseModel):
             visiting.add(step_id)
 
             for dependency_id in steps_by_id[step_id].depends_on:
-                visit(dependency_id)
+                visit(
+                    dependency_id,
+                )
 
             visiting.remove(step_id)
             visited.add(step_id)
 
         for step in self.steps:
-            visit(step.id)
+            visit(
+                step.id,
+            )
 
         for step in self.steps:
             output_names = tuple(binding.name for binding in step.outputs)
@@ -100,7 +105,15 @@ class WorkflowSpecification(BaseModel):
             upstream_step_ids = self._upstream_step_ids(step)
 
             for input_binding in step.inputs:
-                producer_step_id = input_binding.source.producer_step_id
+                source = input_binding.source
+
+                if not isinstance(
+                    source,
+                    WorkflowValueReference,
+                ):
+                    continue
+
+                producer_step_id = source.producer_step_id
 
                 if producer_step_id not in steps_by_id:
                     raise ValueError(
@@ -112,7 +125,7 @@ class WorkflowSpecification(BaseModel):
 
                 producer_output_names = {output.name for output in producer.outputs}
 
-                if input_binding.source.name not in producer_output_names:
+                if source.name not in producer_output_names:
                     raise ValueError(
                         "Workflow input bindings must reference "
                         "an output declared by the producer step."

@@ -321,16 +321,18 @@ def test_workflow_input_binding_records_name_and_source() -> None:
 
 
 def test_workflow_input_binding_can_alias_source_value() -> None:
+    source = WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="classification",
+    )
+
     binding = WorkflowInputBinding(
         name="route",
-        source=WorkflowValueReference(
-            producer_step_id=STEP_ID,
-            name="classification",
-        ),
+        source=source,
     )
 
     assert binding.name == "route"
-    assert binding.source.name == "classification"
+    assert binding.source == source
 
 
 def test_workflow_input_binding_rejects_empty_name() -> None:

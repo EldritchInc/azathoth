@@ -24,6 +24,15 @@ class WorkflowValueReference(BaseModel):
     name: str = Field(min_length=1)
 
 
+class WorkflowContextReference(BaseModel):
+    """Identify a field in the latest matching execution context event."""
+
+    model_config = ConfigDict(frozen=True)
+
+    event_type: str = Field(min_length=1)
+    field_name: str = Field(min_length=1)
+
+
 class WorkflowValueResolutionError(ValueError):
     """Raised when a workflow value binding cannot resolve an output path."""
 
@@ -70,9 +79,9 @@ class WorkflowValueBinding(BaseModel):
 
 
 class WorkflowInputBinding(BaseModel):
-    """Bind a workflow value to a named downstream step input."""
+    """Bind a workflow or context value to a named step input."""
 
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(min_length=1)
-    source: WorkflowValueReference
+    source: WorkflowValueReference | WorkflowContextReference

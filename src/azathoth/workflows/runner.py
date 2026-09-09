@@ -22,7 +22,10 @@ from azathoth.workflows.execution import (
 )
 from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.retry import WorkflowRetryPolicy
-from azathoth.workflows.value import WorkflowValue
+from azathoth.workflows.value import (
+    WorkflowValue,
+    WorkflowValueReference,
+)
 
 
 @dataclass(frozen=True)
@@ -117,10 +120,18 @@ class WorkflowRunner:
         step_context = layer_context
 
         for binding in step.inputs:
+            source = binding.source
+
+            if not isinstance(
+                source,
+                WorkflowValueReference,
+            ):
+                raise RuntimeError("Context-backed workflow inputs are not executable yet.")
+
             value = cls._find_workflow_value(
                 completed_steps=completed_steps,
-                producer_step_id=binding.source.producer_step_id,
-                name=binding.source.name,
+                producer_step_id=source.producer_step_id,
+                name=source.name,
             )
 
             if value is None:
