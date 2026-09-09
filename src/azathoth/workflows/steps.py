@@ -4,7 +4,10 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    ContextPromptStrategySpec,
+    PromptStrategySpec,
+)
 from azathoth.tools import ToolRequirement
 from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.failure import WorkflowFailurePolicy
@@ -29,12 +32,16 @@ class WorkflowStepSpecification(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
-    specification: PromptStrategySpec | ToolStepSpecification
+
+    specification: PromptStrategySpec | ContextPromptStrategySpec | ToolStepSpecification
+
     depends_on: tuple[UUID, ...] = ()
     inputs: tuple[WorkflowInputBinding, ...] = ()
     outputs: tuple[WorkflowValueBinding, ...] = ()
     conditions: tuple[WorkflowCondition, ...] = ()
+
     retry_policy: WorkflowRetryPolicy = Field(
         default_factory=WorkflowRetryPolicy,
     )
+
     failure_policy: WorkflowFailurePolicy = WorkflowFailurePolicy.FAIL_WORKFLOW

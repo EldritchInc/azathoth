@@ -214,6 +214,7 @@ from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
 from azathoth.workflows.value import (
+    WorkflowContextReference,
     WorkflowInputBinding,
     WorkflowValue,
     WorkflowValueBinding,
@@ -273,6 +274,7 @@ __all__ = [
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
+    "WorkflowContextReference",
     "WorkflowDocumentError",
     "WorkflowEvaluation",
     "WorkflowExperimentEvidence",
