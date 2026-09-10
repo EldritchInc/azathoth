@@ -14,6 +14,9 @@ from azathoth.evaluation import (
 )
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
+from azathoth.workflows.input import (
+    create_workflow_input_event,
+)
 from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.scorecard import WorkflowScorecard
@@ -195,7 +198,10 @@ class WorkflowBenchmarkRunner:
     async def run(
         self,
         dataset: BenchmarkDataset,
-        candidate_factory: Callable[[BenchmarkCase], WorkflowCandidate],
+        candidate_factory: Callable[
+            [BenchmarkCase],
+            WorkflowCandidate,
+        ],
         *,
         output_name: str,
     ) -> WorkflowBenchmarkResult:
@@ -204,14 +210,27 @@ class WorkflowBenchmarkRunner:
         results: list[WorkflowBenchmarkCaseResult] = []
 
         for case in dataset.cases:
-            candidate = candidate_factory(case)
+            candidate = candidate_factory(
+                case,
+            )
+
+            context = Context(
+                events=(
+                    create_workflow_input_event(
+                        case.input,
+                        producer="azathoth.benchmark",
+                    ),
+                )
+            )
 
             run = await self._runner.run(
                 candidate,
-                Context(),
+                context,
             )
 
-            values = run.values_named(output_name)
+            values = run.values_named(
+                output_name,
+            )
 
             if len(values) != 1:
                 raise ValueError(
