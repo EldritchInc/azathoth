@@ -8,6 +8,7 @@ from azathoth.cli.benchmarks import (
     import_benchmark,
     list_benchmark_cases,
     list_benchmarks,
+    run_benchmark,
     show_benchmark,
     show_benchmark_case,
 )
@@ -37,6 +38,7 @@ from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
     render_production_invocation_result,
+    render_workflow_benchmark_result,
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
@@ -95,9 +97,11 @@ __all__ = [
     "promote_configured_workflow",
     "promote_workflow",
     "render_production_invocation_result",
+    "render_workflow_benchmark_result",
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
+    "run_benchmark",
     "run_workflow",
     "show_model",
     "show_benchmark",

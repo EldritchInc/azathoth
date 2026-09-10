@@ -1,26 +1,60 @@
 """Tests for human-readable benchmark execution rendering."""
 
-from types import SimpleNamespace
 from uuid import UUID
 
 from azathoth.cli import render_workflow_benchmark_result
+from azathoth.workflows import WorkflowBenchmarkResult
 
 BENCHMARK_ID = UUID("11111111-1111-1111-1111-111111111111")
 
 WORKFLOW_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 
-def create_result() -> SimpleNamespace:
+class StubWorkflowBenchmarkResult(WorkflowBenchmarkResult):
+    """Provide deterministic aggregate benchmark values for rendering."""
+
+    @property
+    def cases_run(self) -> int:
+        """Return deterministic executed case count."""
+
+        return 4
+
+    @property
+    def cases_passed(self) -> int:
+        """Return deterministic passing case count."""
+
+        return 3
+
+    @property
+    def accuracy(self) -> float:
+        """Return deterministic benchmark accuracy."""
+
+        return 0.75
+
+    @property
+    def total_tokens(self) -> int:
+        """Return deterministic token usage."""
+
+        return 120
+
+    @property
+    def total_latency_ms(self) -> int:
+        """Return deterministic provider latency."""
+
+        return 875
+
+    @property
+    def total_cost_usd(self) -> float:
+        """Return deterministic model cost."""
+
+        return 0.001234
+
+
+def create_result() -> WorkflowBenchmarkResult:
     """Create deterministic aggregate benchmark evidence."""
 
-    return SimpleNamespace(
+    return StubWorkflowBenchmarkResult(
         dataset_id=BENCHMARK_ID,
-        cases_run=4,
-        cases_passed=3,
-        accuracy=0.75,
-        total_tokens=120,
-        total_latency_ms=875,
-        total_cost_usd=0.001234,
     )
 
 

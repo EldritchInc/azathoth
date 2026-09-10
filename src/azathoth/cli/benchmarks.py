@@ -1,11 +1,19 @@
 """Durable benchmark inspection commands for the Azathoth CLI."""
 
+import asyncio
 import json
 import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth.cli.benchmark_execution import (
+    execute_configured_benchmark,
+)
+from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.rendering import (
+    render_workflow_benchmark_result,
+)
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -13,6 +21,8 @@ from azathoth.evaluation import (
     SQLiteBenchmarkRepository,
     decode_benchmark_document,
 )
+from azathoth.runtime import WorkflowNotConfiguredError
+from azathoth.workflows import WorkflowGenerationError
 
 
 def list_benchmarks() -> int:
@@ -248,10 +258,71 @@ def import_benchmark(
     return 0
 
 
+def run_benchmark(
+    *,
+    benchmark_id: UUID,
+    workflow_id: UUID,
+    output_name: str,
+) -> int:
+    """Execute one configured workflow against a durable benchmark."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteBenchmarkRepository(
+        configuration.database,
+    )
+
+    dataset = repository.get(
+        benchmark_id,
+    )
+
+    if dataset is None:
+        print(
+            f"Benchmark dataset {benchmark_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    runtime = load_runtime(
+        configuration,
+    )
+
+    try:
+        result = asyncio.run(
+            execute_configured_benchmark(
+                runtime=runtime,
+                workflow_id=workflow_id,
+                dataset=dataset,
+                output_name=output_name,
+            )
+        )
+    except (
+        WorkflowNotConfiguredError,
+        WorkflowGenerationError,
+    ) as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(
+        render_workflow_benchmark_result(
+            result,
+            workflow_id=workflow_id,
+        )
+    )
+
+    return 0
+
+
 __all__ = [
     "import_benchmark",
     "list_benchmark_cases",
     "list_benchmarks",
+    "render_workflow_benchmark_result",
     "show_benchmark",
     "show_benchmark_case",
 ]

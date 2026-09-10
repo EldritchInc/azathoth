@@ -36,7 +36,7 @@ def dispatch_benchmark_command(
     list_benchmarks: BenchmarkListHandler,
     show_benchmark: BenchmarkIdentifierHandler,
     show_benchmark_case: BenchmarkCaseHandler,
-    run_benchmark: BenchmarkRunHandler | None = None,
+    run_benchmark: BenchmarkRunHandler,
 ) -> int | None:
     """Dispatch one parsed benchmark command."""
 
@@ -104,9 +104,6 @@ def dispatch_benchmark_command(
         )
 
     if action == BENCHMARK_RUN_ACTION:
-        if run_benchmark is None:
-            return None
-
         return run_benchmark(
             benchmark_id=cast(
                 UUID,

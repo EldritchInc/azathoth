@@ -8,6 +8,7 @@ from azathoth.cli.benchmarks import (
     import_benchmark,
     list_benchmark_cases,
     list_benchmarks,
+    run_benchmark,
     show_benchmark,
     show_benchmark_case,
 )
@@ -100,6 +101,7 @@ def _dispatch(
             import_benchmark=import_benchmark,
             list_benchmark_cases=list_benchmark_cases,
             list_benchmarks=list_benchmarks,
+            run_benchmark=run_benchmark,
             show_benchmark=show_benchmark,
             show_benchmark_case=show_benchmark_case,
         )
