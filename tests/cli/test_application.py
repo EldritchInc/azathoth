@@ -1381,3 +1381,60 @@ def test_goal_import_dispatches_command(
     assert received == [
         Path("accuracy.json"),
     ]
+
+
+def test_benchmark_run_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[
+        tuple[
+            UUID,
+            UUID,
+            str,
+        ]
+    ] = []
+
+    def fake_run_benchmark(
+        *,
+        benchmark_id: UUID,
+        workflow_id: UUID,
+        output_name: str,
+    ) -> int:
+        received.append(
+            (
+                benchmark_id,
+                workflow_id,
+                output_name,
+            )
+        )
+
+        return 23
+
+    monkeypatch.setattr(
+        application,
+        "run_benchmark",
+        fake_run_benchmark,
+        raising=False,
+    )
+
+    result = main(
+        (
+            "benchmark",
+            "run",
+            str(BENCHMARK_ID),
+            "--workflow",
+            str(WORKFLOW_ID),
+            "--output",
+            "classification",
+        )
+    )
+
+    assert result == 23
+
+    assert received == [
+        (
+            BENCHMARK_ID,
+            WORKFLOW_ID,
+            "classification",
+        )
+    ]
