@@ -64,6 +64,10 @@ from azathoth.workflows.generation import (
     WorkflowGenerationError,
     generate_workflow_candidate,
 )
+from azathoth.workflows.input import (
+    WORKFLOW_INPUT_EVENT_TYPE,
+    create_workflow_input_event,
+)
 from azathoth.workflows.memory_experiment_repository import (
     InMemoryWorkflowExperimentRepository,
     require_workflow_experiment_repository,
@@ -255,6 +259,7 @@ __all__ = [
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
+    "WORKFLOW_INPUT_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
     "WorkflowBenchmarkComparator",
@@ -322,6 +327,7 @@ __all__ = [
     "WorkflowValueResolutionError",
     "complete_production_invocation",
     "create_production_invocation",
+    "create_workflow_input_event",
     "decode_workflow_document",
     "emit_production_result",
     "encode_workflow_document",
