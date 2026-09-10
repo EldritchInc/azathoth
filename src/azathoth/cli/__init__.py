@@ -6,6 +6,7 @@ from azathoth.cli.benchmark_execution import (
     execute_configured_benchmark,
 )
 from azathoth.cli.benchmarks import (
+    compare_benchmarks,
     import_benchmark,
     list_benchmark_cases,
     list_benchmarks,
@@ -39,6 +40,7 @@ from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
     render_production_invocation_result,
+    render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
     render_workflow_optimization_session,
     render_workflow_promotion,
@@ -72,6 +74,7 @@ __all__ = [
     "CliRuntimeConfiguration",
     "authorize_model",
     "build_parser",
+    "compare_benchmarks",
     "compare_configured_benchmarks",
     "deauthorize_model",
     "execute_configured_benchmark",
@@ -99,6 +102,7 @@ __all__ = [
     "promote_configured_workflow",
     "promote_workflow",
     "render_production_invocation_result",
+    "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
     "render_workflow_optimization_session",
     "render_workflow_promotion",

@@ -6,7 +6,11 @@ from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
-from azathoth.cli.parsing.workflows import WORKFLOW_ID_ATTRIBUTE
+from azathoth.cli.parsing.workflows import (
+    TARGET_COST_ATTRIBUTE,
+    TARGET_LATENCY_ATTRIBUTE,
+    WORKFLOW_ID_ATTRIBUTE,
+)
 
 BENCHMARK_COMMAND = "benchmark"
 
@@ -14,6 +18,7 @@ BENCHMARK_ACTION_ATTRIBUTE = "benchmark_action"
 
 BENCHMARK_CASES_ACTION = "cases"
 BENCHMARK_CASE_SHOW_ACTION = "case-show"
+BENCHMARK_COMPARE_ACTION = "compare"
 BENCHMARK_IMPORT_ACTION = "import"
 BENCHMARK_LIST_ACTION = "list"
 BENCHMARK_RUN_ACTION = "run"
@@ -23,6 +28,7 @@ BENCHMARK_DOCUMENT_ATTRIBUTE = "benchmark_document"
 BENCHMARK_ID_ATTRIBUTE = "benchmark_id"
 BENCHMARK_CASE_ID_ATTRIBUTE = "benchmark_case_id"
 BENCHMARK_OUTPUT_ATTRIBUTE = "benchmark_output"
+BENCHMARK_WORKFLOW_IDS_ATTRIBUTE = "workflow_ids"
 
 
 def add_benchmark_parser(
@@ -126,4 +132,52 @@ def add_benchmark_parser(
         required=True,
         metavar="OUTPUT",
         help="Workflow output value to evaluate.",
+    )
+
+    benchmark_compare_parser = benchmark_actions.add_parser(
+        BENCHMARK_COMPARE_ACTION,
+        help="Compare configured workflows against one benchmark dataset.",
+    )
+
+    benchmark_compare_parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID to execute.",
+    )
+
+    benchmark_compare_parser.add_argument(
+        "--workflow",
+        dest=BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
+        type=UUID,
+        action="append",
+        required=True,
+        metavar="WORKFLOW_ID",
+        help="Configured workflow UUID to compare. Repeat for each workflow.",
+    )
+
+    benchmark_compare_parser.add_argument(
+        "--output",
+        dest=BENCHMARK_OUTPUT_ATTRIBUTE,
+        required=True,
+        metavar="OUTPUT",
+        help="Workflow output value to evaluate.",
+    )
+
+    benchmark_compare_parser.add_argument(
+        "--target-latency",
+        dest=TARGET_LATENCY_ATTRIBUTE,
+        type=float,
+        required=True,
+        metavar="SECONDS",
+        help="Target workflow latency in seconds.",
+    )
+
+    benchmark_compare_parser.add_argument(
+        "--target-cost",
+        dest=TARGET_COST_ATTRIBUTE,
+        type=float,
+        required=True,
+        metavar="USD",
+        help="Target workflow execution cost in USD.",
     )

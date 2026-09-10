@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from azathoth.cli.benchmarks import (
+    compare_benchmarks,
     import_benchmark,
     list_benchmark_cases,
     list_benchmarks,
@@ -98,6 +99,7 @@ def _dispatch(
     if command == BENCHMARK_COMMAND:
         return dispatch_benchmark_command(
             arguments,
+            compare_benchmarks=compare_benchmarks,
             import_benchmark=import_benchmark,
             list_benchmark_cases=list_benchmark_cases,
             list_benchmarks=list_benchmarks,

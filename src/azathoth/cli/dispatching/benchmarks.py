@@ -11,6 +11,7 @@ from azathoth.cli.parsing import (
     BENCHMARK_CASE_ID_ATTRIBUTE,
     BENCHMARK_CASE_SHOW_ACTION,
     BENCHMARK_CASES_ACTION,
+    BENCHMARK_COMPARE_ACTION,
     BENCHMARK_DOCUMENT_ATTRIBUTE,
     BENCHMARK_ID_ATTRIBUTE,
     BENCHMARK_IMPORT_ACTION,
@@ -18,6 +19,9 @@ from azathoth.cli.parsing import (
     BENCHMARK_OUTPUT_ATTRIBUTE,
     BENCHMARK_RUN_ACTION,
     BENCHMARK_SHOW_ACTION,
+    BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
+    TARGET_COST_ATTRIBUTE,
+    TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
 )
 
@@ -26,17 +30,19 @@ BenchmarkCaseHandler = Callable[[UUID, UUID], int]
 BenchmarkListHandler = Callable[[], int]
 BenchmarkImportHandler = Callable[[Path], int]
 BenchmarkRunHandler = Callable[..., int]
+BenchmarkCompareHandler = Callable[..., int]
 
 
 def dispatch_benchmark_command(
     arguments: Namespace,
     *,
+    compare_benchmarks: BenchmarkCompareHandler,
     import_benchmark: BenchmarkImportHandler,
     list_benchmark_cases: BenchmarkIdentifierHandler,
     list_benchmarks: BenchmarkListHandler,
+    run_benchmark: BenchmarkRunHandler,
     show_benchmark: BenchmarkIdentifierHandler,
     show_benchmark_case: BenchmarkCaseHandler,
-    run_benchmark: BenchmarkRunHandler,
 ) -> int | None:
     """Dispatch one parsed benchmark command."""
 
@@ -124,6 +130,47 @@ def dispatch_benchmark_command(
                 getattr(
                     arguments,
                     BENCHMARK_OUTPUT_ATTRIBUTE,
+                ),
+            ),
+        )
+
+    if action == BENCHMARK_COMPARE_ACTION:
+        return compare_benchmarks(
+            benchmark_id=cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            workflow_ids=tuple(
+                cast(
+                    list[UUID],
+                    getattr(
+                        arguments,
+                        BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
+                    ),
+                )
+            ),
+            output_name=cast(
+                str,
+                getattr(
+                    arguments,
+                    BENCHMARK_OUTPUT_ATTRIBUTE,
+                ),
+            ),
+            target_latency_seconds=cast(
+                float,
+                getattr(
+                    arguments,
+                    TARGET_LATENCY_ATTRIBUTE,
+                ),
+            ),
+            target_cost_usd=cast(
+                float,
+                getattr(
+                    arguments,
+                    TARGET_COST_ATTRIBUTE,
                 ),
             ),
         )

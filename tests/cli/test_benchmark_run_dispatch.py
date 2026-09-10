@@ -43,6 +43,27 @@ def unused_list_benchmarks() -> int:
     raise AssertionError("benchmark list should not be dispatched")
 
 
+def unused_compare_benchmarks(
+    *,
+    benchmark_id: UUID,
+    workflow_ids: tuple[UUID, ...],
+    output_name: str,
+    target_latency_seconds: float,
+    target_cost_usd: float,
+) -> int:
+    """Fail when benchmark comparison is unexpectedly dispatched."""
+
+    del (
+        benchmark_id,
+        workflow_ids,
+        output_name,
+        target_latency_seconds,
+        target_cost_usd,
+    )
+
+    raise AssertionError("benchmark compare should not be dispatched")
+
+
 def test_benchmark_run_parser_records_dataset_identifier() -> None:
     arguments = build_parser().parse_args(
         (
@@ -126,6 +147,7 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
 
     result = dispatch_benchmark_command(
         arguments,
+        compare_benchmarks=unused_compare_benchmarks,
         import_benchmark=unused_import_benchmark,
         list_benchmark_cases=unused_benchmark_identifier,
         list_benchmarks=unused_list_benchmarks,
