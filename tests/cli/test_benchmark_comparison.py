@@ -12,26 +12,24 @@ from azathoth.evaluation import (
     ExpectedOutcome,
     OutcomeComparison,
 )
+from azathoth.prompting import (
+    ContextPromptStrategySpec,
+    FixedModelSelection,
+    PromptBinding,
+    PromptTemplate,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelMetadata,
+    ModelResponse,
+    Prompt,
 )
 from azathoth.runtime import AzathothRuntime
-from azathoth.tools import (
-    ToolCatalog,
-    ToolDefinition,
-    ToolImplementation,
-    ToolImplementationCatalog,
-    ToolInputSchema,
-    ToolOutputSchema,
-    ToolRequirement,
-)
+from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
-    ToolStepSpecification,
     WorkflowCatalog,
-    WorkflowContextReference,
-    WorkflowInputBinding,
     WorkflowMetadata,
     WorkflowScoringPolicy,
     WorkflowSpecification,
@@ -54,39 +52,70 @@ CORRECT_STEP_ID = UUID("66666666-6666-4666-8666-666666666666")
 
 INCORRECT_STEP_ID = UUID("77777777-7777-4777-8777-777777777777")
 
-CORRECT_TOOL_ID = UUID("88888888-8888-4888-8888-888888888888")
+CORRECT_STRATEGY_ID = UUID("88888888-8888-4888-8888-888888888888")
 
-INCORRECT_TOOL_ID = UUID("99999999-9999-4999-8999-999999999999")
+INCORRECT_STRATEGY_ID = UUID("99999999-9999-4999-8999-999999999999")
 
-CORRECT_IMPLEMENTATION_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+CORRECT_MODEL_IDENTIFIER = "deterministic/correct-classifier"
+INCORRECT_MODEL_IDENTIFIER = "deterministic/incorrect-classifier"
 
-INCORRECT_IMPLEMENTATION_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+
+class ScoredDeterministicLanguageModel:
+    """Return deterministic model output with complete scoring evidence."""
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        response_text: str,
+        estimated_cost_usd: float,
+    ) -> None:
+        self._model = model
+        self._response_text = response_text
+        self._estimated_cost_usd = estimated_cost_usd
+
+    async def complete(
+        self,
+        _prompt: Prompt,
+    ) -> ModelResponse:
+        """Return one deterministic model response."""
+
+        return ModelResponse(
+            text=self._response_text,
+            provider="deterministic",
+            model=self._model,
+            prompt_tokens=10,
+            completion_tokens=1,
+            total_tokens=11,
+            latency_ms=100,
+            estimated_cost_usd=self._estimated_cost_usd,
+        )
 
 
 def create_dataset() -> BenchmarkDataset:
-    """Create a deterministic word-count benchmark."""
+    """Create a deterministic classification benchmark."""
 
     return BenchmarkDataset(
         id=DATASET_ID,
-        name="word-count",
-        description="Compare configured word-count workflows.",
+        name="classification",
+        description="Compare configured classification workflows.",
         version="1.0.0",
         cases=(
             BenchmarkCase(
                 id=FIRST_CASE_ID,
-                input="one two",
+                input="first",
                 expected=ExpectedOutcome(
-                    description="Two words",
-                    value=2,
+                    description="Expected positive classification.",
+                    value="positive",
                     comparison=OutcomeComparison.EXACT,
                 ),
             ),
             BenchmarkCase(
                 id=SECOND_CASE_ID,
-                input="one two three four",
+                input="second",
                 expected=ExpectedOutcome(
-                    description="Four words",
-                    value=4,
+                    description="Expected positive classification.",
+                    value="positive",
                     comparison=OutcomeComparison.EXACT,
                 ),
             ),
@@ -98,85 +127,50 @@ def create_workflow(
     *,
     workflow_id: UUID,
     step_id: UUID,
-    tool_name: str,
+    strategy_id: UUID,
+    name: str,
+    model: str,
 ) -> WorkflowSpecification:
-    """Create one configured externally fed tool workflow."""
+    """Create one configured context-aware model workflow."""
 
     return WorkflowSpecification(
         metadata=WorkflowMetadata(
             id=workflow_id,
-            name=tool_name,
-            description=f"Execute {tool_name}.",
+            name=name,
+            description=f"Execute {name}.",
             version="1.0.0",
         ),
         steps=(
             WorkflowStepSpecification(
                 id=step_id,
-                specification=ToolStepSpecification(
-                    requirement=ToolRequirement(
-                        name=tool_name,
+                specification=ContextPromptStrategySpec(
+                    metadata=StrategyMetadata(
+                        id=strategy_id,
+                        name=name,
+                        description=f"Classify input with {name}.",
                         version="1.0.0",
-                        runtime="python",
                     ),
-                ),
-                inputs=(
-                    WorkflowInputBinding(
-                        name="text",
-                        source=WorkflowContextReference(
-                            event_type=WORKFLOW_INPUT_EVENT_TYPE,
-                            field_name="input",
+                    template=PromptTemplate(
+                        text="Classify this input: {input}",
+                        bindings=(
+                            PromptBinding(
+                                variable_name="input",
+                                event_type=WORKFLOW_INPUT_EVENT_TYPE,
+                                field_name="input",
+                            ),
                         ),
+                    ),
+                    model_selection=FixedModelSelection(
+                        provider="deterministic",
+                        model=model,
                     ),
                 ),
                 outputs=(
                     WorkflowValueBinding(
-                        name="word_count",
-                        path=("word_count",),
+                        name="classification",
                     ),
                 ),
             ),
-        ),
-    )
-
-
-def create_tool_definition(
-    *,
-    tool_id: UUID,
-    name: str,
-) -> ToolDefinition:
-    """Create one deterministic word-count capability."""
-
-    return ToolDefinition(
-        id=tool_id,
-        name=name,
-        description=f"Execute {name}.",
-        version="1.0.0",
-        input_schema=ToolInputSchema(
-            json_schema={
-                "type": "object",
-                "properties": {
-                    "text": {
-                        "type": "string",
-                    },
-                },
-                "required": [
-                    "text",
-                ],
-                "additionalProperties": False,
-            },
-        ),
-        output_schema=ToolOutputSchema(
-            json_schema={
-                "type": "object",
-                "properties": {
-                    "word_count": {
-                        "type": "integer",
-                    },
-                },
-                "required": [
-                    "word_count",
-                ],
-            },
         ),
     )
 
@@ -184,7 +178,22 @@ def create_tool_definition(
 def create_runtime() -> AzathothRuntime:
     """Create two differently performing configured workflows."""
 
-    models = ModelCatalog()
+    models = ModelCatalog(
+        models=(
+            ModelMetadata(
+                provider="deterministic",
+                model="correct-classifier",
+                display_name="Correct Classifier",
+                context_window_tokens=8_192,
+            ),
+            ModelMetadata(
+                provider="deterministic",
+                model="incorrect-classifier",
+                display_name="Incorrect Classifier",
+                context_window_tokens=8_192,
+            ),
+        ),
+    )
 
     return AzathothRuntime(
         workflows=WorkflowCatalog(
@@ -192,12 +201,16 @@ def create_runtime() -> AzathothRuntime:
                 create_workflow(
                     workflow_id=CORRECT_WORKFLOW_ID,
                     step_id=CORRECT_STEP_ID,
-                    tool_name="correct_word_count",
+                    strategy_id=CORRECT_STRATEGY_ID,
+                    name="correct-classifier",
+                    model="correct-classifier",
                 ),
                 create_workflow(
                     workflow_id=INCORRECT_WORKFLOW_ID,
                     step_id=INCORRECT_STEP_ID,
-                    tool_name="incorrect_word_count",
+                    strategy_id=INCORRECT_STRATEGY_ID,
+                    name="incorrect-classifier",
+                    model="incorrect-classifier",
                 ),
             ),
         ),
@@ -205,45 +218,19 @@ def create_runtime() -> AzathothRuntime:
         portfolio=portfolio_for_catalog(
             models,
         ),
-        language_models=LanguageModelRegistry(),
-        tools=ToolCatalog(
-            definitions=(
-                create_tool_definition(
-                    tool_id=CORRECT_TOOL_ID,
-                    name="correct_word_count",
+        language_models=LanguageModelRegistry(
+            models={
+                CORRECT_MODEL_IDENTIFIER: ScoredDeterministicLanguageModel(
+                    model="correct-classifier",
+                    response_text="positive",
+                    estimated_cost_usd=0.0001,
                 ),
-                create_tool_definition(
-                    tool_id=INCORRECT_TOOL_ID,
-                    name="incorrect_word_count",
+                INCORRECT_MODEL_IDENTIFIER: ScoredDeterministicLanguageModel(
+                    model="incorrect-classifier",
+                    response_text="negative",
+                    estimated_cost_usd=0.0001,
                 ),
-            ),
-        ),
-        tool_implementations=ToolImplementationCatalog(
-            implementations=(
-                ToolImplementation(
-                    id=CORRECT_IMPLEMENTATION_ID,
-                    tool_id=CORRECT_TOOL_ID,
-                    tool_version="1.0.0",
-                    version="1.0.0",
-                    runtime="python",
-                    entrypoint="run",
-                    source=(
-                        "def run(text: str) -> dict[str, int]:\n"
-                        "    return {'word_count': len(text.split())}\n"
-                    ),
-                ),
-                ToolImplementation(
-                    id=INCORRECT_IMPLEMENTATION_ID,
-                    tool_id=INCORRECT_TOOL_ID,
-                    tool_version="1.0.0",
-                    version="1.0.0",
-                    runtime="python",
-                    entrypoint="run",
-                    source=(
-                        "def run(text: str) -> dict[str, int]:\n    return {'word_count': 0}\n"
-                    ),
-                ),
-            ),
+            },
         ),
     )
 
@@ -266,7 +253,7 @@ def test_configured_comparison_ranks_workflows() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="word_count",
+            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -291,7 +278,7 @@ def test_configured_comparison_preserves_score_dimensions() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="word_count",
+            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -307,7 +294,10 @@ def test_configured_comparison_preserves_score_dimensions() -> None:
     loser = ranking.entries[1].scorecard
 
     assert loser.quality_score == 0.0
-    assert loser.overall_score < winner.overall_score
+    assert loser.reliability_score == 1.0
+    assert loser.latency_score == 1.0
+    assert loser.cost_score == 1.0
+    assert loser.overall_score == 0.75
 
 
 def test_configured_comparison_uses_workflow_identifiers_as_names() -> None:
@@ -319,7 +309,7 @@ def test_configured_comparison_uses_workflow_identifiers_as_names() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="word_count",
+            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -340,7 +330,7 @@ def test_configured_comparison_rejects_fewer_than_two_workflows() -> None:
                 runtime=create_runtime(),
                 workflow_ids=(CORRECT_WORKFLOW_ID,),
                 dataset=create_dataset(),
-                output_name="word_count",
+                output_name="classification",
                 scoring_policy=create_policy(),
             )
         )
@@ -349,7 +339,7 @@ def test_configured_comparison_rejects_fewer_than_two_workflows() -> None:
 def test_configured_comparison_rejects_duplicate_workflows() -> None:
     with pytest.raises(
         ValueError,
-        match="Configured benchmark workflow identifiers must be unique",
+        match=("Configured benchmark workflow identifiers must be unique"),
     ):
         asyncio.run(
             compare_configured_benchmarks(
@@ -359,7 +349,7 @@ def test_configured_comparison_rejects_duplicate_workflows() -> None:
                     CORRECT_WORKFLOW_ID,
                 ),
                 dataset=create_dataset(),
-                output_name="word_count",
+                output_name="classification",
                 scoring_policy=create_policy(),
             )
         )

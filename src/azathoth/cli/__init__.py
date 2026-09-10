@@ -2,6 +2,7 @@
 
 from azathoth.cli.application import main
 from azathoth.cli.benchmark_execution import (
+    compare_configured_benchmarks,
     execute_configured_benchmark,
 )
 from azathoth.cli.benchmarks import (
@@ -71,6 +72,7 @@ __all__ = [
     "CliRuntimeConfiguration",
     "authorize_model",
     "build_parser",
+    "compare_configured_benchmarks",
     "deauthorize_model",
     "execute_configured_benchmark",
     "execute_configured_workflow",
