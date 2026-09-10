@@ -23,6 +23,7 @@ from azathoth.providers import (
 )
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
+    WORKFLOW_INPUT_EVENT_TYPE,
     WorkflowBenchmarkRunner,
     WorkflowCandidate,
     WorkflowMetadata,
@@ -330,3 +331,75 @@ def test_workflow_benchmark_round_trips_through_json() -> None:
     )
 
     assert restored == result
+
+
+def test_workflow_benchmark_supplies_case_input_to_execution_context() -> None:
+    dataset = create_dataset()
+
+    result = asyncio.run(
+        WorkflowBenchmarkRunner().run(
+            dataset,
+            create_candidate,
+            output_name="classification",
+        )
+    )
+
+    assert len(result.cases) == len(dataset.cases)
+
+    for benchmark_case, case_result in zip(
+        dataset.cases,
+        result.cases,
+        strict=True,
+    ):
+        event = case_result.run.initial_context.latest(
+            WORKFLOW_INPUT_EVENT_TYPE,
+        )
+
+        assert event is not None
+
+        assert event.payload == {
+            "input": benchmark_case.input,
+        }
+
+
+def test_workflow_benchmark_input_preserves_case_order() -> None:
+    dataset = create_dataset()
+
+    result = asyncio.run(
+        WorkflowBenchmarkRunner().run(
+            dataset,
+            create_candidate,
+            output_name="classification",
+        )
+    )
+
+    observed_inputs = tuple(
+        case_result.run.initial_context.latest(
+            WORKFLOW_INPUT_EVENT_TYPE,
+        )
+        for case_result in result.cases
+    )
+
+    assert all(event is not None for event in observed_inputs)
+
+    assert tuple(event.payload["input"] for event in observed_inputs if event is not None) == tuple(
+        benchmark_case.input for benchmark_case in dataset.cases
+    )
+
+
+def test_workflow_benchmark_records_benchmark_input_provenance() -> None:
+    result = asyncio.run(
+        WorkflowBenchmarkRunner().run(
+            create_dataset(),
+            create_candidate,
+            output_name="classification",
+        )
+    )
+
+    for case_result in result.cases:
+        event = case_result.run.initial_context.latest(
+            WORKFLOW_INPUT_EVENT_TYPE,
+        )
+
+        assert event is not None
+        assert event.producer == "azathoth.benchmark"
