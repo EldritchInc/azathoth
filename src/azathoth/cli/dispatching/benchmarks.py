@@ -15,13 +15,17 @@ from azathoth.cli.parsing import (
     BENCHMARK_ID_ATTRIBUTE,
     BENCHMARK_IMPORT_ACTION,
     BENCHMARK_LIST_ACTION,
+    BENCHMARK_OUTPUT_ATTRIBUTE,
+    BENCHMARK_RUN_ACTION,
     BENCHMARK_SHOW_ACTION,
+    WORKFLOW_ID_ATTRIBUTE,
 )
 
 BenchmarkIdentifierHandler = Callable[[UUID], int]
 BenchmarkCaseHandler = Callable[[UUID, UUID], int]
 BenchmarkListHandler = Callable[[], int]
 BenchmarkImportHandler = Callable[[Path], int]
+BenchmarkRunHandler = Callable[..., int]
 
 
 def dispatch_benchmark_command(
@@ -32,6 +36,7 @@ def dispatch_benchmark_command(
     list_benchmarks: BenchmarkListHandler,
     show_benchmark: BenchmarkIdentifierHandler,
     show_benchmark_case: BenchmarkCaseHandler,
+    run_benchmark: BenchmarkRunHandler | None = None,
 ) -> int | None:
     """Dispatch one parsed benchmark command."""
 
@@ -96,6 +101,34 @@ def dispatch_benchmark_command(
                     BENCHMARK_DOCUMENT_ATTRIBUTE,
                 ),
             )
+        )
+
+    if action == BENCHMARK_RUN_ACTION:
+        if run_benchmark is None:
+            return None
+
+        return run_benchmark(
+            benchmark_id=cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            workflow_id=cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            output_name=cast(
+                str,
+                getattr(
+                    arguments,
+                    BENCHMARK_OUTPUT_ATTRIBUTE,
+                ),
+            ),
         )
 
     return None
