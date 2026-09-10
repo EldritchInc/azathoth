@@ -278,16 +278,22 @@ def test_configured_benchmark_preserves_canonical_case_input_context() -> None:
         )
     )
 
-    assert tuple(
-        case.run.initial_context.latest(
-            WORKFLOW_INPUT_EVENT_TYPE,
-        ).payload["input"]
-        for case in result.cases
-        if case.run.initial_context.latest(
+    observed_inputs: list[object] = []
+
+    for case_result in result.cases:
+        event = case_result.run.initial_context.latest(
             WORKFLOW_INPUT_EVENT_TYPE,
         )
-        is not None
-    ) == tuple(case.input for case in dataset.cases)
+
+        assert event is not None
+
+        observed_inputs.append(
+            event.payload["input"],
+        )
+
+    assert tuple(
+        observed_inputs,
+    ) == tuple(benchmark_case.input for benchmark_case in dataset.cases)
 
 
 def test_configured_benchmark_preserves_unknown_workflow_error() -> None:

@@ -1,6 +1,9 @@
 """Azathoth command-line interface."""
 
 from azathoth.cli.application import main
+from azathoth.cli.benchmark_execution import (
+    execute_configured_benchmark,
+)
 from azathoth.cli.benchmarks import (
     import_benchmark,
     list_benchmark_cases,
@@ -67,6 +70,7 @@ __all__ = [
     "authorize_model",
     "build_parser",
     "deauthorize_model",
+    "execute_configured_benchmark",
     "execute_configured_workflow",
     "import_benchmark",
     "import_goal",
