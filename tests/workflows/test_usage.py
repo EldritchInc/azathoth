@@ -21,7 +21,9 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     workflow_uses_model,
+    workflow_uses_tool,
     workflows_using_model,
+    workflows_using_tool,
 )
 
 FIRST_WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -42,6 +44,7 @@ SECOND_STRATEGY_ID = UUID("88888888-8888-8888-8888-888888888888")
 
 MODEL_IDENTIFIER = "openrouter/example-model"
 OTHER_MODEL_IDENTIFIER = "openrouter/other-model"
+OTHER_TOOL_NAME = "sentiment"
 
 
 def create_metadata(
@@ -279,6 +282,83 @@ def test_workflows_using_model_returns_empty_when_unused() -> None:
                 create_tool_workflow(),
             ),
             MODEL_IDENTIFIER,
+        )
+        == ()
+    )
+
+
+def test_workflow_uses_required_tool() -> None:
+    workflow = create_tool_workflow()
+
+    assert workflow_uses_tool(
+        workflow,
+        "word_count",
+    )
+
+
+def test_workflow_does_not_use_different_tool() -> None:
+    workflow = create_tool_workflow()
+
+    assert not workflow_uses_tool(
+        workflow,
+        OTHER_TOOL_NAME,
+    )
+
+
+def test_prompt_workflow_does_not_use_tool() -> None:
+    workflow = create_fixed_prompt_workflow()
+
+    assert not workflow_uses_tool(
+        workflow,
+        "word_count",
+    )
+
+
+def test_workflows_using_tool_returns_matching_workflows_in_order() -> None:
+    first = create_tool_workflow()
+
+    unrelated = create_fixed_prompt_workflow(
+        workflow_id=SECOND_WORKFLOW_ID,
+    )
+
+    second = WorkflowSpecification(
+        metadata=create_metadata(
+            workflow_id=SECOND_WORKFLOW_ID,
+            name="Second tool workflow",
+        ),
+        steps=(
+            WorkflowStepSpecification(
+                id=SECOND_STEP_ID,
+                specification=ToolStepSpecification(
+                    requirement=ToolRequirement(
+                        name="word_count",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert workflows_using_tool(
+        (
+            first,
+            unrelated,
+            second,
+        ),
+        "word_count",
+    ) == (
+        first,
+        second,
+    )
+
+
+def test_workflows_using_tool_returns_empty_when_unused() -> None:
+    assert (
+        workflows_using_tool(
+            (
+                create_fixed_prompt_workflow(),
+                create_context_prompt_workflow(),
+            ),
+            "word_count",
         )
         == ()
     )
