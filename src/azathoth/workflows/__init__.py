@@ -219,7 +219,9 @@ from azathoth.workflows.steps import (
 )
 from azathoth.workflows.usage import (
     workflow_uses_model,
+    workflow_uses_tool,
     workflows_using_model,
+    workflows_using_tool,
 )
 from azathoth.workflows.value import (
     WorkflowContextReference,
@@ -351,5 +353,7 @@ __all__ = [
     "require_workflow_run_repository",
     "resolve_production_model_selection",
     "workflow_uses_model",
+    "workflow_uses_tool",
     "workflows_using_model",
+    "workflows_using_tool",
 ]
