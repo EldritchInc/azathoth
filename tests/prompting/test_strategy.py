@@ -14,7 +14,11 @@ from azathoth.prompting import (
     PromptStrategySpec,
 )
 from azathoth.providers import ModelCapability, ModelRequirements, ModelResponse, Prompt
-from azathoth.strategies import Strategy, StrategyMetadata
+from azathoth.strategies import (
+    Strategy,
+    StrategyMetadata,
+    StrategyResourceBinding,
+)
 
 
 class RecordingLanguageModel:
@@ -258,3 +262,51 @@ def test_prompt_strategy_rejects_mismatched_model_binding() -> None:
 
     with pytest.raises(ModelBindingMismatchError):
         asyncio.run(strategy.run(Context()))
+
+
+def test_prompt_strategy_without_model_binding_records_no_resource() -> None:
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=Prompt(
+            text="Classify the request.",
+        ),
+        language_model=RecordingLanguageModel(
+            response_text="duplicate_charge",
+        ),
+    )
+
+    outcome = asyncio.run(
+        strategy.run(
+            Context(),
+        )
+    )
+
+    assert outcome.resources == ()
+
+
+def test_prompt_strategy_records_bound_model_resource() -> None:
+    strategy = PromptStrategy(
+        metadata=create_metadata(),
+        prompt=Prompt(
+            text="Classify the request.",
+        ),
+        language_model=RecordingLanguageModel(
+            response_text="duplicate_charge",
+        ),
+        model_binding=ModelBinding(
+            identifier="test/stub",
+        ),
+    )
+
+    outcome = asyncio.run(
+        strategy.run(
+            Context(),
+        )
+    )
+
+    assert outcome.resources == (
+        StrategyResourceBinding(
+            kind="model",
+            identifier="test/stub",
+        ),
+    )

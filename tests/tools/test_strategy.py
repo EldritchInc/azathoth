@@ -7,7 +7,10 @@ import pytest
 from pydantic import JsonValue
 
 from azathoth.context import Context, ContextEvent
-from azathoth.strategies import StrategyMetadata
+from azathoth.strategies import (
+    StrategyMetadata,
+    StrategyResourceBinding,
+)
 from azathoth.tools import (
     ToolExecutionError,
     ToolImplementation,
@@ -249,3 +252,27 @@ def test_tool_strategy_rejects_duplicate_bound_input_names() -> None:
         match="was bound more than once",
     ):
         asyncio.run(strategy.run(context))
+
+
+def test_tool_strategy_records_resolved_implementation_resource() -> None:
+    strategy = create_strategy(
+        StubToolExecutor(),
+    )
+
+    outcome = asyncio.run(
+        strategy.run(
+            create_bound_input_context(),
+        )
+    )
+
+    assert outcome.resources == (
+        StrategyResourceBinding(
+            kind="tool",
+            identifier=str(IMPLEMENTATION_ID),
+            attributes={
+                "tool_id": str(TOOL_ID),
+                "tool_version": "1.0.0",
+                "runtime": "python",
+            },
+        ),
+    )
