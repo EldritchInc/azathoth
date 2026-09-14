@@ -18,8 +18,13 @@ from azathoth.tools import ToolRequirement
 from azathoth.workflows import (
     ToolStepSpecification,
     WorkflowMetadata,
+    WorkflowProductionModelSubstitution,
+    WorkflowProductionModelUsageRole,
+    WorkflowProductionState,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    production_model_usages,
+    production_uses_tool,
     workflow_uses_model,
     workflow_uses_tool,
     workflows_using_model,
@@ -45,6 +50,8 @@ SECOND_STRATEGY_ID = UUID("88888888-8888-8888-8888-888888888888")
 MODEL_IDENTIFIER = "openrouter/example-model"
 OTHER_MODEL_IDENTIFIER = "openrouter/other-model"
 OTHER_TOOL_NAME = "sentiment"
+SUBSTITUTE_MODEL_IDENTIFIER = "openrouter/substitute-model"
+SECOND_SUBSTITUTE_MODEL_IDENTIFIER = "openrouter/second-substitute-model"
 
 
 def create_metadata(
@@ -199,6 +206,44 @@ def create_tool_workflow() -> WorkflowSpecification:
                 ),
             ),
         ),
+    )
+
+
+def create_production_state(
+    *,
+    primary_model_identifier: str = MODEL_IDENTIFIER,
+    substitute_model_identifiers: tuple[str, ...] = (SUBSTITUTE_MODEL_IDENTIFIER,),
+) -> WorkflowProductionState:
+    """Create deterministic production state with approved model substitutes."""
+
+    workflow = create_fixed_prompt_workflow(
+        model_identifier=primary_model_identifier,
+    )
+
+    substitutes = tuple(
+        FixedModelSelection(
+            provider=identifier.split(
+                "/",
+                maxsplit=1,
+            )[0],
+            model=identifier.split(
+                "/",
+                maxsplit=1,
+            )[1],
+        )
+        for identifier in substitute_model_identifiers
+    )
+
+    return WorkflowProductionState(
+        specification=workflow,
+        model_substitutions=(
+            WorkflowProductionModelSubstitution(
+                step_id=FIRST_STEP_ID,
+                substitutes=substitutes,
+            ),
+        )
+        if substitutes
+        else (),
     )
 
 
@@ -361,4 +406,148 @@ def test_workflows_using_tool_returns_empty_when_unused() -> None:
             "word_count",
         )
         == ()
+    )
+
+
+def test_production_model_usages_reports_primary_model() -> None:
+    state = create_production_state()
+
+    usages = production_model_usages(
+        state,
+        MODEL_IDENTIFIER,
+    )
+
+    assert len(usages) == 1
+    assert usages[0].step_id == FIRST_STEP_ID
+    assert usages[0].role is WorkflowProductionModelUsageRole.PRIMARY
+
+
+def test_production_model_usages_reports_approved_substitute() -> None:
+    state = create_production_state()
+
+    usages = production_model_usages(
+        state,
+        SUBSTITUTE_MODEL_IDENTIFIER,
+    )
+
+    assert len(usages) == 1
+    assert usages[0].step_id == FIRST_STEP_ID
+    assert usages[0].role is WorkflowProductionModelUsageRole.SUBSTITUTE
+
+
+def test_production_model_usages_preserves_multiple_matching_roles() -> None:
+    workflow = WorkflowSpecification(
+        metadata=create_metadata(
+            workflow_id=FIRST_WORKFLOW_ID,
+            name="Multi-step production workflow",
+        ),
+        steps=(
+            WorkflowStepSpecification(
+                id=FIRST_STEP_ID,
+                specification=PromptStrategySpec(
+                    metadata=create_strategy_metadata(
+                        strategy_id=FIRST_STRATEGY_ID,
+                        name="First production prompt",
+                    ),
+                    prompt=Prompt(
+                        text="Return exactly OK.",
+                    ),
+                    model_selection=FixedModelSelection(
+                        provider="openrouter",
+                        model="example-model",
+                    ),
+                ),
+            ),
+            WorkflowStepSpecification(
+                id=SECOND_STEP_ID,
+                specification=PromptStrategySpec(
+                    metadata=create_strategy_metadata(
+                        strategy_id=SECOND_STRATEGY_ID,
+                        name="Second production prompt",
+                    ),
+                    prompt=Prompt(
+                        text="Return exactly OK.",
+                    ),
+                    model_selection=FixedModelSelection(
+                        provider="openrouter",
+                        model="other-model",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    state = WorkflowProductionState(
+        specification=workflow,
+        model_substitutions=(
+            WorkflowProductionModelSubstitution(
+                step_id=SECOND_STEP_ID,
+                substitutes=(
+                    FixedModelSelection(
+                        provider="openrouter",
+                        model="example-model",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert tuple(
+        (usage.step_id, usage.role)
+        for usage in production_model_usages(
+            state,
+            MODEL_IDENTIFIER,
+        )
+    ) == (
+        (
+            FIRST_STEP_ID,
+            WorkflowProductionModelUsageRole.PRIMARY,
+        ),
+        (
+            SECOND_STEP_ID,
+            WorkflowProductionModelUsageRole.SUBSTITUTE,
+        ),
+    )
+
+
+def test_production_model_usages_returns_empty_for_unused_model() -> None:
+    state = create_production_state()
+
+    assert (
+        production_model_usages(
+            state,
+            OTHER_MODEL_IDENTIFIER,
+        )
+        == ()
+    )
+
+
+def test_production_uses_tool_when_active_specification_requires_capability() -> None:
+    state = WorkflowProductionState(
+        specification=create_tool_workflow(),
+    )
+
+    assert production_uses_tool(
+        state,
+        "word_count",
+    )
+
+
+def test_production_does_not_use_unconfigured_tool() -> None:
+    state = WorkflowProductionState(
+        specification=create_tool_workflow(),
+    )
+
+    assert not production_uses_tool(
+        state,
+        OTHER_TOOL_NAME,
+    )
+
+
+def test_prompt_only_production_does_not_use_tool() -> None:
+    state = create_production_state()
+
+    assert not production_uses_tool(
+        state,
+        "word_count",
     )
