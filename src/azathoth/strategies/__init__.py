@@ -10,6 +10,7 @@ from azathoth.strategies.models import (
     StrategyExecutionMetrics,
     StrategyMetadata,
     StrategyOutcome,
+    StrategyResourceBinding,
 )
 from azathoth.strategies.protocols import Strategy
 
@@ -22,4 +23,5 @@ __all__ = [
     "StrategyExecutionMetrics",
     "StrategyMetadata",
     "StrategyOutcome",
+    "StrategyResourceBinding",
 ]
