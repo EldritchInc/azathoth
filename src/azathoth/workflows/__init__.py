@@ -217,6 +217,10 @@ from azathoth.workflows.steps import (
     ToolStepSpecification,
     WorkflowStepSpecification,
 )
+from azathoth.workflows.usage import (
+    workflow_uses_model,
+    workflows_using_model,
+)
 from azathoth.workflows.value import (
     WorkflowContextReference,
     WorkflowInputBinding,
@@ -346,4 +350,6 @@ __all__ = [
     "require_workflow_run_feedback_repository",
     "require_workflow_run_repository",
     "resolve_production_model_selection",
+    "workflow_uses_model",
+    "workflows_using_model",
 ]
