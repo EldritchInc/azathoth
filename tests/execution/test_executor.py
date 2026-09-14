@@ -6,7 +6,42 @@ from uuid import UUID
 
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import StrategyExecutor
-from azathoth.strategies import StrategyExecutionMetrics, StrategyMetadata, StrategyOutcome
+from azathoth.strategies import (
+    StrategyExecutionMetrics,
+    StrategyMetadata,
+    StrategyOutcome,
+    StrategyResourceBinding,
+)
+
+
+class ResourceBoundStrategy:
+    """A deterministic strategy that emits durable resource bindings."""
+
+    def __init__(self) -> None:
+        self._metadata = StrategyMetadata(
+            id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            name="Resource-bound strategy",
+            description="Emits durable execution resource bindings.",
+            version="1.0.0",
+        )
+
+    @property
+    def metadata(self) -> StrategyMetadata:
+        return self._metadata
+
+    async def run(
+        self,
+        _context: Context,
+    ) -> StrategyOutcome:
+        return StrategyOutcome(
+            output="OK",
+            resources=(
+                StrategyResourceBinding(
+                    kind="model",
+                    identifier="openrouter/example-model",
+                ),
+            ),
+        )
 
 
 class RecordingStrategy:
@@ -138,3 +173,66 @@ def test_executor_preserves_strategy_execution_metrics() -> None:
     assert result.metrics.total_tokens == 12
     assert result.metrics.latency_ms == 15
     assert result.metrics.estimated_cost_usd == 0.0001
+
+
+def test_executor_records_strategy_resource_bindings() -> None:
+    timestamps = iter(
+        (
+            datetime(2026, 9, 13, 21, 0, tzinfo=UTC),
+            datetime(2026, 9, 13, 21, 0, 1, tzinfo=UTC),
+        )
+    )
+    executor = StrategyExecutor(clock=lambda: next(timestamps))
+
+    result = asyncio.run(
+        executor.execute(
+            ResourceBoundStrategy(),
+            Context(),
+        )
+    )
+
+    assert result.resources == (
+        StrategyResourceBinding(
+            kind="model",
+            identifier="openrouter/example-model",
+        ),
+    )
+
+
+def test_executor_records_no_resources_when_strategy_emits_none() -> None:
+    timestamps = iter(
+        (
+            datetime(2026, 9, 13, 21, 0, tzinfo=UTC),
+            datetime(2026, 9, 13, 21, 0, 1, tzinfo=UTC),
+        )
+    )
+    executor = StrategyExecutor(clock=lambda: next(timestamps))
+
+    result = asyncio.run(
+        executor.execute(
+            RecordingStrategy(),
+            Context(),
+        )
+    )
+
+    assert result.resources == ()
+
+
+def test_strategy_resource_binding_preserves_attributes() -> None:
+    binding = StrategyResourceBinding(
+        kind="tool",
+        identifier="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        attributes={
+            "tool_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "tool_version": "2.0.0",
+            "runtime": "python",
+        },
+    )
+
+    assert binding.kind == "tool"
+    assert binding.identifier == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert binding.attributes == {
+        "tool_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "tool_version": "2.0.0",
+        "runtime": "python",
+    }
