@@ -218,6 +218,10 @@ from azathoth.workflows.steps import (
     WorkflowStepSpecification,
 )
 from azathoth.workflows.usage import (
+    WorkflowProductionModelUsage,
+    WorkflowProductionModelUsageRole,
+    production_model_usages,
+    production_uses_tool,
     workflow_uses_model,
     workflow_uses_tool,
     workflows_using_model,
@@ -300,6 +304,8 @@ __all__ = [
     "WorkflowMetadata",
     "WorkflowProductionEmission",
     "WorkflowProductionModelSubstitution",
+    "WorkflowProductionModelUsage",
+    "WorkflowProductionModelUsageRole",
     "WorkflowProductionRevision",
     "WorkflowProductionRevisionRepository",
     "WorkflowProductionState",
@@ -342,6 +348,8 @@ __all__ = [
     "generate_production_workflow_candidate",
     "generate_workflow_candidate",
     "materialize_workflow_candidate",
+    "production_model_usages",
+    "production_uses_tool",
     "promote_workflow_candidate",
     "require_production_invocation_repository",
     "require_workflow_experiment_repository",
