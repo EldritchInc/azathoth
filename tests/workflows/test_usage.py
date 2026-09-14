@@ -1,7 +1,10 @@
 """Tests for configured workflow model usage discovery."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
+from azathoth.context import Context
+from azathoth.execution import ExecutionResult
 from azathoth.prompting import (
     ContextPromptStrategySpec,
     FixedModelSelection,
@@ -13,7 +16,10 @@ from azathoth.providers import (
     ModelRequirements,
     Prompt,
 )
-from azathoth.strategies import StrategyMetadata
+from azathoth.strategies import (
+    StrategyMetadata,
+    StrategyResourceBinding,
+)
 from azathoth.tools import ToolRequirement
 from azathoth.workflows import (
     ToolStepSpecification,
@@ -21,8 +27,13 @@ from azathoth.workflows import (
     WorkflowProductionModelSubstitution,
     WorkflowProductionModelUsageRole,
     WorkflowProductionState,
+    WorkflowRun,
     WorkflowSpecification,
+    WorkflowStepAttempt,
+    WorkflowStepRun,
     WorkflowStepSpecification,
+    WorkflowStepStatus,
+    historical_model_usages,
     production_model_usages,
     production_uses_tool,
     workflow_uses_model,
@@ -53,6 +64,31 @@ OTHER_TOOL_NAME = "sentiment"
 SUBSTITUTE_MODEL_IDENTIFIER = "openrouter/substitute-model"
 SECOND_SUBSTITUTE_MODEL_IDENTIFIER = "openrouter/second-substitute-model"
 
+TOOL_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+
+OTHER_TOOL_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+
+IMPLEMENTATION_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+
+STARTED_AT = datetime(
+    2026,
+    9,
+    13,
+    20,
+    0,
+    tzinfo=UTC,
+)
+
+COMPLETED_AT = datetime(
+    2026,
+    9,
+    13,
+    20,
+    0,
+    1,
+    tzinfo=UTC,
+)
+
 
 def create_metadata(
     *,
@@ -66,6 +102,104 @@ def create_metadata(
         name=name,
         description=f"{name} description.",
         version="1.0.0",
+    )
+
+
+def create_execution_result(
+    *,
+    resources: tuple[StrategyResourceBinding, ...] = (),
+    strategy_id: UUID = FIRST_STRATEGY_ID,
+) -> ExecutionResult:
+    """Create deterministic execution evidence with resource provenance."""
+
+    context = Context()
+
+    return ExecutionResult(
+        strategy_id=strategy_id,
+        strategy_name="Usage test strategy",
+        strategy_version="1.0.0",
+        output="OK",
+        resources=resources,
+        initial_context=context,
+        final_context=context,
+        started_at=STARTED_AT,
+        completed_at=COMPLETED_AT,
+    )
+
+
+def create_attempt(
+    *,
+    attempt_number: int = 1,
+    execution: ExecutionResult,
+) -> WorkflowStepAttempt:
+    """Create one deterministic successful workflow attempt."""
+
+    return WorkflowStepAttempt(
+        attempt_number=attempt_number,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        execution=execution,
+    )
+
+
+def create_step_run(
+    *,
+    step_id: UUID = FIRST_STEP_ID,
+    execution: ExecutionResult | None = None,
+    attempts: tuple[WorkflowStepAttempt, ...] | None = None,
+) -> WorkflowStepRun:
+    """Create one deterministic executed workflow step."""
+
+    if attempts is None:
+        resolved_execution = execution if execution is not None else create_execution_result()
+
+        resolved_attempts = (
+            create_attempt(
+                execution=resolved_execution,
+            ),
+        )
+    else:
+        if not attempts:
+            raise ValueError("Executed usage-test steps require at least one attempt.")
+
+        final_execution = attempts[-1].execution
+
+        if final_execution is None:
+            raise ValueError("Executed usage-test steps must end with a successful attempt.")
+
+        resolved_execution = execution if execution is not None else final_execution
+
+        resolved_attempts = attempts
+
+    return WorkflowStepRun(
+        step_id=step_id,
+        layer_index=0,
+        status=WorkflowStepStatus.EXECUTED,
+        execution=resolved_execution,
+        attempts=resolved_attempts,
+    )
+
+
+def create_workflow_run(
+    *,
+    step_runs: tuple[WorkflowStepRun, ...],
+) -> WorkflowRun:
+    """Create deterministic workflow history for usage discovery."""
+
+    context = Context()
+
+    return WorkflowRun(
+        workflow=WorkflowMetadata(
+            id=FIRST_WORKFLOW_ID,
+            name="Usage discovery workflow",
+            description="Workflow used to test historical resource usage.",
+            version="1.0.0",
+        ),
+        steps=step_runs,
+        initial_context=context,
+        final_context=context,
+        started_at=STARTED_AT,
+        completed_at=COMPLETED_AT,
     )
 
 
@@ -550,4 +684,103 @@ def test_prompt_only_production_does_not_use_tool() -> None:
     assert not production_uses_tool(
         state,
         "word_count",
+    )
+
+
+def test_historical_model_usages_reports_matching_execution() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="model",
+                            identifier=MODEL_IDENTIFIER,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    usages = historical_model_usages(
+        run,
+        MODEL_IDENTIFIER,
+    )
+
+    assert len(usages) == 1
+    assert usages[0].step_id == FIRST_STEP_ID
+    assert usages[0].attempt_number == 1
+    assert usages[0].identifier == MODEL_IDENTIFIER
+
+
+def test_historical_model_usages_ignores_configured_but_unexecuted_model() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="model",
+                            identifier=OTHER_MODEL_IDENTIFIER,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_model_usages(
+            run,
+            MODEL_IDENTIFIER,
+        )
+        == ()
+    )
+
+
+def test_historical_model_usages_preserves_matching_attempts() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                attempts=(
+                    create_attempt(
+                        attempt_number=1,
+                        execution=create_execution_result(
+                            resources=(
+                                StrategyResourceBinding(
+                                    kind="model",
+                                    identifier=MODEL_IDENTIFIER,
+                                ),
+                            ),
+                        ),
+                    ),
+                    create_attempt(
+                        attempt_number=2,
+                        execution=create_execution_result(
+                            resources=(
+                                StrategyResourceBinding(
+                                    kind="model",
+                                    identifier=MODEL_IDENTIFIER,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert tuple(
+        usage.attempt_number
+        for usage in historical_model_usages(
+            run,
+            MODEL_IDENTIFIER,
+        )
+    ) == (
+        1,
+        2,
     )
