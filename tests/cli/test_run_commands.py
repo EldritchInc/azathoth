@@ -26,9 +26,12 @@ from azathoth.workflows import (
     ProductionInvocationRun,
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowRepository,
+    SQLiteWorkflowRunFeedbackRepository,
     SQLiteWorkflowRunRepository,
     WorkflowMetadata,
     WorkflowRun,
+    WorkflowRunFeedback,
+    WorkflowRunFeedbackDisposition,
     WorkflowSpecification,
     WorkflowStepAttempt,
     WorkflowStepRun,
@@ -246,10 +249,15 @@ def test_list_workflow_runs_lists_newest_first_with_sources(
         str(SECOND_RUN_ID),
         str(FIRST_RUN_ID),
     ]
-    assert [line.split()[-1] for line in lines] == [
+    assert [line.split()[-2] for line in lines] == [
         "configured",
         "production",
         "configured",
+    ]
+    assert [line.split()[-1] for line in lines] == [
+        "-",
+        "-",
+        "-",
     ]
 
 
@@ -341,6 +349,63 @@ def test_list_workflow_runs_rejects_unknown_workflow(
     assert result == 1
     assert captured.out == ""
     assert captured.err == f"Workflow {UNKNOWN_WORKFLOW_ID} is not configured.\n"
+
+
+def test_list_workflow_runs_shows_latest_disposition_per_run(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = configure_database(
+        monkeypatch,
+        tmp_path,
+    )
+
+    save_history(database)
+
+    feedback_repository = SQLiteWorkflowRunFeedbackRepository(database)
+
+    feedback_repository.save(
+        WorkflowRunFeedback(
+            run_id=FIRST_RUN_ID,
+            disposition=WorkflowRunFeedbackDisposition.BAD,
+            reason="Wrong label.",
+            created_at=STARTED_AT + timedelta(hours=1),
+        )
+    )
+    feedback_repository.save(
+        WorkflowRunFeedback(
+            run_id=FIRST_RUN_ID,
+            disposition=WorkflowRunFeedbackDisposition.GOOD,
+            created_at=STARTED_AT + timedelta(hours=2),
+        )
+    )
+    feedback_repository.save(
+        WorkflowRunFeedback(
+            run_id=THIRD_RUN_ID,
+            disposition=WorkflowRunFeedbackDisposition.GOOD,
+            created_at=STARTED_AT + timedelta(hours=4),
+        )
+    )
+    feedback_repository.save(
+        WorkflowRunFeedback(
+            run_id=THIRD_RUN_ID,
+            disposition=WorkflowRunFeedbackDisposition.BAD,
+            reason="Recorded later but timestamped earlier.",
+            created_at=STARTED_AT + timedelta(hours=3),
+        )
+    )
+
+    result = list_workflow_runs(WORKFLOW_ID)
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert [(line.split()[0], line.split()[-1]) for line in captured.out.splitlines()] == [
+        (str(THIRD_RUN_ID), "good"),
+        (str(SECOND_RUN_ID), "-"),
+        (str(FIRST_RUN_ID), "good"),
+    ]
 
 
 def test_show_run_renders_persisted_run_with_resources(
