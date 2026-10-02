@@ -39,7 +39,9 @@ from azathoth.cli.parsing import build_parser
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
+    render_model_usage_report,
     render_production_invocation_result,
+    render_tool_usage_report,
     render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
     render_workflow_optimization_session,
@@ -101,7 +103,9 @@ __all__ = [
     "optimize_workflow",
     "promote_configured_workflow",
     "promote_workflow",
+    "render_model_usage_report",
     "render_production_invocation_result",
+    "render_tool_usage_report",
     "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
     "render_workflow_optimization_session",
