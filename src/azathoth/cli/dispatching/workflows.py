@@ -23,6 +23,8 @@ from azathoth.cli.parsing import (
     WORKFLOW_OPTIMIZE_ACTION,
     WORKFLOW_PROMOTE_ACTION,
     WORKFLOW_RUN_ACTION,
+    WORKFLOW_RUN_LIMIT_ATTRIBUTE,
+    WORKFLOW_RUNS_ACTION,
     WORKFLOW_SHOW_ACTION,
 )
 
@@ -31,6 +33,7 @@ WorkflowImportHandler = Callable[[Path], int]
 WorkflowListHandler = Callable[[], int]
 WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
+WorkflowRunsHandler = Callable[..., int]
 
 
 def dispatch_workflow_command(
@@ -38,6 +41,7 @@ def dispatch_workflow_command(
     *,
     import_workflow: WorkflowImportHandler,
     invoke_workflow: WorkflowInvokeHandler,
+    list_workflow_runs: WorkflowRunsHandler,
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowIdentifierHandler,
@@ -90,6 +94,25 @@ def dispatch_workflow_command(
         )
 
         return run_workflow(workflow_id)
+
+    if action == WORKFLOW_RUNS_ACTION:
+        return list_workflow_runs(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_RUN_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
 
     if action == WORKFLOW_INVOKE_ACTION:
         return invoke_workflow(

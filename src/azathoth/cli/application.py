@@ -17,6 +17,7 @@ from azathoth.cli.dispatching import (
     dispatch_benchmark_command,
     dispatch_goal_command,
     dispatch_model_command,
+    dispatch_run_command,
     dispatch_tool_command,
     dispatch_workflow_command,
 )
@@ -37,9 +38,14 @@ from azathoth.cli.parsing import (
     COMMAND_ATTRIBUTE,
     GOAL_COMMAND,
     MODEL_COMMAND,
+    RUN_COMMAND,
     TOOL_COMMAND,
     WORKFLOW_COMMAND,
     build_parser,
+)
+from azathoth.cli.runs import (
+    list_workflow_runs,
+    show_run,
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
@@ -125,11 +131,18 @@ def _dispatch(
             arguments,
             import_workflow=import_workflow,
             invoke_workflow=invoke_workflow,
+            list_workflow_runs=list_workflow_runs,
             list_workflows=list_workflows,
             optimize_workflow=optimize_workflow,
             promote_workflow=promote_workflow,
             run_workflow=run_workflow,
             show_workflow=show_workflow,
+        )
+
+    if command == RUN_COMMAND:
+        return dispatch_run_command(
+            arguments,
+            show_run=show_run,
         )
 
     if command == MODEL_COMMAND:

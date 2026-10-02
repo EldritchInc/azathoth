@@ -69,8 +69,13 @@ azathoth
 │   │   ├── --target-cost <USD>
 │   │   └── --generations <COUNT>
 │   ├── promote <WORKFLOW_ID>
-│   └── invoke <WORKFLOW_ID>
-│       └── --input <JSON>
+│   ├── invoke <WORKFLOW_ID>
+│   │   └── --input <JSON>
+│   └── runs <WORKFLOW_ID>
+│       └── --limit <COUNT>
+│
+├── run
+│   └── show <RUN_ID>
 │
 ├── model
 │   ├── list
@@ -396,6 +401,7 @@ Commands such as:
 azathoth --help
 azathoth --version
 azathoth workflow --help
+azathoth run --help
 azathoth model --help
 azathoth tool --help
 azathoth goal --help
@@ -423,7 +429,7 @@ workflow import
         ▼
 workflow list / show
         │
-        ├──────────────► workflow run
+        ├──────────────► workflow run ──────► workflow runs / run show
         │
         ├──────────────► workflow optimize
         │
@@ -590,9 +596,14 @@ WorkflowRunner
         │
         ▼
 WorkflowRun
+        │
+        ├── SQLiteWorkflowRunRepository
+        │
+        ▼
+rendered to the operator
 ```
 
-The resulting run is rendered to the operator.
+The completed run is persisted before it is rendered.
 
 # `workflow run` Is Development/Configured Execution
 
@@ -627,6 +638,118 @@ If the run completes unsuccessfully, the CLI returns a failure exit status.
 
 Configuration or candidate-generation failures are emitted to standard error
 and also return failure.
+
+# Configured Runs Are Persisted
+
+Every completed configured run is persisted as durable evidence, whether it
+succeeded or failed.
+
+```text
+workflow run
+    succeeded run     persisted
+    failed run        persisted
+
+candidate generation fails
+    no run exists     nothing persisted
+```
+
+The rendered output includes the run ID, so a run can be revisited later with
+`run show`.
+
+Configured runs and production runs share one durable run history. They are
+distinguished by association, not by separate storage:
+
+```text
+WorkflowRun associated with a ProductionInvocation
+    production run
+
+every other persisted WorkflowRun
+    configured run
+```
+
+Persisted configured runs also feed the history half of `model usage` and
+`tool usage`.
+
+# List Workflow Runs
+
+List persisted runs of one workflow with:
+
+```bash
+azathoth workflow runs <WORKFLOW_ID>
+```
+
+Limit the listing to the most recent runs with:
+
+```bash
+azathoth workflow runs <WORKFLOW_ID> --limit <COUNT>
+```
+
+`--limit` must be a positive integer.
+
+Runs are listed newest first, one line per run:
+
+```text
+<RUN_ID>  2026-10-02T12:10:00+00:00  succeeded  1.500s  configured
+<RUN_ID>  2026-10-02T12:05:00+00:00  failed     0.250s  production
+```
+
+Each line contains the run ID, start time, status, duration, and source.
+
+The limit is applied after sorting, so `--limit 5` means the five most recent
+runs.
+
+A configured workflow with no runs prints nothing and exits successfully.
+
+Runs of a workflow since removed from configuration remain listable.
+
+An identifier that is neither configured nor present in run history fails
+with:
+
+```text
+Workflow <WORKFLOW_ID> is not configured.
+```
+
+so a mistyped identifier is not mistaken for a workflow that never ran.
+
+# Show a Run
+
+Inspect one persisted run with:
+
+```bash
+azathoth run show <RUN_ID>
+```
+
+The run is rendered exactly as `workflow run` rendered it: identity, status,
+statistics, and per-step evidence.
+
+Each executed step also lists the resources its strategy bound:
+
+```text
+Resource: model openrouter/some-model
+Resource: tool <IMPLEMENTATION_ID> (runtime=python, tool_id=<TOOL_ID>, tool_version=1.0.0)
+```
+
+Attributes are sorted by name. Structured attribute values render as compact
+JSON.
+
+This is the reverse of usage discovery:
+
+```text
+model usage / tool usage
+    which runs used this resource?
+
+run show
+    which resources did this run use?
+```
+
+An unknown run fails with:
+
+```text
+Run <RUN_ID> was not found.
+```
+
+`workflow runs` and `run show` read durable state only. They do not require
+provider credentials or runtime bootstrap.
 
 # Empirically Optimize a Workflow
 
@@ -1533,6 +1656,8 @@ The CLI contains human-readable renderers for:
 ```text
 WorkflowRun
 
+WorkflowRun summaries
+
 WorkflowOptimizationSession
 
 WorkflowProductionRevision
@@ -1820,6 +1945,9 @@ The complete operator-facing workflow path is:
                          │
                          ▼
                     WorkflowRun
+                         │
+                         ▼
+             workflow runs / run show
 
 
                  EMPIRICAL OPTIMIZATION
@@ -1891,6 +2019,10 @@ The V1 operator architecture can be summarized as:
 inspection
     ≠
 execution
+
+run history
+    ≠
+run execution
 
 configured execution
     ≠

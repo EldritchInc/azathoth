@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "name": "exact match live",
+    "description": "Compare live language models on a deterministic exact-match task.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "specification": {
+        "metadata": {
+          "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "name": "return exact token",
+          "description": "Return one exact token without additional text.",
+          "version": "1.0.0"
+        },
+        "prompt": {
+          "text": "Return exactly the following text:\n\nAZATHOTH_OK\n\nDo not include quotation marks, punctuation, Markdown, explanation, or any other text."
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [],
+      "inputs": [],
+      "outputs": [],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ]
+}

@@ -43,7 +43,13 @@ from azathoth.workflows import (
 def run_workflow(
     workflow_id: UUID,
 ) -> int:
-    """Execute one configured workflow."""
+    """Execute one configured workflow and persist its run as evidence.
+
+    Completed runs are persisted whether they succeeded or failed, so configured
+    execution history is inspectable alongside production invocation history.
+    Runs that never start, because no candidate could be generated, leave no
+    evidence.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -66,6 +72,10 @@ def run_workflow(
         )
 
         return 1
+
+    SQLiteWorkflowRunRepository(
+        configuration.database,
+    ).save(run)
 
     print(render_workflow_run(run))
 

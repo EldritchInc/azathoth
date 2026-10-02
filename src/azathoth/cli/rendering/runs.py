@@ -1,6 +1,11 @@
 """Human-readable workflow run rendering."""
 
+import json
+
+from pydantic import JsonValue
+
 from azathoth.cli.rendering._json import render_json_value
+from azathoth.strategies import StrategyResourceBinding
 from azathoth.workflows import (
     WorkflowRun,
     WorkflowStepRun,
@@ -93,6 +98,8 @@ def _append_execution(
         if metrics.estimated_cost_usd is not None:
             lines.append(f"Estimated Cost: ${metrics.estimated_cost_usd:.6f}")
 
+    lines.extend(f"Resource: {_render_resource(resource)}" for resource in execution.resources)
+
     lines.extend(
         (
             "Output:",
@@ -114,3 +121,37 @@ def _append_failure(
     assert failure is not None
 
     lines.append(f"Error: {failure.exception_type}: {failure.message}")
+
+
+def _render_resource(
+    resource: StrategyResourceBinding,
+) -> str:
+    """Render one resource binding with deterministically ordered attributes."""
+
+    rendered = f"{resource.kind} {resource.identifier}"
+
+    if not resource.attributes:
+        return rendered
+
+    attributes = ", ".join(
+        f"{name}={_render_attribute(resource.attributes[name])}"
+        for name in sorted(resource.attributes)
+    )
+
+    return f"{rendered} ({attributes})"
+
+
+def _render_attribute(
+    value: JsonValue,
+) -> str:
+    """Render one resource attribute value compactly."""
+
+    if isinstance(value, str):
+        return value
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )

@@ -23,3 +23,19 @@ def json_value(
         JsonValue,
         parsed,
     )
+
+
+def positive_integer(
+    value: str,
+) -> int:
+    """Parse one strictly positive integer command-line value."""
+
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ArgumentTypeError(f"Expected a positive integer, got {value!r}.") from exc
+
+    if parsed < 1:
+        raise ArgumentTypeError(f"Expected a positive integer, got {value!r}.")
+
+    return parsed

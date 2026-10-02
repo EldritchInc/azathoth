@@ -47,6 +47,11 @@ from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
+    render_workflow_run_summaries,
+)
+from azathoth.cli.runs import (
+    list_workflow_runs,
+    show_run,
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
@@ -100,6 +105,7 @@ __all__ = [
     "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
+    "list_workflow_runs",
     "list_workflows",
     "load_runtime",
     "main",
@@ -116,9 +122,11 @@ __all__ = [
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
+    "render_workflow_run_summaries",
     "run_benchmark",
     "run_workflow",
     "show_model",
+    "show_run",
     "show_benchmark",
     "show_benchmark_case",
     "show_goal",

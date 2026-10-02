@@ -6,7 +6,10 @@ from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
-from azathoth.cli.parsing.common import json_value
+from azathoth.cli.parsing.common import (
+    json_value,
+    positive_integer,
+)
 
 WORKFLOW_COMMAND = "workflow"
 
@@ -18,11 +21,13 @@ WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_OPTIMIZE_ACTION = "optimize"
 WORKFLOW_PROMOTE_ACTION = "promote"
 WORKFLOW_RUN_ACTION = "run"
+WORKFLOW_RUNS_ACTION = "runs"
 WORKFLOW_SHOW_ACTION = "show"
 
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
+WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 
 EXPECTED_VALUE_ATTRIBUTE = "expected_value"
 TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
@@ -164,4 +169,25 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to promote.",
+    )
+
+    workflow_runs_parser = workflow_actions.add_parser(
+        WORKFLOW_RUNS_ACTION,
+        help="List persisted runs of one workflow, newest first.",
+    )
+
+    workflow_runs_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose runs to list.",
+    )
+
+    workflow_runs_parser.add_argument(
+        "--limit",
+        dest=WORKFLOW_RUN_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent runs to list.",
     )
