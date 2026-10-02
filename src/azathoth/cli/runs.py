@@ -1,6 +1,7 @@
 """Workflow run inspection commands for the Azathoth CLI."""
 
 import sys
+from collections.abc import Iterable
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
@@ -14,6 +15,8 @@ from azathoth.workflows import (
     SQLiteWorkflowRepository,
     SQLiteWorkflowRunFeedbackRepository,
     SQLiteWorkflowRunRepository,
+    WorkflowRunFeedback,
+    WorkflowRunFeedbackDisposition,
 )
 
 
@@ -69,10 +72,17 @@ def list_workflow_runs(
         ).associations()
     )
 
+    latest_dispositions = _latest_dispositions(
+        SQLiteWorkflowRunFeedbackRepository(
+            configuration.database,
+        ).feedback(),
+    )
+
     print(
         render_workflow_run_summaries(
             newest_first,
             production_run_ids=production_run_ids,
+            latest_dispositions=latest_dispositions,
         )
     )
 
@@ -112,3 +122,22 @@ def show_run(
     )
 
     return 0
+
+
+def _latest_dispositions(
+    feedback: Iterable[WorkflowRunFeedback],
+) -> dict[UUID, WorkflowRunFeedbackDisposition]:
+    """Return each judged run's most recent disposition.
+
+    Feedback is read in insertion order, so a later record wins a timestamp tie.
+    """
+
+    latest: dict[UUID, WorkflowRunFeedback] = {}
+
+    for record in feedback:
+        current = latest.get(record.run_id)
+
+        if current is None or record.created_at >= current.created_at:
+            latest[record.run_id] = record
+
+    return {run_id: record.disposition for run_id, record in latest.items()}
