@@ -59,6 +59,10 @@ from azathoth.cli.tools import (
     show_tool_implementation,
     show_tool_test_case,
 )
+from azathoth.cli.usage import (
+    model_usage,
+    tool_usage,
+)
 from azathoth.cli.workflows import (
     import_workflow,
     invoke_workflow,
@@ -99,6 +103,7 @@ __all__ = [
     "list_workflows",
     "load_runtime",
     "main",
+    "model_usage",
     "optimize_configured_workflow",
     "optimize_workflow",
     "promote_configured_workflow",
@@ -121,5 +126,6 @@ __all__ = [
     "show_tool_implementation",
     "show_tool_test_case",
     "show_workflow",
+    "tool_usage",
     "verify_tool",
 ]
