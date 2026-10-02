@@ -11,6 +11,7 @@ from azathoth.prompting import (
     FixedModelSelection,
     PromptStrategySpec,
 )
+from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.production import WorkflowProductionState
 from azathoth.workflows.steps import ToolStepSpecification
@@ -30,6 +31,29 @@ class WorkflowProductionModelUsage(BaseModel):
 
     step_id: UUID
     role: WorkflowProductionModelUsageRole
+
+
+class WorkflowHistoricalModelUsage(BaseModel):
+    """Record one successfully executed model resource."""
+
+    model_config = ConfigDict(frozen=True)
+
+    step_id: UUID
+    attempt_number: int
+    identifier: str
+
+
+class WorkflowHistoricalToolUsage(BaseModel):
+    """Record one successfully executed tool implementation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    step_id: UUID
+    attempt_number: int
+    implementation_id: UUID
+    tool_id: UUID
+    tool_version: str
+    runtime: str
 
 
 def workflow_uses_model(
@@ -185,9 +209,109 @@ def production_uses_tool(
     )
 
 
+def historical_model_usages(
+    run: WorkflowRun,
+    model_identifier: str,
+) -> tuple[WorkflowHistoricalModelUsage, ...]:
+    """Return successful executions of one exact model in a workflow run."""
+
+    usages: list[WorkflowHistoricalModelUsage] = []
+
+    for step in run.steps:
+        for attempt in step.attempts:
+            execution = attempt.execution
+
+            if execution is None:
+                continue
+
+            for resource in execution.resources:
+                if resource.kind != "model":
+                    continue
+
+                if resource.identifier != model_identifier:
+                    continue
+
+                usages.append(
+                    WorkflowHistoricalModelUsage(
+                        step_id=step.step_id,
+                        attempt_number=attempt.attempt_number,
+                        identifier=resource.identifier,
+                    )
+                )
+
+    return tuple(usages)
+
+
+def historical_tool_usages(
+    run: WorkflowRun,
+    tool_id: UUID,
+) -> tuple[WorkflowHistoricalToolUsage, ...]:
+    """Return successful executions of one durable tool identity."""
+
+    usages: list[WorkflowHistoricalToolUsage] = []
+
+    for step in run.steps:
+        for attempt in step.attempts:
+            execution = attempt.execution
+
+            if execution is None:
+                continue
+
+            for resource in execution.resources:
+                if resource.kind != "tool":
+                    continue
+
+                resource_tool_id = resource.attributes.get(
+                    "tool_id",
+                )
+                tool_version = resource.attributes.get(
+                    "tool_version",
+                )
+                runtime = resource.attributes.get(
+                    "runtime",
+                )
+
+                if not isinstance(resource_tool_id, str):
+                    continue
+
+                if not isinstance(tool_version, str):
+                    continue
+
+                if not isinstance(runtime, str):
+                    continue
+
+                try:
+                    parsed_tool_id = UUID(resource_tool_id)
+                    implementation_id = UUID(
+                        resource.identifier,
+                    )
+                except ValueError:
+                    continue
+
+                if parsed_tool_id != tool_id:
+                    continue
+
+                usages.append(
+                    WorkflowHistoricalToolUsage(
+                        step_id=step.step_id,
+                        attempt_number=attempt.attempt_number,
+                        implementation_id=implementation_id,
+                        tool_id=parsed_tool_id,
+                        tool_version=tool_version,
+                        runtime=runtime,
+                    )
+                )
+
+    return tuple(usages)
+
+
 __all__ = [
+    "WorkflowHistoricalModelUsage",
+    "WorkflowHistoricalToolUsage",
     "WorkflowProductionModelUsage",
     "WorkflowProductionModelUsageRole",
+    "historical_model_usages",
+    "historical_tool_usages",
     "production_model_usages",
     "production_uses_tool",
     "workflow_uses_model",
