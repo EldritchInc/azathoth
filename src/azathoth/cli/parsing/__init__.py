@@ -40,6 +40,7 @@ from azathoth.cli.parsing.models import (
     MODEL_LIST_ACTION,
     MODEL_PORTFOLIO_ACTION,
     MODEL_SHOW_ACTION,
+    MODEL_USAGE_ACTION,
     add_model_parser,
 )
 from azathoth.cli.parsing.tools import (
@@ -56,6 +57,7 @@ from azathoth.cli.parsing.tools import (
     TOOL_TEST_CASE_ID_ATTRIBUTE,
     TOOL_TEST_CASE_SHOW_ACTION,
     TOOL_TEST_CASES_ACTION,
+    TOOL_USAGE_ACTION,
     TOOL_VERIFY_ACTION,
     TOOL_VERSION_ATTRIBUTE,
     TOOL_VERSIONS_ACTION,
@@ -146,6 +148,7 @@ __all__ = [
     "MODEL_LIST_ACTION",
     "MODEL_PORTFOLIO_ACTION",
     "MODEL_SHOW_ACTION",
+    "MODEL_USAGE_ACTION",
     "TARGET_COST_ATTRIBUTE",
     "TARGET_LATENCY_ATTRIBUTE",
     "TOOL_ACTION_ATTRIBUTE",
@@ -161,6 +164,7 @@ __all__ = [
     "TOOL_TEST_CASES_ACTION",
     "TOOL_TEST_CASE_ID_ATTRIBUTE",
     "TOOL_TEST_CASE_SHOW_ACTION",
+    "TOOL_USAGE_ACTION",
     "TOOL_VERIFY_ACTION",
     "TOOL_VERSION_ATTRIBUTE",
     "TOOL_VERSIONS_ACTION",
