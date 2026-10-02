@@ -45,6 +45,7 @@ from azathoth.cli.parsing import (
 )
 from azathoth.cli.runs import (
     list_workflow_runs,
+    record_run_feedback,
     show_run,
 )
 from azathoth.cli.tool_verification import verify_tool
@@ -142,6 +143,7 @@ def _dispatch(
     if command == RUN_COMMAND:
         return dispatch_run_command(
             arguments,
+            record_run_feedback=record_run_feedback,
             show_run=show_run,
         )
 
