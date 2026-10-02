@@ -75,7 +75,11 @@ azathoth
 │       └── --limit <COUNT>
 │
 ├── run
-│   └── show <RUN_ID>
+│   ├── show <RUN_ID>
+│   └── feedback <RUN_ID>
+│       ├── --good | --bad          (exactly one)
+│       ├── --reason <TEXT>         (required with --bad)
+│       └── --corrected-output <JSON>   (only with --bad)
 │
 ├── model
 │   ├── list
@@ -689,11 +693,15 @@ azathoth workflow runs <WORKFLOW_ID> --limit <COUNT>
 Runs are listed newest first, one line per run:
 
 ```text
-<RUN_ID>  2026-10-02T12:10:00+00:00  succeeded  1.500s  configured
-<RUN_ID>  2026-10-02T12:05:00+00:00  failed     0.250s  production
+<RUN_ID>  2026-10-02T12:10:00+00:00  succeeded  1.500s  configured  good
+<RUN_ID>  2026-10-02T12:05:00+00:00  failed     0.250s  production  -
 ```
 
-Each line contains the run ID, start time, status, duration, and source.
+Each line contains the run ID, start time, status, duration, source, and the
+run's latest feedback disposition. Runs that have not been judged show `-`.
+
+"Latest" means the most recent feedback timestamp, not the most recently saved
+record. When timestamps tie, the later-saved record wins.
 
 The limit is applied after sorting, so `--limit 5` means the five most recent
 runs.
@@ -720,7 +728,8 @@ azathoth run show <RUN_ID>
 ```
 
 The run is rendered exactly as `workflow run` rendered it: identity, status,
-statistics, and per-step evidence.
+statistics, and per-step evidence, followed by every feedback record for that
+run, oldest first.
 
 Each executed step also lists the resources its strategy bound:
 
@@ -742,6 +751,12 @@ run show
     which resources did this run use?
 ```
 
+A run with no feedback ends with:
+
+```text
+Feedback: none
+```
+
 An unknown run fails with:
 
 ```text
@@ -750,6 +765,90 @@ Run <RUN_ID> was not found.
 
 `workflow runs` and `run show` read durable state only. They do not require
 provider credentials or runtime bootstrap.
+
+# Judge a Run
+
+Record a judgment about one persisted run with:
+
+```bash
+azathoth run feedback <RUN_ID> --good [--reason <TEXT>]
+```
+
+or:
+
+```bash
+azathoth run feedback <RUN_ID> --bad --reason <TEXT> \
+    [--corrected-output '<JSON>']
+```
+
+Exactly one of `--good` or `--bad` is required.
+
+Each judgment is an immutable `WorkflowRunFeedback` record:
+
+```text
+WorkflowRunFeedback
+├── id
+├── run_id
+├── disposition         good | bad
+├── reason              optional for good, required for bad
+├── corrected_output    optional JSON, bad only
+└── created_at
+```
+
+A run can collect any number of judgments. Later judgments do not replace
+earlier ones; `workflow runs` shows the latest disposition and `run show` shows
+the full history.
+
+On success the command prints:
+
+```text
+Recorded bad feedback <FEEDBACK_ID> for run <RUN_ID>.
+```
+
+# Feedback Rules
+
+Feedback is accepted only when it is coherent:
+
+```text
+unknown run
+    Run <RUN_ID> was not found.
+
+--good with --corrected-output
+    A corrected output can only accompany bad feedback.
+
+--bad without a reason
+    Bad workflow run feedback requires a reason.
+```
+
+A run that needed correcting was not good, so a corrected output is accepted
+only with `--bad`.
+
+Reasons are trimmed. A blank reason is treated as absent, so a whitespace-only
+reason does not satisfy `--bad`.
+
+Every rejection exits with failure and saves nothing.
+
+Malformed `--corrected-output` JSON and missing or conflicting dispositions are
+rejected by the parser before any durable state is read.
+
+# Feedback Is Evidence
+
+Bad runs with corrected outputs record what a workflow should have produced
+for a real input:
+
+```text
+WorkflowRun
+    actual input and output
+
+WorkflowRunFeedback
+    judgment, reason, and corrected output
+```
+
+That pairing is durable evidence about workflow correctness, recorded by the
+operator rather than inferred.
+
+Recording feedback never changes the run it judges, the workflow
+specification, or production state.
 
 # Empirically Optimize a Workflow
 
@@ -1658,6 +1757,8 @@ WorkflowRun
 
 WorkflowRun summaries
 
+WorkflowRunFeedback
+
 WorkflowOptimizationSession
 
 WorkflowProductionRevision
@@ -1818,6 +1919,8 @@ production states
 production revisions
 
 workflow runs
+
+workflow run feedback
 
 production invocations
 
@@ -2023,6 +2126,10 @@ execution
 run history
     ≠
 run execution
+
+run feedback
+    ≠
+run mutation
 
 configured execution
     ≠
