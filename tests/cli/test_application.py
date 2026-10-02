@@ -348,12 +348,19 @@ def test_cli_model_help_lists_deauthorize_action(
 def test_cli_dispatches_model_deauthorize(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    identifiers: list[str] = []
+    calls: list[tuple[str, bool]] = []
 
     def fake_deauthorize_model(
         identifier: str,
+        *,
+        force: bool,
     ) -> int:
-        identifiers.append(identifier)
+        calls.append(
+            (
+                identifier,
+                force,
+            )
+        )
 
         return 37
 
@@ -372,8 +379,11 @@ def test_cli_dispatches_model_deauthorize(
     )
 
     assert result == 37
-    assert identifiers == [
-        FIRST_IDENTIFIER,
+    assert calls == [
+        (
+            FIRST_IDENTIFIER,
+            False,
+        ),
     ]
 
 
