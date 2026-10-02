@@ -15,6 +15,7 @@ MODEL_PORTFOLIO_ACTION = "portfolio"
 MODEL_SHOW_ACTION = "show"
 MODEL_USAGE_ACTION = "usage"
 
+MODEL_FORCE_ATTRIBUTE = "model_force"
 MODEL_IDENTIFIER_ATTRIBUTE = "model_identifier"
 
 
@@ -52,6 +53,13 @@ def add_model_parser(
         MODEL_IDENTIFIER_ATTRIBUTE,
         metavar="MODEL_IDENTIFIER",
         help="Provider-qualified model identifier to deauthorize.",
+    )
+
+    model_deauthorize_parser.add_argument(
+        "--force",
+        dest=MODEL_FORCE_ATTRIBUTE,
+        action="store_true",
+        help="Deauthorize even when active production depends on the model.",
     )
 
     model_actions.add_parser(
