@@ -47,6 +47,7 @@ from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
+    render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
 from azathoth.cli.runs import (
@@ -122,6 +123,7 @@ __all__ = [
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
+    "render_workflow_run_feedback",
     "render_workflow_run_summaries",
     "run_benchmark",
     "run_workflow",

@@ -4,6 +4,7 @@ from azathoth.cli.rendering.benchmarks import (
     render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
 )
+from azathoth.cli.rendering.feedback import render_workflow_run_feedback
 from azathoth.cli.rendering.invocations import (
     render_production_invocation_result,
 )
@@ -29,5 +30,6 @@ __all__ = [
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
+    "render_workflow_run_feedback",
     "render_workflow_run_summaries",
 ]
