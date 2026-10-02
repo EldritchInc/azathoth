@@ -47,6 +47,7 @@ from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
+    render_workflow_run_summaries,
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
@@ -116,6 +117,7 @@ __all__ = [
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
+    "render_workflow_run_summaries",
     "run_benchmark",
     "run_workflow",
     "show_model",
