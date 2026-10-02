@@ -4,6 +4,8 @@ import sys
 from collections.abc import Iterable
 from uuid import UUID
 
+from pydantic import JsonValue, ValidationError
+
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
     render_workflow_run,
@@ -122,6 +124,79 @@ def show_run(
     )
 
     return 0
+
+
+def record_run_feedback(
+    run_id: UUID,
+    *,
+    disposition: WorkflowRunFeedbackDisposition,
+    reason: str | None = None,
+    corrected_output: JsonValue = None,
+) -> int:
+    """Record one immutable judgment about a persisted workflow run.
+
+    Only existing runs can be judged. A corrected output contradicts a good
+    disposition, so it is accepted only with bad feedback. Blank reasons are
+    treated as absent, and domain validation decides whether the remaining
+    judgment is acceptable. Nothing is saved when any check fails.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    if (
+        SQLiteWorkflowRunRepository(
+            configuration.database,
+        ).get(run_id)
+        is None
+    ):
+        print(
+            f"Run {run_id} was not found.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    if disposition is WorkflowRunFeedbackDisposition.GOOD and corrected_output is not None:
+        print(
+            "A corrected output can only accompany bad feedback.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    normalized_reason = reason.strip() if reason is not None else None
+
+    try:
+        feedback = WorkflowRunFeedback(
+            run_id=run_id,
+            disposition=disposition,
+            reason=normalized_reason or None,
+            corrected_output=corrected_output,
+        )
+    except ValidationError as exc:
+        for error in exc.errors():
+            print(
+                _validation_message(error["msg"]),
+                file=sys.stderr,
+            )
+
+        return 1
+
+    SQLiteWorkflowRunFeedbackRepository(
+        configuration.database,
+    ).save(feedback)
+
+    print(f"Recorded {disposition.value} feedback {feedback.id} for run {run_id}.")
+
+    return 0
+
+
+def _validation_message(
+    message: str,
+) -> str:
+    """Remove pydantic's value-error prefix from one domain validation message."""
+
+    return message.removeprefix("Value error, ")
 
 
 def _latest_dispositions(

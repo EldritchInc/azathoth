@@ -52,6 +52,7 @@ from azathoth.cli.rendering import (
 )
 from azathoth.cli.runs import (
     list_workflow_runs,
+    record_run_feedback,
     show_run,
 )
 from azathoth.cli.tool_verification import verify_tool
@@ -115,6 +116,7 @@ __all__ = [
     "optimize_workflow",
     "promote_configured_workflow",
     "promote_workflow",
+    "record_run_feedback",
     "render_model_usage_report",
     "render_production_invocation_result",
     "render_tool_usage_report",
