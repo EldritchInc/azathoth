@@ -72,12 +72,49 @@ azathoth
 │   └── invoke <WORKFLOW_ID>
 │       └── --input <JSON>
 │
-└── model
+├── model
+│   ├── list
+│   ├── show <MODEL_IDENTIFIER>
+│   ├── authorize <MODEL_IDENTIFIER>
+│   ├── deauthorize <MODEL_IDENTIFIER>
+│   │   └── --force
+│   ├── portfolio
+│   └── usage <MODEL_IDENTIFIER>
+│
+├── tool
+│   ├── import <FILE>
+│   ├── list
+│   ├── show <TOOL_ID>
+│   │   └── --version <VERSION>
+│   ├── versions <TOOL_ID>
+│   ├── implementations <TOOL_ID>
+│   │   └── --version <VERSION>
+│   ├── implementation-show <IMPLEMENTATION_ID>
+│   ├── test-cases <TOOL_ID>
+│   ├── test-case-show <TEST_CASE_ID>
+│   ├── verify <TOOL_ID>
+│   │   └── --version <VERSION>
+│   └── usage <TOOL_ID>
+│
+├── goal
+│   ├── import <FILE>
+│   ├── list
+│   └── show <GOAL_ID>
+│
+└── benchmark
+    ├── import <FILE>
     ├── list
-    ├── show <MODEL_IDENTIFIER>
-    ├── authorize <MODEL_IDENTIFIER>
-    ├── deauthorize <MODEL_IDENTIFIER>
-    └── portfolio
+    ├── show <BENCHMARK_ID>
+    ├── cases <BENCHMARK_ID>
+    ├── case-show <BENCHMARK_ID> <CASE_ID>
+    ├── run <BENCHMARK_ID>
+    │   ├── --workflow <WORKFLOW_ID>
+    │   └── --output <OUTPUT>
+    └── compare <BENCHMARK_ID>
+        ├── --workflow <WORKFLOW_ID>   (repeat for each workflow)
+        ├── --output <OUTPUT>
+        ├── --target-latency <SECONDS>
+        └── --target-cost <USD>
 ```
 
 This is the actual V1 operator surface.
@@ -360,6 +397,9 @@ azathoth --help
 azathoth --version
 azathoth workflow --help
 azathoth model --help
+azathoth tool --help
+azathoth goal --help
+azathoth benchmark --help
 ```
 
 are parser operations.
@@ -1070,7 +1110,8 @@ azathoth model
 ├── show
 ├── authorize
 ├── deauthorize
-└── portfolio
+├── portfolio
+└── usage
 ```
 
 The CLI does not use one command to conflate these concepts.
@@ -1179,6 +1220,68 @@ portfolio authorization removed
 
 Availability and authorization remain separate.
 
+# Deauthorization Is Guarded by Production
+
+Deauthorization is refused while any active `WorkflowProductionState` holds
+the model as a step's primary model or as an approved substitute.
+
+The command exits with failure, leaves the portfolio unchanged, and names each
+dependent workflow and step on standard error:
+
+```text
+Model 'openrouter/some-model' is used by active production and was not deauthorized.
+  summarize (<WORKFLOW_ID>): primary step <STEP_ID>
+Use --force to deauthorize anyway.
+```
+
+An operator who accepts that consequence can proceed explicitly:
+
+```bash
+azathoth model deauthorize <MODEL_IDENTIFIER> --force
+```
+
+Forced deauthorization removes portfolio membership and still reports the
+dependent production workflows on standard error as a warning.
+
+Only active production blocks deauthorization.
+
+Configured workflows that pin the model, and historical runs that executed it,
+do not. Use `model usage` to inspect those before deauthorizing.
+
+# Trace Model Usage
+
+Show everywhere one exact model is depended upon with:
+
+```bash
+azathoth model usage <MODEL_IDENTIFIER>
+```
+
+The report is grouped by workflow and combines three independent sources:
+
+```text
+configured
+    a durable WorkflowSpecification pins the model with fixed selection
+
+production
+    an active WorkflowProductionState holds the model as primary or substitute
+
+history
+    a persisted WorkflowRun recorded a successful execution bound to the model
+```
+
+Portfolio-based model selection is not counted as configured usage, because
+the model is not pinned; it is only eligible.
+
+Workflows deleted from configuration still appear when production state or run
+history references them. That is the case where the question "what depends on
+this model?" matters most.
+
+`model usage` reads durable state only. It does not require provider
+credentials or current provider availability, so a model a provider has stopped
+offering can still be traced.
+
+An unused model reports zero workflows and exits successfully.
+
 # List the Portfolio
 
 Inspect authorized models with:
@@ -1234,6 +1337,10 @@ rewrite active WorkflowProductionState automatically
 
 Production authority remains explicit and durable.
 
+Because deauthorization never rewrites production state, it refuses by default
+when production depends on the model rather than leaving production pinned to
+a model the organization no longer authorizes.
+
 # Model Availability Is Dynamic
 
 Current provider state may change between CLI invocations.
@@ -1253,6 +1360,117 @@ command B
 
 Durable portfolio authorization and durable workflow intent remain separate
 from that changing provider state.
+
+# Tool Commands
+
+The tool command family exposes durable tool definitions, their executable
+implementations, and their verification cases.
+
+```text
+azathoth tool
+├── import
+├── list
+├── show
+├── versions
+├── implementations
+├── implementation-show
+├── test-cases
+├── test-case-show
+├── verify
+└── usage
+```
+
+A tool identity is a UUID shared by every definition version of that tool.
+
+Commands that act on one exact definition version take:
+
+```bash
+--version <VERSION>
+```
+
+# Trace Tool Usage
+
+Show everywhere one tool identity is depended upon with:
+
+```bash
+azathoth tool usage <TOOL_ID>
+```
+
+Workflows require tools by capability name, while execution history records
+the durable tool identity:
+
+```text
+ToolRequirement.name
+    configured and production usage
+
+tool identity (UUID)
+    historical execution provenance
+```
+
+The report resolves capability names from every definition version sharing the
+tool identity, so a tool renamed between versions is still traced under each
+name. Requirement version constraints are not used to narrow configured or
+production matches.
+
+Historical entries include the implementation, tool version, and runtime that
+actually executed.
+
+A tool identity is known when any definition version exists or when run
+history recorded its execution. An unknown identity fails with:
+
+```text
+Tool <TOOL_ID> is not configured.
+```
+
+so a mistyped identifier is not mistaken for an unused tool.
+
+# Goal Commands
+
+The goal command family manages durable reusable goals.
+
+```bash
+azathoth goal import <FILE>
+azathoth goal list
+azathoth goal show <GOAL_ID>
+```
+
+# Benchmark Commands
+
+The benchmark command family manages durable benchmark datasets and evaluates
+configured workflows against them.
+
+```bash
+azathoth benchmark import <FILE>
+azathoth benchmark list
+azathoth benchmark show <BENCHMARK_ID>
+azathoth benchmark cases <BENCHMARK_ID>
+azathoth benchmark case-show <BENCHMARK_ID> <CASE_ID>
+```
+
+Execute one configured workflow against a dataset with:
+
+```bash
+azathoth benchmark run <BENCHMARK_ID> \
+    --workflow <WORKFLOW_ID> \
+    --output <OUTPUT>
+```
+
+Compare several configured workflows against one dataset with:
+
+```bash
+azathoth benchmark compare <BENCHMARK_ID> \
+    --workflow <WORKFLOW_ID> \
+    --workflow <WORKFLOW_ID> \
+    --output <OUTPUT> \
+    --target-latency <SECONDS> \
+    --target-cost <USD>
+```
+
+`--output` names the workflow output value evaluated against each case.
+
+Benchmarking executes configured workflows.
+
+Like optimization, it produces evidence and does not promote.
 
 # CLI JSON Arguments
 
@@ -1320,6 +1538,12 @@ WorkflowOptimizationSession
 WorkflowProductionRevision
 
 ProductionInvocationResult
+
+WorkflowBenchmarkResult / WorkflowBenchmarkRanking
+
+WorkflowModelUsageReport
+
+WorkflowToolUsageReport
 ```
 
 The renderers consume completed domain artifacts.
@@ -1459,6 +1683,10 @@ model portfolio
 provider model observations
 
 tool definitions and implementations
+
+reusable goals
+
+benchmark datasets
 
 production states
 
@@ -1687,6 +1915,10 @@ organizational authorization
 model portfolio
     ≠
 production model authority
+
+usage discovery
+    ≠
+mutation
 
 durable configuration
     ≠
