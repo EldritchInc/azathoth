@@ -231,6 +231,12 @@ from azathoth.workflows.usage import (
     workflows_using_model,
     workflows_using_tool,
 )
+from azathoth.workflows.usage_report import (
+    WorkflowModelUsageEntry,
+    WorkflowModelUsageReport,
+    WorkflowRunModelUsage,
+    model_usage_report,
+)
 from azathoth.workflows.value import (
     WorkflowContextReference,
     WorkflowInputBinding,
@@ -308,6 +314,8 @@ __all__ = [
     "WorkflowHistoricalToolUsage",
     "WorkflowInputBinding",
     "WorkflowMetadata",
+    "WorkflowModelUsageEntry",
+    "WorkflowModelUsageReport",
     "WorkflowProductionEmission",
     "WorkflowProductionModelSubstitution",
     "WorkflowProductionModelUsage",
@@ -327,6 +335,7 @@ __all__ = [
     "WorkflowRunFeedback",
     "WorkflowRunFeedbackDisposition",
     "WorkflowRunFeedbackRepository",
+    "WorkflowRunModelUsage",
     "WorkflowRunner",
     "WorkflowRunRepository",
     "WorkflowRunStatistics",
@@ -356,6 +365,7 @@ __all__ = [
     "historical_model_usages",
     "historical_tool_usages",
     "materialize_workflow_candidate",
+    "model_usage_report",
     "production_model_usages",
     "production_uses_tool",
     "promote_workflow_candidate",
