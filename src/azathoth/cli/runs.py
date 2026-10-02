@@ -6,11 +6,13 @@ from uuid import UUID
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
     render_workflow_run,
+    render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
 from azathoth.workflows import (
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowRepository,
+    SQLiteWorkflowRunFeedbackRepository,
     SQLiteWorkflowRunRepository,
 )
 
@@ -80,7 +82,7 @@ def list_workflow_runs(
 def show_run(
     run_id: UUID,
 ) -> int:
-    """Show one persisted workflow run with step evidence and resource bindings."""
+    """Show one persisted workflow run with step evidence, resources, and feedback."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -96,6 +98,17 @@ def show_run(
 
         return 1
 
-    print(render_workflow_run(run))
+    feedback = SQLiteWorkflowRunFeedbackRepository(
+        configuration.database,
+    ).feedback_for_run(run_id)
+
+    print(
+        "\n\n".join(
+            (
+                render_workflow_run(run),
+                render_workflow_run_feedback(feedback),
+            )
+        )
+    )
 
     return 0
