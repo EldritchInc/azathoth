@@ -9,6 +9,7 @@ from azathoth.execution import ExecutionResult
 from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowRun,
+    WorkflowRunFeedbackDisposition,
     WorkflowStepAttempt,
     WorkflowStepFailure,
     WorkflowStepRun,
@@ -134,18 +135,24 @@ def test_summary_renders_configured_successful_run() -> None:
     rendered = render_workflow_run_summaries(
         (successful_run(FIRST_RUN_ID),),
         production_run_ids=frozenset(),
+        latest_dispositions={},
     )
 
-    assert rendered == (f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  succeeded  1.500s  configured")
+    assert rendered == (
+        f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  succeeded  1.500s  configured  -"
+    )
 
 
 def test_summary_renders_production_failed_run_with_aligned_status() -> None:
     rendered = render_workflow_run_summaries(
         (failed_run(FIRST_RUN_ID),),
         production_run_ids=frozenset({FIRST_RUN_ID}),
+        latest_dispositions={},
     )
 
-    assert rendered == (f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  failed     0.250s  production")
+    assert rendered == (
+        f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  failed     0.250s  production  -"
+    )
 
 
 def test_summary_preserves_given_order_one_line_per_run() -> None:
@@ -158,15 +165,16 @@ def test_summary_preserves_given_order_one_line_per_run() -> None:
             successful_run(FIRST_RUN_ID),
         ),
         production_run_ids=frozenset({SECOND_RUN_ID}),
+        latest_dispositions={},
     )
 
     lines = rendered.splitlines()
 
     assert len(lines) == 2
     assert lines[0].startswith(f"{SECOND_RUN_ID}  2026-10-02T12:05:00+00:00")
-    assert lines[0].endswith("production")
+    assert lines[0].endswith("production  -")
     assert lines[1].startswith(f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00")
-    assert lines[1].endswith("configured")
+    assert lines[1].endswith("configured  -")
 
 
 def test_summary_of_no_runs_is_empty() -> None:
@@ -174,6 +182,26 @@ def test_summary_of_no_runs_is_empty() -> None:
         render_workflow_run_summaries(
             (),
             production_run_ids=frozenset(),
+            latest_dispositions={},
         )
         == ""
     )
+
+
+def test_summary_renders_latest_disposition_per_run() -> None:
+    rendered = render_workflow_run_summaries(
+        (
+            successful_run(SECOND_RUN_ID),
+            failed_run(FIRST_RUN_ID),
+        ),
+        production_run_ids=frozenset(),
+        latest_dispositions={
+            SECOND_RUN_ID: WorkflowRunFeedbackDisposition.GOOD,
+            FIRST_RUN_ID: WorkflowRunFeedbackDisposition.BAD,
+        },
+    )
+
+    assert rendered.splitlines() == [
+        f"{SECOND_RUN_ID}  2026-10-02T12:00:00+00:00  succeeded  1.500s  configured  good",
+        f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  failed     0.250s  configured  bad",
+    ]
