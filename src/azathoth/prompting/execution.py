@@ -5,6 +5,7 @@ from azathoth.providers import LanguageModel, Prompt
 from azathoth.strategies import (
     StrategyExecutionMetrics,
     StrategyOutcome,
+    StrategyResourceBinding,
 )
 
 
@@ -23,6 +24,16 @@ async def execute_prompt(
 
     return StrategyOutcome(
         output=response.text,
+        resources=(
+            (
+                StrategyResourceBinding(
+                    kind="model",
+                    identifier=model_binding.identifier,
+                ),
+            )
+            if model_binding is not None
+            else ()
+        ),
         metrics=StrategyExecutionMetrics(
             provider=response.provider,
             model=response.model,

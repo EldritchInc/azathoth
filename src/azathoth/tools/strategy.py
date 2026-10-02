@@ -6,6 +6,7 @@ from azathoth.context import Context
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyOutcome,
+    StrategyResourceBinding,
 )
 from azathoth.tools.exceptions import ToolExecutionError
 from azathoth.tools.implementation import ToolImplementation
@@ -54,6 +55,17 @@ class ToolStrategy:
 
         return StrategyOutcome(
             output=output,
+            resources=(
+                StrategyResourceBinding(
+                    kind="tool",
+                    identifier=str(self._implementation.id),
+                    attributes={
+                        "tool_id": str(self._implementation.tool_id),
+                        "tool_version": self._implementation.tool_version,
+                        "runtime": self._implementation.runtime,
+                    },
+                ),
+            ),
         )
 
     @staticmethod

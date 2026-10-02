@@ -11,6 +11,11 @@ from azathoth.providers import (
     ModelPortfolioEntry,
     SQLiteModelPortfolioRepository,
 )
+from azathoth.workflows import (
+    SQLiteWorkflowProductionStateRepository,
+    WorkflowModelUsageReport,
+    model_usage_report,
+)
 
 
 def list_models() -> int:
@@ -104,8 +109,15 @@ def authorize_model(
 
 def deauthorize_model(
     identifier: str,
+    *,
+    force: bool = False,
 ) -> int:
-    """Remove one model from organizational authorization."""
+    """Remove one model from organizational authorization.
+
+    Deauthorization is refused while active production holds the model as a
+    primary or approved substitute, because those workflows would lose a model
+    they are pinned to. Forcing proceeds anyway and reports the dependents.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
@@ -118,6 +130,38 @@ def deauthorize_model(
 
         return 1
 
+    report = model_usage_report(
+        identifier,
+        specifications=(),
+        production_states=SQLiteWorkflowProductionStateRepository(
+            configuration.database,
+        ).states(),
+        runs=(),
+    )
+
+    if report.in_production:
+        if not force:
+            print(
+                f"Model {identifier!r} is used by active production and was not deauthorized.",
+                file=sys.stderr,
+            )
+
+            _print_production_dependents(report)
+
+            print(
+                "Use --force to deauthorize anyway.",
+                file=sys.stderr,
+            )
+
+            return 1
+
+        print(
+            f"Warning: deauthorizing model {identifier!r} used by active production.",
+            file=sys.stderr,
+        )
+
+        _print_production_dependents(report)
+
     repository = SQLiteModelPortfolioRepository(
         configuration.database,
     )
@@ -127,6 +171,20 @@ def deauthorize_model(
     print(f"Deauthorized model {identifier}.")
 
     return 0
+
+
+def _print_production_dependents(
+    report: WorkflowModelUsageReport,
+) -> None:
+    """Report production workflows depending on one model."""
+
+    for entry in report.production_workflows:
+        roles = ", ".join(f"{usage.role.value} step {usage.step_id}" for usage in entry.production)
+
+        print(
+            f"  {entry.workflow.name} ({entry.workflow.id}): {roles}",
+            file=sys.stderr,
+        )
 
 
 def _print_model(

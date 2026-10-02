@@ -14,9 +14,15 @@ from azathoth.cli.rendering.promotions import (
     render_workflow_promotion,
 )
 from azathoth.cli.rendering.runs import render_workflow_run
+from azathoth.cli.rendering.usage import (
+    render_model_usage_report,
+    render_tool_usage_report,
+)
 
 __all__ = [
+    "render_model_usage_report",
     "render_production_invocation_result",
+    "render_tool_usage_report",
     "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
     "render_workflow_optimization_session",

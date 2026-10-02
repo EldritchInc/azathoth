@@ -8,12 +8,15 @@ from azathoth.cli.parsing import (
     MODEL_ACTION_ATTRIBUTE,
     MODEL_AUTHORIZE_ACTION,
     MODEL_DEAUTHORIZE_ACTION,
+    MODEL_FORCE_ATTRIBUTE,
     MODEL_IDENTIFIER_ATTRIBUTE,
     MODEL_LIST_ACTION,
     MODEL_PORTFOLIO_ACTION,
     MODEL_SHOW_ACTION,
+    MODEL_USAGE_ACTION,
 )
 
+ModelDeauthorizeHandler = Callable[..., int]
 ModelIdentifierHandler = Callable[[str], int]
 ModelListHandler = Callable[[], int]
 
@@ -22,9 +25,10 @@ def dispatch_model_command(
     arguments: Namespace,
     *,
     authorize_model: ModelIdentifierHandler,
-    deauthorize_model: ModelIdentifierHandler,
+    deauthorize_model: ModelDeauthorizeHandler,
     list_models: ModelListHandler,
     list_portfolio_models: ModelListHandler,
+    model_usage: ModelIdentifierHandler,
     show_model: ModelIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed model command."""
@@ -58,7 +62,17 @@ def dispatch_model_command(
             ),
         )
 
-        return deauthorize_model(model_identifier)
+        return deauthorize_model(
+            model_identifier,
+            force=cast(
+                bool,
+                getattr(
+                    arguments,
+                    MODEL_FORCE_ATTRIBUTE,
+                    False,
+                ),
+            ),
+        )
 
     if action == MODEL_LIST_ACTION:
         return list_models()
@@ -76,5 +90,16 @@ def dispatch_model_command(
         )
 
         return show_model(model_identifier)
+
+    if action == MODEL_USAGE_ACTION:
+        model_identifier = cast(
+            str,
+            getattr(
+                arguments,
+                MODEL_IDENTIFIER_ATTRIBUTE,
+            ),
+        )
+
+        return model_usage(model_identifier)
 
     return None

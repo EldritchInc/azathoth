@@ -52,6 +52,10 @@ from azathoth.cli.tools import (
     show_tool_implementation,
     show_tool_test_case,
 )
+from azathoth.cli.usage import (
+    model_usage,
+    tool_usage,
+)
 from azathoth.cli.workflows import (
     import_workflow,
     invoke_workflow,
@@ -135,6 +139,7 @@ def _dispatch(
             deauthorize_model=deauthorize_model,
             list_models=list_models,
             list_portfolio_models=list_portfolio_models,
+            model_usage=model_usage,
             show_model=show_model,
         )
 
@@ -149,6 +154,7 @@ def _dispatch(
             show_tool=show_tool,
             show_tool_implementation=show_tool_implementation,
             show_tool_test_case=show_tool_test_case,
+            tool_usage=tool_usage,
             verify_tool=verify_tool,
         )
 

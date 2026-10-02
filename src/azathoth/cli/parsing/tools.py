@@ -17,6 +17,7 @@ TOOL_LIST_ACTION = "list"
 TOOL_SHOW_ACTION = "show"
 TOOL_TEST_CASES_ACTION = "test-cases"
 TOOL_TEST_CASE_SHOW_ACTION = "test-case-show"
+TOOL_USAGE_ACTION = "usage"
 TOOL_VERIFY_ACTION = "verify"
 TOOL_VERSIONS_ACTION = "versions"
 
@@ -164,4 +165,16 @@ def add_tool_parser(
         required=True,
         metavar="VERSION",
         help="Exact durable tool definition version.",
+    )
+
+    tool_usage_parser = tool_actions.add_parser(
+        TOOL_USAGE_ACTION,
+        help="Show where one tool is configured, in production, and executed.",
+    )
+
+    tool_usage_parser.add_argument(
+        TOOL_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TOOL_ID",
+        help="Tool capability UUID to trace.",
     )

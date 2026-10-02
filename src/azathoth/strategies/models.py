@@ -2,7 +2,13 @@
 
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    model_validator,
+)
 
 from azathoth.context import ContextEvent
 
@@ -16,6 +22,18 @@ class StrategyMetadata(BaseModel):
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
     version: str = Field(default="1.0.0", min_length=1)
+
+
+class StrategyResourceBinding(BaseModel):
+    """Describe one durable resource bound to strategy execution."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: str = Field(min_length=1)
+    identifier: str = Field(min_length=1)
+    attributes: dict[str, JsonValue] = Field(
+        default_factory=dict,
+    )
 
 
 class StrategyExecutionMetrics(BaseModel):
@@ -53,4 +71,5 @@ class StrategyOutcome(BaseModel):
 
     output: JsonValue
     events: tuple[ContextEvent, ...] = ()
+    resources: tuple[StrategyResourceBinding, ...] = ()
     metrics: StrategyExecutionMetrics | None = None
