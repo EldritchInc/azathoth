@@ -1,4 +1,4 @@
-"""Tests for configured workflow model usage discovery."""
+"""Tests for configured, production, and historical workflow usage discovery."""
 
 from datetime import UTC, datetime
 from uuid import UUID
@@ -30,10 +30,12 @@ from azathoth.workflows import (
     WorkflowRun,
     WorkflowSpecification,
     WorkflowStepAttempt,
+    WorkflowStepFailure,
     WorkflowStepRun,
     WorkflowStepSpecification,
     WorkflowStepStatus,
     historical_model_usages,
+    historical_tool_usages,
     production_model_usages,
     production_uses_tool,
     workflow_uses_model,
@@ -69,6 +71,12 @@ TOOL_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 OTHER_TOOL_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 
 IMPLEMENTATION_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+
+OTHER_IMPLEMENTATION_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+
+TOOL_VERSION = "1.0.0"
+
+TOOL_RUNTIME = "python"
 
 STARTED_AT = datetime(
     2026,
@@ -142,6 +150,43 @@ def create_attempt(
     )
 
 
+def create_failed_attempt(
+    *,
+    attempt_number: int = 1,
+) -> WorkflowStepAttempt:
+    """Create one deterministic failed workflow attempt."""
+
+    return WorkflowStepAttempt(
+        attempt_number=attempt_number,
+        started_at=STARTED_AT,
+        completed_at=COMPLETED_AT,
+        failure=WorkflowStepFailure(
+            exception_type="RuntimeError",
+            message="Transient usage-test failure.",
+        ),
+    )
+
+
+def create_tool_binding(
+    *,
+    tool_id: UUID = TOOL_ID,
+    implementation_id: UUID = IMPLEMENTATION_ID,
+    tool_version: str = TOOL_VERSION,
+    runtime: str = TOOL_RUNTIME,
+) -> StrategyResourceBinding:
+    """Create tool resource provenance matching tool strategy emission."""
+
+    return StrategyResourceBinding(
+        kind="tool",
+        identifier=str(implementation_id),
+        attributes={
+            "tool_id": str(tool_id),
+            "tool_version": tool_version,
+            "runtime": runtime,
+        },
+    )
+
+
 def create_step_run(
     *,
     step_id: UUID = FIRST_STEP_ID,
@@ -149,6 +194,9 @@ def create_step_run(
     attempts: tuple[WorkflowStepAttempt, ...] | None = None,
 ) -> WorkflowStepRun:
     """Create one deterministic executed workflow step."""
+
+    resolved_execution: ExecutionResult
+    resolved_attempts: tuple[WorkflowStepAttempt, ...]
 
     if attempts is None:
         resolved_execution = execution if execution is not None else create_execution_result()
@@ -783,4 +831,331 @@ def test_historical_model_usages_preserves_matching_attempts() -> None:
     ) == (
         1,
         2,
+    )
+
+
+def test_historical_model_usages_ignores_failed_attempts() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                attempts=(
+                    create_failed_attempt(
+                        attempt_number=1,
+                    ),
+                    create_attempt(
+                        attempt_number=2,
+                        execution=create_execution_result(
+                            resources=(
+                                StrategyResourceBinding(
+                                    kind="model",
+                                    identifier=MODEL_IDENTIFIER,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert tuple(
+        usage.attempt_number
+        for usage in historical_model_usages(
+            run,
+            MODEL_IDENTIFIER,
+        )
+    ) == (2,)
+
+
+def test_historical_model_usages_ignores_tool_resources() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=MODEL_IDENTIFIER,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_model_usages(
+            run,
+            MODEL_IDENTIFIER,
+        )
+        == ()
+    )
+
+
+def test_historical_tool_usages_reports_matching_execution() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(create_tool_binding(),),
+                ),
+            ),
+        ),
+    )
+
+    usages = historical_tool_usages(
+        run,
+        TOOL_ID,
+    )
+
+    assert len(usages) == 1
+    assert usages[0].step_id == FIRST_STEP_ID
+    assert usages[0].attempt_number == 1
+    assert usages[0].implementation_id == IMPLEMENTATION_ID
+    assert usages[0].tool_id == TOOL_ID
+    assert usages[0].tool_version == TOOL_VERSION
+    assert usages[0].runtime == TOOL_RUNTIME
+
+
+def test_historical_tool_usages_ignores_different_tool() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        create_tool_binding(
+                            tool_id=OTHER_TOOL_ID,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+        == ()
+    )
+
+
+def test_historical_tool_usages_ignores_model_resources() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="model",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_id": str(TOOL_ID),
+                                "tool_version": TOOL_VERSION,
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+        == ()
+    )
+
+
+def test_historical_tool_usages_skips_incomplete_provenance() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_id": str(TOOL_ID),
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_id": str(TOOL_ID),
+                                "tool_version": TOOL_VERSION,
+                            },
+                        ),
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_version": TOOL_VERSION,
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_id": 42,
+                                "tool_version": TOOL_VERSION,
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+        == ()
+    )
+
+
+def test_historical_tool_usages_skips_malformed_identities() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier="not-a-uuid",
+                            attributes={
+                                "tool_id": str(TOOL_ID),
+                                "tool_version": TOOL_VERSION,
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                        StrategyResourceBinding(
+                            kind="tool",
+                            identifier=str(IMPLEMENTATION_ID),
+                            attributes={
+                                "tool_id": "not-a-uuid",
+                                "tool_version": TOOL_VERSION,
+                                "runtime": TOOL_RUNTIME,
+                            },
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert (
+        historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+        == ()
+    )
+
+
+def test_historical_tool_usages_ignores_failed_attempts() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                attempts=(
+                    create_failed_attempt(
+                        attempt_number=1,
+                    ),
+                    create_attempt(
+                        attempt_number=2,
+                        execution=create_execution_result(
+                            resources=(create_tool_binding(),),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert tuple(
+        usage.attempt_number
+        for usage in historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+    ) == (2,)
+
+
+def test_historical_tool_usages_preserves_step_and_implementation_order() -> None:
+    run = create_workflow_run(
+        step_runs=(
+            create_step_run(
+                step_id=FIRST_STEP_ID,
+                execution=create_execution_result(
+                    resources=(create_tool_binding(),),
+                ),
+            ),
+            create_step_run(
+                step_id=SECOND_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        create_tool_binding(
+                            tool_id=OTHER_TOOL_ID,
+                        ),
+                    ),
+                ),
+            ),
+            create_step_run(
+                step_id=THIRD_STEP_ID,
+                execution=create_execution_result(
+                    resources=(
+                        create_tool_binding(
+                            implementation_id=OTHER_IMPLEMENTATION_ID,
+                            tool_version="2.0.0",
+                            runtime="javascript",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert tuple(
+        (
+            usage.step_id,
+            usage.implementation_id,
+            usage.tool_version,
+            usage.runtime,
+        )
+        for usage in historical_tool_usages(
+            run,
+            TOOL_ID,
+        )
+    ) == (
+        (
+            FIRST_STEP_ID,
+            IMPLEMENTATION_ID,
+            TOOL_VERSION,
+            TOOL_RUNTIME,
+        ),
+        (
+            THIRD_STEP_ID,
+            OTHER_IMPLEMENTATION_ID,
+            "2.0.0",
+            "javascript",
+        ),
     )
