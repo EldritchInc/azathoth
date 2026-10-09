@@ -43,6 +43,7 @@ from azathoth.cli.parsing import build_parser
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
+    WorkflowRunSource,
     render_model_usage_report,
     render_production_invocation_result,
     render_tool_usage_report,
@@ -91,6 +92,7 @@ __all__ = [
     "DEFAULT_DATABASE",
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
+    "WorkflowRunSource",
     "authorize_model",
     "build_parser",
     "compare_benchmarks",

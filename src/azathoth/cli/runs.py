@@ -8,12 +8,14 @@ from pydantic import JsonValue, ValidationError
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
+    WorkflowRunSource,
     render_workflow_run,
     render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
 from azathoth.workflows import (
     SQLiteProductionInvocationRunRepository,
+    SQLiteWorkflowExperimentRepository,
     SQLiteWorkflowRepository,
     SQLiteWorkflowRunFeedbackRepository,
     SQLiteWorkflowRunRepository,
@@ -67,11 +69,9 @@ def list_workflow_runs(
     if not newest_first:
         return 0
 
-    production_run_ids = frozenset(
-        association.run_id
-        for association in SQLiteProductionInvocationRunRepository(
-            configuration.database,
-        ).associations()
+    run_sources = _run_sources(
+        configuration,
+        workflow_id,
     )
 
     latest_dispositions = _latest_dispositions(
@@ -83,7 +83,7 @@ def list_workflow_runs(
     print(
         render_workflow_run_summaries(
             newest_first,
-            production_run_ids=production_run_ids,
+            run_sources=run_sources,
             latest_dispositions=latest_dispositions,
         )
     )
@@ -189,6 +189,32 @@ def record_run_feedback(
     print(f"Recorded {disposition.value} feedback {feedback.id} for run {run_id}.")
 
     return 0
+
+
+def _run_sources(
+    configuration: CliRuntimeConfiguration,
+    workflow_id: UUID,
+) -> dict[UUID, WorkflowRunSource]:
+    """Return the known source of each run that did not come from configured execution.
+
+    Runs observed by an experiment came from optimization. Runs associated with
+    a production invocation came from production and take precedence.
+    """
+
+    sources: dict[UUID, WorkflowRunSource] = {
+        observation.run_id: WorkflowRunSource.EXPERIMENT
+        for experiment in SQLiteWorkflowExperimentRepository(
+            configuration.database,
+        ).experiments_for_workflow(workflow_id)
+        for observation in experiment.observations
+    }
+
+    for association in SQLiteProductionInvocationRunRepository(
+        configuration.database,
+    ).associations():
+        sources[association.run_id] = WorkflowRunSource.PRODUCTION
+
+    return sources
 
 
 def _validation_message(

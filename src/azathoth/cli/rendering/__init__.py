@@ -18,7 +18,10 @@ from azathoth.cli.rendering.optimization import (
 from azathoth.cli.rendering.promotions import (
     render_workflow_promotion,
 )
-from azathoth.cli.rendering.run_summaries import render_workflow_run_summaries
+from azathoth.cli.rendering.run_summaries import (
+    WorkflowRunSource,
+    render_workflow_run_summaries,
+)
 from azathoth.cli.rendering.runs import render_workflow_run
 from azathoth.cli.rendering.usage import (
     render_model_usage_report,
@@ -26,6 +29,7 @@ from azathoth.cli.rendering.usage import (
 )
 
 __all__ = [
+    "WorkflowRunSource",
     "render_model_usage_report",
     "render_production_invocation_result",
     "render_tool_usage_report",
