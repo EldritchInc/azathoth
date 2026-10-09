@@ -22,6 +22,10 @@ from azathoth.cli.configuration import (
     CliRuntimeConfiguration,
 )
 from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.experiments import (
+    list_workflow_experiments,
+    show_experiment,
+)
 from azathoth.cli.goals import (
     import_goal,
     list_goals,
@@ -109,6 +113,7 @@ __all__ = [
     "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
+    "list_workflow_experiments",
     "list_workflow_runs",
     "list_workflows",
     "load_runtime",
@@ -137,6 +142,7 @@ __all__ = [
     "show_run",
     "show_benchmark",
     "show_benchmark_case",
+    "show_experiment",
     "show_goal",
     "show_tool",
     "show_tool_implementation",
