@@ -32,9 +32,12 @@ from azathoth.workflows import (
     ProductionInvocationFailure,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
+    SQLiteWorkflowExperimentRepository,
     SQLiteWorkflowProductionRevisionRepository,
     SQLiteWorkflowProductionStateRepository,
+    SQLiteWorkflowRunEvaluationRepository,
     SQLiteWorkflowRunRepository,
+    WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowScoringPolicy,
 )
@@ -178,7 +181,11 @@ def optimize_workflow(
     target_cost_usd: float,
     generations: int,
 ) -> int:
-    """Empirically optimize one configured workflow."""
+    """Empirically optimize one configured workflow and persist its evidence.
+
+    Every generation's candidate runs, evaluations, and experiment record are
+    saved to the configured database, so the session can be inspected later.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -199,6 +206,17 @@ def optimize_workflow(
                     target_cost_usd=target_cost_usd,
                 ),
                 max_generations=generations,
+                recorder=WorkflowExperimentEvidenceRecorder(
+                    runs=SQLiteWorkflowRunRepository(
+                        configuration.database,
+                    ),
+                    evaluations=SQLiteWorkflowRunEvaluationRepository(
+                        configuration.database,
+                    ),
+                    experiments=SQLiteWorkflowExperimentRepository(
+                        configuration.database,
+                    ),
+                ),
             )
         )
     except (
