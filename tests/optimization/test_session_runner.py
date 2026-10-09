@@ -503,7 +503,11 @@ def test_session_runner_stops_at_requested_generation_limit() -> None:
 
 
 def test_session_runner_is_deterministic() -> None:
-    """Equivalent runs should produce equivalent optimization histories."""
+    """Equivalent runs should produce equivalent optimization histories.
+
+    Every experiment is a distinct execution with its own identity, so
+    determinism is asserted over everything except experiment identity.
+    """
 
     candidates = create_candidates()
 
@@ -533,4 +537,27 @@ def test_session_runner_is_deterministic() -> None:
         )
     )
 
-    assert first == second
+    assert first.initial_candidates == second.initial_candidates
+    assert len(first.generations) == len(second.generations)
+
+    for first_generation, second_generation in zip(
+        first.generations,
+        second.generations,
+        strict=True,
+    ):
+        assert first_generation.generation == second_generation.generation
+        assert first_generation.candidates == second_generation.candidates
+        assert first_generation.previous_experiment.evidence == (
+            second_generation.previous_experiment.evidence
+        )
+        assert first_generation.previous_experiment.ranking == (
+            second_generation.previous_experiment.ranking
+        )
+
+    experiment_ids = [
+        generation.previous_experiment.id
+        for session in (first, second)
+        for generation in session.generations
+    ]
+
+    assert len(experiment_ids) == len(set(experiment_ids))
