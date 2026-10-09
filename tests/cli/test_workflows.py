@@ -488,16 +488,21 @@ def test_workflow_show_does_not_require_openrouter_credentials(
 
 def test_optimize_workflow_renders_optimization_session(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     session = create_optimization_session()
 
     runtime = object()
 
+    configuration = CliRuntimeConfiguration(
+        database=tmp_path / "azathoth.db",
+    )
+
     monkeypatch.setattr(
         CliRuntimeConfiguration,
         "from_environment",
-        lambda: object(),
+        lambda: configuration,
     )
 
     monkeypatch.setattr(
@@ -540,15 +545,20 @@ def test_optimize_workflow_renders_optimization_session(
 
 def test_optimize_workflow_preserves_operator_optimization_inputs(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     received: dict[str, object] = {}
 
     runtime = object()
 
+    configuration = CliRuntimeConfiguration(
+        database=tmp_path / "azathoth.db",
+    )
+
     monkeypatch.setattr(
         CliRuntimeConfiguration,
         "from_environment",
-        lambda: object(),
+        lambda: configuration,
     )
 
     monkeypatch.setattr(
