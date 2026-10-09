@@ -21,6 +21,13 @@ from azathoth.cli.parsing.benchmarks import (
     add_benchmark_parser,
 )
 from azathoth.cli.parsing.common import COMMAND_ATTRIBUTE
+from azathoth.cli.parsing.experiments import (
+    EXPERIMENT_ACTION_ATTRIBUTE,
+    EXPERIMENT_COMMAND,
+    EXPERIMENT_ID_ATTRIBUTE,
+    EXPERIMENT_SHOW_ACTION,
+    add_experiment_parser,
+)
 from azathoth.cli.parsing.goals import (
     GOAL_ACTION_ATTRIBUTE,
     GOAL_COMMAND,
@@ -83,6 +90,8 @@ from azathoth.cli.parsing.workflows import (
     WORKFLOW_ACTION_ATTRIBUTE,
     WORKFLOW_COMMAND,
     WORKFLOW_DOCUMENT_ATTRIBUTE,
+    WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
+    WORKFLOW_EXPERIMENTS_ACTION,
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
@@ -120,6 +129,8 @@ def build_parser() -> ArgumentParser:
 
     add_run_parser(commands)
 
+    add_experiment_parser(commands)
+
     add_model_parser(commands)
 
     add_tool_parser(commands)
@@ -148,6 +159,10 @@ __all__ = [
     "BENCHMARK_WORKFLOW_IDS_ATTRIBUTE",
     "COMMAND_ATTRIBUTE",
     "EXPECTED_VALUE_ATTRIBUTE",
+    "EXPERIMENT_ACTION_ATTRIBUTE",
+    "EXPERIMENT_COMMAND",
+    "EXPERIMENT_ID_ATTRIBUTE",
+    "EXPERIMENT_SHOW_ACTION",
     "GENERATIONS_ATTRIBUTE",
     "GOAL_ACTION_ATTRIBUTE",
     "GOAL_COMMAND",
@@ -196,6 +211,8 @@ __all__ = [
     "WORKFLOW_ACTION_ATTRIBUTE",
     "WORKFLOW_COMMAND",
     "WORKFLOW_DOCUMENT_ATTRIBUTE",
+    "WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE",
+    "WORKFLOW_EXPERIMENTS_ACTION",
     "WORKFLOW_ID_ATTRIBUTE",
     "WORKFLOW_IMPORT_ACTION",
     "WORKFLOW_INPUT_ATTRIBUTE",
