@@ -3,7 +3,10 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from azathoth.cli import render_workflow_run_summaries
+from azathoth.cli import (
+    WorkflowRunSource,
+    render_workflow_run_summaries,
+)
 from azathoth.context import Context
 from azathoth.execution import ExecutionResult
 from azathoth.workflows import (
@@ -134,7 +137,7 @@ def failed_run(
 def test_summary_renders_configured_successful_run() -> None:
     rendered = render_workflow_run_summaries(
         (successful_run(FIRST_RUN_ID),),
-        production_run_ids=frozenset(),
+        run_sources={},
         latest_dispositions={},
     )
 
@@ -146,12 +149,28 @@ def test_summary_renders_configured_successful_run() -> None:
 def test_summary_renders_production_failed_run_with_aligned_status() -> None:
     rendered = render_workflow_run_summaries(
         (failed_run(FIRST_RUN_ID),),
-        production_run_ids=frozenset({FIRST_RUN_ID}),
+        run_sources={
+            FIRST_RUN_ID: WorkflowRunSource.PRODUCTION,
+        },
         latest_dispositions={},
     )
 
     assert rendered == (
         f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  failed     0.250s  production  -"
+    )
+
+
+def test_summary_renders_experiment_run() -> None:
+    rendered = render_workflow_run_summaries(
+        (successful_run(FIRST_RUN_ID),),
+        run_sources={
+            FIRST_RUN_ID: WorkflowRunSource.EXPERIMENT,
+        },
+        latest_dispositions={},
+    )
+
+    assert rendered == (
+        f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  succeeded  1.500s  experiment  -"
     )
 
 
@@ -164,7 +183,9 @@ def test_summary_preserves_given_order_one_line_per_run() -> None:
             ),
             successful_run(FIRST_RUN_ID),
         ),
-        production_run_ids=frozenset({SECOND_RUN_ID}),
+        run_sources={
+            SECOND_RUN_ID: WorkflowRunSource.PRODUCTION,
+        },
         latest_dispositions={},
     )
 
@@ -181,7 +202,7 @@ def test_summary_of_no_runs_is_empty() -> None:
     assert (
         render_workflow_run_summaries(
             (),
-            production_run_ids=frozenset(),
+            run_sources={},
             latest_dispositions={},
         )
         == ""
@@ -194,7 +215,7 @@ def test_summary_renders_latest_disposition_per_run() -> None:
             successful_run(SECOND_RUN_ID),
             failed_run(FIRST_RUN_ID),
         ),
-        production_run_ids=frozenset(),
+        run_sources={},
         latest_dispositions={
             SECOND_RUN_ID: WorkflowRunFeedbackDisposition.GOOD,
             FIRST_RUN_ID: WorkflowRunFeedbackDisposition.BAD,
