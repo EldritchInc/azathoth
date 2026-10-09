@@ -46,6 +46,9 @@ from azathoth.workflows.experiment_record import (
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
 )
+from azathoth.workflows.experiment_recorder import (
+    WorkflowExperimentEvidenceRecorder,
+)
 from azathoth.workflows.experiment_repository import (
     WorkflowExperimentRepository,
 )
@@ -307,6 +310,7 @@ __all__ = [
     "WorkflowDocumentError",
     "WorkflowEvaluation",
     "WorkflowExperimentEvidence",
+    "WorkflowExperimentEvidenceRecorder",
     "WorkflowExperimentObservation",
     "WorkflowExperimentRecord",
     "WorkflowExperimentRepository",

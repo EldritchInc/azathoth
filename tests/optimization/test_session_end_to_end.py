@@ -272,7 +272,13 @@ def test_workflow_optimization_session_end_to_end() -> None:
         BEST_WORKFLOW_ID,
     )
 
-    assert first_generation.previous_experiment == second_generation.previous_experiment
+    assert first_generation.previous_experiment.evidence == (
+        second_generation.previous_experiment.evidence
+    )
+    assert first_generation.previous_experiment.ranking == (
+        second_generation.previous_experiment.ranking
+    )
+    assert first_generation.previous_experiment.id != second_generation.previous_experiment.id
 
 
 def test_workflow_optimization_session_survives_candidate_execution_failure() -> None:

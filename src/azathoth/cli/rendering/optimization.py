@@ -45,6 +45,7 @@ def render_workflow_optimization_session(
             (
                 "",
                 f"Generation {result.generation}",
+                f"Experiment ID: {experiment.id}",
                 f"Evaluated Candidates: {len(experiment.evidence)}",
                 "Winner:",
             )

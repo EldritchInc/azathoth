@@ -15,6 +15,7 @@ from azathoth.optimization import (
 )
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
+    WorkflowExperimentEvidenceRecorder,
     WorkflowExperimentRunner,
     WorkflowScorer,
     WorkflowScoringPolicy,
@@ -30,8 +31,13 @@ async def optimize_configured_workflow(
     max_generations: int,
     context: Context | None = None,
     evaluator: Evaluator | None = None,
+    recorder: WorkflowExperimentEvidenceRecorder | None = None,
 ) -> WorkflowOptimizationSession:
-    """Run empirical model-substitution optimization for one workflow."""
+    """Run empirical model-substitution optimization for one workflow.
+
+    When a recorder is supplied, every generation's candidate runs,
+    evaluations, and experiment record are persisted as durable evidence.
+    """
 
     initial_candidate = runtime.generate_workflow_candidate(
         workflow_id,
@@ -41,6 +47,7 @@ async def optimize_configured_workflow(
         scorer=WorkflowScorer(
             policy=scoring_policy,
         ),
+        recorder=recorder,
     )
 
     optimizer = ModelSubstitutionWorkflowOptimizer(

@@ -15,11 +15,16 @@ from azathoth.cli.benchmarks import (
 )
 from azathoth.cli.dispatching import (
     dispatch_benchmark_command,
+    dispatch_experiment_command,
     dispatch_goal_command,
     dispatch_model_command,
     dispatch_run_command,
     dispatch_tool_command,
     dispatch_workflow_command,
+)
+from azathoth.cli.experiments import (
+    list_workflow_experiments,
+    show_experiment,
 )
 from azathoth.cli.goals import (
     import_goal,
@@ -36,6 +41,7 @@ from azathoth.cli.models import (
 from azathoth.cli.parsing import (
     BENCHMARK_COMMAND,
     COMMAND_ATTRIBUTE,
+    EXPERIMENT_COMMAND,
     GOAL_COMMAND,
     MODEL_COMMAND,
     RUN_COMMAND,
@@ -132,6 +138,7 @@ def _dispatch(
             arguments,
             import_workflow=import_workflow,
             invoke_workflow=invoke_workflow,
+            list_workflow_experiments=list_workflow_experiments,
             list_workflow_runs=list_workflow_runs,
             list_workflows=list_workflows,
             optimize_workflow=optimize_workflow,
@@ -145,6 +152,12 @@ def _dispatch(
             arguments,
             record_run_feedback=record_run_feedback,
             show_run=show_run,
+        )
+
+    if command == EXPERIMENT_COMMAND:
+        return dispatch_experiment_command(
+            arguments,
+            show_experiment=show_experiment,
         )
 
     if command == MODEL_COMMAND:

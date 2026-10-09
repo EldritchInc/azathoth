@@ -15,6 +15,7 @@ WORKFLOW_COMMAND = "workflow"
 
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 
+WORKFLOW_EXPERIMENTS_ACTION = "experiments"
 WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_INVOKE_ACTION = "invoke"
 WORKFLOW_LIST_ACTION = "list"
@@ -25,6 +26,7 @@ WORKFLOW_RUNS_ACTION = "runs"
 WORKFLOW_SHOW_ACTION = "show"
 
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
+WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE = "workflow_experiment_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
@@ -169,6 +171,27 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to promote.",
+    )
+
+    workflow_experiments_parser = workflow_actions.add_parser(
+        WORKFLOW_EXPERIMENTS_ACTION,
+        help="List persisted experiments of one workflow, newest first.",
+    )
+
+    workflow_experiments_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose experiments to list.",
+    )
+
+    workflow_experiments_parser.add_argument(
+        "--limit",
+        dest=WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent experiments to list.",
     )
 
     workflow_runs_parser = workflow_actions.add_parser(

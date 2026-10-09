@@ -71,6 +71,8 @@ azathoth
 │   ├── promote <WORKFLOW_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   └── --input <JSON>
+│   ├── experiments <WORKFLOW_ID>
+│   │   └── --limit <COUNT>
 │   └── runs <WORKFLOW_ID>
 │       └── --limit <COUNT>
 │
@@ -80,6 +82,9 @@ azathoth
 │       ├── --good | --bad          (exactly one)
 │       ├── --reason <TEXT>         (required with --bad)
 │       └── --corrected-output <JSON>   (only with --bad)
+│
+├── experiment
+│   └── show <EXPERIMENT_ID>
 │
 ├── model
 │   ├── list
@@ -406,6 +411,7 @@ azathoth --help
 azathoth --version
 azathoth workflow --help
 azathoth run --help
+azathoth experiment --help
 azathoth model --help
 azathoth tool --help
 azathoth goal --help
@@ -660,16 +666,21 @@ candidate generation fails
 The rendered output includes the run ID, so a run can be revisited later with
 `run show`.
 
-Configured runs and production runs share one durable run history. They are
-distinguished by association, not by separate storage:
+Configured, experiment, and production runs share one durable run history.
+They are distinguished by association, not by separate storage:
 
 ```text
 WorkflowRun associated with a ProductionInvocation
     production run
 
+WorkflowRun observed by a WorkflowExperimentRecord
+    experiment run
+
 every other persisted WorkflowRun
     configured run
 ```
+
+When a run is both, production takes precedence.
 
 Persisted configured runs also feed the history half of `model usage` and
 `tool usage`.
@@ -694,6 +705,7 @@ Runs are listed newest first, one line per run:
 
 ```text
 <RUN_ID>  2026-10-02T12:10:00+00:00  succeeded  1.500s  configured  good
+<RUN_ID>  2026-10-02T12:07:00+00:00  succeeded  0.900s  experiment  -
 <RUN_ID>  2026-10-02T12:05:00+00:00  failed     0.250s  production  -
 ```
 
@@ -955,6 +967,131 @@ WorkflowOptimizationSession
 
 The completed session is rendered to the operator.
 
+# Optimization Evidence Is Persisted
+
+Every generation of `workflow optimize` leaves durable evidence:
+
+```text
+each candidate execution
+    WorkflowRun                 persisted, succeeded or failed
+
+each successful execution
+    WorkflowRunEvaluation       persisted
+
+each generation
+    WorkflowExperimentRecord    persisted
+```
+
+An experiment record holds one observation per successfully executed
+candidate, each referencing its run, its evaluation, its candidate signature,
+and its scorecard, plus the ranking of those runs.
+
+The record shares the identity of the in-memory experiment result, so the
+rendered session names it directly:
+
+```text
+Generation 1
+Experiment ID: <EXPERIMENT_ID>
+Evaluated Candidates: 2
+```
+
+From there the evidence chain is navigable from bash:
+
+```text
+workflow optimize
+        │
+        ▼
+Experiment ID ──► experiment show
+                        │
+                        ▼
+                 Run ID ──► run show / run feedback
+```
+
+A generation in which every candidate fails raises before ranking. Its failed
+runs remain persisted; no experiment record is written.
+
+Failed candidates appear as runs but not as experiment observations, because
+records hold only scored, ranked observations. As a consequence a failed
+optimization candidate is currently listed with the `configured` source.
+
+# List Workflow Experiments
+
+List persisted experiments containing one workflow with:
+
+```bash
+azathoth workflow experiments <WORKFLOW_ID>
+```
+
+Limit the listing to the most recent experiments with:
+
+```bash
+azathoth workflow experiments <WORKFLOW_ID> --limit <COUNT>
+```
+
+`--limit` must be a positive integer.
+
+Experiments are listed newest first, one line per experiment:
+
+```text
+<EXPERIMENT_ID>  2026-10-09T16:05:00+00:00  2 candidates  winner <RUN_ID>  overall 0.900000
+```
+
+Each line contains the experiment ID, recorded time, candidate count, winning
+run, and winning overall score.
+
+A configured workflow with no experiments prints nothing and exits
+successfully.
+
+Experiments of a workflow since removed from configuration remain listable.
+
+An identifier that is neither configured nor present in experiment history
+fails with:
+
+```text
+Workflow <WORKFLOW_ID> is not configured.
+```
+
+# Show an Experiment
+
+Inspect one persisted experiment with:
+
+```bash
+azathoth experiment show <EXPERIMENT_ID>
+```
+
+The experiment is rendered with every observation in rank order, not
+candidate order:
+
+```text
+Experiment ID: <EXPERIMENT_ID>
+Recorded: 2026-10-09T16:05:00+00:00
+Candidates: 2
+Winner Run ID: <RUN_ID>
+
+Rank 1
+Workflow: summarize
+Workflow ID: <WORKFLOW_ID>
+Run ID: <RUN_ID>
+Evaluation ID: <EVALUATION_ID>
+Strategy IDs: <STRATEGY_ID>
+Quality: 1.000000
+Reliability: 1.000000
+Latency: 0.950000
+Cost: 0.800000
+Overall: 0.900000
+```
+
+A scorecard rationale is rendered when one was recorded.
+
+An unknown experiment fails with:
+
+```text
+Experiment <EXPERIMENT_ID> was not found.
+```
+
+`workflow experiments` and `experiment show` read durable state only. They do
+not require provider credentials or runtime bootstrap.
+
 # Optimization Does Not Promote
 
 This is one of the most important V1 CLI boundaries.
@@ -971,7 +1108,7 @@ WorkflowProductionState
 
 and does not automatically deploy the optimizer's empirical winner.
 
-Optimization produces evidence and candidate-search results.
+Optimization produces durable evidence and candidate-search results.
 
 Production promotion is a separate explicit operator action.
 
@@ -1759,6 +1896,8 @@ WorkflowRun summaries
 
 WorkflowRunFeedback
 
+WorkflowExperimentRecord / WorkflowExperimentRecord summaries
+
 WorkflowOptimizationSession
 
 WorkflowProductionRevision
@@ -1836,9 +1975,16 @@ expected outcome
 workflow scoring policy
 
 generation limit
+
+evidence recorder
 ```
 
 into a `WorkflowOptimizationSession`.
+
+The installed CLI always supplies a SQLite-backed
+`WorkflowExperimentEvidenceRecorder`, so every generation's runs,
+evaluations, and experiment record are persisted. Without a recorder, the
+application service behaves exactly as before and keeps no evidence.
 
 The CLI command supplies operator parameters.
 
@@ -1919,6 +2065,10 @@ production states
 production revisions
 
 workflow runs
+
+workflow run evaluations
+
+workflow experiments
 
 workflow run feedback
 
@@ -2064,7 +2214,10 @@ The complete operator-facing workflow path is:
             WorkflowOptimizationSession
                          │
                          ▼
-             evidence / candidate search
+      runs / evaluations / experiment records
+                         │
+                         ▼
+        workflow experiments / experiment show
 
 
                    EXPLICIT PROMOTION
@@ -2130,6 +2283,10 @@ run execution
 run feedback
     ≠
 run mutation
+
+experiment evidence
+    ≠
+experiment outcome
 
 configured execution
     ≠

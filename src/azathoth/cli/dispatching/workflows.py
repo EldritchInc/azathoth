@@ -15,6 +15,8 @@ from azathoth.cli.parsing import (
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ACTION_ATTRIBUTE,
     WORKFLOW_DOCUMENT_ATTRIBUTE,
+    WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
+    WORKFLOW_EXPERIMENTS_ACTION,
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
@@ -33,7 +35,7 @@ WorkflowImportHandler = Callable[[Path], int]
 WorkflowListHandler = Callable[[], int]
 WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
-WorkflowRunsHandler = Callable[..., int]
+WorkflowHistoryHandler = Callable[..., int]
 
 
 def dispatch_workflow_command(
@@ -41,7 +43,8 @@ def dispatch_workflow_command(
     *,
     import_workflow: WorkflowImportHandler,
     invoke_workflow: WorkflowInvokeHandler,
-    list_workflow_runs: WorkflowRunsHandler,
+    list_workflow_experiments: WorkflowHistoryHandler,
+    list_workflow_runs: WorkflowHistoryHandler,
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowIdentifierHandler,
@@ -109,6 +112,25 @@ def dispatch_workflow_command(
                 getattr(
                     arguments,
                     WORKFLOW_RUN_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == WORKFLOW_EXPERIMENTS_ACTION:
+        return list_workflow_experiments(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
                     None,
                 ),
             ),

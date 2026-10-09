@@ -22,6 +22,10 @@ from azathoth.cli.configuration import (
     CliRuntimeConfiguration,
 )
 from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.experiments import (
+    list_workflow_experiments,
+    show_experiment,
+)
 from azathoth.cli.goals import (
     import_goal,
     list_goals,
@@ -39,11 +43,14 @@ from azathoth.cli.parsing import build_parser
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
+    WorkflowRunSource,
     render_model_usage_report,
     render_production_invocation_result,
     render_tool_usage_report,
     render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
+    render_workflow_experiment,
+    render_workflow_experiment_summaries,
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
@@ -85,6 +92,7 @@ __all__ = [
     "DEFAULT_DATABASE",
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
+    "WorkflowRunSource",
     "authorize_model",
     "build_parser",
     "compare_benchmarks",
@@ -107,6 +115,7 @@ __all__ = [
     "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
+    "list_workflow_experiments",
     "list_workflow_runs",
     "list_workflows",
     "load_runtime",
@@ -122,6 +131,8 @@ __all__ = [
     "render_tool_usage_report",
     "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
+    "render_workflow_experiment",
+    "render_workflow_experiment_summaries",
     "render_workflow_optimization_session",
     "render_workflow_promotion",
     "render_workflow_run",
@@ -133,6 +144,7 @@ __all__ = [
     "show_run",
     "show_benchmark",
     "show_benchmark_case",
+    "show_experiment",
     "show_goal",
     "show_tool",
     "show_tool_implementation",

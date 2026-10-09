@@ -3,6 +3,7 @@
 from azathoth.cli.dispatching.benchmarks import (
     dispatch_benchmark_command,
 )
+from azathoth.cli.dispatching.experiments import dispatch_experiment_command
 from azathoth.cli.dispatching.goals import dispatch_goal_command
 from azathoth.cli.dispatching.models import dispatch_model_command
 from azathoth.cli.dispatching.runs import dispatch_run_command
@@ -11,6 +12,7 @@ from azathoth.cli.dispatching.workflows import dispatch_workflow_command
 
 __all__ = [
     "dispatch_benchmark_command",
+    "dispatch_experiment_command",
     "dispatch_goal_command",
     "dispatch_model_command",
     "dispatch_run_command",
