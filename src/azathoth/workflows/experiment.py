@@ -1,5 +1,7 @@
 """Workflow experiment models."""
 
+from uuid import UUID, uuid4
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -22,10 +24,15 @@ class WorkflowExperimentEvidence(BaseModel):
 
 
 class WorkflowExperimentResult(BaseModel):
-    """The immutable result of comparing multiple workflow executions."""
+    """The immutable result of comparing multiple workflow executions.
+
+    Each result has its own identity, so a durable experiment record can share
+    it and operators can trace an optimization generation to that record.
+    """
 
     model_config = ConfigDict(frozen=True)
 
+    id: UUID = Field(default_factory=uuid4)
     evidence: tuple[WorkflowExperimentEvidence, ...] = Field(
         min_length=1,
     )
