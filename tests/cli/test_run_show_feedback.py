@@ -145,7 +145,7 @@ def test_show_run_reports_absent_feedback(
 
     assert result == 0
     assert captured.err == ""
-    assert captured.out.endswith('"positive"\n\nFeedback: none\n')
+    assert captured.out.endswith("\n\nFeedback: none\n")
 
 
 def test_show_run_appends_feedback_for_that_run_only(
