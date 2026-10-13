@@ -27,6 +27,11 @@ from azathoth.evaluation.models import (
     ExpectedOutcome,
     OutcomeComparison,
 )
+from azathoth.evaluation.normalized import (
+    NormalizedMatchEvaluator,
+    normalize_json_value,
+    normalize_text,
+)
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
@@ -48,6 +53,7 @@ __all__ = [
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
     "JsonDifference",
+    "NormalizedMatchEvaluator",
     "OutcomeComparison",
     "SQLiteBenchmarkRepository",
     "decode_benchmark_document",
@@ -55,5 +61,7 @@ __all__ = [
     "first_json_difference",
     "json_type_name",
     "json_values_equal",
+    "normalize_json_value",
+    "normalize_text",
     "require_benchmark_repository",
 ]

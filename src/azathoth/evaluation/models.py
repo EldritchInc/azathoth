@@ -16,6 +16,7 @@ class OutcomeComparison(StrEnum):
     """The broad comparison method appropriate for an expected outcome."""
 
     EXACT = "exact"
+    NORMALIZED = "normalized"
     SEMANTIC = "semantic"
     SCHEMA = "schema"
 
