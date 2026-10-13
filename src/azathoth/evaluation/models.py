@@ -11,6 +11,8 @@ from pydantic import (
     model_validator,
 )
 
+from azathoth.evaluation.json_schema import json_schema_validator
+
 
 class OutcomeComparison(StrEnum):
     """The broad comparison method appropriate for an expected outcome."""
@@ -36,6 +38,15 @@ class ExpectedOutcome(BaseModel):
     description: str = Field(min_length=1)
     value: JsonValue
     comparison: OutcomeComparison
+
+    @model_validator(mode="after")
+    def validate_schema_expectation(self) -> "ExpectedOutcome":
+        """Reject schema expectations whose value is not a valid JSON Schema."""
+
+        if self.comparison is OutcomeComparison.SCHEMA:
+            json_schema_validator(self.value)
+
+        return self
 
 
 class EvaluationEvidence(BaseModel):
