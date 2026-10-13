@@ -217,3 +217,51 @@ def test_benchmark_rejects_unsupported_comparison_before_executing_any_case() ->
         )
 
     assert created == []
+
+
+def test_benchmark_records_each_case_comparison() -> None:
+    result = asyncio.run(
+        WorkflowBenchmarkRunner().run(
+            create_mixed_dataset(),
+            create_candidate,
+            output_name="classification",
+        )
+    )
+
+    assert [(case.case_id, case.comparison) for case in result.cases] == [
+        (EXACT_CASE_ID, OutcomeComparison.EXACT),
+        (NORMALIZED_CASE_ID, OutcomeComparison.NORMALIZED),
+        (SCHEMA_CASE_ID, OutcomeComparison.SCHEMA),
+    ]
+
+
+def test_benchmark_tallies_passes_per_comparison() -> None:
+    dataset = create_mixed_dataset().model_copy(
+        update={
+            "cases": (
+                *create_mixed_dataset().cases,
+                create_case(
+                    SEMANTIC_CASE_ID,
+                    OutcomeComparison.EXACT,
+                    "a refund, please",
+                ),
+            ),
+        }
+    )
+
+    result = asyncio.run(
+        WorkflowBenchmarkRunner().run(
+            dataset,
+            create_candidate,
+            output_name="classification",
+        )
+    )
+
+    assert [
+        (tally.comparison, tally.cases_passed, tally.cases_run)
+        for tally in result.comparison_tallies
+    ] == [
+        (OutcomeComparison.EXACT, 1, 2),
+        (OutcomeComparison.NORMALIZED, 1, 1),
+        (OutcomeComparison.SCHEMA, 1, 1),
+    ]
