@@ -9,6 +9,10 @@ from azathoth.cli.rendering.experiments import (
     render_workflow_experiment_summaries,
 )
 from azathoth.cli.rendering.feedback import render_workflow_run_feedback
+from azathoth.cli.rendering.invocation_history import (
+    render_production_invocation,
+    render_production_invocation_summaries,
+)
 from azathoth.cli.rendering.invocations import (
     render_production_invocation_result,
 )
@@ -35,7 +39,9 @@ from azathoth.cli.rendering.usage import (
 __all__ = [
     "WorkflowRunSource",
     "render_model_usage_report",
+    "render_production_invocation",
     "render_production_invocation_result",
+    "render_production_invocation_summaries",
     "render_tool_usage_report",
     "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
