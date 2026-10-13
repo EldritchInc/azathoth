@@ -10,6 +10,7 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     EvaluationResult,
+    OutcomeComparison,
     OutcomeEvaluator,
 )
 from azathoth.workflows.candidate import WorkflowCandidate
@@ -32,8 +33,19 @@ class WorkflowBenchmarkCaseResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     case_id: UUID
+    comparison: OutcomeComparison
     run: WorkflowRun
     evaluation: EvaluationResult
+
+
+class WorkflowBenchmarkComparisonTally(BaseModel):
+    """Pass counts for the benchmark cases judged by one comparison."""
+
+    model_config = ConfigDict(frozen=True)
+
+    comparison: OutcomeComparison
+    cases_run: int = Field(ge=0)
+    cases_passed: int = Field(ge=0)
 
 
 class WorkflowBenchmarkResult(BaseModel):
@@ -64,6 +76,33 @@ class WorkflowBenchmarkResult(BaseModel):
             return 0.0
 
         return self.cases_passed / self.cases_run
+
+    @property
+    def comparison_tallies(
+        self,
+    ) -> tuple[WorkflowBenchmarkComparisonTally, ...]:
+        """Return pass counts per comparison, in comparison declaration order.
+
+        Comparisons used by no executed case are omitted.
+        """
+
+        tallies: list[WorkflowBenchmarkComparisonTally] = []
+
+        for comparison in OutcomeComparison:
+            judged = [case for case in self.cases if case.comparison is comparison]
+
+            if not judged:
+                continue
+
+            tallies.append(
+                WorkflowBenchmarkComparisonTally(
+                    comparison=comparison,
+                    cases_run=len(judged),
+                    cases_passed=sum(case.evaluation.passed for case in judged),
+                )
+            )
+
+        return tuple(tallies)
 
     @property
     def total_tokens(self) -> int:
@@ -260,6 +299,7 @@ class WorkflowBenchmarkRunner:
             results.append(
                 WorkflowBenchmarkCaseResult(
                     case_id=case.id,
+                    comparison=case.expected.comparison,
                     run=run,
                     evaluation=evaluation,
                 )

@@ -13,7 +13,11 @@ def render_workflow_benchmark_result(
     *,
     workflow_id: UUID,
 ) -> str:
-    """Render aggregate workflow benchmark evidence."""
+    """Render aggregate workflow benchmark evidence.
+
+    Pass counts are broken down by comparison after overall accuracy, so
+    benchmarks mixing comparisons show which kind of case is failing.
+    """
 
     return "\n".join(
         (
@@ -22,6 +26,10 @@ def render_workflow_benchmark_result(
             f"Cases Run: {result.cases_run}",
             f"Cases Passed: {result.cases_passed}",
             f"Accuracy: {result.accuracy:.6f}",
+            *(
+                f"Passed ({tally.comparison.value}): {tally.cases_passed}/{tally.cases_run}"
+                for tally in result.comparison_tallies
+            ),
             f"Total Tokens: {result.total_tokens}",
             f"Total Latency: {result.total_latency_ms} ms",
             f"Total Cost: ${result.total_cost_usd:.6f}",
