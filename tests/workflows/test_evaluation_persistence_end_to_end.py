@@ -298,13 +298,13 @@ def test_evaluator_evidence_preserves_expected_and_actual_outputs(
 
     evidence = restored.evaluation.evidence
 
-    assert len(evidence) == 2
+    assert evidence == run_evaluation.evaluation.evidence
 
-    assert evidence[0].label == "expected"
-    assert evidence[0].value == "negative"
-
-    assert evidence[1].label == "actual"
-    assert evidence[1].value == "positive"
+    assert [(item.label, item.value) for item in evidence] == [
+        ("expected", "negative"),
+        ("actual", "positive"),
+        ("difference_path", "$"),
+    ]
 
 
 def test_machine_evaluation_and_human_feedback_coexist_for_run(
