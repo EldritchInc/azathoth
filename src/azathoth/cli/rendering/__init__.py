@@ -15,6 +15,10 @@ from azathoth.cli.rendering.invocations import (
 from azathoth.cli.rendering.optimization import (
     render_workflow_optimization_session,
 )
+from azathoth.cli.rendering.production import (
+    render_workflow_production,
+    render_workflow_revision_summaries,
+)
 from azathoth.cli.rendering.promotions import (
     render_workflow_promotion,
 )
@@ -38,7 +42,9 @@ __all__ = [
     "render_workflow_experiment",
     "render_workflow_experiment_summaries",
     "render_workflow_optimization_session",
+    "render_workflow_production",
     "render_workflow_promotion",
+    "render_workflow_revision_summaries",
     "render_workflow_run",
     "render_workflow_run_feedback",
     "render_workflow_run_summaries",
