@@ -10,6 +10,12 @@ from azathoth.evaluation.benchmark_document import (
 )
 from azathoth.evaluation.benchmark_repository import BenchmarkRepository
 from azathoth.evaluation.exact import ExactMatchEvaluator
+from azathoth.evaluation.json_equality import (
+    JsonDifference,
+    first_json_difference,
+    json_type_name,
+    json_values_equal,
+)
 from azathoth.evaluation.memory_benchmark_repository import (
     InMemoryBenchmarkRepository,
     require_benchmark_repository,
@@ -41,9 +47,13 @@ __all__ = [
     "ExactMatchEvaluator",
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
+    "JsonDifference",
     "OutcomeComparison",
     "SQLiteBenchmarkRepository",
     "decode_benchmark_document",
     "encode_benchmark_document",
+    "first_json_difference",
+    "json_type_name",
+    "json_values_equal",
     "require_benchmark_repository",
 ]
