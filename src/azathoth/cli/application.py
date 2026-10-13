@@ -17,6 +17,7 @@ from azathoth.cli.dispatching import (
     dispatch_benchmark_command,
     dispatch_experiment_command,
     dispatch_goal_command,
+    dispatch_invocation_command,
     dispatch_model_command,
     dispatch_run_command,
     dispatch_tool_command,
@@ -43,11 +44,18 @@ from azathoth.cli.parsing import (
     COMMAND_ATTRIBUTE,
     EXPERIMENT_COMMAND,
     GOAL_COMMAND,
+    INVOCATION_COMMAND,
     MODEL_COMMAND,
     RUN_COMMAND,
     TOOL_COMMAND,
     WORKFLOW_COMMAND,
     build_parser,
+)
+from azathoth.cli.production_inspection import (
+    list_workflow_invocations,
+    list_workflow_revisions,
+    show_invocation,
+    show_workflow_production,
 )
 from azathoth.cli.runs import (
     list_workflow_runs,
@@ -139,12 +147,15 @@ def _dispatch(
             import_workflow=import_workflow,
             invoke_workflow=invoke_workflow,
             list_workflow_experiments=list_workflow_experiments,
+            list_workflow_invocations=list_workflow_invocations,
+            list_workflow_revisions=list_workflow_revisions,
             list_workflow_runs=list_workflow_runs,
             list_workflows=list_workflows,
             optimize_workflow=optimize_workflow,
             promote_workflow=promote_workflow,
             run_workflow=run_workflow,
             show_workflow=show_workflow,
+            show_workflow_production=show_workflow_production,
         )
 
     if command == RUN_COMMAND:
@@ -158,6 +169,12 @@ def _dispatch(
         return dispatch_experiment_command(
             arguments,
             show_experiment=show_experiment,
+        )
+
+    if command == INVOCATION_COMMAND:
+        return dispatch_invocation_command(
+            arguments,
+            show_invocation=show_invocation,
         )
 
     if command == MODEL_COMMAND:

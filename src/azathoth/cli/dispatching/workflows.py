@@ -20,10 +20,15 @@ from azathoth.cli.parsing import (
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
+    WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
+    WORKFLOW_INVOCATIONS_ACTION,
     WORKFLOW_INVOKE_ACTION,
     WORKFLOW_LIST_ACTION,
     WORKFLOW_OPTIMIZE_ACTION,
+    WORKFLOW_PRODUCTION_ACTION,
     WORKFLOW_PROMOTE_ACTION,
+    WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
+    WORKFLOW_REVISIONS_ACTION,
     WORKFLOW_RUN_ACTION,
     WORKFLOW_RUN_LIMIT_ATTRIBUTE,
     WORKFLOW_RUNS_ACTION,
@@ -44,12 +49,15 @@ def dispatch_workflow_command(
     import_workflow: WorkflowImportHandler,
     invoke_workflow: WorkflowInvokeHandler,
     list_workflow_experiments: WorkflowHistoryHandler,
+    list_workflow_invocations: WorkflowHistoryHandler,
+    list_workflow_revisions: WorkflowHistoryHandler,
     list_workflow_runs: WorkflowHistoryHandler,
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowIdentifierHandler,
     run_workflow: WorkflowIdentifierHandler,
     show_workflow: WorkflowIdentifierHandler,
+    show_workflow_production: WorkflowIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed workflow command."""
 
@@ -131,6 +139,55 @@ def dispatch_workflow_command(
                 getattr(
                     arguments,
                     WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == WORKFLOW_PRODUCTION_ACTION:
+        return show_workflow_production(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            )
+        )
+
+    if action == WORKFLOW_REVISIONS_ACTION:
+        return list_workflow_revisions(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == WORKFLOW_INVOCATIONS_ACTION:
+        return list_workflow_invocations(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
                     None,
                 ),
             ),
