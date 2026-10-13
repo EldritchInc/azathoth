@@ -41,6 +41,12 @@ from azathoth.cli.models import (
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.parsing import build_parser
 from azathoth.cli.production import invoke_active_production_workflow
+from azathoth.cli.production_inspection import (
+    list_workflow_invocations,
+    list_workflow_revisions,
+    show_invocation,
+    show_workflow_production,
+)
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
     WorkflowRunSource,
@@ -120,6 +126,8 @@ __all__ = [
     "list_tool_versions",
     "list_tools",
     "list_workflow_experiments",
+    "list_workflow_invocations",
+    "list_workflow_revisions",
     "list_workflow_runs",
     "list_workflows",
     "load_runtime",
@@ -154,10 +162,12 @@ __all__ = [
     "show_benchmark_case",
     "show_experiment",
     "show_goal",
+    "show_invocation",
     "show_tool",
     "show_tool_implementation",
     "show_tool_test_case",
     "show_workflow",
+    "show_workflow_production",
     "tool_usage",
     "verify_tool",
 ]
