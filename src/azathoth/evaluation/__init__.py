@@ -37,6 +37,11 @@ from azathoth.evaluation.normalized import (
     normalize_json_value,
     normalize_text,
 )
+from azathoth.evaluation.outcome import (
+    OutcomeEvaluator,
+    UnsupportedComparisonError,
+    default_comparison_evaluators,
+)
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 from azathoth.evaluation.schema import SchemaEvaluator
 from azathoth.evaluation.sqlite_benchmark_repository import (
@@ -62,9 +67,12 @@ __all__ = [
     "JsonSchemaViolation",
     "NormalizedMatchEvaluator",
     "OutcomeComparison",
+    "OutcomeEvaluator",
     "SQLiteBenchmarkRepository",
     "SchemaEvaluator",
+    "UnsupportedComparisonError",
     "decode_benchmark_document",
+    "default_comparison_evaluators",
     "encode_benchmark_document",
     "first_json_difference",
     "json_schema_validator",

@@ -5,8 +5,8 @@ from uuid import UUID
 from azathoth.context import Context
 from azathoth.evaluation import (
     Evaluator,
-    ExactMatchEvaluator,
     ExpectedOutcome,
+    OutcomeEvaluator,
 )
 from azathoth.optimization import (
     ModelSubstitutionWorkflowOptimizer,
@@ -35,9 +35,26 @@ async def optimize_configured_workflow(
 ) -> WorkflowOptimizationSession:
     """Run empirical model-substitution optimization for one workflow.
 
+    Without an explicit evaluator, the expected outcome is judged by the
+    evaluator for its comparison, and an unsupported comparison is rejected
+    before any candidate is generated or executed.
+
     When a recorder is supplied, every generation's candidate runs,
     evaluations, and experiment record are persisted as durable evidence.
+
+    Raises:
+        UnsupportedComparisonError: The default evaluator cannot judge the
+            expected outcome's comparison.
     """
+
+    if evaluator is None:
+        outcome_evaluator = OutcomeEvaluator()
+
+        outcome_evaluator.require_supported(
+            expected_outcome.comparison,
+        )
+
+        evaluator = outcome_evaluator
 
     initial_candidate = runtime.generate_workflow_candidate(
         workflow_id,
@@ -65,7 +82,7 @@ async def optimize_configured_workflow(
     return await session_runner.run(
         initial_candidates=(initial_candidate,),
         context=context if context is not None else Context(),
-        evaluator=evaluator if evaluator is not None else ExactMatchEvaluator(),
+        evaluator=evaluator,
         expected_outcome=expected_outcome,
         max_generations=max_generations,
     )

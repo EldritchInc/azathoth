@@ -10,7 +10,7 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     EvaluationResult,
-    ExactMatchEvaluator,
+    OutcomeEvaluator,
 )
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
@@ -190,10 +190,10 @@ class WorkflowBenchmarkRunner:
     def __init__(
         self,
         runner: WorkflowRunner | None = None,
-        evaluator: ExactMatchEvaluator | None = None,
+        evaluator: OutcomeEvaluator | None = None,
     ) -> None:
         self._runner = runner if runner is not None else WorkflowRunner()
-        self._evaluator = evaluator if evaluator is not None else ExactMatchEvaluator()
+        self._evaluator = evaluator if evaluator is not None else OutcomeEvaluator()
 
     async def run(
         self,
@@ -205,7 +205,22 @@ class WorkflowBenchmarkRunner:
         *,
         output_name: str,
     ) -> WorkflowBenchmarkResult:
-        """Execute and evaluate every case in a benchmark dataset."""
+        """Execute and evaluate every case in a benchmark dataset.
+
+        Every case is evaluated with the evaluator for its own comparison.
+        All comparisons are checked before any case executes, so a dataset
+        containing an unsupported comparison never partially runs.
+
+        Raises:
+            UnsupportedComparisonError: A case uses a comparison with no
+                evaluator.
+        """
+
+        for case in dataset.cases:
+            self._evaluator.require_supported(
+                case.expected.comparison,
+                subject=f"Benchmark case {case.id}",
+            )
 
         results: list[WorkflowBenchmarkCaseResult] = []
 
