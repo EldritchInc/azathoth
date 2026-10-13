@@ -10,6 +10,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
     WorkflowRunSource,
     render_workflow_run,
+    render_workflow_run_evaluations,
     render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
@@ -17,6 +18,7 @@ from azathoth.workflows import (
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowExperimentRepository,
     SQLiteWorkflowRepository,
+    SQLiteWorkflowRunEvaluationRepository,
     SQLiteWorkflowRunFeedbackRepository,
     SQLiteWorkflowRunRepository,
     WorkflowRunFeedback,
@@ -94,7 +96,11 @@ def list_workflow_runs(
 def show_run(
     run_id: UUID,
 ) -> int:
-    """Show one persisted workflow run with step evidence, resources, and feedback."""
+    """Show one persisted workflow run with its evidence and every judgment of it.
+
+    Evaluator judgments follow the run evidence and precede human feedback,
+    each in the order it was recorded.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -110,6 +116,10 @@ def show_run(
 
         return 1
 
+    evaluations = SQLiteWorkflowRunEvaluationRepository(
+        configuration.database,
+    ).evaluations_for_run(run_id)
+
     feedback = SQLiteWorkflowRunFeedbackRepository(
         configuration.database,
     ).feedback_for_run(run_id)
@@ -118,6 +128,7 @@ def show_run(
         "\n\n".join(
             (
                 render_workflow_run(run),
+                render_workflow_run_evaluations(evaluations),
                 render_workflow_run_feedback(feedback),
             )
         )

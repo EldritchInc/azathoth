@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from azathoth.evaluation.models import ExpectedOutcome
+from azathoth.evaluation.models import ExpectedOutcome, OutcomeComparison
 
 
 class BenchmarkCase(BaseModel):
@@ -39,3 +39,18 @@ class BenchmarkDataset(BaseModel):
             raise ValueError("Benchmark dataset cannot contain duplicate case identifiers.")
 
         return self
+
+    def comparison_counts(
+        self,
+    ) -> dict[OutcomeComparison, int]:
+        """Return how many cases use each comparison, in declaration order.
+
+        Comparisons used by no case are omitted.
+        """
+
+        counts = {
+            comparison: sum(case.expected.comparison is comparison for case in self.cases)
+            for comparison in OutcomeComparison
+        }
+
+        return {comparison: count for comparison, count in counts.items() if count}

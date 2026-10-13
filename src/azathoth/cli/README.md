@@ -748,8 +748,8 @@ azathoth run show <RUN_ID>
 ```
 
 The run is rendered exactly as `workflow run` rendered it: identity, status,
-statistics, and per-step evidence, followed by every feedback record for that
-run, oldest first.
+statistics, and per-step evidence. It is followed by every evaluator judgment
+recorded for that run, then every feedback record, each oldest first.
 
 Each executed step also lists the resources its strategy bound:
 
@@ -771,9 +771,34 @@ run show
     which resources did this run use?
 ```
 
-A run with no feedback ends with:
+Evaluator judgments render as:
 
 ```text
+Evaluations: 1
+
+Evaluation 1
+ID: <EVALUATION_ID>
+Evaluated: 2026-10-09T16:05:00+00:00
+Evaluator: exact-match 2.0.0
+Status: failed
+Score: 0.000000 (threshold 1.000000)
+Reason: Actual value did not exactly match expected value at $.intent.
+Evidence: expected = {"intent": "refund"}
+Evidence: actual = {"intent": "billing"}
+Evidence: difference_path = "$.intent"
+```
+
+Each evidence item renders on one line as its label and compact JSON value.
+
+Evaluator judgments precede human feedback because feedback can overrule an
+evaluator, not the reverse. Optimization records evaluations for every
+candidate run; other runs show none.
+
+A run with no evaluations or feedback ends with:
+
+```text
+Evaluations: none
+
 Feedback: none
 ```
 
@@ -928,6 +953,13 @@ ExpectedOutcome
 ```
 
 The V1 CLI therefore uses exact expected-output evaluation for this command.
+
+Exact evaluation compares JSON types, not Python values: `true` never matches
+an expected `1`, and `null` never matches `false`, `0`, `""`, `[]`, or `{}`.
+Numbers compare by value, so `1` matches `1.0`.
+
+Richer comparisons are declared per case in benchmarks. See
+[Benchmark Comparisons](#benchmark-comparisons).
 
 # CLI Scoring Targets
 
@@ -2062,6 +2094,71 @@ Benchmarking executes configured workflows.
 
 Like optimization, it produces evidence and does not promote.
 
+# Benchmark Comparisons
+
+Every benchmark case declares how its output is judged:
+
+```text
+exact
+    type-strict JSON equality
+
+normalized
+    type-strict JSON equality after Unicode, case, and whitespace
+    normalization of string values
+
+schema
+    validation against the JSON Schema carried as the expected value
+
+semantic
+    judgment of meaning (not supported yet)
+```
+
+Comparisons are declared on each case, never on workflows, so every workflow
+run against a benchmark is held to the same standards. One benchmark may mix
+comparisons: a workflow with conditional branches can legitimately return an
+exact label for one input and structured output for another.
+
+`benchmark show` counts cases per comparison:
+
+```text
+Cases: 42
+Comparisons: exact 12, normalized 26, schema 4
+```
+
+An empty benchmark shows `Comparisons: none`.
+
+`benchmark case-show` shows the comparison of one case.
+
+`benchmark run` breaks passes down per comparison after overall accuracy:
+
+```text
+Cases Run: 42
+Cases Passed: 37
+Accuracy: 0.880952
+Passed (exact): 11/12
+Passed (normalized): 23/26
+Passed (schema): 3/4
+```
+
+Overall accuracy remains the fraction of cases that met their own standard.
+
+# Unsupported Comparisons
+
+A benchmark containing a comparison Azathoth cannot judge yet may still be
+imported, so it is ready when support arrives.
+
+`benchmark run` and `benchmark compare` check every case before bootstrapping
+the runtime and fail without executing anything:
+
+```text
+Benchmark case <CASE_ID> uses comparison 'semantic', which is not supported yet.
+```
+
+Unsupported comparisons are never judged by a substitute evaluator.
+
+A schema case whose expected value is not a valid JSON Schema is rejected at
+import.
+
 # CLI JSON Arguments
 
 The CLI parser accepts JSON-compatible command-line values for:
@@ -2124,6 +2221,8 @@ The CLI contains human-readable renderers for:
 WorkflowRun
 
 WorkflowRun summaries
+
+WorkflowRunEvaluation
 
 WorkflowRunFeedback
 
@@ -2525,6 +2624,14 @@ run execution
 run feedback
     ≠
 run mutation
+
+evaluator judgment
+    ≠
+human feedback
+
+unsupported comparison
+    ≠
+silent substitute judgment
 
 experiment evidence
     ≠

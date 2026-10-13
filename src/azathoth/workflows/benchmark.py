@@ -10,7 +10,8 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     EvaluationResult,
-    ExactMatchEvaluator,
+    OutcomeComparison,
+    OutcomeEvaluator,
 )
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
@@ -32,8 +33,19 @@ class WorkflowBenchmarkCaseResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     case_id: UUID
+    comparison: OutcomeComparison
     run: WorkflowRun
     evaluation: EvaluationResult
+
+
+class WorkflowBenchmarkComparisonTally(BaseModel):
+    """Pass counts for the benchmark cases judged by one comparison."""
+
+    model_config = ConfigDict(frozen=True)
+
+    comparison: OutcomeComparison
+    cases_run: int = Field(ge=0)
+    cases_passed: int = Field(ge=0)
 
 
 class WorkflowBenchmarkResult(BaseModel):
@@ -64,6 +76,33 @@ class WorkflowBenchmarkResult(BaseModel):
             return 0.0
 
         return self.cases_passed / self.cases_run
+
+    @property
+    def comparison_tallies(
+        self,
+    ) -> tuple[WorkflowBenchmarkComparisonTally, ...]:
+        """Return pass counts per comparison, in comparison declaration order.
+
+        Comparisons used by no executed case are omitted.
+        """
+
+        tallies: list[WorkflowBenchmarkComparisonTally] = []
+
+        for comparison in OutcomeComparison:
+            judged = [case for case in self.cases if case.comparison is comparison]
+
+            if not judged:
+                continue
+
+            tallies.append(
+                WorkflowBenchmarkComparisonTally(
+                    comparison=comparison,
+                    cases_run=len(judged),
+                    cases_passed=sum(case.evaluation.passed for case in judged),
+                )
+            )
+
+        return tuple(tallies)
 
     @property
     def total_tokens(self) -> int:
@@ -190,10 +229,10 @@ class WorkflowBenchmarkRunner:
     def __init__(
         self,
         runner: WorkflowRunner | None = None,
-        evaluator: ExactMatchEvaluator | None = None,
+        evaluator: OutcomeEvaluator | None = None,
     ) -> None:
         self._runner = runner if runner is not None else WorkflowRunner()
-        self._evaluator = evaluator if evaluator is not None else ExactMatchEvaluator()
+        self._evaluator = evaluator if evaluator is not None else OutcomeEvaluator()
 
     async def run(
         self,
@@ -205,7 +244,22 @@ class WorkflowBenchmarkRunner:
         *,
         output_name: str,
     ) -> WorkflowBenchmarkResult:
-        """Execute and evaluate every case in a benchmark dataset."""
+        """Execute and evaluate every case in a benchmark dataset.
+
+        Every case is evaluated with the evaluator for its own comparison.
+        All comparisons are checked before any case executes, so a dataset
+        containing an unsupported comparison never partially runs.
+
+        Raises:
+            UnsupportedComparisonError: A case uses a comparison with no
+                evaluator.
+        """
+
+        for case in dataset.cases:
+            self._evaluator.require_supported(
+                case.expected.comparison,
+                subject=f"Benchmark case {case.id}",
+            )
 
         results: list[WorkflowBenchmarkCaseResult] = []
 
@@ -245,6 +299,7 @@ class WorkflowBenchmarkRunner:
             results.append(
                 WorkflowBenchmarkCaseResult(
                     case_id=case.id,
+                    comparison=case.expected.comparison,
                     run=run,
                     evaluation=evaluation,
                 )

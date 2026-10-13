@@ -55,6 +55,7 @@ def test_distribution_declares_runtime_dependencies() -> None:
 
     assert runtime_requirements == (
         "httpx<1,>=0.28",
+        "jsonschema<5,>=4.18",
         "pydantic>=2",
     )
 

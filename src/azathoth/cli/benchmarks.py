@@ -20,7 +20,9 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     BenchmarkDocumentError,
+    OutcomeEvaluator,
     SQLiteBenchmarkRepository,
+    UnsupportedComparisonError,
     decode_benchmark_document,
 )
 from azathoth.runtime import WorkflowNotConfiguredError
@@ -159,6 +161,16 @@ def _print_benchmark_dataset(
     print(f"Description: {dataset.description}")
     print(f"Cases: {len(dataset.cases)}")
 
+    counts = dataset.comparison_counts()
+
+    print(
+        "Comparisons: "
+        + (
+            ", ".join(f"{comparison.value} {count}" for comparison, count in counts.items())
+            or "none"
+        )
+    )
+
 
 def _print_benchmark_case(
     case: BenchmarkCase,
@@ -289,6 +301,9 @@ def run_benchmark(
 
         return 1
 
+    if not _comparisons_supported(dataset):
+        return 1
+
     runtime = load_runtime(
         configuration,
     )
@@ -305,6 +320,7 @@ def run_benchmark(
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
+        UnsupportedComparisonError,
     ) as exc:
         print(
             str(exc),
@@ -351,6 +367,9 @@ def compare_benchmarks(
 
         return 1
 
+    if not _comparisons_supported(dataset):
+        return 1
+
     runtime = load_runtime(
         configuration,
     )
@@ -388,6 +407,34 @@ def compare_benchmarks(
     )
 
     return 0
+
+
+def _comparisons_supported(
+    dataset: BenchmarkDataset,
+) -> bool:
+    """Report the first case whose comparison cannot be evaluated yet.
+
+    Checking before runtime bootstrap means an unsupported benchmark fails
+    without provider credentials and without executing any case.
+    """
+
+    evaluator = OutcomeEvaluator()
+
+    for case in dataset.cases:
+        try:
+            evaluator.require_supported(
+                case.expected.comparison,
+                subject=f"Benchmark case {case.id}",
+            )
+        except UnsupportedComparisonError as exc:
+            print(
+                str(exc),
+                file=sys.stderr,
+            )
+
+            return False
+
+    return True
 
 
 __all__ = [

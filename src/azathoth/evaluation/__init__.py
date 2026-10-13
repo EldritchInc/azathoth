@@ -10,6 +10,17 @@ from azathoth.evaluation.benchmark_document import (
 )
 from azathoth.evaluation.benchmark_repository import BenchmarkRepository
 from azathoth.evaluation.exact import ExactMatchEvaluator
+from azathoth.evaluation.json_equality import (
+    JsonDifference,
+    first_json_difference,
+    json_type_name,
+    json_values_equal,
+)
+from azathoth.evaluation.json_schema import (
+    JsonSchemaViolation,
+    json_schema_validator,
+    json_schema_violations,
+)
 from azathoth.evaluation.memory_benchmark_repository import (
     InMemoryBenchmarkRepository,
     require_benchmark_repository,
@@ -21,7 +32,18 @@ from azathoth.evaluation.models import (
     ExpectedOutcome,
     OutcomeComparison,
 )
+from azathoth.evaluation.normalized import (
+    NormalizedMatchEvaluator,
+    normalize_json_value,
+    normalize_text,
+)
+from azathoth.evaluation.outcome import (
+    OutcomeEvaluator,
+    UnsupportedComparisonError,
+    default_comparison_evaluators,
+)
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
+from azathoth.evaluation.schema import SchemaEvaluator
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
 )
@@ -41,9 +63,23 @@ __all__ = [
     "ExactMatchEvaluator",
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
+    "JsonDifference",
+    "JsonSchemaViolation",
+    "NormalizedMatchEvaluator",
     "OutcomeComparison",
+    "OutcomeEvaluator",
     "SQLiteBenchmarkRepository",
+    "SchemaEvaluator",
+    "UnsupportedComparisonError",
     "decode_benchmark_document",
+    "default_comparison_evaluators",
     "encode_benchmark_document",
+    "first_json_difference",
+    "json_schema_validator",
+    "json_schema_violations",
+    "json_type_name",
+    "json_values_equal",
+    "normalize_json_value",
+    "normalize_text",
     "require_benchmark_repository",
 ]
