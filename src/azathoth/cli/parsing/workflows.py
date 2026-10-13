@@ -17,10 +17,13 @@ WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 
 WORKFLOW_EXPERIMENTS_ACTION = "experiments"
 WORKFLOW_IMPORT_ACTION = "import"
+WORKFLOW_INVOCATIONS_ACTION = "invocations"
 WORKFLOW_INVOKE_ACTION = "invoke"
 WORKFLOW_LIST_ACTION = "list"
 WORKFLOW_OPTIMIZE_ACTION = "optimize"
+WORKFLOW_PRODUCTION_ACTION = "production"
 WORKFLOW_PROMOTE_ACTION = "promote"
+WORKFLOW_REVISIONS_ACTION = "revisions"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_RUNS_ACTION = "runs"
 WORKFLOW_SHOW_ACTION = "show"
@@ -29,6 +32,8 @@ WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE = "workflow_experiment_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
+WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
+WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 
 EXPECTED_VALUE_ATTRIBUTE = "expected_value"
@@ -171,6 +176,60 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to promote.",
+    )
+
+    workflow_production_parser = workflow_actions.add_parser(
+        WORKFLOW_PRODUCTION_ACTION,
+        help="Show the active production configuration of one workflow.",
+    )
+
+    workflow_production_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose production configuration to show.",
+    )
+
+    workflow_revisions_parser = workflow_actions.add_parser(
+        WORKFLOW_REVISIONS_ACTION,
+        help="List production revisions of one workflow, newest first.",
+    )
+
+    workflow_revisions_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose production revisions to list.",
+    )
+
+    workflow_revisions_parser.add_argument(
+        "--limit",
+        dest=WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent revisions to list.",
+    )
+
+    workflow_invocations_parser = workflow_actions.add_parser(
+        WORKFLOW_INVOCATIONS_ACTION,
+        help="List production invocations of one workflow, newest first.",
+    )
+
+    workflow_invocations_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose production invocations to list.",
+    )
+
+    workflow_invocations_parser.add_argument(
+        "--limit",
+        dest=WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent invocations to list.",
     )
 
     workflow_experiments_parser = workflow_actions.add_parser(

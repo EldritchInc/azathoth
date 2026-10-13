@@ -125,6 +125,9 @@ from azathoth.workflows.production_execution import (
 from azathoth.workflows.production_generation import (
     generate_production_workflow_candidate,
 )
+from azathoth.workflows.production_inspection import (
+    active_production_revision,
+)
 from azathoth.workflows.production_invocation import (
     ProductionInvocation,
     ProductionInvocationErrorCode,
@@ -363,6 +366,7 @@ __all__ = [
     "WorkflowValueBinding",
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
+    "active_production_revision",
     "complete_production_invocation",
     "create_production_invocation",
     "create_workflow_input_event",

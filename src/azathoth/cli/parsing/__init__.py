@@ -38,6 +38,13 @@ from azathoth.cli.parsing.goals import (
     GOAL_SHOW_ACTION,
     add_goal_parser,
 )
+from azathoth.cli.parsing.invocations import (
+    INVOCATION_ACTION_ATTRIBUTE,
+    INVOCATION_COMMAND,
+    INVOCATION_ID_ATTRIBUTE,
+    INVOCATION_SHOW_ACTION,
+    add_invocation_parser,
+)
 from azathoth.cli.parsing.models import (
     MODEL_ACTION_ATTRIBUTE,
     MODEL_AUTHORIZE_ACTION,
@@ -95,10 +102,15 @@ from azathoth.cli.parsing.workflows import (
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
+    WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
+    WORKFLOW_INVOCATIONS_ACTION,
     WORKFLOW_INVOKE_ACTION,
     WORKFLOW_LIST_ACTION,
     WORKFLOW_OPTIMIZE_ACTION,
+    WORKFLOW_PRODUCTION_ACTION,
     WORKFLOW_PROMOTE_ACTION,
+    WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
+    WORKFLOW_REVISIONS_ACTION,
     WORKFLOW_RUN_ACTION,
     WORKFLOW_RUN_LIMIT_ATTRIBUTE,
     WORKFLOW_RUNS_ACTION,
@@ -130,6 +142,8 @@ def build_parser() -> ArgumentParser:
     add_run_parser(commands)
 
     add_experiment_parser(commands)
+
+    add_invocation_parser(commands)
 
     add_model_parser(commands)
 
@@ -171,6 +185,10 @@ __all__ = [
     "GOAL_IMPORT_ACTION",
     "GOAL_LIST_ACTION",
     "GOAL_SHOW_ACTION",
+    "INVOCATION_ACTION_ATTRIBUTE",
+    "INVOCATION_COMMAND",
+    "INVOCATION_ID_ATTRIBUTE",
+    "INVOCATION_SHOW_ACTION",
     "MODEL_ACTION_ATTRIBUTE",
     "MODEL_AUTHORIZE_ACTION",
     "MODEL_COMMAND",
@@ -216,14 +234,20 @@ __all__ = [
     "WORKFLOW_ID_ATTRIBUTE",
     "WORKFLOW_IMPORT_ACTION",
     "WORKFLOW_INPUT_ATTRIBUTE",
+    "WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE",
+    "WORKFLOW_INVOCATIONS_ACTION",
     "WORKFLOW_INVOKE_ACTION",
     "WORKFLOW_LIST_ACTION",
     "WORKFLOW_OPTIMIZE_ACTION",
+    "WORKFLOW_PRODUCTION_ACTION",
     "WORKFLOW_PROMOTE_ACTION",
+    "WORKFLOW_REVISION_LIMIT_ATTRIBUTE",
+    "WORKFLOW_REVISIONS_ACTION",
     "WORKFLOW_RUN_ACTION",
     "WORKFLOW_RUN_LIMIT_ATTRIBUTE",
     "WORKFLOW_RUNS_ACTION",
     "WORKFLOW_SHOW_ACTION",
     "add_benchmark_parser",
+    "add_invocation_parser",
     "build_parser",
 ]

@@ -71,6 +71,11 @@ azathoth
 │   ├── promote <WORKFLOW_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   └── --input <JSON>
+│   ├── production <WORKFLOW_ID>
+│   ├── revisions <WORKFLOW_ID>
+│   │   └── --limit <COUNT>
+│   ├── invocations <WORKFLOW_ID>
+│   │   └── --limit <COUNT>
 │   ├── experiments <WORKFLOW_ID>
 │   │   └── --limit <COUNT>
 │   └── runs <WORKFLOW_ID>
@@ -85,6 +90,9 @@ azathoth
 │
 ├── experiment
 │   └── show <EXPERIMENT_ID>
+│
+├── invocation
+│   └── show <INVOCATION_ID>
 │
 ├── model
 │   ├── list
@@ -1432,6 +1440,226 @@ durable production execution evidence
 
 This is the operator boundary for moving configured behavior into production.
 
+# Inspect Active Production
+
+Show what production currently executes for one workflow with:
+
+```bash
+azathoth workflow production <WORKFLOW_ID>
+```
+
+The rendering reads the current `WorkflowProductionState`, the execution
+authority, and pairs it with the revision that recorded it:
+
+```text
+Workflow: summarize
+Workflow ID: <WORKFLOW_ID>
+Revision ID: <REVISION_ID>
+Deployed At: 2026-10-09T17:00:00+00:00
+
+Prompt Step: <STEP_ID>
+Primary Model: openrouter/some-model
+Substitute Models: openrouter/fallback-a, openrouter/fallback-b
+
+Emission: classification <- step <STEP_ID> output label
+```
+
+Every prompt step lists its primary model. `Substitute Models` appears only
+for steps with approved substitutes. Emissions appear only when production
+state declares them.
+
+The active revision is the most recent revision whose recorded state equals
+the current production state. It is not simply the newest revision.
+
+State written before revisions were recorded has no matching revision and
+renders:
+
+```text
+Revision ID: unrecorded
+Deployed At: unknown
+```
+
+Production state is shown even when the workflow has since been removed from
+configuration, because production state, not configuration, is what
+`workflow invoke` executes.
+
+A configured workflow that was never promoted fails with:
+
+```text
+Workflow <WORKFLOW_ID> is not in production.
+```
+
+An identifier that is neither configured nor in production fails with:
+
+```text
+Workflow <WORKFLOW_ID> is not configured.
+```
+
+# List Production Revisions
+
+List the production revision history of one workflow with:
+
+```bash
+azathoth workflow revisions <WORKFLOW_ID>
+```
+
+Limit the listing to the most recent revisions with:
+
+```bash
+azathoth workflow revisions <WORKFLOW_ID> --limit <COUNT>
+```
+
+`--limit` must be a positive integer.
+
+Revisions are listed newest first, one line per revision:
+
+```text
+<REVISION_ID>  2026-10-09T17:10:00+00:00  -       openrouter/model-c
+<REVISION_ID>  2026-10-09T17:05:00+00:00  active  openrouter/model-b
+<REVISION_ID>  2026-10-09T17:00:00+00:00  -       openrouter/model-a
+```
+
+Each line contains the revision ID, creation time, an active marker, and the
+primary model of every prompt step. Workflows without prompt steps show
+`no prompt steps`.
+
+The `active` marker follows the same rule as `workflow production`: it marks
+the revision matching current production state, which need not be the newest.
+
+The limit is applied after sorting.
+
+A configured workflow with no revisions prints nothing and exits
+successfully.
+
+Revisions of a workflow since removed from configuration remain listable.
+
+An identifier that is neither configured nor present in revision history
+fails with:
+
+```text
+Workflow <WORKFLOW_ID> is not configured.
+```
+
+Revision history is audit evidence. Listing it never changes what production
+executes.
+
+# List Production Invocations
+
+List production invocations of one workflow with:
+
+```bash
+azathoth workflow invocations <WORKFLOW_ID>
+```
+
+Limit the listing to the most recent invocations with:
+
+```bash
+azathoth workflow invocations <WORKFLOW_ID> --limit <COUNT>
+```
+
+`--limit` must be a positive integer.
+
+Invocations are listed newest first, one line per invocation:
+
+```text
+<INVOCATION_ID>  2026-10-09T17:10:00+00:00  pending                       no run
+<INVOCATION_ID>  2026-10-09T17:05:00+00:00  timeout                       no run
+<INVOCATION_ID>  2026-10-09T17:00:00+00:00  succeeded                     <RUN_ID>
+```
+
+Each line contains the invocation ID, creation time, outcome, and the
+associated workflow run.
+
+The outcome is one of:
+
+```text
+succeeded
+    a successful result was recorded
+
+<error code>
+    a failure was recorded, for example invalid_input or timeout
+
+pending
+    no terminal result was recorded
+```
+
+Invocations that never produced a workflow run show `no run`.
+
+The limit is applied after sorting.
+
+A configured workflow with no invocations prints nothing and exits
+successfully.
+
+Invocations of a workflow since removed from configuration remain listable.
+
+An identifier that is neither configured nor present in invocation history
+fails with:
+
+```text
+Workflow <WORKFLOW_ID> is not configured.
+```
+
+# Show an Invocation
+
+Inspect one production invocation with:
+
+```bash
+azathoth invocation show <INVOCATION_ID>
+```
+
+The invocation is rendered with its caller-visible evidence:
+
+```text
+Invocation ID: <INVOCATION_ID>
+Workflow ID: <WORKFLOW_ID>
+Created At: 2026-10-09T17:00:00+00:00
+Outcome: succeeded
+Run ID: <RUN_ID>
+Caller Metadata:
+{
+  "caller": "billing-service"
+}
+Input:
+{
+  "text": "hello"
+}
+Result:
+{
+  "answer": "OK"
+}
+```
+
+`Caller Metadata` appears only when metadata was recorded. `Input` is the
+payload the caller supplied to `workflow invoke`.
+
+A failed invocation renders its message and optional metadata instead of a
+result:
+
+```text
+Outcome: timeout
+Run ID: no run
+...
+Message: Workflow timed out.
+```
+
+A pending invocation renders neither.
+
+The `Run ID` continues into run inspection:
+
+```bash
+azathoth run show <RUN_ID>
+```
+
+An unknown invocation fails with:
+
+```text
+Invocation <INVOCATION_ID> was not found.
+```
+
+`workflow production`, `workflow revisions`, `workflow invocations`, and
+`invocation show` read durable state only. They do not require provider
+credentials or runtime bootstrap.
+
 # No Dedicated Rollback Command in V1
 
 V1 does not expose:
@@ -1441,6 +1669,9 @@ azathoth workflow rollback
 ```
 
 Production changes remain explicit promotions.
+
+Revision history is inspectable with `workflow revisions`, but no command
+executes or restores a historical revision.
 
 A dedicated rollback convenience operation is not part of the frozen V1
 operator surface.
@@ -1900,7 +2131,11 @@ WorkflowExperimentRecord / WorkflowExperimentRecord summaries
 
 WorkflowOptimizationSession
 
-WorkflowProductionRevision
+WorkflowProductionState
+
+WorkflowProductionRevision / WorkflowProductionRevision summaries
+
+ProductionInvocation / ProductionInvocation summaries
 
 ProductionInvocationResult
 
@@ -2157,6 +2392,9 @@ WorkflowProductionRevision
 
 `workflow invoke` executes current state.
 
+`workflow production` shows current state; `workflow revisions` shows audit
+history.
+
 No CLI command infers production intent from:
 
 ```text
@@ -2247,6 +2485,10 @@ The complete operator-facing workflow path is:
                          │
                          ▼
            ProductionInvocationResult
+                         │
+                         ▼
+ workflow production / workflow revisions
+ workflow invocations / invocation show
 ```
 
 The model operator path remains orthogonal:
@@ -2303,6 +2545,10 @@ invocation
 production state
     ≠
 production revision
+
+production inspection
+    ≠
+production change
 
 provider availability
     ≠
