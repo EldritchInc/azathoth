@@ -16,7 +16,6 @@ from azathoth.cli.parsing import (
     BENCHMARK_ID_ATTRIBUTE,
     BENCHMARK_IMPORT_ACTION,
     BENCHMARK_LIST_ACTION,
-    BENCHMARK_OUTPUT_ATTRIBUTE,
     BENCHMARK_RUN_ACTION,
     BENCHMARK_SHOW_ACTION,
     BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
@@ -125,13 +124,6 @@ def dispatch_benchmark_command(
                     WORKFLOW_ID_ATTRIBUTE,
                 ),
             ),
-            output_name=cast(
-                str,
-                getattr(
-                    arguments,
-                    BENCHMARK_OUTPUT_ATTRIBUTE,
-                ),
-            ),
         )
 
     if action == BENCHMARK_COMPARE_ACTION:
@@ -151,13 +143,6 @@ def dispatch_benchmark_command(
                         BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
                     ),
                 )
-            ),
-            output_name=cast(
-                str,
-                getattr(
-                    arguments,
-                    BENCHMARK_OUTPUT_ATTRIBUTE,
-                ),
             ),
             target_latency_seconds=cast(
                 float,

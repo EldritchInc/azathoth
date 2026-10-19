@@ -27,7 +27,6 @@ BENCHMARK_SHOW_ACTION = "show"
 BENCHMARK_DOCUMENT_ATTRIBUTE = "benchmark_document"
 BENCHMARK_ID_ATTRIBUTE = "benchmark_id"
 BENCHMARK_CASE_ID_ATTRIBUTE = "benchmark_case_id"
-BENCHMARK_OUTPUT_ATTRIBUTE = "benchmark_output"
 BENCHMARK_WORKFLOW_IDS_ATTRIBUTE = "workflow_ids"
 
 
@@ -126,14 +125,6 @@ def add_benchmark_parser(
         help="Configured workflow UUID to benchmark.",
     )
 
-    benchmark_run_parser.add_argument(
-        "--output",
-        dest=BENCHMARK_OUTPUT_ATTRIBUTE,
-        required=True,
-        metavar="OUTPUT",
-        help="Workflow output value to evaluate.",
-    )
-
     benchmark_compare_parser = benchmark_actions.add_parser(
         BENCHMARK_COMPARE_ACTION,
         help="Compare configured workflows against one benchmark dataset.",
@@ -154,14 +145,6 @@ def add_benchmark_parser(
         required=True,
         metavar="WORKFLOW_ID",
         help="Configured workflow UUID to compare. Repeat for each workflow.",
-    )
-
-    benchmark_compare_parser.add_argument(
-        "--output",
-        dest=BENCHMARK_OUTPUT_ATTRIBUTE,
-        required=True,
-        metavar="OUTPUT",
-        help="Workflow output value to evaluate.",
     )
 
     benchmark_compare_parser.add_argument(
