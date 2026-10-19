@@ -36,6 +36,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import (
     generate_workflow_candidate,
@@ -130,6 +131,10 @@ def create_workflow() -> WorkflowSpecification:
                     ),
                 ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
         ),
     )
 
@@ -323,7 +328,6 @@ def test_durable_benchmark_executes_after_full_configuration_restart(
         WorkflowBenchmarkRunner().run(
             dataset,
             candidate_factory,
-            output_name="classification",
         )
     )
 
@@ -376,7 +380,6 @@ def test_durable_benchmark_inputs_drive_reconstructed_execution(
         WorkflowBenchmarkRunner().run(
             dataset,
             candidate_factory,
-            output_name="classification",
         )
     )
 
@@ -423,7 +426,6 @@ def test_durable_benchmark_preserves_execution_identity_per_case(
         WorkflowBenchmarkRunner().run(
             dataset,
             candidate_factory,
-            output_name="classification",
         )
     )
 

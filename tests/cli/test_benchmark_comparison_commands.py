@@ -130,7 +130,6 @@ def test_benchmark_result_rendering_breaks_down_passes_by_comparison() -> None:
         WorkflowBenchmarkRunner().run(
             create_mixed_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -164,7 +163,6 @@ def test_benchmark_run_rejects_unsupported_comparison_before_runtime_bootstrap(
     result = run_benchmark(
         benchmark_id=DATASET_ID,
         workflow_id=FIRST_WORKFLOW_ID,
-        output_name="classification",
     )
 
     captured = capsys.readouterr()
@@ -193,7 +191,6 @@ def test_benchmark_compare_rejects_unsupported_comparison_before_runtime_bootstr
     result = compare_benchmarks(
         benchmark_id=DATASET_ID,
         workflow_ids=(FIRST_WORKFLOW_ID, SECOND_WORKFLOW_ID),
-        output_name="classification",
         target_latency_seconds=60.0,
         target_cost_usd=0.01,
     )

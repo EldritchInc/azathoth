@@ -40,6 +40,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import portfolio_for_catalog
 
@@ -127,6 +128,10 @@ def create_workflow() -> WorkflowSpecification:
                     ),
                 ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="word_count",
         ),
     )
 
@@ -219,7 +224,6 @@ def test_configured_benchmark_executes_workflow_by_identifier() -> None:
             runtime=create_runtime(),
             workflow_id=WORKFLOW_ID,
             dataset=create_dataset(),
-            output_name="word_count",
         )
     )
 
@@ -235,7 +239,6 @@ def test_configured_benchmark_uses_same_workflow_for_every_case() -> None:
             runtime=create_runtime(),
             workflow_id=WORKFLOW_ID,
             dataset=create_dataset(),
-            output_name="word_count",
         )
     )
 
@@ -251,7 +254,6 @@ def test_configured_benchmark_case_inputs_drive_execution() -> None:
             runtime=create_runtime(),
             workflow_id=WORKFLOW_ID,
             dataset=create_dataset(),
-            output_name="word_count",
         )
     )
 
@@ -274,7 +276,6 @@ def test_configured_benchmark_preserves_canonical_case_input_context() -> None:
             runtime=create_runtime(),
             workflow_id=WORKFLOW_ID,
             dataset=dataset,
-            output_name="word_count",
         )
     )
 
@@ -306,7 +307,6 @@ def test_configured_benchmark_preserves_unknown_workflow_error() -> None:
                 runtime=create_runtime(),
                 workflow_id=UNKNOWN_WORKFLOW_ID,
                 dataset=create_dataset(),
-                output_name="word_count",
             )
         )
 
@@ -317,7 +317,6 @@ def test_configured_benchmark_accepts_explicit_runner() -> None:
             runtime=create_runtime(),
             workflow_id=WORKFLOW_ID,
             dataset=create_dataset(),
-            output_name="word_count",
             runner=WorkflowBenchmarkRunner(),
         )
     )

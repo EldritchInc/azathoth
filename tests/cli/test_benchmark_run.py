@@ -100,7 +100,6 @@ def test_benchmark_run_executes_persisted_dataset(
             object,
             UUID,
             BenchmarkDataset,
-            str,
         ]
     ] = []
 
@@ -113,14 +112,12 @@ def test_benchmark_run_executes_persisted_dataset(
         runtime: object,
         workflow_id: UUID,
         dataset: BenchmarkDataset,
-        output_name: str,
     ) -> WorkflowBenchmarkResult:
         calls.append(
             (
                 runtime,
                 workflow_id,
                 dataset,
-                output_name,
             )
         )
 
@@ -141,7 +138,6 @@ def test_benchmark_run_executes_persisted_dataset(
     status = run_benchmark(
         benchmark_id=BENCHMARK_ID,
         workflow_id=WORKFLOW_ID,
-        output_name="classification",
     )
 
     captured = capsys.readouterr()
@@ -153,7 +149,6 @@ def test_benchmark_run_executes_persisted_dataset(
             runtime,
             WORKFLOW_ID,
             create_dataset(),
-            "classification",
         )
     ]
 
@@ -189,7 +184,6 @@ def test_benchmark_run_rejects_unknown_dataset_before_runtime_bootstrap(
     status = run_benchmark(
         benchmark_id=UNKNOWN_BENCHMARK_ID,
         workflow_id=WORKFLOW_ID,
-        output_name="classification",
     )
 
     captured = capsys.readouterr()
@@ -247,7 +241,6 @@ def test_benchmark_run_reports_workflow_execution_errors(
     status = run_benchmark(
         benchmark_id=BENCHMARK_ID,
         workflow_id=WORKFLOW_ID,
-        output_name="classification",
     )
 
     captured = capsys.readouterr()

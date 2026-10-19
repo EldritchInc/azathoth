@@ -35,6 +35,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import (
     generate_workflow_candidate,
@@ -117,6 +118,10 @@ def create_candidate(
                     ),
                 ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
         ),
     )
 
@@ -219,7 +224,6 @@ def test_benchmark_ranking_selects_highest_quality_candidate() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_factories(),
-            output_name="classification",
         )
     )
 
@@ -235,7 +239,6 @@ def test_benchmark_ranking_preserves_existing_score_dimensions() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_factories(),
-            output_name="classification",
         )
     )
 
@@ -255,7 +258,6 @@ def test_benchmark_ranking_orders_lower_quality_candidates_after_winner() -> Non
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_factories(),
-            output_name="classification",
         )
     )
 
@@ -281,7 +283,6 @@ def test_benchmark_ranking_records_aggregate_rationale() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_factories(),
-            output_name="classification",
         )
     )
 
@@ -296,7 +297,6 @@ def test_benchmark_ranking_rejects_empty_comparison() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             {},
-            output_name="classification",
         )
     )
 
@@ -312,7 +312,6 @@ def test_benchmark_ranking_round_trips_through_json() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_factories(),
-            output_name="classification",
         )
     )
 

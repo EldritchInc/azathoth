@@ -4,6 +4,8 @@ from argparse import Namespace
 from pathlib import Path
 from uuid import UUID
 
+import pytest
+
 from azathoth.cli import build_parser
 from azathoth.cli.dispatching import dispatch_benchmark_command
 
@@ -47,7 +49,6 @@ def unused_compare_benchmarks(
     *,
     benchmark_id: UUID,
     workflow_ids: tuple[UUID, ...],
-    output_name: str,
     target_latency_seconds: float,
     target_cost_usd: float,
 ) -> int:
@@ -56,7 +57,6 @@ def unused_compare_benchmarks(
     del (
         benchmark_id,
         workflow_ids,
-        output_name,
         target_latency_seconds,
         target_cost_usd,
     )
@@ -72,8 +72,6 @@ def test_benchmark_run_parser_records_dataset_identifier() -> None:
             str(BENCHMARK_ID),
             "--workflow",
             str(WORKFLOW_ID),
-            "--output",
-            "classification",
         )
     )
 
@@ -89,28 +87,30 @@ def test_benchmark_run_parser_records_workflow_identifier() -> None:
             str(BENCHMARK_ID),
             "--workflow",
             str(WORKFLOW_ID),
-            "--output",
-            "classification",
         )
     )
 
     assert arguments.workflow_id == WORKFLOW_ID
 
 
-def test_benchmark_run_parser_records_output_name() -> None:
-    arguments = build_parser().parse_args(
-        (
-            "benchmark",
-            "run",
-            str(BENCHMARK_ID),
-            "--workflow",
-            str(WORKFLOW_ID),
-            "--output",
-            "classification",
+def test_benchmark_run_parser_rejects_output_option(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        build_parser().parse_args(
+            (
+                "benchmark",
+                "run",
+                str(BENCHMARK_ID),
+                "--workflow",
+                str(WORKFLOW_ID),
+                "--output",
+                "classification",
+            )
         )
-    )
 
-    assert arguments.benchmark_output == "classification"
+    assert raised.value.code == 2
+    assert "unrecognized arguments: --output classification" in capsys.readouterr().err
 
 
 def test_benchmark_run_dispatches_complete_execution_request() -> None:
@@ -118,14 +118,12 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
         benchmark_action="run",
         benchmark_id=BENCHMARK_ID,
         workflow_id=WORKFLOW_ID,
-        benchmark_output="classification",
     )
 
     calls: list[
         tuple[
             UUID,
             UUID,
-            str,
         ]
     ] = []
 
@@ -133,13 +131,11 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
         *,
         benchmark_id: UUID,
         workflow_id: UUID,
-        output_name: str,
     ) -> int:
         calls.append(
             (
                 benchmark_id,
                 workflow_id,
-                output_name,
             )
         )
 
@@ -162,6 +158,5 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
         (
             BENCHMARK_ID,
             WORKFLOW_ID,
-            "classification",
         )
     ]

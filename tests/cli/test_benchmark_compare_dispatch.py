@@ -49,14 +49,12 @@ def unused_run_benchmark(
     *,
     benchmark_id: UUID,
     workflow_id: UUID,
-    output_name: str,
 ) -> int:
     """Fail when benchmark run is unexpectedly dispatched."""
 
     del (
         benchmark_id,
         workflow_id,
-        output_name,
     )
 
     raise AssertionError("benchmark run should not be dispatched")
@@ -72,8 +70,6 @@ def test_benchmark_compare_parser_records_dataset_identifier() -> None:
             str(FIRST_WORKFLOW_ID),
             "--workflow",
             str(SECOND_WORKFLOW_ID),
-            "--output",
-            "classification",
             "--target-latency",
             "5",
             "--target-cost",
@@ -95,8 +91,6 @@ def test_benchmark_compare_parser_records_workflow_identifiers() -> None:
             str(FIRST_WORKFLOW_ID),
             "--workflow",
             str(SECOND_WORKFLOW_ID),
-            "--output",
-            "classification",
             "--target-latency",
             "5",
             "--target-cost",
@@ -110,7 +104,7 @@ def test_benchmark_compare_parser_records_workflow_identifiers() -> None:
     ]
 
 
-def test_benchmark_compare_parser_records_output_and_targets() -> None:
+def test_benchmark_compare_parser_records_targets() -> None:
     arguments = build_parser().parse_args(
         (
             "benchmark",
@@ -120,8 +114,6 @@ def test_benchmark_compare_parser_records_output_and_targets() -> None:
             str(FIRST_WORKFLOW_ID),
             "--workflow",
             str(SECOND_WORKFLOW_ID),
-            "--output",
-            "classification",
             "--target-latency",
             "5",
             "--target-cost",
@@ -129,7 +121,6 @@ def test_benchmark_compare_parser_records_output_and_targets() -> None:
         )
     )
 
-    assert arguments.benchmark_output == "classification"
     assert arguments.target_latency_seconds == 5.0
     assert arguments.target_cost_usd == 0.001
 
@@ -142,7 +133,6 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
             FIRST_WORKFLOW_ID,
             SECOND_WORKFLOW_ID,
         ],
-        benchmark_output="classification",
         target_latency_seconds=5.0,
         target_cost_usd=0.001,
     )
@@ -151,7 +141,6 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
         tuple[
             UUID,
             tuple[UUID, ...],
-            str,
             float,
             float,
         ]
@@ -161,7 +150,6 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
         *,
         benchmark_id: UUID,
         workflow_ids: tuple[UUID, ...],
-        output_name: str,
         target_latency_seconds: float,
         target_cost_usd: float,
     ) -> int:
@@ -169,7 +157,6 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
             (
                 benchmark_id,
                 workflow_ids,
-                output_name,
                 target_latency_seconds,
                 target_cost_usd,
             )
@@ -197,7 +184,6 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
                 FIRST_WORKFLOW_ID,
                 SECOND_WORKFLOW_ID,
             ),
-            "classification",
             5.0,
             0.001,
         )

@@ -136,7 +136,6 @@ def test_benchmark_compare_executes_configured_workflows(
             object,
             tuple[UUID, ...],
             BenchmarkDataset,
-            str,
             WorkflowScoringPolicy,
         ]
     ] = []
@@ -148,7 +147,6 @@ def test_benchmark_compare_executes_configured_workflows(
         runtime: object,
         workflow_ids: tuple[UUID, ...],
         dataset: BenchmarkDataset,
-        output_name: str,
         scoring_policy: WorkflowScoringPolicy,
     ) -> WorkflowBenchmarkRanking:
         calls.append(
@@ -156,7 +154,6 @@ def test_benchmark_compare_executes_configured_workflows(
                 runtime,
                 workflow_ids,
                 dataset,
-                output_name,
                 scoring_policy,
             )
         )
@@ -181,7 +178,6 @@ def test_benchmark_compare_executes_configured_workflows(
             FIRST_WORKFLOW_ID,
             SECOND_WORKFLOW_ID,
         ),
-        output_name="classification",
         target_latency_seconds=5.0,
         target_cost_usd=0.001,
     )
@@ -196,7 +192,6 @@ def test_benchmark_compare_executes_configured_workflows(
         received_runtime,
         received_workflows,
         received_dataset,
-        received_output,
         received_policy,
     ) = calls[0]
 
@@ -208,7 +203,6 @@ def test_benchmark_compare_executes_configured_workflows(
     )
 
     assert received_dataset == create_dataset()
-    assert received_output == "classification"
 
     assert received_policy == WorkflowScoringPolicy(
         target_latency_seconds=5.0,
@@ -250,7 +244,6 @@ def test_benchmark_compare_rejects_unknown_dataset_before_runtime_bootstrap(
             FIRST_WORKFLOW_ID,
             SECOND_WORKFLOW_ID,
         ),
-        output_name="classification",
         target_latency_seconds=5.0,
         target_cost_usd=0.001,
     )
@@ -317,7 +310,6 @@ def test_benchmark_compare_reports_operator_errors(
             FIRST_WORKFLOW_ID,
             SECOND_WORKFLOW_ID,
         ),
-        output_name="classification",
         target_latency_seconds=5.0,
         target_cost_usd=0.001,
     )
