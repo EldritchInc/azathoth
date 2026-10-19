@@ -10,7 +10,11 @@ from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.retry import WorkflowRetryPolicy
-from azathoth.workflows.value import WorkflowInputBinding, WorkflowValueBinding
+from azathoth.workflows.value import (
+    WorkflowInputBinding,
+    WorkflowValueBinding,
+    WorkflowValueReference,
+)
 
 
 class WorkflowCandidateSignature(BaseModel):
@@ -42,10 +46,15 @@ class WorkflowCandidateStep:
 
 @dataclass(frozen=True)
 class WorkflowCandidate:
-    """An executable workflow generated from a workflow specification."""
+    """An executable workflow generated from a workflow specification.
+
+    The optional result carries the specification's declared result, so the
+    value judged during evaluation is the value production would return.
+    """
 
     metadata: WorkflowMetadata
     steps: tuple[WorkflowCandidateStep, ...]
+    result: WorkflowValueReference | None = None
 
     def __post_init__(self) -> None:
         """Validate executable workflow topology."""
@@ -93,6 +102,22 @@ class WorkflowCandidate:
 
         for step_id in step_ids:
             visit(step_id)
+
+        if self.result is not None:
+            producer = next(
+                (step for step in self.steps if step.id == self.result.producer_step_id),
+                None,
+            )
+
+            if producer is None:
+                raise ValueError(
+                    "Workflow candidate result must reference a step in the same candidate."
+                )
+
+            if self.result.name not in {output.name for output in producer.outputs}:
+                raise ValueError(
+                    "Workflow candidate result must reference an output declared by its step."
+                )
 
     @property
     def signature(

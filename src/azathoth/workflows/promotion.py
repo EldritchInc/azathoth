@@ -43,6 +43,9 @@ def materialize_workflow_candidate(
             "Workflow specification and candidate must contain the same step identifiers."
         )
 
+    if candidate.result != specification.result:
+        raise ValueError("Workflow specification and candidate must declare the same result.")
+
     promoted_steps = tuple(
         _materialize_step(
             specification=workflow_step,
