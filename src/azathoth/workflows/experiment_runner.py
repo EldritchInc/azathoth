@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass
 
-from pydantic import JsonValue
-
 from azathoth.context import Context
 from azathoth.evaluation import (
     EvaluationResult,
@@ -30,6 +28,10 @@ from azathoth.workflows.experiment_recorder import (
 from azathoth.workflows.ranker import (
     WorkflowRanker,
 )
+from azathoth.workflows.result import (
+    WorkflowResultError,
+    workflow_result,
+)
 from azathoth.workflows.run_evaluation import (
     WorkflowRunEvaluation,
 )
@@ -39,6 +41,7 @@ from azathoth.workflows.runner import (
 from azathoth.workflows.scoring import (
     WorkflowScorer,
 )
+from azathoth.workflows.value import WorkflowValueReference
 
 
 @dataclass(frozen=True)
@@ -78,12 +81,26 @@ class WorkflowExperimentRunner:
         evaluator: Evaluator,
         expected_outcome: ExpectedOutcome,
     ) -> WorkflowExperimentResult:
-        """Execute, evaluate, score, and rank successful workflow candidates."""
+        """Execute, evaluate, score, and rank successful workflow candidates.
+
+        Each successful run is judged on its candidate's declared result. Every
+        candidate must declare a result, checked before any candidate executes.
+
+        Raises:
+            WorkflowResultError: A candidate declares no result, or a
+                successful run did not produce its declared result exactly once.
+        """
+
+        results = tuple(_declared_result(workflow) for workflow in workflows)
 
         evidence: list[WorkflowExperimentEvidence] = []
         executions: list[_ScoredExecution] = []
 
-        for workflow in workflows:
+        for workflow, declared_result in zip(
+            workflows,
+            results,
+            strict=True,
+        ):
             run = await self._runner.run_recording_failures(
                 workflow=workflow,
                 context=context,
@@ -97,7 +114,10 @@ class WorkflowExperimentRunner:
 
             evaluation = await evaluator.evaluate(
                 expected=expected_outcome,
-                actual=self._output_from_run(run),
+                actual=workflow_result(
+                    run,
+                    declared_result,
+                ),
             )
 
             if self._recorder is not None:
@@ -195,16 +215,17 @@ class WorkflowExperimentRunner:
             ranking=tuple(executions[index].run.id for index in ranking),
         )
 
-    @staticmethod
-    def _output_from_run(
-        run: WorkflowRun,
-    ) -> JsonValue:
-        """Return the last successfully executed workflow step output."""
 
-        for step in reversed(run.steps):
-            if step.execution is not None:
-                return step.execution.output
+def _declared_result(
+    workflow: WorkflowCandidate,
+) -> WorkflowValueReference:
+    """Return the declared result of one experiment candidate.
 
-        raise ValueError(
-            "Workflow experiment cannot evaluate a run without a successful step execution."
-        )
+    Raises:
+        WorkflowResultError: The candidate declares no result.
+    """
+
+    if workflow.result is None:
+        raise WorkflowResultError(f"Workflow {workflow.metadata.id} does not declare a result.")
+
+    return workflow.result

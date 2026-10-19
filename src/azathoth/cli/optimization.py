@@ -17,6 +17,7 @@ from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowExperimentEvidenceRecorder,
     WorkflowExperimentRunner,
+    WorkflowResultError,
     WorkflowScorer,
     WorkflowScoringPolicy,
 )
@@ -35,9 +36,10 @@ async def optimize_configured_workflow(
 ) -> WorkflowOptimizationSession:
     """Run empirical model-substitution optimization for one workflow.
 
-    Without an explicit evaluator, the expected outcome is judged by the
-    evaluator for its comparison, and an unsupported comparison is rejected
-    before any candidate is generated or executed.
+    Candidates are judged on the workflow's declared result. Without an
+    explicit evaluator, the expected outcome is judged by the evaluator for its
+    comparison. A workflow without a declared result and an unsupported
+    comparison are both rejected before any candidate is generated or executed.
 
     When a recorder is supplied, every generation's candidate runs,
     evaluations, and experiment record are persisted as durable evidence.
@@ -45,7 +47,15 @@ async def optimize_configured_workflow(
     Raises:
         UnsupportedComparisonError: The default evaluator cannot judge the
             expected outcome's comparison.
+        WorkflowResultError: The configured workflow declares no result.
     """
+
+    specification = runtime.workflows.get(
+        workflow_id,
+    )
+
+    if specification is not None and specification.result is None:
+        raise WorkflowResultError(f"Workflow {workflow_id} does not declare a result.")
 
     if evaluator is None:
         outcome_evaluator = OutcomeEvaluator()
