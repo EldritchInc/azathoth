@@ -37,7 +37,12 @@
       },
       "depends_on": [],
       "inputs": [],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "answer",
+          "path": []
+        }
+      ],
       "conditions": [],
       "retry_policy": {
         "max_attempts": 1,
@@ -47,5 +52,9 @@
       },
       "failure_policy": "fail_workflow"
     }
-  ]
+  ],
+  "result": {
+    "producer_step_id": "22222222-2222-2222-2222-222222222222",
+    "name": "answer"
+  }
 }

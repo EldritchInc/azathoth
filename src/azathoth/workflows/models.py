@@ -21,7 +21,11 @@ class WorkflowMetadata(BaseModel):
 
 
 class WorkflowSpecification(BaseModel):
-    """Describe an ordered workflow without runtime dependencies."""
+    """Describe an ordered workflow without runtime dependencies.
+
+    The optional result identifies the one declared step output that is the
+    workflow's answer. Evaluation and production use exactly this value.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -29,6 +33,7 @@ class WorkflowSpecification(BaseModel):
     steps: tuple[WorkflowStepSpecification, ...] = Field(
         min_length=1,
     )
+    result: WorkflowValueReference | None = None
 
     @model_validator(mode="after")
     def validate_unique_step_ids(self) -> Self:
@@ -160,6 +165,28 @@ class WorkflowSpecification(BaseModel):
                         "Workflow conditions must reference "
                         "values produced by upstream workflow steps."
                     )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_result(self) -> Self:
+        """Ensure a declared result references a declared step output."""
+
+        if self.result is None:
+            return self
+
+        producer = next(
+            (step for step in self.steps if step.id == self.result.producer_step_id),
+            None,
+        )
+
+        if producer is None:
+            raise ValueError("Workflow result must reference a producer step in the same workflow.")
+
+        if self.result.name not in {output.name for output in producer.outputs}:
+            raise ValueError(
+                "Workflow result must reference an output declared by the producer step."
+            )
 
         return self
 

@@ -173,6 +173,10 @@ from azathoth.workflows.reliability import (
     WorkflowReliabilityMetrics,
 )
 from azathoth.workflows.repository import WorkflowRepository
+from azathoth.workflows.result import (
+    WorkflowResultError,
+    workflow_result,
+)
 from azathoth.workflows.retry import (
     WorkflowRetryPolicy,
 )
@@ -339,6 +343,7 @@ __all__ = [
     "WorkflowRanking",
     "WorkflowReliabilityMetrics",
     "WorkflowRepository",
+    "WorkflowResultError",
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunEvaluation",
@@ -394,6 +399,7 @@ __all__ = [
     "require_workflow_run_repository",
     "resolve_production_model_selection",
     "tool_usage_report",
+    "workflow_result",
     "workflow_uses_model",
     "workflow_uses_tool",
     "workflows_using_model",

@@ -37,7 +37,12 @@
       },
       "depends_on": [],
       "inputs": [],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "token",
+          "path": []
+        }
+      ],
       "conditions": [],
       "retry_policy": {
         "max_attempts": 1,
@@ -47,5 +52,9 @@
       },
       "failure_policy": "fail_workflow"
     }
-  ]
+  ],
+  "result": {
+    "producer_step_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "name": "token"
+  }
 }
