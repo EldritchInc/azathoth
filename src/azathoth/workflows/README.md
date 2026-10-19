@@ -40,8 +40,8 @@ The separation between these representations is intentional.
 
 `WorkflowSpecification` is durable workflow intent.
 
-It contains workflow metadata and an ordered collection of
-`WorkflowStepSpecification` values.
+It contains workflow metadata, an ordered collection of
+`WorkflowStepSpecification` values, and an optional declared result.
 
 A specification describes what the workflow is allowed and expected to do. It
 is not itself an executable runtime instance and does not contain empirical
@@ -57,6 +57,61 @@ They can also be serialized and reconstructed through:
 
 - `encode_workflow_document`
 - `decode_workflow_document`
+
+## Workflow Result
+
+`WorkflowSpecification.result` declares which value is the workflow's answer.
+
+It is a `WorkflowValueReference`: one producer step and one output name.
+
+```json
+"result": {
+  "producer_step_id": "22222222-2222-2222-2222-222222222222",
+  "name": "answer"
+}
+```
+
+The reference is validated when the specification is constructed:
+
+- the producer must be a step in the same workflow
+- the name must be an output declared by that step
+
+Violations fail with:
+
+```text
+Workflow result must reference a producer step in the same workflow.
+Workflow result must reference an output declared by the producer step.
+```
+
+The declared result is the single value that the rest of the lifecycle treats
+as the workflow's outcome:
+
+```text
+declared result
+      │
+      ├── benchmark cases judge it
+      ├── optimization experiments judge it
+      └── promotion emits it as the production "result"
+```
+
+`workflow_result(run, reference)` extracts the declared value from a
+`WorkflowRun`.
+
+It fails with `WorkflowResultError` when the referenced step did not produce
+the value exactly once:
+
+```text
+Workflow result 'answer' from step <STEP_ID> was not produced.
+Workflow result 'answer' from step <STEP_ID> was produced more than once.
+```
+
+`WorkflowCandidate.result` carries the declared result into each executable
+candidate. Candidate generation copies it from the specification, and
+candidates validate it against their own steps.
+
+The domain field is optional so that workflows stored before results existed
+still decode. Operations that need an answer reject a workflow without one
+explicitly rather than guessing which output matters.
 
 ## Workflow Steps
 
@@ -245,6 +300,9 @@ The experiment model includes:
 Experiment records can be persisted through `WorkflowExperimentRepository`
 implementations.
 
+Every candidate must declare a result. The runner checks this before any
+candidate executes, and judges the declared result of each run.
+
 Experiment results identify empirical winners without automatically changing
 production state.
 
@@ -282,6 +340,10 @@ The benchmark surface includes:
 - `WorkflowBenchmarkRanking`
 - `WorkflowBenchmarkComparison`
 
+Each case judges the workflow's declared result. Benchmarking a workflow
+without a declared result fails before any case executes, and a case whose run
+does not produce the result fails with `WorkflowResultError` naming the case.
+
 Benchmark results remain evidence.
 
 They do not mutate configured or production workflow state.
@@ -313,6 +375,16 @@ portfolio-selection decision.
 
 Promotion may additionally record explicit ordered model substitutions through
 `WorkflowProductionModelSubstitution`.
+
+Promotion requires a declared result. A workflow without one fails with
+`WorkflowResultError` before anything is written:
+
+```text
+Workflow <WORKFLOW_ID> does not declare a result.
+```
+
+`materialize_workflow_candidate` also rejects a candidate whose result differs
+from the specification's declared result.
 
 Promotion persists two different forms of production information:
 
@@ -458,6 +530,27 @@ A production workflow may explicitly declare caller-visible outputs using
 `WorkflowProductionEmission`.
 
 Production emissions reference declared workflow step outputs.
+
+Promotion records exactly one emission, named by
+`PRODUCTION_RESULT_EMISSION`:
+
+```text
+result <- declared workflow result
+```
+
+A production invocation therefore returns:
+
+```json
+{
+  "result": <declared result value>
+}
+```
+
+Keeping the answer under one named key leaves room for additional emissions
+later without changing where callers find the result.
+
+Production states promoted before declared results existed have no emissions
+and return `{}`. Promoting the workflow again records the `result` emission.
 
 `emit_production_result` projects completed workflow execution into the
 declared production response.
