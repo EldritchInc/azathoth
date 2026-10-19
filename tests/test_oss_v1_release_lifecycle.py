@@ -591,12 +591,13 @@ def test_oss_v1_release_lifecycle(
     )
 
     #
-    # The canonical minimal workflow declares no public production emissions,
-    # so the caller-visible result is intentionally empty even though the
-    # workflow itself executed successfully.
+    # The canonical minimal workflow declares its answer as its result, so
+    # promotion emits exactly that value to production callers.
     #
 
-    assert terminal_result.result == {}
+    assert terminal_result.result == {
+        "result": "success",
+    }
 
     association = invocation_run_repository.get(
         invocation.id,

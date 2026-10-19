@@ -41,6 +41,8 @@ from azathoth.workflows import (
     WorkflowProductionModelSubstitution,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
     materialize_workflow_candidate,
     promote_workflow_candidate,
 )
@@ -117,6 +119,11 @@ def create_workflow() -> WorkflowSpecification:
                         requirements=ModelRequirements(),
                     ),
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
             WorkflowStepSpecification(
                 id=TOOL_STEP_ID,
@@ -129,6 +136,10 @@ def create_workflow() -> WorkflowSpecification:
                 ),
                 depends_on=(PROMPT_STEP_ID,),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=PROMPT_STEP_ID,
+            name="answer",
         ),
     )
 
