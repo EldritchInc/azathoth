@@ -37,6 +37,8 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -91,7 +93,16 @@ def create_workflow() -> WorkflowSpecification:
                         requirements=ModelRequirements(),
                     ),
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="answer",
         ),
     )
 

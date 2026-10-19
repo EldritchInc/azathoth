@@ -30,6 +30,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import (
     generate_workflow_candidate,
@@ -112,6 +113,10 @@ def create_candidate(
                     ),
                 ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
         ),
     )
 
@@ -199,7 +204,6 @@ def test_benchmark_comparator_executes_all_candidates() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 
@@ -216,7 +220,6 @@ def test_benchmark_comparator_records_candidate_accuracy() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 
@@ -238,7 +241,6 @@ def test_benchmark_comparator_records_usage_independently() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 
@@ -263,7 +265,6 @@ def test_benchmark_comparator_preserves_candidate_order() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             factories,
-            output_name="classification",
         )
     )
 
@@ -279,7 +280,6 @@ def test_benchmark_comparison_returns_named_result() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 
@@ -295,7 +295,6 @@ def test_benchmark_comparison_returns_none_for_unknown_candidate() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 
@@ -307,7 +306,6 @@ def test_benchmark_comparison_handles_no_candidates() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             {},
-            output_name="classification",
         )
     )
 
@@ -320,7 +318,6 @@ def test_benchmark_comparison_round_trips_through_json() -> None:
         WorkflowBenchmarkComparator().compare(
             create_dataset(),
             create_candidate_factories(),
-            output_name="classification",
         )
     )
 

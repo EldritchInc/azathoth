@@ -130,11 +130,9 @@ azathoth
     ├── cases <BENCHMARK_ID>
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── run <BENCHMARK_ID>
-    │   ├── --workflow <WORKFLOW_ID>
-    │   └── --output <OUTPUT>
+    │   └── --workflow <WORKFLOW_ID>
     └── compare <BENCHMARK_ID>
         ├── --workflow <WORKFLOW_ID>   (repeat for each workflow)
-        ├── --output <OUTPUT>
         ├── --target-latency <SECONDS>
         └── --target-cost <USD>
 ```
@@ -495,6 +493,15 @@ SQLiteWorkflowRepository
 
 Import persists durable workflow intent.
 
+The document must declare a result. A document without one is rejected before
+anything is saved:
+
+```text
+Workflow document must declare a result.
+```
+
+The command exits with status `1`.
+
 It does not execute the workflow.
 
 It does not optimize the workflow.
@@ -513,6 +520,19 @@ examples/workflows/simple-prompt.json
 ```
 
 is a complete domain serialization rather than a second simplified CLI schema.
+
+Its single step declares an `answer` output, and the document declares that
+output as the workflow result:
+
+```json
+"result": {
+  "producer_step_id": "22222222-2222-2222-2222-222222222222",
+  "name": "answer"
+}
+```
+
+The result must name a step in the same document and an output that step
+declares.
 
 That keeps:
 
@@ -555,7 +575,26 @@ azathoth workflow show <WORKFLOW_ID>
 
 The identifier is a workflow UUID.
 
-The command renders workflow metadata and configured step structure.
+The command renders workflow metadata, the declared result, and configured
+step structure:
+
+```text
+ID: <WORKFLOW_ID>
+Name: simple prompt
+Version: 1.0.0
+Description: Return a concise answer to one request.
+Result: step <STEP_ID> output answer
+Steps: 1
+```
+
+A workflow stored before declared results existed renders:
+
+```text
+Result: undeclared
+```
+
+Such a workflow can still be inspected and run, but benchmarking, optimizing,
+and promoting it fail until it is re-imported with a result.
 
 It does not need to turn that specification into a `WorkflowCandidate` merely
 to inspect it.
@@ -748,8 +787,8 @@ azathoth run show <RUN_ID>
 ```
 
 The run is rendered exactly as `workflow run` rendered it: identity, status,
-statistics, and per-step evidence. It is followed by every evaluator judgment
-recorded for that run, then every feedback record, each oldest first.
+statistics, and per-step evidence, followed by every feedback record for that
+run, oldest first.
 
 Each executed step also lists the resources its strategy bound:
 
@@ -771,34 +810,9 @@ run show
     which resources did this run use?
 ```
 
-Evaluator judgments render as:
+A run with no feedback ends with:
 
 ```text
-Evaluations: 1
-
-Evaluation 1
-ID: <EVALUATION_ID>
-Evaluated: 2026-10-09T16:05:00+00:00
-Evaluator: exact-match 2.0.0
-Status: failed
-Score: 0.000000 (threshold 1.000000)
-Reason: Actual value did not exactly match expected value at $.intent.
-Evidence: expected = {"intent": "refund"}
-Evidence: actual = {"intent": "billing"}
-Evidence: difference_path = "$.intent"
-```
-
-Each evidence item renders on one line as its label and compact JSON value.
-
-Evaluator judgments precede human feedback because feedback can overrule an
-evaluator, not the reverse. Optimization records evaluations for every
-candidate run; other runs show none.
-
-A run with no evaluations or feedback ends with:
-
-```text
-Evaluations: none
-
 Feedback: none
 ```
 
@@ -920,6 +934,9 @@ The default is:
 
 # Optimization Arguments
 
+The workflow must declare a result. Optimization fails before generating any
+candidates when it does not.
+
 `--expected` is required and must be valid JSON.
 
 Examples:
@@ -952,14 +969,10 @@ ExpectedOutcome
 └── comparison = exact
 ```
 
+Each candidate run is judged by comparing its declared result with that
+value.
+
 The V1 CLI therefore uses exact expected-output evaluation for this command.
-
-Exact evaluation compares JSON types, not Python values: `true` never matches
-an expected `1`, and `null` never matches `false`, `0`, `""`, `[]`, or `{}`.
-Numbers compare by value, so `1` matches `1.0`.
-
-Richer comparisons are declared per case in benchmarks. See
-[Benchmark Comparisons](#benchmark-comparisons).
 
 # CLI Scoring Targets
 
@@ -1185,6 +1198,20 @@ explicit promotion
         │
         ├── WorkflowProductionState
         └── WorkflowProductionRevision
+```
+
+The workflow must declare a result. Promoting a workflow without one fails
+before anything is written:
+
+```text
+Workflow <WORKFLOW_ID> does not declare a result.
+```
+
+Promotion records one production emission, `result`, sourced from the
+declared result. `workflow production` shows it:
+
+```text
+Emission: result <- step <STEP_ID> output answer
 ```
 
 # Promotion Is Explicit
@@ -1417,12 +1444,18 @@ empirical workflow execution
 On success, the CLI renders:
 
 ```text
-Invocation ID
-
+Invocation ID: <INVOCATION_ID>
 Status: succeeded
-
-Result
+Result:
+{
+  "result": "Paris"
+}
 ```
+
+The workflow's declared result appears under the `result` key.
+
+Production promoted before declared results existed returns `{}`. Promote the
+workflow again to record the `result` emission.
 
 On failure, it renders:
 
@@ -1493,12 +1526,13 @@ Prompt Step: <STEP_ID>
 Primary Model: openrouter/some-model
 Substitute Models: openrouter/fallback-a, openrouter/fallback-b
 
-Emission: classification <- step <STEP_ID> output label
+Emission: result <- step <STEP_ID> output label
 ```
 
 Every prompt step lists its primary model. `Substitute Models` appears only
 for steps with approved substitutes. Emissions appear only when production
-state declares them.
+state declares them. Production promoted before declared results existed
+shows no emission until the workflow is promoted again.
 
 The active revision is the most recent revision whose recorded state equals
 the current production state. It is not simply the newest revision.
@@ -2073,8 +2107,7 @@ Execute one configured workflow against a dataset with:
 
 ```bash
 azathoth benchmark run <BENCHMARK_ID> \
-    --workflow <WORKFLOW_ID> \
-    --output <OUTPUT>
+    --workflow <WORKFLOW_ID>
 ```
 
 Compare several configured workflows against one dataset with:
@@ -2083,81 +2116,27 @@ Compare several configured workflows against one dataset with:
 azathoth benchmark compare <BENCHMARK_ID> \
     --workflow <WORKFLOW_ID> \
     --workflow <WORKFLOW_ID> \
-    --output <OUTPUT> \
     --target-latency <SECONDS> \
     --target-cost <USD>
 ```
 
-`--output` names the workflow output value evaluated against each case.
+Each case judges the workflow's declared result. There is no `--output`
+option: which value is the answer belongs to the workflow, not to the command
+line.
+
+Every workflow must declare a result. The command fails before loading the
+runtime or executing any case when one does not.
+
+A case whose run does not produce the declared result fails the command with
+the case named:
+
+```text
+Benchmark case <CASE_ID>: Workflow result 'answer' from step <STEP_ID> was not produced.
+```
 
 Benchmarking executes configured workflows.
 
 Like optimization, it produces evidence and does not promote.
-
-# Benchmark Comparisons
-
-Every benchmark case declares how its output is judged:
-
-```text
-exact
-    type-strict JSON equality
-
-normalized
-    type-strict JSON equality after Unicode, case, and whitespace
-    normalization of string values
-
-schema
-    validation against the JSON Schema carried as the expected value
-
-semantic
-    judgment of meaning (not supported yet)
-```
-
-Comparisons are declared on each case, never on workflows, so every workflow
-run against a benchmark is held to the same standards. One benchmark may mix
-comparisons: a workflow with conditional branches can legitimately return an
-exact label for one input and structured output for another.
-
-`benchmark show` counts cases per comparison:
-
-```text
-Cases: 42
-Comparisons: exact 12, normalized 26, schema 4
-```
-
-An empty benchmark shows `Comparisons: none`.
-
-`benchmark case-show` shows the comparison of one case.
-
-`benchmark run` breaks passes down per comparison after overall accuracy:
-
-```text
-Cases Run: 42
-Cases Passed: 37
-Accuracy: 0.880952
-Passed (exact): 11/12
-Passed (normalized): 23/26
-Passed (schema): 3/4
-```
-
-Overall accuracy remains the fraction of cases that met their own standard.
-
-# Unsupported Comparisons
-
-A benchmark containing a comparison Azathoth cannot judge yet may still be
-imported, so it is ready when support arrives.
-
-`benchmark run` and `benchmark compare` check every case before bootstrapping
-the runtime and fail without executing anything:
-
-```text
-Benchmark case <CASE_ID> uses comparison 'semantic', which is not supported yet.
-```
-
-Unsupported comparisons are never judged by a substitute evaluator.
-
-A schema case whose expected value is not a valid JSON Schema is rejected at
-import.
 
 # CLI JSON Arguments
 
@@ -2221,8 +2200,6 @@ The CLI contains human-readable renderers for:
 WorkflowRun
 
 WorkflowRun summaries
-
-WorkflowRunEvaluation
 
 WorkflowRunFeedback
 
@@ -2624,14 +2601,6 @@ run execution
 run feedback
     ≠
 run mutation
-
-evaluator judgment
-    ≠
-human feedback
-
-unsupported comparison
-    ≠
-silent substitute judgment
 
 experiment evidence
     ≠

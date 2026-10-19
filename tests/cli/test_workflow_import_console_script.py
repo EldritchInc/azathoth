@@ -154,7 +154,7 @@ def test_imported_example_appears_in_installed_workflow_show(
     assert "Strategy: answer request\n" in shown.stdout
     assert "Dependencies: 0\n" in shown.stdout
     assert "Inputs: 0\n" in shown.stdout
-    assert "Outputs: 0\n" in shown.stdout
+    assert "Outputs: 1\n" in shown.stdout
     assert "Conditions: 0\n" in shown.stdout
 
     assert shown.stderr == ""

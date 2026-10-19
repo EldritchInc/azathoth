@@ -19,6 +19,8 @@ from azathoth.workflows import (
     WorkflowRetryPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
     decode_workflow_document,
     encode_workflow_document,
 )
@@ -61,7 +63,16 @@ def create_simple_prompt_workflow() -> WorkflowSpecification:
                         requirements=ModelRequirements(),
                     ),
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="answer",
         ),
     )
 
@@ -171,9 +182,25 @@ def test_simple_prompt_example_uses_default_workflow_behavior() -> None:
 
     assert step.depends_on == ()
     assert step.inputs == ()
-    assert step.outputs == ()
     assert step.conditions == ()
 
     assert step.retry_policy == WorkflowRetryPolicy()
 
     assert step.failure_policy == WorkflowFailurePolicy.FAIL_WORKFLOW
+
+
+def test_simple_prompt_example_declares_answer_as_result() -> None:
+    specification = decode_workflow_document(read_simple_prompt_document())
+
+    step = specification.steps[0]
+
+    assert step.outputs == (
+        WorkflowValueBinding(
+            name="answer",
+        ),
+    )
+
+    assert specification.result == WorkflowValueReference(
+        producer_step_id=STEP_ID,
+        name="answer",
+    )

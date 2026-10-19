@@ -8,6 +8,7 @@ from azathoth.strategies import Strategy
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.production import (
+    WorkflowProductionEmission,
     WorkflowProductionModelSubstitution,
     WorkflowProductionRevision,
     WorkflowProductionState,
@@ -18,10 +19,13 @@ from azathoth.workflows.production_repository import (
 from azathoth.workflows.production_revision_repository import (
     WorkflowProductionRevisionRepository,
 )
+from azathoth.workflows.result import WorkflowResultError
 from azathoth.workflows.steps import (
     ToolStepSpecification,
     WorkflowStepSpecification,
 )
+
+PRODUCTION_RESULT_EMISSION = "result"
 
 
 def materialize_workflow_candidate(
@@ -42,6 +46,9 @@ def materialize_workflow_candidate(
         raise ValueError(
             "Workflow specification and candidate must contain the same step identifiers."
         )
+
+    if candidate.result != specification.result:
+        raise ValueError("Workflow specification and candidate must declare the same result.")
 
     promoted_steps = tuple(
         _materialize_step(
@@ -116,7 +123,20 @@ def promote_workflow_candidate(
     revision_repository: WorkflowProductionRevisionRepository,
     model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = (),
 ) -> WorkflowProductionRevision:
-    """Promote one explicitly selected workflow candidate to production."""
+    """Promote one explicitly selected workflow candidate to production.
+
+    Production emits exactly the workflow's declared result, under the name
+    `result`, so callers receive the same value evaluation judged. A workflow
+    without a declared result cannot be promoted.
+
+    Raises:
+        WorkflowResultError: The workflow does not declare a result.
+    """
+
+    if specification.result is None:
+        raise WorkflowResultError(
+            f"Workflow {specification.metadata.id} does not declare a result."
+        )
 
     promoted_specification = materialize_workflow_candidate(
         specification=specification,
@@ -126,6 +146,12 @@ def promote_workflow_candidate(
     state = WorkflowProductionState(
         specification=promoted_specification,
         model_substitutions=model_substitutions,
+        emissions=(
+            WorkflowProductionEmission(
+                name=PRODUCTION_RESULT_EMISSION,
+                source=specification.result,
+            ),
+        ),
     )
 
     revision = WorkflowProductionRevision(

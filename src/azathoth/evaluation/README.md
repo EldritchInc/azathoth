@@ -89,8 +89,22 @@ from azathoth.evaluation import (
     ExactMatchEvaluator,
     ExpectedOutcome,
     InMemoryBenchmarkRepository,
+    JsonDifference,
+    JsonSchemaViolation,
+    NormalizedMatchEvaluator,
     OutcomeComparison,
+    OutcomeEvaluator,
     SQLiteBenchmarkRepository,
+    SchemaEvaluator,
+    UnsupportedComparisonError,
+    default_comparison_evaluators,
+    first_json_difference,
+    json_schema_validator,
+    json_schema_violations,
+    json_type_name,
+    json_values_equal,
+    normalize_json_value,
+    normalize_text,
     require_benchmark_repository,
 )
 ```
@@ -145,13 +159,19 @@ This allows expectations to describe both scalar and structured outputs.
 
 Expected values are not limited to strings.
 
-For example:
+For example, a schema expectation carries a JSON Schema as its value:
 
 ```python
 ExpectedOutcome(
     description="Return the required support structure.",
     value={
-        "required_fields": [
+        "type": "object",
+        "properties": {
+            "category": {"enum": ["billing", "technical", "account"]},
+            "customer_message": {"type": "string"},
+            "recommended_action": {"type": "string"},
+        },
+        "required": [
             "category",
             "customer_message",
             "recommended_action",
@@ -161,19 +181,30 @@ ExpectedOutcome(
 )
 ```
 
-The evaluation domain therefore supports structured evaluation intent even
-when a particular concrete evaluator has not yet been implemented for every
-comparison category.
+What the value means depends on the comparison:
+
+```text
+exact / normalized
+    the expected output itself
+
+schema
+    a JSON Schema the output must satisfy
+
+semantic
+    the expected meaning (judged in a later release)
+```
 
 # OutcomeComparison
 
-`OutcomeComparison` identifies the broad comparison method appropriate for an
+`OutcomeComparison` identifies how an actual output is judged against an
 expected outcome.
 
 V1 defines:
 
 ```text
 EXACT
+
+NORMALIZED
 
 SEMANTIC
 
@@ -185,49 +216,96 @@ with serialized values:
 ```text
 exact
 
+normalized
+
 semantic
 
 schema
 ```
 
-This field expresses evaluation intent.
-
-It does not itself execute comparison logic.
+The comparison is declared per expected outcome, and therefore per benchmark
+case.
 
 ```text
 OutcomeComparison
-    declares comparison category
+    declares how one output is judged
 
 Evaluator
-    implements comparison behavior
+    implements that judgment
 ```
 
-# Comparison Intent Is Not Evaluator Dispatch
+Different cases in one benchmark may use different comparisons. A workflow
+with conditional branches may legitimately produce an exact routing label for
+one input and free text for another, and each case declares the standard its
+own output must meet.
 
-V1 does not define a global evaluator registry or automatic dispatcher such as:
+Comparisons belong to expected outcomes, never to workflows. Every workflow
+judged against a case is held to that case's standard, so candidates cannot
+choose or relax how they are judged.
+
+# Schema Expectations Are Validated at Construction
+
+When the comparison is `schema`, `ExpectedOutcome` rejects values that are not
+valid JSON Schemas:
 
 ```text
-OutcomeComparison.EXACT
-        │
-        ▼
-automatically locate ExactMatchEvaluator
+Invalid JSON Schema: <reason>
+
+A JSON Schema must be an object or a boolean.
 ```
 
-The caller supplies an `Evaluator`.
+Benchmark documents and CLI inputs construct `ExpectedOutcome`, so an invalid
+schema is rejected at import rather than discovered during a run.
 
-Therefore:
+# OutcomeEvaluator
+
+`OutcomeEvaluator` judges each expected outcome with the evaluator for its own
+comparison:
 
 ```text
 ExpectedOutcome.comparison
-    evaluation intent
-
-Evaluator instance
-    executable evaluation policy
+        │
+        ├── exact       → ExactMatchEvaluator
+        ├── normalized  → NormalizedMatchEvaluator
+        ├── schema      → SchemaEvaluator
+        └── semantic    → UnsupportedComparisonError
 ```
 
-remain separate concepts.
+It is the default evaluator for benchmark execution and configured workflow
+optimization.
 
-This keeps evaluator selection explicit.
+The delegated evaluator produces the result, so recorded evaluations name the
+evaluator that actually judged the output (`exact-match`, `normalized-match`,
+`json-schema`), never the router.
+
+The built-in mapping is returned by `default_comparison_evaluators()`. Callers
+may supply their own mapping:
+
+```python
+OutcomeEvaluator(
+    {
+        OutcomeComparison.EXACT: ExactMatchEvaluator(),
+        OutcomeComparison.SEMANTIC: custom_semantic_evaluator,
+    }
+)
+```
+
+# Unsupported Comparisons Are Rejected
+
+A comparison with no evaluator raises `UnsupportedComparisonError`, a
+`ValueError`:
+
+```text
+<subject> uses comparison 'semantic', which is not supported yet.
+```
+
+It is never judged by a substitute evaluator.
+
+`supports(comparison)` and `require_supported(comparison, subject=...)` let
+callers check comparisons before doing any work. Benchmark execution checks
+every case before executing any of them, and optimization checks its expected
+outcome before generating any candidate, so unsupported work fails before it
+starts rather than partway through.
 
 # Evaluator Protocol
 
@@ -294,8 +372,8 @@ Example:
 ```python
 EvaluatorMetadata(
     name="exact-match",
-    description="Compare expected and actual values using equality.",
-    version="1.0.0",
+    description="Compare expected and actual values using type-strict JSON equality.",
+    version="2.0.0",
 )
 ```
 
@@ -540,28 +618,29 @@ The evaluation domain does not impose one fixed evidence schema.
 
 An evaluator chooses meaningful labels and structured values.
 
-The exact-match evaluator uses:
+The built-in evaluators use:
 
 ```text
-expected
+exact-match
+    expected, actual, difference_path, expected_type, actual_type
 
-actual
+normalized-match
+    expected, actual, normalized_expected, normalized_actual,
+    difference_path, expected_type, actual_type
+
+json-schema
+    schema, actual, violation_count, violations
 ```
 
-Other evaluator implementations may use different evidence appropriate to
-their judgment method.
+Failure-only labels appear only when an output fails. Other evaluator
+implementations may use different evidence appropriate to their judgment
+method.
 
 The generic `EvaluationResult` model remains stable.
 
 # ExactMatchEvaluator
 
-V1 provides one concrete evaluator:
-
-```text
-ExactMatchEvaluator
-```
-
-It performs deterministic Python equality between:
+`ExactMatchEvaluator` performs deterministic, type-strict JSON equality between:
 
 ```text
 expected.value
@@ -569,27 +648,26 @@ expected.value
 actual
 ```
 
-Conceptually:
+Comparison follows JSON types rather than Python equality:
 
 ```text
-expected.value
-      │
-      ▼
-     ==
-      ▲
-      │
-actual
+booleans never equal numbers        true ≠ 1, false ≠ 0
+
+null never equals other values      null ≠ false, 0, "", [], {}
+
+numbers compare by value            1 = 1.0
+
+arrays compare in order             [1, 2] ≠ [2, 1]
+
+objects require identical keys      key order is irrelevant
 ```
+
+The comparison is implemented by `first_json_difference()`, shared with the
+normalized evaluator.
 
 # Exact Match Pass
 
-If:
-
-```text
-expected.value == actual
-```
-
-then the evaluator returns:
+If the values are equal under JSON typing, the evaluator returns:
 
 ```text
 score = 1.0
@@ -601,13 +679,7 @@ status = PASSED
 
 # Exact Match Failure
 
-If:
-
-```text
-expected.value != actual
-```
-
-then the evaluator returns:
+Otherwise it returns:
 
 ```text
 score = 0.0
@@ -617,25 +689,31 @@ threshold = 1.0
 status = FAILED
 ```
 
+with a reason naming where the values first differ:
+
+```text
+Actual value did not exactly match expected value at $.intent.
+```
+
 No fuzzy matching or normalization is performed.
 
 # Exact Match Supports Structured JSON
 
-Because both expected and actual values are JSON-compatible, equality can
-compare nested structures.
+Nested objects and arrays are compared recursively.
 
-For example:
+The first difference is located by a `$`-rooted path:
 
 ```text
-{
-    "intent": "duplicate_charge",
-    "confidence": 0.97,
-}
+$                   the root value
+
+$.result.approved   an object member
+
+$.labels[1]         an array element
 ```
 
-must equal the actual nested value exactly to pass.
-
-A nested difference causes failure.
+Object members are visited in sorted key order, so the same pair of values
+always reports the same path. A length or key-set mismatch is reported at the
+containing array or object.
 
 # ExactMatchEvaluator Evidence
 
@@ -647,10 +725,22 @@ expected = expected.value
 actual = actual
 ```
 
-as two `EvaluationEvidence` items.
+A failure also records:
 
-The completed result therefore carries both the conclusion and the direct
-values used to reach that conclusion.
+```text
+difference_path = first differing path
+```
+
+and, when the JSON types differ there:
+
+```text
+expected_type = JSON type expected
+
+actual_type = JSON type found
+```
+
+JSON type names are `null`, `boolean`, `number`, `string`, `array`, and
+`object`.
 
 # ExactMatchEvaluator Identity
 
@@ -659,35 +749,148 @@ The concrete evaluator reports:
 ```text
 name = "exact-match"
 
-version = "1.0.0"
+version = "2.0.0"
 ```
 
-Those values are copied into every result it produces.
+Version `2.0.0` introduced type-strict comparison. Earlier results recorded
+version `1.0.0`, when booleans could equal numbers, so recorded evaluations
+show which rules judged them.
 
-# ExactMatchEvaluator Does Not Dispatch on Comparison
+# Concrete Evaluators Do Not Dispatch on Comparison
 
-The frozen V1 implementation compares:
-
-```text
-expected.value == actual
-```
-
-directly.
-
-It does not branch on:
+Each concrete evaluator applies its own judgment without inspecting:
 
 ```text
 expected.comparison
 ```
 
-inside `ExactMatchEvaluator`.
+Comparison dispatch belongs to `OutcomeEvaluator`.
 
-Therefore callers should pair evaluator choice and expected comparison intent
-coherently.
+Using a concrete evaluator directly is an explicit choice to apply that
+judgment regardless of the declared comparison.
 
-The package does not silently enforce or infer that pairing.
+# NormalizedMatchEvaluator
 
-This is an important V1 boundary.
+`NormalizedMatchEvaluator` applies type-strict JSON equality after normalizing
+every string value.
+
+Normalization is:
+
+```text
+NFKC Unicode normalization
+
+case folding
+
+NFKC normalization again
+
+trim, and collapse internal whitespace runs to single spaces
+```
+
+The second normalization pass keeps case folding from reintroducing
+non-canonical forms.
+
+Therefore:
+
+```text
+"  Duplicate_Charge\n"   matches   "duplicate_charge"
+
+"ＲＥＦＵＮＤ"              matches   "refund"
+
+"Straße"                 matches   "strasse"
+```
+
+Normalization never relaxes structure:
+
+```text
+object keys are not normalized
+
+array order still matters
+
+inner spaces are not removed      "duplicate charge" ≠ "duplicatecharge"
+
+types are not converted           "true" ≠ true, "1" ≠ 1
+```
+
+# NormalizedMatchEvaluator Evidence
+
+Every result records:
+
+```text
+expected
+
+actual
+
+normalized_expected
+
+normalized_actual
+```
+
+A failure also records `difference_path`, `expected_type`, and `actual_type`
+exactly as exact matching does.
+
+The evaluator reports:
+
+```text
+name = "normalized-match"
+
+version = "1.0.0"
+```
+
+# SchemaEvaluator
+
+`SchemaEvaluator` validates the actual output against the JSON Schema carried
+as the expected value.
+
+The schema dialect follows the schema's `$schema` keyword and defaults to
+Draft 2020-12. Boolean schemas are valid: `true` accepts every value and
+`false` rejects every value.
+
+Validation is deterministic and offline:
+
+```text
+remote $ref values are never retrieved
+
+format is an annotation, not an assertion
+
+booleans never satisfy {"type": "integer"} or {"type": "number"}
+```
+
+# SchemaEvaluator Evidence
+
+Every result records:
+
+```text
+schema
+
+actual
+```
+
+A failure also records:
+
+```text
+violation_count = total violations
+
+violations = up to ten {path, message} entries
+```
+
+Violations are ordered by path, then message, so the same output always
+produces the same evidence:
+
+```text
+$.category   'shipping' is not one of ['billing', 'technical', 'account']
+
+$.priority   9 is greater than the maximum of 5
+
+$.tags[1]    3 is not of type 'string'
+```
+
+The evaluator reports:
+
+```text
+name = "json-schema"
+
+version = "1.0.0"
+```
 
 # Evaluation Is Not Execution
 
@@ -917,9 +1120,19 @@ BenchmarkCase
       │
       ├── input
       └── expected
+              ├── description
+              ├── value
+              └── comparison
 ```
 
-This makes the workload self-contained with respect to what result is expected.
+This makes the workload self-contained with respect to what result is
+expected and how it is judged.
+
+Each case declares its own comparison. There is no benchmark-level default:
+reading a case is always enough to know how it is judged.
+
+`BenchmarkDataset.comparison_counts()` reports how many cases use each
+comparison, in comparison declaration order, omitting unused comparisons.
 
 # Benchmark Case Metadata
 
@@ -1329,13 +1542,14 @@ architecture.
                   │       │        │
                   ▼       ▼        ▼
             description  value  comparison
-                           │
-                           │
-                    ACTUAL VALUE
-                           │
-                           ▼
+                           │        │
+                           │        ▼
+                    ACTUAL VALUE  OutcomeEvaluator
+                           │        │
+                           ▼        ▼
 
-                       Evaluator
+             Evaluator for that comparison
+             exact / normalized / schema
                   ┌────────┴────────┐
                   │                 │
                   ▼                 ▼
@@ -1387,9 +1601,17 @@ expected outcome
     ≠
 evaluator implementation
 
-comparison intent
+comparison declaration
     ≠
-automatic evaluator dispatch
+evaluator implementation
+
+unsupported comparison
+    ≠
+silent substitute judgment
+
+normalized equality
+    ≠
+type coercion
 
 score
     ≠

@@ -27,7 +27,9 @@ from azathoth.evaluation import (
 )
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
+    SQLiteWorkflowRepository,
     WorkflowGenerationError,
+    WorkflowResultError,
     WorkflowScoringPolicy,
 )
 
@@ -279,9 +281,13 @@ def run_benchmark(
     *,
     benchmark_id: UUID,
     workflow_id: UUID,
-    output_name: str,
 ) -> int:
-    """Execute one configured workflow against a durable benchmark."""
+    """Execute one configured workflow against a durable benchmark.
+
+    Each case judges the workflow's declared result. Unsupported comparisons
+    and workflows without a declared result are rejected before runtime
+    bootstrap, without executing any case.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -304,6 +310,12 @@ def run_benchmark(
     if not _comparisons_supported(dataset):
         return 1
 
+    if not _results_declared(
+        configuration,
+        (workflow_id,),
+    ):
+        return 1
+
     runtime = load_runtime(
         configuration,
     )
@@ -314,13 +326,13 @@ def run_benchmark(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 dataset=dataset,
-                output_name=output_name,
             )
         )
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
         UnsupportedComparisonError,
+        WorkflowResultError,
     ) as exc:
         print(
             str(exc),
@@ -343,11 +355,15 @@ def compare_benchmarks(
     *,
     benchmark_id: UUID,
     workflow_ids: tuple[UUID, ...],
-    output_name: str,
     target_latency_seconds: float,
     target_cost_usd: float,
 ) -> int:
-    """Compare configured workflows against a durable benchmark."""
+    """Compare configured workflows against a durable benchmark.
+
+    Each case judges every workflow's declared result. Unsupported
+    comparisons and workflows without a declared result are rejected before
+    runtime bootstrap, without executing any case.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -370,6 +386,12 @@ def compare_benchmarks(
     if not _comparisons_supported(dataset):
         return 1
 
+    if not _results_declared(
+        configuration,
+        workflow_ids,
+    ):
+        return 1
+
     runtime = load_runtime(
         configuration,
     )
@@ -380,7 +402,6 @@ def compare_benchmarks(
                 runtime=runtime,
                 workflow_ids=workflow_ids,
                 dataset=dataset,
-                output_name=output_name,
                 scoring_policy=WorkflowScoringPolicy(
                     target_latency_seconds=target_latency_seconds,
                     target_cost_usd=target_cost_usd,
@@ -429,6 +450,33 @@ def _comparisons_supported(
         except UnsupportedComparisonError as exc:
             print(
                 str(exc),
+                file=sys.stderr,
+            )
+
+            return False
+
+    return True
+
+
+def _results_declared(
+    configuration: CliRuntimeConfiguration,
+    workflow_ids: tuple[UUID, ...],
+) -> bool:
+    """Report the first configured workflow that declares no result.
+
+    Unconfigured identifiers are left for runtime bootstrap to report.
+    """
+
+    repository = SQLiteWorkflowRepository(
+        configuration.database,
+    )
+
+    for workflow_id in workflow_ids:
+        specification = repository.get(workflow_id)
+
+        if specification is not None and specification.result is None:
+            print(
+                f"Workflow {workflow_id} does not declare a result.",
                 file=sys.stderr,
             )
 

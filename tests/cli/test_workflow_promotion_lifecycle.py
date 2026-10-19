@@ -32,6 +32,8 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -69,7 +71,16 @@ def create_workflow() -> WorkflowSpecification:
                     ),
                     model_selection=MODEL,
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="answer",
         ),
     )
 
@@ -296,3 +307,4 @@ def test_cli_promoted_workflow_is_immediately_invokable(
     assert run.steps[0].execution.output == "production-success"
 
     assert "Status: succeeded\n" in captured.out
+    assert '"result": "production-success"' in captured.out

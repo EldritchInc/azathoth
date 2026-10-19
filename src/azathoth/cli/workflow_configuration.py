@@ -14,6 +14,7 @@ from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
+    WorkflowValueReference,
     decode_workflow_document,
 )
 
@@ -62,6 +63,8 @@ def show_workflow(
 
     print(f"Description: {metadata.description}")
 
+    print(f"Result: {_render_result(specification.result)}")
+
     print(f"Steps: {len(specification.steps)}")
 
     for index, step in enumerate(
@@ -108,7 +111,12 @@ def show_workflow(
 def import_workflow(
     document_path: Path,
 ) -> int:
-    """Import one durable workflow from a JSON document."""
+    """Import one durable workflow from a JSON document.
+
+    Imported workflows must declare their result, the one value evaluation
+    judges and production returns. Documents without one are rejected before
+    anything is persisted.
+    """
 
     try:
         document = document_path.read_text(encoding="utf-8")
@@ -125,6 +133,14 @@ def import_workflow(
     except WorkflowDocumentError as exc:
         print(
             str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    if specification.result is None:
+        print(
+            "Workflow document must declare a result.",
             file=sys.stderr,
         )
 
@@ -164,3 +180,14 @@ def _step_type(
         return "prompt"
 
     return "tool"
+
+
+def _render_result(
+    result: WorkflowValueReference | None,
+) -> str:
+    """Render one workflow's declared result reference."""
+
+    if result is None:
+        return "undeclared"
+
+    return f"step {result.producer_step_id} output {result.name}"

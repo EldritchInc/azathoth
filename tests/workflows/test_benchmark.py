@@ -30,6 +30,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import (
     generate_workflow_candidate,
@@ -116,6 +117,10 @@ def create_candidate(
                 ),
             ),
         ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
     )
 
     catalog = ModelCatalog(
@@ -187,6 +192,10 @@ def create_failing_candidate(
                 ),
             ),
         ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="classification",
+        ),
     )
 
     catalog = ModelCatalog(
@@ -222,7 +231,6 @@ def test_workflow_benchmark_executes_all_cases() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -239,7 +247,6 @@ def test_workflow_benchmark_evaluates_all_cases() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -253,7 +260,6 @@ def test_workflow_benchmark_records_failed_evaluation() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_failing_candidate,
-            output_name="classification",
         )
     )
 
@@ -270,7 +276,6 @@ def test_workflow_benchmark_records_execution_runs() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -286,7 +291,6 @@ def test_workflow_benchmark_aggregates_usage() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -305,7 +309,6 @@ def test_workflow_benchmark_handles_empty_dataset() -> None:
         WorkflowBenchmarkRunner().run(
             dataset,
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -322,7 +325,6 @@ def test_workflow_benchmark_round_trips_through_json() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -340,7 +342,6 @@ def test_workflow_benchmark_supplies_case_input_to_execution_context() -> None:
         WorkflowBenchmarkRunner().run(
             dataset,
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -369,7 +370,6 @@ def test_workflow_benchmark_input_preserves_case_order() -> None:
         WorkflowBenchmarkRunner().run(
             dataset,
             create_candidate,
-            output_name="classification",
         )
     )
 
@@ -392,7 +392,6 @@ def test_workflow_benchmark_records_benchmark_input_provenance() -> None:
         WorkflowBenchmarkRunner().run(
             create_dataset(),
             create_candidate,
-            output_name="classification",
         )
     )
 

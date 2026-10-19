@@ -23,6 +23,8 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
     encode_workflow_document,
 )
 
@@ -60,7 +62,16 @@ def create_workflow() -> WorkflowSpecification:
                         requirements=ModelRequirements(),
                     ),
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="answer",
         ),
     )
 

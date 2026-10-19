@@ -1400,7 +1400,6 @@ def test_benchmark_run_dispatches_command(
         tuple[
             UUID,
             UUID,
-            str,
         ]
     ] = []
 
@@ -1408,13 +1407,11 @@ def test_benchmark_run_dispatches_command(
         *,
         benchmark_id: UUID,
         workflow_id: UUID,
-        output_name: str,
     ) -> int:
         received.append(
             (
                 benchmark_id,
                 workflow_id,
-                output_name,
             )
         )
 
@@ -1434,8 +1431,6 @@ def test_benchmark_run_dispatches_command(
             str(BENCHMARK_ID),
             "--workflow",
             str(WORKFLOW_ID),
-            "--output",
-            "classification",
         )
     )
 
@@ -1445,6 +1440,5 @@ def test_benchmark_run_dispatches_command(
         (
             BENCHMARK_ID,
             WORKFLOW_ID,
-            "classification",
         )
     ]

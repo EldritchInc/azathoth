@@ -19,6 +19,10 @@ from azathoth.workflows.input import (
     create_workflow_input_event,
 )
 from azathoth.workflows.ranker import WorkflowRanker
+from azathoth.workflows.result import (
+    WorkflowResultError,
+    workflow_result,
+)
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.scorecard import WorkflowScorecard
 from azathoth.workflows.scoring import (
@@ -241,18 +245,19 @@ class WorkflowBenchmarkRunner:
             [BenchmarkCase],
             WorkflowCandidate,
         ],
-        *,
-        output_name: str,
     ) -> WorkflowBenchmarkResult:
         """Execute and evaluate every case in a benchmark dataset.
 
-        Every case is evaluated with the evaluator for its own comparison.
-        All comparisons are checked before any case executes, so a dataset
-        containing an unsupported comparison never partially runs.
+        Every case judges the candidate's declared result with the evaluator
+        for the case's own comparison. All comparisons are checked before any
+        case executes, so a dataset containing an unsupported comparison never
+        partially runs.
 
         Raises:
             UnsupportedComparisonError: A case uses a comparison with no
                 evaluator.
+            WorkflowResultError: A candidate declares no result, or a run did
+                not produce its declared result exactly once.
         """
 
         for case in dataset.cases:
@@ -268,6 +273,11 @@ class WorkflowBenchmarkRunner:
                 case,
             )
 
+            if candidate.result is None:
+                raise WorkflowResultError(
+                    f"Workflow {candidate.metadata.id} does not declare a result."
+                )
+
             context = Context(
                 events=(
                     create_workflow_input_event(
@@ -282,18 +292,17 @@ class WorkflowBenchmarkRunner:
                 context,
             )
 
-            values = run.values_named(
-                output_name,
-            )
-
-            if len(values) != 1:
-                raise ValueError(
-                    f"Benchmark workflow must produce exactly one value named {output_name!r}."
+            try:
+                actual = workflow_result(
+                    run,
+                    candidate.result,
                 )
+            except WorkflowResultError as exc:
+                raise WorkflowResultError(f"Benchmark case {case.id}: {exc}") from exc
 
             evaluation = await self._evaluator.evaluate(
                 case.expected,
-                values[0].value,
+                actual,
             )
 
             results.append(
@@ -327,8 +336,6 @@ class WorkflowBenchmarkComparator:
             str,
             Callable[[BenchmarkCase], WorkflowCandidate],
         ],
-        *,
-        output_name: str,
     ) -> WorkflowBenchmarkComparison:
         """Execute every named candidate factory against one dataset."""
 
@@ -338,7 +345,6 @@ class WorkflowBenchmarkComparator:
             result = await self._runner.run(
                 dataset,
                 candidate_factory,
-                output_name=output_name,
             )
 
             candidates.append(

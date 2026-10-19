@@ -102,8 +102,7 @@ def test_installed_benchmark_run_help_exposes_execution_arguments(
     assert "BENCHMARK_ID" in result.stdout
     assert "--workflow" in result.stdout
     assert "WORKFLOW_ID" in result.stdout
-    assert "--output" in result.stdout
-    assert "OUTPUT" in result.stdout
+    assert "--output" not in result.stdout
 
     assert result.stderr == ""
 
@@ -124,8 +123,7 @@ def test_installed_benchmark_compare_help_exposes_scoring_arguments(
     assert "BENCHMARK_ID" in result.stdout
     assert "--workflow" in result.stdout
     assert "WORKFLOW_ID" in result.stdout
-    assert "--output" in result.stdout
-    assert "OUTPUT" in result.stdout
+    assert "--output" not in result.stdout
     assert "--target-latency" in result.stdout
     assert "SECONDS" in result.stdout
     assert "--target-cost" in result.stdout
@@ -145,8 +143,6 @@ def test_installed_benchmark_run_reaches_operator_command(
         str(BENCHMARK_ID),
         "--workflow",
         str(FIRST_WORKFLOW_ID),
-        "--output",
-        "classification",
         cwd=tmp_path,
         database=database,
     )
@@ -172,8 +168,6 @@ def test_installed_benchmark_compare_reaches_operator_command(
         str(FIRST_WORKFLOW_ID),
         "--workflow",
         str(SECOND_WORKFLOW_ID),
-        "--output",
-        "classification",
         "--target-latency",
         "5",
         "--target-cost",

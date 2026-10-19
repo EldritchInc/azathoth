@@ -25,7 +25,6 @@ async def execute_configured_benchmark(
     runtime: RuntimeEnvironment,
     workflow_id: UUID,
     dataset: BenchmarkDataset,
-    output_name: str,
     runner: WorkflowBenchmarkRunner | None = None,
 ) -> WorkflowBenchmarkResult:
     """Execute one configured workflow against a benchmark dataset."""
@@ -44,7 +43,6 @@ async def execute_configured_benchmark(
     return await benchmark_runner.run(
         dataset,
         candidate_factory,
-        output_name=output_name,
     )
 
 
@@ -53,7 +51,6 @@ async def compare_configured_benchmarks(
     runtime: RuntimeEnvironment,
     workflow_ids: tuple[UUID, ...],
     dataset: BenchmarkDataset,
-    output_name: str,
     scoring_policy: WorkflowScoringPolicy,
     comparator: WorkflowBenchmarkComparator | None = None,
 ) -> WorkflowBenchmarkRanking:
@@ -93,7 +90,6 @@ async def compare_configured_benchmarks(
     comparison = await benchmark_comparator.compare(
         dataset,
         candidate_factories,
-        output_name=output_name,
     )
 
     scorer = WorkflowBenchmarkScorer(

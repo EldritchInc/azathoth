@@ -35,6 +35,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import portfolio_for_catalog
 
@@ -172,6 +173,10 @@ def create_workflow(
                 ),
             ),
         ),
+        result=WorkflowValueReference(
+            producer_step_id=step_id,
+            name="classification",
+        ),
     )
 
 
@@ -253,7 +258,6 @@ def test_configured_comparison_ranks_workflows() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -278,7 +282,6 @@ def test_configured_comparison_preserves_score_dimensions() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -309,7 +312,6 @@ def test_configured_comparison_uses_workflow_identifiers_as_names() -> None:
                 INCORRECT_WORKFLOW_ID,
             ),
             dataset=create_dataset(),
-            output_name="classification",
             scoring_policy=create_policy(),
         )
     )
@@ -330,7 +332,6 @@ def test_configured_comparison_rejects_fewer_than_two_workflows() -> None:
                 runtime=create_runtime(),
                 workflow_ids=(CORRECT_WORKFLOW_ID,),
                 dataset=create_dataset(),
-                output_name="classification",
                 scoring_policy=create_policy(),
             )
         )
@@ -349,7 +350,6 @@ def test_configured_comparison_rejects_duplicate_workflows() -> None:
                     CORRECT_WORKFLOW_ID,
                 ),
                 dataset=create_dataset(),
-                output_name="classification",
                 scoring_policy=create_policy(),
             )
         )

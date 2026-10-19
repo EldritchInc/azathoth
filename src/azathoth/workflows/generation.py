@@ -110,6 +110,7 @@ def generate_workflow_candidate(
     return WorkflowCandidate(
         metadata=specification.metadata,
         steps=tuple(executable_steps),
+        result=specification.result,
     )
 
 

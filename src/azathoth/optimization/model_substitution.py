@@ -123,7 +123,10 @@ def _replace_prompt_step_model(
     target_model: ModelMetadata,
     registry: LanguageModelRegistry,
 ) -> WorkflowCandidate:
-    """Return one candidate with a single prompt step rebound."""
+    """Return one candidate with a single prompt step rebound.
+
+    Every other candidate attribute, including the declared result, is kept.
+    """
 
     generated = generate_prompt_candidates(
         specification=specification,
@@ -149,8 +152,8 @@ def _replace_prompt_step_model(
         strategy=generated[0],
     )
 
-    return WorkflowCandidate(
-        metadata=candidate.metadata,
+    return replace(
+        candidate,
         steps=tuple(
             (replacement_step if step.id == candidate_step.id else step) for step in candidate.steps
         ),
