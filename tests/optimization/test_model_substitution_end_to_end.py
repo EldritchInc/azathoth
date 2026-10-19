@@ -37,6 +37,8 @@ from azathoth.workflows import (
     WorkflowScoringPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
+    WorkflowValueBinding,
+    WorkflowValueReference,
 )
 from tests.model_authorization import (
     generate_workflow_candidate,
@@ -188,7 +190,16 @@ def create_workflow() -> WorkflowSpecification:
                         requirements=ModelRequirements(),
                     ),
                 ),
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=STEP_ID,
+            name="answer",
         ),
     )
 

@@ -31,6 +31,8 @@ from azathoth.workflows import (
     WorkflowMetadata,
     WorkflowScorer,
     WorkflowScoringPolicy,
+    WorkflowValueBinding,
+    WorkflowValueReference,
 )
 
 WEAK_WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -187,7 +189,16 @@ def create_workflow(
             WorkflowCandidateStep(
                 id=step_id,
                 strategy=strategy,
+                outputs=(
+                    WorkflowValueBinding(
+                        name="answer",
+                    ),
+                ),
             ),
+        ),
+        result=WorkflowValueReference(
+            producer_step_id=step_id,
+            name="answer",
         ),
     )
 
