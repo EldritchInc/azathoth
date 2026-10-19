@@ -39,6 +39,7 @@ from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
+    WorkflowResultError,
     WorkflowScoringPolicy,
 )
 
@@ -108,6 +109,7 @@ def promote_workflow(
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
+        WorkflowResultError,
     ) as exc:
         print(
             str(exc),
