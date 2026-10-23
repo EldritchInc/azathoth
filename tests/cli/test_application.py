@@ -1161,7 +1161,11 @@ def test_benchmark_show_dispatches_command(
 
     def fake_show_benchmark(
         benchmark_id: UUID,
+        *,
+        revision: int | None,
     ) -> int:
+        assert revision is None
+
         received.append(benchmark_id)
 
         return 0

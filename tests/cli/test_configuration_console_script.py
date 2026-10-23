@@ -114,7 +114,7 @@ def test_installed_cli_imports_checked_in_benchmark(
 
     assert result.returncode == 0
 
-    assert result.stdout == (f"Imported benchmark dataset {BENCHMARK_ID}.\n")
+    assert result.stdout == (f"Imported benchmark dataset {BENCHMARK_ID} revision 1.\n")
 
     assert result.stderr == ""
     assert database.exists()

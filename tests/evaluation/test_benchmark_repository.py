@@ -2,8 +2,6 @@
 
 from uuid import UUID
 
-import pytest
-
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -95,18 +93,16 @@ def test_in_memory_benchmark_repository_preserves_insertion_order() -> None:
     )
 
 
-def test_in_memory_benchmark_repository_rejects_duplicate_dataset() -> None:
+def test_in_memory_benchmark_repository_appends_a_revision_for_a_resave() -> None:
     repository = InMemoryBenchmarkRepository()
 
     dataset = create_dataset()
 
-    repository.save(dataset)
+    first = repository.save(dataset)
+    second = repository.save(dataset)
 
-    with pytest.raises(
-        ValueError,
-        match=(f"Benchmark dataset {DATASET_ID} already exists"),
-    ):
-        repository.save(dataset)
+    assert (first.number, second.number) == (1, 2)
+    assert repository.datasets() == (dataset,)
 
 
 def test_benchmark_repository_satisfies_protocol() -> None:
