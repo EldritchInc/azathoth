@@ -143,6 +143,7 @@ def test_benchmark_result_rendering_breaks_down_passes_by_comparison() -> None:
         "Passed (exact): 0/1\n"
         "Passed (normalized): 1/1\n"
         "Passed (schema): 1/1\n"
+        "Run failures: 0\n"
         "Total Tokens: "
     ) in rendered
 
