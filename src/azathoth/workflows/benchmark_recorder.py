@@ -59,6 +59,7 @@ class WorkflowBenchmarkEvidenceRecorder:
         record = WorkflowBenchmarkExecutionRecord(
             id=result.id,
             benchmark_id=result.dataset_id,
+            benchmark_digest=result.dataset_digest,
             kind=WorkflowBenchmarkExecutionKind.RUN,
             candidates=(
                 _execution_candidate(
@@ -120,6 +121,7 @@ class WorkflowBenchmarkEvidenceRecorder:
         record = WorkflowBenchmarkExecutionRecord(
             id=ranking.id,
             benchmark_id=comparison.dataset_id,
+            benchmark_digest=comparison.dataset_digest,
             kind=WorkflowBenchmarkExecutionKind.COMPARE,
             candidates=tuple(execution_candidates[name] for name in names),
             ranking=tuple(execution_candidates[name].id for name in ranked_names),

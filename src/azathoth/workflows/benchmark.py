@@ -15,6 +15,10 @@ from azathoth.evaluation import (
     judge_call_count,
     judge_calls_cost_usd,
 )
+from azathoth.revisions import (
+    CONTENT_DIGEST_PATTERN,
+    content_digest,
+)
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.input import (
@@ -87,13 +91,19 @@ class WorkflowBenchmarkResult(BaseModel):
     """Aggregate result of executing one benchmark dataset.
 
     The identifier is shared by the durable execution record of a recorded
-    benchmark run.
+    benchmark run. The dataset digest is the content digest of the exact
+    benchmark revision executed; it is absent for results built by hand.
     """
 
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
     dataset_id: UUID
+
+    dataset_digest: str | None = Field(
+        default=None,
+        pattern=CONTENT_DIGEST_PATTERN,
+    )
     cases: tuple[WorkflowBenchmarkCaseResult, ...] = ()
 
     @property
@@ -222,11 +232,20 @@ class WorkflowBenchmarkComparisonEntry(BaseModel):
 
 
 class WorkflowBenchmarkComparison(BaseModel):
-    """Side-by-side benchmark evidence for multiple workflow candidates."""
+    """Side-by-side benchmark evidence for multiple workflow candidates.
+
+    The dataset digest is the content digest of the exact benchmark revision
+    every candidate executed.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     dataset_id: UUID
+
+    dataset_digest: str | None = Field(
+        default=None,
+        pattern=CONTENT_DIGEST_PATTERN,
+    )
     candidates: tuple[WorkflowBenchmarkComparisonEntry, ...] = ()
 
     @model_validator(mode="after")
@@ -386,6 +405,7 @@ class WorkflowBenchmarkRunner:
 
         return WorkflowBenchmarkResult(
             dataset_id=dataset.id,
+            dataset_digest=content_digest(dataset),
             cases=tuple(results),
         )
 
@@ -466,6 +486,7 @@ class WorkflowBenchmarkComparator:
 
         return WorkflowBenchmarkComparison(
             dataset_id=dataset.id,
+            dataset_digest=content_digest(dataset),
             candidates=tuple(candidates),
         )
 

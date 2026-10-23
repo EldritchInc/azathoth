@@ -38,6 +38,12 @@ def render_workflow_experiment(
         f"Experiment ID: {experiment.id}",
         f"Recorded: {experiment.recorded_at.isoformat()}",
         f"Benchmark: {benchmark}",
+        "Benchmark Digest: "
+        + (
+            experiment.benchmark_digest[:12]
+            if experiment.benchmark_digest is not None
+            else "unknown"
+        ),
         f"Candidates: {len(experiment.observations)}",
         f"Cases: {_case_count(experiment)}",
         f"Winner Observation ID: {experiment.winner.id}",

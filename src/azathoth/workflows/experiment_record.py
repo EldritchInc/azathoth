@@ -11,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.workflows.candidate import WorkflowCandidateSignature
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.scorecard import WorkflowScorecard
@@ -153,6 +154,11 @@ class WorkflowExperimentRecord(BaseModel):
     id: UUID = Field(default_factory=uuid4)
 
     benchmark_id: UUID | None = None
+
+    benchmark_digest: str | None = Field(
+        default=None,
+        pattern=CONTENT_DIGEST_PATTERN,
+    )
 
     observations: tuple[
         WorkflowExperimentObservation,
