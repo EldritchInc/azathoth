@@ -28,6 +28,7 @@ WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_RUNS_ACTION = "runs"
 WORKFLOW_SHOW_ACTION = "show"
 
+WORKFLOW_BENCHMARK_ID_ATTRIBUTE = "workflow_benchmark_id"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE = "workflow_experiment_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
@@ -36,7 +37,6 @@ WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 
-EXPECTED_VALUE_ATTRIBUTE = "expected_value"
 TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
 TARGET_COST_ATTRIBUTE = "target_cost_usd"
 GENERATIONS_ATTRIBUTE = "generations"
@@ -131,12 +131,12 @@ def add_workflow_parser(
     )
 
     workflow_optimize_parser.add_argument(
-        "--expected",
-        dest=EXPECTED_VALUE_ATTRIBUTE,
+        "--benchmark",
+        dest=WORKFLOW_BENCHMARK_ID_ATTRIBUTE,
         required=True,
-        type=json_value,
-        metavar="JSON",
-        help="Expected workflow output as JSON.",
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark UUID whose cases judge every candidate.",
     )
 
     workflow_optimize_parser.add_argument(

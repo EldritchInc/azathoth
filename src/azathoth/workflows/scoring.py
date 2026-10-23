@@ -8,6 +8,9 @@ from azathoth.evaluation import EvaluationResult
 from azathoth.workflows.execution import (
     WorkflowRun,
 )
+from azathoth.workflows.run_failure import (
+    RUN_FAILURE_EVALUATOR_NAME,
+)
 from azathoth.workflows.scorecard import (
     WorkflowScorecard,
 )
@@ -48,7 +51,13 @@ class WorkflowScorer:
         run: WorkflowRun,
         evaluation: EvaluationResult,
     ) -> WorkflowScorecard:
-        """Score one completed workflow run deterministically."""
+        """Score one completed workflow run deterministically.
+
+        A run judged by the run-failure evaluation failed without producing
+        its declared result. It earns no latency or cost credit, because
+        failing quickly and cheaply is not efficiency, so a crashing candidate
+        can never outrank a correct one on speed or price alone.
+        """
 
         quality_score = evaluation.score
 
@@ -61,17 +70,19 @@ class WorkflowScorer:
             + (1.0 - reliability.failure_rate)
         ) / 4.0
 
-        latency_score = self._normalized_target_score(
-            actual=run.duration_seconds,
-            target=self._policy.target_latency_seconds,
-        )
+        if evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME:
+            latency_score = 0.0
+            cost_score = 0.0
+        else:
+            latency_score = self._normalized_target_score(
+                actual=run.duration_seconds,
+                target=self._policy.target_latency_seconds,
+            )
 
-        total_cost_usd = self._total_cost_usd(run)
-
-        cost_score = self._normalized_target_score(
-            actual=total_cost_usd,
-            target=self._policy.target_cost_usd,
-        )
+            cost_score = self._normalized_target_score(
+                actual=self._total_cost_usd(run),
+                target=self._policy.target_cost_usd,
+            )
 
         overall_score = (quality_score + reliability_score + latency_score + cost_score) / 4.0
 
