@@ -1,10 +1,15 @@
 """Tests for rendering saved benchmark comparisons."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
-from azathoth.cli import render_workflow_benchmark_comparison_execution
+from azathoth.cli import (
+    render_workflow_benchmark_comparison_execution,
+    render_workflow_benchmark_execution,
+    render_workflow_benchmark_execution_summaries,
+)
 from azathoth.evaluation import OutcomeComparison
 from azathoth.workflows import (
     WorkflowBenchmarkExecutionCandidate,
@@ -28,6 +33,17 @@ SECOND_WORKFLOW_ID = UUID("22222222-2222-4222-8222-222222222222")
 EXACT_CASE_ID = UUID("c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1")
 
 SEMANTIC_CASE_ID = UUID("c2c2c2c2-c2c2-42c2-82c2-c2c2c2c2c2c2")
+
+RUN_EXECUTION_ID = UUID("e1e1e1e1-e1e1-41e1-81e1-e1e1e1e1e1e1")
+
+RECORDED_AT = datetime(
+    2026,
+    10,
+    23,
+    12,
+    30,
+    tzinfo=UTC,
+)
 
 
 def create_candidate(
@@ -132,6 +148,28 @@ def create_comparison(
             target_latency_seconds=5.0,
             target_cost_usd=0.01,
         ),
+        recorded_at=RECORDED_AT,
+    )
+
+
+def create_run() -> WorkflowBenchmarkExecutionRecord:
+    """Create one saved benchmark run whose second case was a judged failure."""
+
+    return WorkflowBenchmarkExecutionRecord(
+        id=RUN_EXECUTION_ID,
+        benchmark_id=BENCHMARK_ID,
+        kind=WorkflowBenchmarkExecutionKind.RUN,
+        candidates=(
+            create_candidate(
+                workflow_id=FIRST_WORKFLOW_ID,
+                group=1,
+                passed=(True, False),
+                run_failure=False,
+                semantic=True,
+                scorecard=None,
+            ),
+        ),
+        recorded_at=RECORDED_AT,
     )
 
 
@@ -207,3 +245,122 @@ def test_comparison_rendering_rejects_a_benchmark_run() -> None:
         match=f"^Benchmark execution {EXECUTION_ID} is not a comparison.$",
     ):
         render_workflow_benchmark_comparison_execution(run)
+
+
+def test_execution_summaries_describe_runs_and_comparisons() -> None:
+    rendered = render_workflow_benchmark_execution_summaries(
+        (
+            create_comparison(),
+            create_run(),
+        )
+    )
+
+    assert rendered == (
+        f"{EXECUTION_ID}  2026-10-23T12:30:00+00:00  compare  2 candidates  2 cases  "
+        f"winner {SECOND_WORKFLOW_ID}  overall 1.000000\n"
+        f"{RUN_EXECUTION_ID}  2026-10-23T12:30:00+00:00  run  1 candidate  2 cases  "
+        f"workflow {FIRST_WORKFLOW_ID}  accuracy 0.500000"
+    )
+
+
+def test_execution_summaries_of_nothing_are_empty() -> None:
+    assert render_workflow_benchmark_execution_summaries(()) == ""
+
+
+def test_run_execution_rendering_shows_its_candidate_and_every_case() -> None:
+    execution = create_run()
+
+    rendered = render_workflow_benchmark_execution(execution)
+
+    assert rendered == (
+        f"Execution ID: {RUN_EXECUTION_ID}\n"
+        "Recorded: 2026-10-23T12:30:00+00:00\n"
+        "Kind: run\n"
+        f"Benchmark ID: {BENCHMARK_ID}\n"
+        "Candidates: 1\n"
+        "Cases: 2\n"
+        "\n"
+        "Candidate\n"
+        f"Candidate ID: {execution.candidates[0].id}\n"
+        "Workflow: workflow 1\n"
+        f"Workflow ID: {FIRST_WORKFLOW_ID}\n"
+        f"Strategy IDs: {UUID(int=1)}\n"
+        "Passed: 1/2\n"
+        "Accuracy: 0.500000\n"
+        "Passed (exact): 1/1\n"
+        "Passed (semantic): 0/1\n"
+        "Run failures: 0\n"
+        "Judge Calls: 1\n"
+        "Judge Cost: $0.250000\n"
+        f"Case {EXACT_CASE_ID}: passed  exact  run {UUID(int=101)}  evaluation {UUID(int=102)}\n"
+        f"Case {SEMANTIC_CASE_ID}: failed  semantic  run {UUID(int=103)}  "
+        f"evaluation {UUID(int=104)}"
+    )
+
+
+def test_comparison_execution_rendering_shows_targets_winner_and_scorecards() -> None:
+    execution = create_comparison()
+
+    rendered = render_workflow_benchmark_execution(execution)
+
+    winner, loser = execution.ranked_candidates
+
+    assert rendered.startswith(
+        f"Execution ID: {EXECUTION_ID}\n"
+        "Recorded: 2026-10-23T12:30:00+00:00\n"
+        "Kind: compare\n"
+        f"Benchmark ID: {BENCHMARK_ID}\n"
+        "Candidates: 2\n"
+        "Cases: 2\n"
+        "Target Latency: 5.000000 s\n"
+        "Target Cost: $0.010000\n"
+        f"Winner Workflow ID: {SECOND_WORKFLOW_ID}\n"
+        "\n"
+        "Rank 1\n"
+        f"Candidate ID: {winner.id}\n"
+    )
+
+    assert (
+        "Run failures: 0\n"
+        "Judge Calls: 1\n"
+        "Judge Cost: $0.250000\n"
+        "Quality: 1.000000\n"
+        "Reliability: 1.000000\n"
+        "Latency: 0.900000\n"
+        "Cost: 0.800000\n"
+        "Overall: 1.000000\n"
+        f"Case {EXACT_CASE_ID}: passed  exact  run {UUID(int=201)}"
+    ) in rendered
+
+    assert f"\nRank 2\nCandidate ID: {loser.id}\n" in rendered
+    assert rendered.endswith(
+        f"Case {SEMANTIC_CASE_ID}: failed  semantic  run {UUID(int=103)}  "
+        f"evaluation {UUID(int=104)}"
+    )
+
+
+def test_comparison_execution_rendering_includes_scorecard_rationale() -> None:
+    execution = create_comparison()
+
+    winner, loser = execution.candidates[1], execution.candidates[0]
+
+    annotated = execution.model_copy(
+        update={
+            "candidates": (
+                loser,
+                winner.model_copy(
+                    update={
+                        "scorecard": create_scorecard(1.0).model_copy(
+                            update={
+                                "rationale": "Benchmark aggregate across 2 cases.",
+                            },
+                        ),
+                    },
+                ),
+            ),
+        },
+    )
+
+    rendered = render_workflow_benchmark_execution(annotated)
+
+    assert "Overall: 1.000000\nRationale: Benchmark aggregate across 2 cases.\n" in rendered

@@ -39,6 +39,16 @@ def unused_benchmark_case(
     raise AssertionError("benchmark case handler should not be dispatched")
 
 
+def unused_list_benchmark_executions(
+    _benchmark_id: UUID,
+    *,
+    limit: int | None,
+) -> int:
+    """Fail when benchmark execution listing is dispatched."""
+
+    raise AssertionError("benchmark executions should not be dispatched")
+
+
 def unused_list_benchmarks() -> int:
     """Fail when benchmark listing is dispatched."""
 
@@ -146,10 +156,12 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
         compare_benchmarks=unused_compare_benchmarks,
         import_benchmark=unused_import_benchmark,
         list_benchmark_cases=unused_benchmark_identifier,
+        list_benchmark_executions=unused_list_benchmark_executions,
         list_benchmarks=unused_list_benchmarks,
         run_benchmark=run_benchmark,
         show_benchmark=unused_benchmark_identifier,
         show_benchmark_case=unused_benchmark_case,
+        show_benchmark_execution=unused_benchmark_identifier,
     )
 
     assert result == 17
