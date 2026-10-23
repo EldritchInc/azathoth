@@ -29,17 +29,13 @@ def render_workflow_experiment(
         f"Experiment ID: {experiment.id}",
         f"Recorded: {experiment.recorded_at.isoformat()}",
         f"Candidates: {len(experiment.observations)}",
-        f"Winner Run ID: {experiment.winner.run_id}",
+        f"Winner Run ID: {experiment.winner.cases[0].run_id}",
     ]
 
-    for rank, run_id in enumerate(
-        experiment.ranking,
+    for rank, observation in enumerate(
+        experiment.ranked_observations,
         start=1,
     ):
-        observation = experiment.observation_for_run(run_id)
-
-        assert observation is not None
-
         _append_observation(
             lines,
             rank,
@@ -59,7 +55,7 @@ def _render_summary(
     return (
         f"{experiment.id}  {experiment.recorded_at.isoformat()}  "
         f"{len(experiment.observations)} candidates  "
-        f"winner {winner.run_id}  overall {winner.scorecard.overall_score:.6f}"
+        f"winner {winner.cases[0].run_id}  overall {winner.scorecard.overall_score:.6f}"
     )
 
 
@@ -78,8 +74,14 @@ def _append_observation(
             f"Rank {rank}",
             f"Workflow: {observation.workflow.name}",
             f"Workflow ID: {observation.workflow.id}",
-            f"Run ID: {observation.run_id}",
-            f"Evaluation ID: {observation.evaluation_id}",
+            *(
+                line
+                for case in observation.cases
+                for line in (
+                    f"Run ID: {case.run_id}",
+                    f"Evaluation ID: {case.evaluation_id}",
+                )
+            ),
             "Strategy IDs: "
             + ", ".join(
                 str(strategy_id) for strategy_id in observation.candidate_signature.strategy_ids

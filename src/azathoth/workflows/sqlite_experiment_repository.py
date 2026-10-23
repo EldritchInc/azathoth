@@ -23,7 +23,11 @@ class SQLiteWorkflowExperimentRepository:
         self,
         experiment: WorkflowExperimentRecord,
     ) -> None:
-        """Persist one experiment without replacing existing evidence."""
+        """Persist one experiment without replacing existing evidence.
+
+        Every case of every observation is indexed by workflow, run, and
+        evaluation, so experiments can be found by the workflows they observed.
+        """
 
         connection = sqlite3.connect(self._database)
 
@@ -44,23 +48,24 @@ class SQLiteWorkflowExperimentRepository:
                 )
 
                 for observation in experiment.observations:
-                    connection.execute(
-                        """
-                        INSERT INTO workflow_experiment_observations (
-                            experiment_id,
-                            workflow_id,
-                            run_id,
-                            evaluation_id
+                    for case in observation.cases:
+                        connection.execute(
+                            """
+                            INSERT INTO workflow_experiment_observations (
+                                experiment_id,
+                                workflow_id,
+                                run_id,
+                                evaluation_id
+                            )
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                str(experiment.id),
+                                str(observation.workflow.id),
+                                str(case.run_id),
+                                str(case.evaluation_id),
+                            ),
                         )
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (
-                            str(experiment.id),
-                            str(observation.workflow.id),
-                            str(observation.run_id),
-                            str(observation.evaluation_id),
-                        ),
-                    )
 
                 connection.commit()
             except sqlite3.IntegrityError as exc:

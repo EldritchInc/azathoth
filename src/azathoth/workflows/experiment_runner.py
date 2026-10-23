@@ -19,6 +19,7 @@ from azathoth.workflows.experiment import (
     WorkflowExperimentResult,
 )
 from azathoth.workflows.experiment_record import (
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
 )
@@ -180,15 +181,22 @@ class WorkflowExperimentRunner:
 
         Observations keep candidate order. Ranking entries are matched to
         evidence positions the same way the result orders its evidence, so the
-        record's run ranking agrees with the result's ranked evidence.
+        record's observation ranking agrees with the result's ranked evidence.
+        Each observation holds its candidate's one execution as a single case
+        without a case identifier.
         """
 
         observations = tuple(
             WorkflowExperimentObservation(
                 workflow=execution.run.workflow,
                 candidate_signature=entry.candidate_signature,
-                run_id=execution.run.id,
-                evaluation_id=execution.evaluation.id,
+                cases=(
+                    WorkflowExperimentCaseObservation(
+                        run_id=execution.run.id,
+                        evaluation_id=execution.evaluation.id,
+                        passed=execution.evaluation.passed,
+                    ),
+                ),
                 scorecard=entry.scorecard,
             )
             for entry, execution in zip(
@@ -212,7 +220,7 @@ class WorkflowExperimentRunner:
         return WorkflowExperimentRecord(
             id=result.id,
             observations=observations,
-            ranking=tuple(executions[index].run.id for index in ranking),
+            ranking=tuple(observations[index].id for index in ranking),
         )
 
 
