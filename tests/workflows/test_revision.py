@@ -80,6 +80,7 @@ def test_revision_defaults_to_the_current_utc_time() -> None:
         number=1,
     )
 
+    assert revision.imported_at is not None
     assert revision.imported_at.utcoffset() == UTC.utcoffset(None)
 
 

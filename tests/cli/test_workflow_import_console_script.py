@@ -81,7 +81,7 @@ def test_installed_cli_imports_checked_in_workflow_example(
 
     assert result.returncode == 0
 
-    assert result.stdout == (f"Imported workflow {WORKFLOW_ID}.\n")
+    assert result.stdout == (f"Imported workflow {WORKFLOW_ID} revision 1.\n")
 
     assert result.stderr == ""
 
@@ -191,7 +191,7 @@ def test_installed_workflow_import_lifecycle_requires_no_provider_credentials(
     assert shown.returncode == 0
 
 
-def test_installed_workflow_import_rejects_duplicate_example(
+def test_installed_workflow_reimport_appends_identical_revision(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "azathoth.db"
@@ -212,11 +212,13 @@ def test_installed_workflow_import_rejects_duplicate_example(
         database=database,
     )
 
-    assert second.returncode == 1
+    assert second.returncode == 0
 
-    assert second.stdout == ""
+    assert second.stdout == (
+        f"Imported workflow {WORKFLOW_ID} revision 2 (identical to revision 1).\n"
+    )
 
-    assert second.stderr == (f"Workflow specification {WORKFLOW_ID} already exists.\n")
+    assert second.stderr == ""
 
 
 def test_installed_workflow_import_rejects_missing_document(
@@ -300,7 +302,7 @@ def test_installed_workflow_import_list_show_lifecycle(
 
     assert shown.returncode == 0
 
-    assert imported.stdout == (f"Imported workflow {WORKFLOW_ID}.\n")
+    assert imported.stdout == (f"Imported workflow {WORKFLOW_ID} revision 1.\n")
 
     assert listed.stdout == (f"{WORKFLOW_ID}  1.0.0  simple prompt\n")
 

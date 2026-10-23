@@ -288,7 +288,7 @@ def test_cli_workflow_import_dispatches_command(
 
     assert result == 0
 
-    assert captured.out == (f"Imported workflow {WORKFLOW_ID}.\n")
+    assert captured.out == (f"Imported workflow {WORKFLOW_ID} revision 1.\n")
 
     assert captured.err == ""
 

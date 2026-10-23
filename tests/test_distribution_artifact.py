@@ -349,7 +349,7 @@ def test_wheel_runs_provider_free_workflow_inspection_outside_repository(
     )
 
     assert import_result.returncode == 0, import_result.stderr
-    assert import_result.stdout == f"Imported workflow {WORKFLOW_ID}.\n"
+    assert import_result.stdout == f"Imported workflow {WORKFLOW_ID} revision 1.\n"
 
     list_result = run(
         str(executable),

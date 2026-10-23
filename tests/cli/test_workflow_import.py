@@ -121,7 +121,7 @@ def test_workflow_import_persists_valid_document(
 
     assert result == 0
 
-    assert captured.out == (f"Imported workflow {WORKFLOW_ID}.\n")
+    assert captured.out == (f"Imported workflow {WORKFLOW_ID} revision 1.\n")
 
     assert captured.err == ""
 
@@ -225,7 +225,7 @@ def test_workflow_import_rejects_invalid_workflow_document(
     assert not database.exists()
 
 
-def test_workflow_import_rejects_duplicate_workflow(
+def test_workflow_reimport_appends_an_identical_revision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -248,12 +248,102 @@ def test_workflow_import_rejects_duplicate_workflow(
 
     captured = capsys.readouterr()
 
-    assert result == 1
-    assert captured.out == ""
+    assert result == 0
+    assert captured.err == ""
+    assert captured.out == (
+        f"Imported workflow {WORKFLOW_ID} revision 2 (identical to revision 1).\n"
+    )
 
-    assert captured.err == (f"Workflow specification {WORKFLOW_ID} already exists.\n")
+    repository = SQLiteWorkflowRepository(database)
 
-    assert SQLiteWorkflowRepository(database).specifications() == (create_workflow(),)
+    assert repository.specifications() == (create_workflow(),)
+    assert tuple(revision.number for revision in repository.revisions(WORKFLOW_ID)) == (1, 2)
+
+
+def test_workflow_import_of_changed_content_appends_a_new_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document = tmp_path / "workflow.json"
+    changed_document = tmp_path / "changed.json"
+
+    write_workflow_document(document)
+
+    changed = create_workflow().model_copy(
+        update={
+            "metadata": create_workflow().metadata.model_copy(
+                update={
+                    "description": "Changed description.",
+                },
+            ),
+        },
+    )
+
+    changed_document.write_text(
+        encode_workflow_document(changed),
+        encoding="utf-8",
+    )
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    assert import_workflow(document) == 0
+    assert import_workflow(changed_document) == 0
+
+    captured = capsys.readouterr()
+
+    assert captured.out.splitlines() == [
+        f"Imported workflow {WORKFLOW_ID} revision 1.",
+        f"Imported workflow {WORKFLOW_ID} revision 2.",
+    ]
+
+    assert SQLiteWorkflowRepository(database).get(WORKFLOW_ID) == changed
+
+
+def test_workflow_reimport_of_earlier_content_reports_the_revert(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document = tmp_path / "workflow.json"
+    changed_document = tmp_path / "changed.json"
+
+    write_workflow_document(document)
+
+    changed_document.write_text(
+        encode_workflow_document(
+            create_workflow().model_copy(
+                update={
+                    "metadata": create_workflow().metadata.model_copy(
+                        update={
+                            "version": "2.0.0",
+                        },
+                    ),
+                },
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    import_workflow(document)
+    import_workflow(changed_document)
+    import_workflow(document)
+
+    lines = capsys.readouterr().out.splitlines()
+
+    assert lines[-1] == f"Imported workflow {WORKFLOW_ID} revision 3 (identical to revision 1)."
+
+    assert SQLiteWorkflowRepository(database).get(WORKFLOW_ID) == create_workflow()
 
 
 def test_workflow_import_does_not_require_provider_credentials(

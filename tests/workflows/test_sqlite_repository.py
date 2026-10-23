@@ -3,8 +3,6 @@
 from pathlib import Path
 from uuid import UUID
 
-import pytest
-
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
@@ -187,19 +185,17 @@ def test_sqlite_repository_preserves_insertion_order(
     )
 
 
-def test_sqlite_repository_rejects_duplicate_workflow(
+def test_sqlite_repository_appends_a_revision_for_a_resave(
     tmp_path: Path,
 ) -> None:
     repository = SQLiteWorkflowRepository(tmp_path / "workflows.db")
     specification = create_workflow()
 
-    repository.save(specification)
+    first = repository.save(specification)
+    second = repository.save(specification)
 
-    with pytest.raises(
-        ValueError,
-        match=f"Workflow specification {WORKFLOW_ID} already exists",
-    ):
-        repository.save(specification)
+    assert (first.number, second.number) == (1, 2)
+    assert repository.specifications() == (specification,)
 
 
 def test_sqlite_repository_reconstructs_complete_workflow(

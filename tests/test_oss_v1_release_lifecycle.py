@@ -241,7 +241,7 @@ def test_oss_v1_release_lifecycle(
     captured = capsys.readouterr()
 
     assert captured.err == ""
-    assert captured.out == (f"Imported workflow {workflow_id}.\n")
+    assert captured.out == (f"Imported workflow {workflow_id} revision 1.\n")
 
     persisted_workflow = SQLiteWorkflowRepository(
         database,
