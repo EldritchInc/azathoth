@@ -1,0 +1,44 @@
+{
+  "id": "5e2e0b6a-3c1d-4b7e-9f22-000000000000",
+  "name": "classify sentiment semantic",
+  "description": "Judge sentiment classification by meaning with the semantic judge rotation.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f22-000000000001",
+      "input": "The staff went out of their way to help me.",
+      "expected": {
+        "description": "The answer says the text is positive. Any wording that clearly means positive passes.",
+        "value": "positive",
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "positive"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f22-000000000002",
+      "input": "The room was cold and the staff were rude.",
+      "expected": {
+        "description": "The answer says the text is negative. Any wording that clearly means negative passes.",
+        "value": "negative",
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "negative"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f22-000000000003",
+      "input": "Honestly, I would buy it again tomorrow.",
+      "expected": {
+        "description": "The answer says the text is positive. Any wording that clearly means positive passes.",
+        "value": "positive",
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "positive"
+      }
+    }
+  ]
+}

@@ -410,6 +410,18 @@ cases it judged.
 `WorkflowScorer` gives a run judged this way no latency or cost credit, so a
 crashing candidate never outranks a correct one on speed or price alone.
 
+## Semantic Cases
+
+Semantic cases are judged by whatever semantic evaluator the benchmark
+runner's `OutcomeEvaluator` holds. A failed run on a semantic case never
+reaches a judge; it is judged by `evaluate_failed_run` like any other.
+
+`WorkflowBenchmarkResult` reports judging separately from the workflow:
+
+- `judged_semantically`: whether any case used the semantic comparison
+- `judge_calls`: every judge call recorded in the evaluations
+- `judge_cost_usd`: their cost, never part of `total_cost_usd`
+
 Benchmark results remain evidence.
 
 They do not mutate configured or production workflow state.

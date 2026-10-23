@@ -527,6 +527,13 @@ ToolCatalog
 ToolImplementationCatalog
 ToolResolver
 ToolImplementationResolver
+JudgeRotation
+```
+
+outcome evaluation:
+
+```text
+outcome_evaluator(semantic=...)
 ```
 
 and executable candidate generation:
@@ -613,6 +620,7 @@ load_runtime()
         ├── discover / compose current model state
         ├── reconstruct authorization
         ├── reconstruct production state
+        ├── reconstruct the semantic judge rotation
         └── attach executable implementations
         │
         ▼
@@ -813,6 +821,40 @@ property.
 A dependency belongs in runtime composition only when it forms part of the
 shared executable environment required by runtime operations.
 
+## Semantic Judges
+
+The runtime carries the durable `JudgeRotation` of semantic judges as
+`judges`.
+
+Bootstrap loads the rotation but does not resolve it, so an unusable judge
+never blocks commands that do not judge semantically.
+
+`outcome_evaluator(semantic=...)` returns the evaluator for benchmark and
+experiment outcomes:
+
+```text
+outcome_evaluator()
+    exact, normalized, schema
+    judges are not touched
+
+outcome_evaluator(semantic=True)
+    exact, normalized, schema, semantic
+    every judge resolved now, before any case executes
+```
+
+With `semantic=True`, each judge must be authorized in the model portfolio,
+present in the current provider catalog, and executable through the
+language-model registry:
+
+```text
+No semantic judges are configured.
+Judge model <MODEL_IDENTIFIER> is not authorized.
+Judge model <MODEL_IDENTIFIER> is not currently available.
+```
+
+Commands request semantic judging only when a benchmark actually has semantic
+cases.
+
 ## Runtime Errors
 
 Runtime-specific failures derive from `AzathothRuntimeError`.
@@ -821,8 +863,12 @@ V1 exposes:
 
 ```text
 AzathothRuntimeError
-└── WorkflowNotConfiguredError
+├── WorkflowNotConfiguredError
+└── JudgeUnavailableError
 ```
+
+`JudgeUnavailableError` reports a judge that cannot be used when semantic
+judging is requested.
 
 `WorkflowNotConfiguredError` distinguishes the absence of a configured workflow
 from failures that occur while resolving an existing specification into an
