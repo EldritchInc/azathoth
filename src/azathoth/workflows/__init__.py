@@ -197,6 +197,10 @@ from azathoth.workflows.result import (
 from azathoth.workflows.retry import (
     WorkflowRetryPolicy,
 )
+from azathoth.workflows.revision import (
+    WorkflowSpecificationRevision,
+    earliest_identical_revision,
+)
 from azathoth.workflows.run_evaluation import WorkflowRunEvaluation
 from azathoth.workflows.run_evaluation_repository import (
     WorkflowRunEvaluationRepository,
@@ -397,6 +401,7 @@ __all__ = [
     "WorkflowScorer",
     "WorkflowScoringPolicy",
     "WorkflowSpecification",
+    "WorkflowSpecificationRevision",
     "WorkflowStepAttempt",
     "WorkflowStepFailure",
     "WorkflowStepRun",
@@ -414,6 +419,7 @@ __all__ = [
     "create_production_invocation",
     "create_workflow_input_event",
     "decode_workflow_document",
+    "earliest_identical_revision",
     "emit_production_result",
     "evaluate_failed_run",
     "encode_workflow_document",
