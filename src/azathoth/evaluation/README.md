@@ -1033,7 +1033,8 @@ judged.
 Judge calls are recorded only as evaluation evidence. They are never part of
 a `WorkflowRun`, so they never enter a run's cost, a benchmark's total cost,
 or any scorecard's latency or cost dimension. Benchmark results report them
-separately as `judge_calls` and `judge_cost_usd`.
+separately as `judge_calls` and `judge_cost_usd`, and saved benchmark
+executions keep both on the case each judge call judged.
 
 # Evaluation Is Not Execution
 

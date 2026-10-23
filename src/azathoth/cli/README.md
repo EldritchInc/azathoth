@@ -136,10 +136,13 @@ azathoth
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
-    └── compare <BENCHMARK_ID>
-        ├── --workflow <WORKFLOW_ID>   (repeat for each workflow)
-        ├── --target-latency <SECONDS>
-        └── --target-cost <USD>
+    ├── compare <BENCHMARK_ID>
+    │   ├── --workflow <WORKFLOW_ID>   (repeat for each workflow)
+    │   ├── --target-latency <SECONDS>
+    │   └── --target-cost <USD>
+    ├── executions <BENCHMARK_ID>
+    │   └── --limit <COUNT>
+    └── execution-show <EXECUTION_ID>
 ```
 
 This is the actual V1 operator surface.
@@ -718,8 +721,8 @@ candidate generation fails
 The rendered output includes the run ID, so a run can be revisited later with
 `run show`.
 
-Configured, experiment, and production runs share one durable run history.
-They are distinguished by association, not by separate storage:
+Configured, benchmark, experiment, and production runs share one durable run
+history. They are distinguished by association, not by separate storage:
 
 ```text
 WorkflowRun associated with a ProductionInvocation
@@ -728,11 +731,15 @@ WorkflowRun associated with a ProductionInvocation
 WorkflowRun observed by a WorkflowExperimentRecord
     experiment run
 
+WorkflowRun recorded by a WorkflowBenchmarkExecutionRecord
+    benchmark run
+
 every other persisted WorkflowRun
     configured run
 ```
 
-When a run is both, production takes precedence.
+Production takes precedence over every other association, and experiment over
+benchmark.
 
 Persisted configured runs also feed the history half of `model usage` and
 `tool usage`.
@@ -758,6 +765,7 @@ Runs are listed newest first, one line per run:
 ```text
 <RUN_ID>  2026-10-02T12:10:00+00:00  succeeded  1.500s  configured  good
 <RUN_ID>  2026-10-02T12:07:00+00:00  succeeded  0.900s  experiment  -
+<RUN_ID>  2026-10-02T12:06:00+00:00  succeeded  0.700s  benchmark  -
 <RUN_ID>  2026-10-02T12:05:00+00:00  failed     0.250s  production  -
 ```
 
@@ -2309,9 +2317,11 @@ counts against accuracy, its comparison's pass count, and, in `compare`, the
 candidate's ranking. A run whose steps failed but which still produced its
 declared result is judged on that result.
 
-`benchmark run` reports failed runs after the per-comparison pass counts:
+`benchmark run` leads with the ID of its saved execution and reports failed
+runs after the per-comparison pass counts:
 
 ```text
+Execution ID: <EXECUTION_ID>
 Benchmark ID: <BENCHMARK_ID>
 Workflow ID: <WORKFLOW_ID>
 Cases Run: 5
@@ -2325,6 +2335,146 @@ Total Tokens: 412
 Total Latency: 2310 ms
 Total Cost: $0.000180
 ```
+
+`benchmark compare` leads with its saved execution too, then lists every
+workflow best first. Under its scorecard, each workflow gets the same
+breakdown `run` prints, so a ranking can be explained by which kind of case
+each workflow got wrong:
+
+```text
+Execution ID: <EXECUTION_ID>
+Benchmark ID: <BENCHMARK_ID>
+
+Rank 1
+Workflow ID: <WORKFLOW_ID>
+Quality: 1.000000
+Reliability: 1.000000
+Latency: 0.980000
+Cost: 0.950000
+Overall: 0.982500
+Passed (exact): 2/2
+Passed (normalized): 2/2
+Passed (schema): 1/1
+Run failures: 0
+
+Rank 2
+Workflow ID: <WORKFLOW_ID>
+...
+```
+
+The comparison is rendered from the execution record it just saved, so what
+is printed is exactly what can be inspected later.
+
+# Saved Benchmark Executions
+
+Every `benchmark run` and `benchmark compare` is saved. There is no opt-in
+flag: benchmark evidence costs provider calls, and judge calls, to produce.
+
+```text
+benchmark run / benchmark compare
+    every case run            persisted, including failed runs
+    every case evaluation     persisted, including judge calls
+    one execution record      persisted, sharing the printed Execution ID
+
+rejected before any case executes, or judging fails
+    nothing persisted
+```
+
+A `run` record holds one candidate. A `compare` record holds every compared
+candidate with its scorecard, the ranking, and the `--target-latency` and
+`--target-cost` that produced it, so a saved ranking can always be explained.
+Candidates are identified by workflow ID and candidate signature, not by name.
+
+Each workflow candidate is generated once, before any case executes, and runs
+every case, so a record describes exactly one resolved configuration.
+
+List the saved executions of one benchmark with:
+
+```bash
+azathoth benchmark executions <BENCHMARK_ID>
+azathoth benchmark executions <BENCHMARK_ID> --limit <COUNT>
+```
+
+`--limit` must be a positive integer. Executions are listed newest first, one
+line each:
+
+```text
+<EXECUTION_ID>  2026-10-23T12:32:00+00:00  compare  2 candidates  5 cases  winner <WORKFLOW_ID>  overall 0.982500
+<EXECUTION_ID>  2026-10-23T12:31:00+00:00  run  1 candidate  5 cases  workflow <WORKFLOW_ID>  accuracy 0.800000
+```
+
+A configured benchmark with no executions prints nothing and exits
+successfully. Executions of a benchmark since removed remain listable. An
+identifier with neither fails with:
+
+```text
+Benchmark dataset <BENCHMARK_ID> is not configured.
+```
+
+Inspect one saved execution with:
+
+```bash
+azathoth benchmark execution-show <EXECUTION_ID>
+```
+
+```text
+Execution ID: <EXECUTION_ID>
+Recorded: 2026-10-23T12:32:00+00:00
+Kind: compare
+Benchmark ID: <BENCHMARK_ID>
+Candidates: 2
+Cases: 5
+Target Latency: 5.000000 s
+Target Cost: $0.001000
+Winner Workflow ID: <WORKFLOW_ID>
+
+Rank 1
+Candidate ID: <CANDIDATE_ID>
+Workflow: classify-sentiment
+Workflow ID: <WORKFLOW_ID>
+Strategy IDs: <STRATEGY_ID>
+Passed: 5/5
+Accuracy: 1.000000
+Passed (exact): 2/2
+Passed (normalized): 2/2
+Passed (schema): 1/1
+Run failures: 0
+Quality: 1.000000
+Reliability: 1.000000
+Latency: 0.980000
+Cost: 0.950000
+Overall: 0.982500
+Rationale: Benchmark aggregate for candidate '<WORKFLOW_ID>' across 5 cases.
+Case <CASE_ID>: passed  exact  run <RUN_ID>  evaluation <EVALUATION_ID>
+...
+```
+
+A `run` execution shows `Kind: run`, no targets or winner, and one block
+headed `Candidate` without scorecard lines.
+
+An unknown execution fails with:
+
+```text
+Benchmark execution <EXECUTION_ID> was not found.
+```
+
+Every case line names its run and evaluation, so saved evidence traces
+straight to `run show`:
+
+```text
+benchmark executions <BENCHMARK_ID>
+        │
+        ▼
+Execution ID ──► benchmark execution-show
+                        │
+                        ▼
+              Case ... run <RUN_ID> ──► run show / run feedback
+```
+
+`workflow runs` lists these runs with the `benchmark` source.
+
+`benchmark executions` and `benchmark execution-show` read durable state only.
+They do not require provider credentials and never load the runtime.
 
 # Semantic Benchmark Cases
 
@@ -2356,6 +2506,11 @@ Judge Cost: $0.000450
 
 `Judge Calls` counts every judge call, including fallbacks after a failed or
 unusable reply.
+
+`benchmark compare` and `benchmark execution-show` print the same two lines
+under every workflow that had semantic cases, after its run failures. Each
+workflow's judge calls are its own: a judge's cost is recorded on the case it
+judged, never on the run and never in a scorecard.
 
 Benchmarking executes configured workflows.
 
@@ -2406,6 +2561,9 @@ azathoth model authorize <MODEL_IDENTIFIER>
 
 azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 \
     --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+
+azathoth benchmark executions 5e2e0b6a-3c1d-4b7e-9f21-000000000000
+azathoth benchmark execution-show <EXECUTION_ID>
 
 azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
     --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 \
@@ -2532,6 +2690,8 @@ ProductionInvocationResult
 
 WorkflowBenchmarkResult / WorkflowBenchmarkRanking
 
+WorkflowBenchmarkExecutionRecord / WorkflowBenchmarkExecutionRecord summaries
+
 WorkflowModelUsageReport
 
 WorkflowToolUsageReport
@@ -2559,6 +2719,10 @@ Examples include:
 
 ```text
 execute_configured_workflow
+
+execute_configured_benchmark
+
+compare_configured_benchmarks
 
 optimize_configured_workflow
 
@@ -2615,6 +2779,30 @@ application service behaves exactly as before and keeps no evidence.
 The CLI command supplies operator parameters.
 
 The optimization package retains optimization semantics.
+
+# Benchmark Application Services
+
+`execute_configured_benchmark` and `compare_configured_benchmarks` compose:
+
+```text
+runtime
+
+workflow identity, or identities
+
+benchmark dataset
+
+workflow scoring policy (compare only)
+
+evidence recorder
+```
+
+into a `WorkflowBenchmarkResult` or a `WorkflowBenchmarkRanking`, whose `id`
+is the ID of the execution record saved for it.
+
+The installed CLI always supplies a SQLite-backed
+`WorkflowBenchmarkEvidenceRecorder`, so every case run, every evaluation, and
+one execution record are persisted. Without a recorder, the services keep no
+evidence beyond their returned result.
 
 # Promotion Application Service
 

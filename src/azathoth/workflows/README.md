@@ -376,6 +376,8 @@ The benchmark surface includes:
 - `WorkflowBenchmarkResult`
 - `WorkflowBenchmarkRanking`
 - `WorkflowBenchmarkComparison`
+- `WorkflowBenchmarkExecutionRecord`
+- `WorkflowBenchmarkEvidenceRecorder`
 
 Each case judges the workflow's declared result. Benchmarking a workflow
 without a declared result fails before any case executes, and a successful run
@@ -422,9 +424,70 @@ reaches a judge; it is judged by `evaluate_failed_run` like any other.
 - `judge_calls`: every judge call recorded in the evaluations
 - `judge_cost_usd`: their cost, never part of `total_cost_usd`
 
+Each `WorkflowBenchmarkCaseResult` exposes the same facts per case:
+`run_failure`, `judge_calls`, and `judge_cost_usd`.
+
 Benchmark results remain evidence.
 
 They do not mutate configured or production workflow state.
+
+## Benchmark Execution Records
+
+A completed benchmark run or comparison can be saved as one
+`WorkflowBenchmarkExecutionRecord`:
+
+```text
+WorkflowBenchmarkExecutionRecord
+├── id                      shared with the WorkflowBenchmarkResult or Ranking
+├── benchmark_id
+├── kind                    run | compare
+├── candidates
+│   └── WorkflowBenchmarkExecutionCandidate
+│       ├── id
+│       ├── workflow / candidate_signature
+│       ├── scorecard       compare only
+│       └── cases           one per benchmark case, in dataset order
+│           └── WorkflowBenchmarkExecutionCase
+│               ├── case_id / comparison
+│               ├── run_id / evaluation_id
+│               ├── passed / run_failure
+│               └── judge_calls / judge_cost_usd
+├── ranking                 candidate IDs, best first; compare only
+├── scoring_policy          compare only
+└── recorded_at
+```
+
+Run and evaluation IDs are unique across the record. A `run` record holds
+exactly one candidate with no scorecard, ranking, or policy. A `compare`
+record holds at least two scored candidates judged on the same case IDs in the
+same order, its scoring policy, and a ranking covering every candidate
+exactly once.
+
+Candidates derive `cases_passed`, `accuracy`, `run_failures`,
+`judged_semantically`, `judge_calls`, `judge_cost_usd`, and
+`comparison_tallies`. Records derive `case_ids`, `ranked_candidates`,
+`winner` (`None` for a run), total judge calls and cost, `candidate(id)`, and
+`candidate_for_run(run_id)`.
+
+Records persist through `WorkflowBenchmarkExecutionRepository`:
+
+- `InMemoryWorkflowBenchmarkExecutionRepository`
+- `SQLiteWorkflowBenchmarkExecutionRepository`
+
+which save without replacing, and find executions by ID, by benchmark, by
+workflow, and by run.
+
+`WorkflowBenchmarkEvidenceRecorder(runs, evaluations, executions)` saves one
+execution:
+
+```text
+record_run(result, *, candidate)
+record_comparison(comparison, ranking, *, candidates, scoring_policy)
+```
+
+Each builds and validates the record before saving anything, then saves every
+case run, every evaluation, and the record. Evidence that cannot form a valid
+record leaves every repository unchanged.
 
 ## Production Promotion
 
