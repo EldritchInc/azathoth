@@ -21,9 +21,19 @@ from azathoth.evaluation.json_schema import (
     json_schema_validator,
     json_schema_violations,
 )
+from azathoth.evaluation.judge_repository import JudgeRotationRepository
+from azathoth.evaluation.judges import (
+    JudgeEntry,
+    JudgeRotation,
+    expectation_hash,
+)
 from azathoth.evaluation.memory_benchmark_repository import (
     InMemoryBenchmarkRepository,
     require_benchmark_repository,
+)
+from azathoth.evaluation.memory_judge_repository import (
+    InMemoryJudgeRotationRepository,
+    require_judge_rotation_repository,
 )
 from azathoth.evaluation.models import (
     EvaluationEvidence,
@@ -47,6 +57,9 @@ from azathoth.evaluation.schema import SchemaEvaluator
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
 )
+from azathoth.evaluation.sqlite_judge_repository import (
+    SQLiteJudgeRotationRepository,
+)
 
 __all__ = [
     "BenchmarkCase",
@@ -63,17 +76,23 @@ __all__ = [
     "ExactMatchEvaluator",
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
+    "InMemoryJudgeRotationRepository",
     "JsonDifference",
     "JsonSchemaViolation",
+    "JudgeEntry",
+    "JudgeRotation",
+    "JudgeRotationRepository",
     "NormalizedMatchEvaluator",
     "OutcomeComparison",
     "OutcomeEvaluator",
     "SQLiteBenchmarkRepository",
+    "SQLiteJudgeRotationRepository",
     "SchemaEvaluator",
     "UnsupportedComparisonError",
     "decode_benchmark_document",
     "default_comparison_evaluators",
     "encode_benchmark_document",
+    "expectation_hash",
     "first_json_difference",
     "json_schema_validator",
     "json_schema_violations",
@@ -82,4 +101,5 @@ __all__ = [
     "normalize_json_value",
     "normalize_text",
     "require_benchmark_repository",
+    "require_judge_rotation_repository",
 ]
