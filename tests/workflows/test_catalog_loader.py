@@ -121,6 +121,10 @@ def assert_loaded_catalog(
 
     assert catalog == WorkflowCatalog(
         specifications=expected,
+        revisions={
+            FIRST_WORKFLOW_ID: 1,
+            SECOND_WORKFLOW_ID: 1,
+        },
     )
 
     assert catalog.specifications == expected
@@ -173,3 +177,30 @@ def test_loader_accepts_repository_protocol() -> None:
     ).load_catalog()
 
     assert catalog == WorkflowCatalog()
+
+
+def test_loader_catalogs_each_workflow_at_its_latest_revision() -> None:
+    repository = InMemoryWorkflowRepository()
+
+    first, second = populate_repository(repository)
+
+    renamed = first.model_copy(
+        update={
+            "metadata": first.metadata.model_copy(
+                update={
+                    "name": "renamed first workflow",
+                },
+            ),
+        },
+    )
+
+    repository.save(renamed)
+
+    catalog = WorkflowCatalogLoader(repository).load_catalog()
+
+    assert catalog.specifications == (
+        renamed,
+        second,
+    )
+    assert catalog.revision_number(FIRST_WORKFLOW_ID) == 2
+    assert catalog.revision_number(SECOND_WORKFLOW_ID) == 1
