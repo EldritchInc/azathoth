@@ -24,6 +24,9 @@ from azathoth.workflows.benchmark_record import (
     WorkflowBenchmarkExecutionKind,
     WorkflowBenchmarkExecutionRecord,
 )
+from azathoth.workflows.benchmark_recorder import (
+    WorkflowBenchmarkEvidenceRecorder,
+)
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
@@ -326,6 +329,7 @@ __all__ = [
     "WorkflowBenchmarkComparator",
     "WorkflowBenchmarkComparison",
     "WorkflowBenchmarkComparisonEntry",
+    "WorkflowBenchmarkEvidenceRecorder",
     "WorkflowBenchmarkExecutionCandidate",
     "WorkflowBenchmarkExecutionCase",
     "WorkflowBenchmarkExecutionKind",

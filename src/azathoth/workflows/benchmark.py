@@ -1,7 +1,7 @@
 """Execution, scoring, comparison, and ranking for workflow benchmarks."""
 
 from collections.abc import Callable, Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -49,6 +49,29 @@ class WorkflowBenchmarkCaseResult(BaseModel):
     run: WorkflowRun
     evaluation: EvaluationResult
 
+    @property
+    def run_failure(self) -> bool:
+        """Return whether this case was judged as a failed run.
+
+        A case is a run failure when its run failed without producing the
+        declared result. Runs whose steps failed but which still produced the
+        declared result are judged normally and are not run failures.
+        """
+
+        return self.evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME
+
+    @property
+    def judge_calls(self) -> int:
+        """Return how many semantic judge calls judging this case made."""
+
+        return judge_call_count(self.evaluation)
+
+    @property
+    def judge_cost_usd(self) -> float:
+        """Return the judges' cost for this case, never charged to the run."""
+
+        return judge_calls_cost_usd(self.evaluation)
+
 
 class WorkflowBenchmarkComparisonTally(BaseModel):
     """Pass counts for the benchmark cases judged by one comparison."""
@@ -61,10 +84,15 @@ class WorkflowBenchmarkComparisonTally(BaseModel):
 
 
 class WorkflowBenchmarkResult(BaseModel):
-    """Aggregate result of executing one benchmark dataset."""
+    """Aggregate result of executing one benchmark dataset.
+
+    The identifier is shared by the durable execution record of a recorded
+    benchmark run.
+    """
 
     model_config = ConfigDict(frozen=True)
 
+    id: UUID = Field(default_factory=uuid4)
     dataset_id: UUID
     cases: tuple[WorkflowBenchmarkCaseResult, ...] = ()
 
@@ -82,16 +110,9 @@ class WorkflowBenchmarkResult(BaseModel):
 
     @property
     def run_failures(self) -> int:
-        """Return the number of cases judged as failed runs.
+        """Return the number of cases judged as failed runs."""
 
-        A case is a run failure when its run failed without producing the
-        declared result. Runs whose steps failed but which still produced the
-        declared result are judged normally and are not counted here.
-        """
-
-        return sum(
-            case.evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME for case in self.cases
-        )
+        return sum(case.run_failure for case in self.cases)
 
     @property
     def judged_semantically(self) -> bool:
@@ -103,7 +124,7 @@ class WorkflowBenchmarkResult(BaseModel):
     def judge_calls(self) -> int:
         """Return how many semantic judge calls the benchmark made."""
 
-        return sum(judge_call_count(case.evaluation) for case in self.cases)
+        return sum(case.judge_calls for case in self.cases)
 
     @property
     def judge_cost_usd(self) -> float:
@@ -113,7 +134,7 @@ class WorkflowBenchmarkResult(BaseModel):
         and never added to any run's cost or to `total_cost_usd`.
         """
 
-        return sum(judge_calls_cost_usd(case.evaluation) for case in self.cases)
+        return sum(case.judge_cost_usd for case in self.cases)
 
     @property
     def accuracy(self) -> float:
@@ -255,9 +276,15 @@ class WorkflowBenchmarkRankedCandidate(BaseModel):
 
 
 class WorkflowBenchmarkRanking(BaseModel):
-    """Ordered benchmark ranking using workflow scorecard evidence."""
+    """Ordered benchmark ranking using workflow scorecard evidence.
+
+    The identifier is shared by the durable execution record of a recorded
+    benchmark comparison.
+    """
 
     model_config = ConfigDict(frozen=True)
+
+    id: UUID = Field(default_factory=uuid4)
 
     entries: tuple[WorkflowBenchmarkRankedCandidate, ...] = Field(
         min_length=1,
