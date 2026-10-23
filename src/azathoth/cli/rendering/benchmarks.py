@@ -12,8 +12,12 @@ def render_workflow_benchmark_result(
     result: WorkflowBenchmarkResult,
     *,
     workflow_id: UUID,
+    execution_id: UUID | None = None,
 ) -> str:
     """Render aggregate workflow benchmark evidence.
+
+    A recorded result leads with the identifier of its saved execution, so
+    the operator can inspect it again later.
 
     Pass counts are broken down by comparison after overall accuracy, so
     benchmarks mixing comparisons show which kind of case is failing. The
@@ -24,6 +28,7 @@ def render_workflow_benchmark_result(
     """
 
     lines = [
+        *((f"Execution ID: {execution_id}",) if execution_id is not None else ()),
         f"Benchmark ID: {result.dataset_id}",
         f"Workflow ID: {workflow_id}",
         f"Cases Run: {result.cases_run}",

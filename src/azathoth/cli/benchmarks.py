@@ -18,7 +18,7 @@ from azathoth.cli.benchmark_execution import (
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
-    render_workflow_benchmark_ranking,
+    render_workflow_benchmark_comparison_execution,
     render_workflow_benchmark_result,
 )
 from azathoth.evaluation import (
@@ -35,6 +35,10 @@ from azathoth.runtime import (
     WorkflowNotConfiguredError,
 )
 from azathoth.workflows import (
+    SQLiteWorkflowBenchmarkExecutionRepository,
+    SQLiteWorkflowRunEvaluationRepository,
+    SQLiteWorkflowRunRepository,
+    WorkflowBenchmarkEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
     WorkflowScoringPolicy,
@@ -293,7 +297,9 @@ def run_benchmark(
 
     Each case judges the workflow's declared result. Unsupported comparisons
     and workflows without a declared result are rejected before runtime
-    bootstrap, without executing any case.
+    bootstrap, without executing any case. Every case run, every evaluation,
+    and one execution record are saved, and the execution identifier leads
+    the output.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -328,6 +334,7 @@ def run_benchmark(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 dataset=dataset,
+                recorder=_benchmark_recorder(configuration),
             )
         )
     except (
@@ -349,6 +356,7 @@ def run_benchmark(
         render_workflow_benchmark_result(
             result,
             workflow_id=workflow_id,
+            execution_id=result.id,
         )
     )
 
@@ -366,7 +374,9 @@ def compare_benchmarks(
 
     Each case judges every workflow's declared result. Unsupported
     comparisons and workflows without a declared result are rejected before
-    runtime bootstrap, without executing any case.
+    runtime bootstrap, without executing any case. Every case run, every
+    evaluation, and one execution record are saved, and the comparison is
+    rendered from that saved record.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -395,6 +405,8 @@ def compare_benchmarks(
         configuration,
     )
 
+    recorder = _benchmark_recorder(configuration)
+
     try:
         ranking = asyncio.run(
             compare_configured_benchmarks(
@@ -405,6 +417,7 @@ def compare_benchmarks(
                     target_latency_seconds=target_latency_seconds,
                     target_cost_usd=target_cost_usd,
                 ),
+                recorder=recorder,
             )
         )
     except (
@@ -420,14 +433,41 @@ def compare_benchmarks(
 
         return 1
 
+    execution = recorder.executions.get(ranking.id)
+
+    if execution is None:
+        print(
+            f"Benchmark execution {ranking.id} was not recorded.",
+            file=sys.stderr,
+        )
+
+        return 1
+
     print(
-        render_workflow_benchmark_ranking(
-            ranking,
-            benchmark_id=benchmark_id,
+        render_workflow_benchmark_comparison_execution(
+            execution,
         )
     )
 
     return 0
+
+
+def _benchmark_recorder(
+    configuration: CliRuntimeConfiguration,
+) -> WorkflowBenchmarkEvidenceRecorder:
+    """Return the recorder that saves benchmark evidence to the configured database."""
+
+    return WorkflowBenchmarkEvidenceRecorder(
+        runs=SQLiteWorkflowRunRepository(
+            configuration.database,
+        ),
+        evaluations=SQLiteWorkflowRunEvaluationRepository(
+            configuration.database,
+        ),
+        executions=SQLiteWorkflowBenchmarkExecutionRepository(
+            configuration.database,
+        ),
+    )
 
 
 __all__ = [
