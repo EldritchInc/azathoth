@@ -15,6 +15,12 @@ from azathoth.workflows.benchmark import (
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
 )
+from azathoth.workflows.benchmark_record import (
+    WorkflowBenchmarkExecutionCandidate,
+    WorkflowBenchmarkExecutionCase,
+    WorkflowBenchmarkExecutionKind,
+    WorkflowBenchmarkExecutionRecord,
+)
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
@@ -308,6 +314,10 @@ __all__ = [
     "WorkflowBenchmarkComparator",
     "WorkflowBenchmarkComparison",
     "WorkflowBenchmarkComparisonEntry",
+    "WorkflowBenchmarkExecutionCandidate",
+    "WorkflowBenchmarkExecutionCase",
+    "WorkflowBenchmarkExecutionKind",
+    "WorkflowBenchmarkExecutionRecord",
     "WorkflowBenchmarkRankedCandidate",
     "WorkflowBenchmarkRanker",
     "WorkflowBenchmarkRanking",
