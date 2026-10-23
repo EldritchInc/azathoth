@@ -73,7 +73,9 @@ from azathoth.cli.runs import (
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
+    export_tool,
     import_tool,
+    list_tool_history,
     list_tool_implementations,
     list_tool_test_cases,
     list_tool_versions,
@@ -214,7 +216,9 @@ def _dispatch(
     if command == TOOL_COMMAND:
         return dispatch_tool_command(
             arguments,
+            export_tool=export_tool,
             import_tool=import_tool,
+            list_tool_history=list_tool_history,
             list_tool_implementations=list_tool_implementations,
             list_tool_test_cases=list_tool_test_cases,
             list_tool_versions=list_tool_versions,

@@ -3,6 +3,7 @@
 from pydantic import JsonValue
 
 from azathoth.context import Context
+from azathoth.revisions import content_digest
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyOutcome,
@@ -63,6 +64,7 @@ class ToolStrategy:
                         "tool_id": str(self._implementation.tool_id),
                         "tool_version": self._implementation.tool_version,
                         "runtime": self._implementation.runtime,
+                        "implementation_digest": content_digest(self._implementation),
                     },
                 ),
             ),

@@ -6,10 +6,14 @@ from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
+from azathoth.cli.parsing.common import positive_integer
+
 TOOL_COMMAND = "tool"
 
 TOOL_ACTION_ATTRIBUTE = "tool_action"
 
+TOOL_EXPORT_ACTION = "export"
+TOOL_HISTORY_ACTION = "history"
 TOOL_IMPLEMENTATIONS_ACTION = "implementations"
 TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
 TOOL_IMPORT_ACTION = "import"
@@ -22,6 +26,9 @@ TOOL_VERIFY_ACTION = "verify"
 TOOL_VERSIONS_ACTION = "versions"
 
 TOOL_DOCUMENT_ATTRIBUTE = "tool_document"
+TOOL_HISTORY_LIMIT_ATTRIBUTE = "tool_history_limit"
+TOOL_HISTORY_VERSION_ATTRIBUTE = "tool_history_version"
+TOOL_REVISION_ATTRIBUTE = "tool_revision"
 TOOL_ID_ATTRIBUTE = "tool_id"
 TOOL_IMPLEMENTATION_ID_ATTRIBUTE = "tool_implementation_id"
 TOOL_TEST_CASE_ID_ATTRIBUTE = "tool_test_case_id"
@@ -77,6 +84,64 @@ def add_tool_parser(
         required=True,
         metavar="VERSION",
         help="Exact durable tool definition version.",
+    )
+
+    tool_history_parser = tool_actions.add_parser(
+        TOOL_HISTORY_ACTION,
+        help="List imported revisions of one tool, newest first.",
+    )
+
+    tool_history_parser.add_argument(
+        TOOL_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TOOL_ID",
+        help="Tool capability UUID whose imported revisions to list.",
+    )
+
+    tool_history_parser.add_argument(
+        "--version",
+        dest=TOOL_HISTORY_VERSION_ATTRIBUTE,
+        default=None,
+        metavar="VERSION",
+        help="Only list revisions of this exact tool version.",
+    )
+
+    tool_history_parser.add_argument(
+        "--limit",
+        dest=TOOL_HISTORY_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent revisions to list.",
+    )
+
+    tool_export_parser = tool_actions.add_parser(
+        TOOL_EXPORT_ACTION,
+        help="Print one imported tool revision as an importable JSON document.",
+    )
+
+    tool_export_parser.add_argument(
+        TOOL_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="TOOL_ID",
+        help="Tool capability UUID to export.",
+    )
+
+    tool_export_parser.add_argument(
+        "--version",
+        dest=TOOL_VERSION_ATTRIBUTE,
+        required=True,
+        metavar="VERSION",
+        help="Exact tool version to export.",
+    )
+
+    tool_export_parser.add_argument(
+        "--revision",
+        dest=TOOL_REVISION_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="NUMBER",
+        help="Imported revision to export. Defaults to the latest.",
     )
 
     tool_versions_parser = tool_actions.add_parser(

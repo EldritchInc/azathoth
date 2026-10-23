@@ -9,12 +9,17 @@ from uuid import UUID
 from azathoth.cli.parsing import (
     TOOL_ACTION_ATTRIBUTE,
     TOOL_DOCUMENT_ATTRIBUTE,
+    TOOL_EXPORT_ACTION,
+    TOOL_HISTORY_ACTION,
+    TOOL_HISTORY_LIMIT_ATTRIBUTE,
+    TOOL_HISTORY_VERSION_ATTRIBUTE,
     TOOL_ID_ATTRIBUTE,
     TOOL_IMPLEMENTATION_ID_ATTRIBUTE,
     TOOL_IMPLEMENTATION_SHOW_ACTION,
     TOOL_IMPLEMENTATIONS_ACTION,
     TOOL_IMPORT_ACTION,
     TOOL_LIST_ACTION,
+    TOOL_REVISION_ATTRIBUTE,
     TOOL_SHOW_ACTION,
     TOOL_TEST_CASE_ID_ATTRIBUTE,
     TOOL_TEST_CASE_SHOW_ACTION,
@@ -29,12 +34,15 @@ ToolIdentifierHandler = Callable[[UUID], int]
 ToolImportHandler = Callable[[Path], int]
 ToolListHandler = Callable[[], int]
 ToolVersionHandler = Callable[..., int]
+ToolHistoryHandler = Callable[..., int]
 
 
 def dispatch_tool_command(
     arguments: Namespace,
     *,
+    export_tool: ToolVersionHandler,
     import_tool: ToolImportHandler,
+    list_tool_history: ToolHistoryHandler,
     list_tool_implementations: ToolVersionHandler,
     list_tool_test_cases: ToolIdentifierHandler,
     list_tool_versions: ToolIdentifierHandler,
@@ -84,6 +92,59 @@ def dispatch_tool_command(
                 getattr(
                     arguments,
                     TOOL_VERSION_ATTRIBUTE,
+                ),
+            ),
+        )
+
+    if action == TOOL_HISTORY_ACTION:
+        return list_tool_history(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_ID_ATTRIBUTE,
+                ),
+            ),
+            version=cast(
+                str | None,
+                getattr(
+                    arguments,
+                    TOOL_HISTORY_VERSION_ATTRIBUTE,
+                    None,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    TOOL_HISTORY_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == TOOL_EXPORT_ACTION:
+        return export_tool(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    TOOL_ID_ATTRIBUTE,
+                ),
+            ),
+            version=cast(
+                str,
+                getattr(
+                    arguments,
+                    TOOL_VERSION_ATTRIBUTE,
+                ),
+            ),
+            revision=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    TOOL_REVISION_ATTRIBUTE,
+                    None,
                 ),
             ),
         )

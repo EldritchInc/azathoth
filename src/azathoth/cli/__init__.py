@@ -85,7 +85,9 @@ from azathoth.cli.runs import (
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
+    export_tool,
     import_tool,
+    list_tool_history,
     list_tool_implementations,
     list_tool_test_cases,
     list_tool_versions,
@@ -126,6 +128,7 @@ __all__ = [
     "execute_configured_workflow",
     "import_benchmark",
     "import_goal",
+    "export_tool",
     "import_tool",
     "export_workflow",
     "import_workflow",
@@ -138,6 +141,7 @@ __all__ = [
     "list_judges",
     "list_models",
     "list_portfolio_models",
+    "list_tool_history",
     "list_tool_implementations",
     "list_tool_test_cases",
     "list_tool_versions",
