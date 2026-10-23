@@ -19,6 +19,7 @@ from azathoth.workflows import (
     WorkflowCandidateStep,
     WorkflowFailurePolicy,
     WorkflowInputBinding,
+    WorkflowInputResolutionError,
     WorkflowMetadata,
     WorkflowNamedValueReference,
     WorkflowRunner,
@@ -290,10 +291,46 @@ def test_name_only_input_records_the_consumer_as_executed() -> None:
     )
 
 
-def test_name_only_input_without_any_surviving_producer_still_raises() -> None:
+def test_name_only_input_without_any_surviving_producer_fails_the_consumer() -> None:
+    executor = AddressExecutor(
+        failing=frozenset(
+            {
+                "Primary",
+                "Fallback",
+            }
+        ),
+    )
+
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=executor,
+        ).run_recording_failures(
+            workflow=create_candidate(),
+            context=Context(),
+        )
+    )
+
+    consumer = run.steps[-1]
+
+    assert consumer.step_id == CONSUMER_STEP_ID
+    assert consumer.status is WorkflowStepStatus.FAILED
+
+    failure = consumer.attempts[-1].failure
+
+    assert failure is not None
+    assert failure.exception_type == "WorkflowInputResolutionError"
+    assert failure.message == (
+        "Workflow input 'location' could not resolve value 'address' from any step it depends on."
+    )
+
+    assert "Consumer" not in executor.bound_inputs
+
+
+def test_name_only_input_without_any_surviving_producer_raises_from_run() -> None:
     with pytest.raises(
-        RuntimeError,
-        match="Validated workflow input could not resolve a committed workflow value.",
+        WorkflowInputResolutionError,
+        match="^Workflow input 'location' could not resolve value 'address' "
+        "from any step it depends on.$",
     ):
         run_candidate(
             AddressExecutor(
