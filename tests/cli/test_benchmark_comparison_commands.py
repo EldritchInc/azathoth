@@ -17,8 +17,10 @@ from azathoth.cli import (
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.evaluation import (
     BenchmarkDataset,
+    JudgeEntry,
     OutcomeComparison,
     SQLiteBenchmarkRepository,
+    SQLiteJudgeRotationRepository,
 )
 from azathoth.workflows import WorkflowBenchmarkRunner
 from tests.workflows.test_benchmark_comparisons import (
@@ -148,7 +150,7 @@ def test_benchmark_result_rendering_breaks_down_passes_by_comparison() -> None:
     ) in rendered
 
 
-def test_benchmark_run_rejects_unsupported_comparison_before_runtime_bootstrap(
+def test_benchmark_run_rejects_semantic_case_without_judges_before_runtime_bootstrap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -172,11 +174,11 @@ def test_benchmark_run_rejects_unsupported_comparison_before_runtime_bootstrap(
     assert captured.out == ""
     assert captured.err == (
         f"Benchmark case {SEMANTIC_CASE_ID} uses comparison 'semantic', "
-        "which is not supported yet.\n"
+        "but no judges are configured.\n"
     )
 
 
-def test_benchmark_compare_rejects_unsupported_comparison_before_runtime_bootstrap(
+def test_benchmark_compare_rejects_semantic_case_without_judges_before_runtime_bootstrap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -202,5 +204,46 @@ def test_benchmark_compare_rejects_unsupported_comparison_before_runtime_bootstr
     assert captured.out == ""
     assert captured.err == (
         f"Benchmark case {SEMANTIC_CASE_ID} uses comparison 'semantic', "
-        "which is not supported yet.\n"
+        "but no judges are configured.\n"
     )
+
+
+def test_benchmark_run_accepts_semantic_case_when_judges_are_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    persist(
+        create_semantic_dataset(),
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+    )
+
+    SQLiteJudgeRotationRepository(tmp_path / "azathoth.db").add(
+        JudgeEntry(
+            provider="judges",
+            model="gamma",
+        )
+    )
+
+    def stop_at_bootstrap(
+        configuration: CliRuntimeConfiguration,
+    ) -> object:
+        raise RuntimeError("Reached runtime bootstrap.")
+
+    monkeypatch.setattr(
+        benchmark_commands,
+        "load_runtime",
+        stop_at_bootstrap,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="^Reached runtime bootstrap.$",
+    ):
+        run_benchmark(
+            benchmark_id=DATASET_ID,
+            workflow_id=FIRST_WORKFLOW_ID,
+        )
+
+    assert capsys.readouterr().err == ""

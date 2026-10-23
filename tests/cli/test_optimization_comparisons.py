@@ -8,12 +8,11 @@ from azathoth.cli import optimize_configured_workflow
 from azathoth.evaluation import (
     ExpectedOutcome,
     OutcomeComparison,
-    UnsupportedComparisonError,
 )
+from azathoth.runtime import JudgeUnavailableError
 from azathoth.workflows import WorkflowScoringPolicy
 from tests.cli.test_optimization import (
     WORKFLOW_ID,
-    case_id,
     create_benchmark,
     create_runtime,
 )
@@ -69,7 +68,7 @@ def test_optimization_still_judges_exact_expectations_exactly() -> None:
     assert evidence[0].scorecard.quality_score == 0.0
 
 
-def test_optimization_rejects_unsupported_comparison_before_generating_candidates(
+def test_optimization_rejects_semantic_case_without_judges_before_generating_candidates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = create_runtime()
@@ -84,10 +83,8 @@ def test_optimization_rejects_unsupported_comparison_before_generating_candidate
     )
 
     with pytest.raises(
-        UnsupportedComparisonError,
-        match=(
-            f"^Benchmark case {case_id(1)} uses comparison 'semantic', which is not supported yet.$"
-        ),
+        JudgeUnavailableError,
+        match="^No semantic judges are configured.$",
     ):
         asyncio.run(
             optimize_configured_workflow(
