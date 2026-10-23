@@ -18,11 +18,22 @@ from azathoth.workflows.value import (
 
 
 class WorkflowCandidateSignature(BaseModel):
-    """Identify one resolved executable workflow configuration."""
+    """Identify one resolved executable workflow configuration.
+
+    The workflow revision names the imported specification revision the
+    candidate was generated from. It is absent for candidates generated
+    outside a revisioned catalog and for records written before revisions.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     workflow_id: UUID
+
+    workflow_revision: int | None = Field(
+        default=None,
+        ge=1,
+    )
+
     strategy_ids: tuple[UUID, ...] = Field(
         min_length=1,
     )
@@ -49,18 +60,24 @@ class WorkflowCandidate:
     """An executable workflow generated from a workflow specification.
 
     The optional result carries the specification's declared result, so the
-    value judged during evaluation is the value production would return.
+    value judged during evaluation is the value production would return. The
+    optional revision names the specification revision the candidate was
+    generated from, so every run of it records where it came from.
     """
 
     metadata: WorkflowMetadata
     steps: tuple[WorkflowCandidateStep, ...]
     result: WorkflowValueReference | None = None
+    revision: int | None = None
 
     def __post_init__(self) -> None:
         """Validate executable workflow topology."""
 
         if not self.steps:
             raise ValueError("Workflow candidates must contain at least one step.")
+
+        if self.revision is not None and self.revision < 1:
+            raise ValueError("Workflow candidate revision must be at least 1.")
 
         step_ids = tuple(step.id for step in self.steps)
         known_ids = set(step_ids)
@@ -127,6 +144,7 @@ class WorkflowCandidate:
 
         return WorkflowCandidateSignature(
             workflow_id=self.metadata.id,
+            workflow_revision=self.revision,
             strategy_ids=tuple(step.strategy.metadata.id for step in self.steps),
         )
 

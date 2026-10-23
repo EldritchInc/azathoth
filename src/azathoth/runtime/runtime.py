@@ -210,7 +210,11 @@ class AzathothRuntime:
         self,
         workflow_id: UUID,
     ) -> WorkflowCandidate:
-        """Generate an executable candidate for one configured workflow."""
+        """Generate an executable candidate for one configured workflow.
+
+        The candidate carries the catalogued revision of the specification,
+        so its signature and every run of it name the revision executed.
+        """
 
         specification = self._workflows.get(workflow_id)
 
@@ -224,4 +228,5 @@ class AzathothRuntime:
             portfolio=self._portfolio,
             tool_resolver=self._tool_resolver,
             tool_implementation_resolver=(self._tool_implementation_resolver),
+            revision=self._workflows.revision_number(workflow_id),
         )

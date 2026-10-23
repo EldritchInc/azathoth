@@ -145,6 +145,7 @@ def promote_workflow_candidate(
 
     state = WorkflowProductionState(
         specification=promoted_specification,
+        specification_revision=candidate.revision,
         model_substitutions=model_substitutions,
         emissions=(
             WorkflowProductionEmission(
