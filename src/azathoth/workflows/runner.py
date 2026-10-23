@@ -1,5 +1,7 @@
 """Workflow execution orchestration."""
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -28,14 +30,37 @@ from azathoth.workflows.value import (
     WorkflowValueReference,
 )
 
+RetrySleep = Callable[[float], Awaitable[None]]
+"""Wait the given number of seconds before a workflow step retry."""
+
+
+async def _sleep(
+    delay: float,
+) -> None:
+    """Wait the given number of seconds on the running event loop."""
+
+    await asyncio.sleep(delay)
+
+
+@dataclass(frozen=True)
+class _StepOutcome:
+    """The retry-exhausted outcome of executing one eligible workflow step."""
+
+    execution: ExecutionResult | None
+    attempts: tuple[WorkflowStepAttempt, ...]
+    error: Exception | None
+
 
 @dataclass(frozen=True)
 class _LayerStepResult:
     """Temporary result produced while processing one workflow layer."""
 
     step: WorkflowCandidateStep
-    step_context: Context | None
-    execution: ExecutionResult | None
+    status: WorkflowStepStatus
+    step_context: Context | None = None
+    execution: ExecutionResult | None = None
+    attempts: tuple[WorkflowStepAttempt, ...] = ()
+    error: Exception | None = None
 
 
 @dataclass(frozen=True)
@@ -47,14 +72,22 @@ class _WorkflowExecutionResult:
 
 
 class WorkflowRunner:
-    """Execute workflow candidates."""
+    """Execute workflow candidates.
+
+    The eligible steps of each dependency layer execute concurrently. A layer
+    commits only after every one of its steps has finished, always in declared
+    order, so the recorded run and its final context are identical whatever
+    order the steps finish in.
+    """
 
     def __init__(
         self,
         *,
         executor: StrategyExecutor | None = None,
+        sleep: RetrySleep | None = None,
     ) -> None:
         self._executor = executor if executor is not None else StrategyExecutor()
+        self._sleep: RetrySleep = sleep if sleep is not None else _sleep
 
     @staticmethod
     def _find_workflow_value(
@@ -206,7 +239,11 @@ class WorkflowRunner:
         tuple[WorkflowStepAttempt, ...],
         Exception | None,
     ]:
-        """Execute a strategy according to its retry policy."""
+        """Execute a strategy according to its retry policy.
+
+        Before each retry, the runner waits the delay the policy assigns to
+        that attempt. A zero delay retries immediately.
+        """
 
         attempts: list[WorkflowStepAttempt] = []
 
@@ -267,11 +304,52 @@ class WorkflowRunner:
                         error,
                     )
 
-                retry_policy.delay_for_attempt(
+                delay = retry_policy.delay_for_attempt(
                     attempt_number + 1,
                 )
 
+                if delay > 0:
+                    await self._sleep(delay)
+
         raise AssertionError("Workflow retry execution completed without producing an outcome.")
+
+    async def _execute_layer(
+        self,
+        eligible: tuple[tuple[WorkflowCandidateStep, Context], ...],
+    ) -> tuple[_StepOutcome, ...]:
+        """Execute eligible layer steps concurrently, returning outcomes in order.
+
+        Every step runs to retry exhaustion. Step failures are captured as
+        outcomes rather than raised, so one failing step never cancels its
+        siblings.
+        """
+
+        async with asyncio.TaskGroup() as group:
+            tasks = tuple(
+                group.create_task(
+                    self._execute_with_retry(
+                        strategy=step.strategy,
+                        context=step_context,
+                        retry_policy=step.retry_policy,
+                    )
+                )
+                for step, step_context in eligible
+            )
+
+        outcomes: list[_StepOutcome] = []
+
+        for task in tasks:
+            execution, attempts, error = task.result()
+
+            outcomes.append(
+                _StepOutcome(
+                    execution=execution,
+                    attempts=attempts,
+                    error=error,
+                )
+            )
+
+        return tuple(outcomes)
 
     @staticmethod
     def _merge_execution_context(
@@ -348,16 +426,8 @@ class WorkflowRunner:
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
-            layer_results: list[
-                tuple[
-                    WorkflowCandidateStep,
-                    Context | None,
-                    ExecutionResult | None,
-                    tuple[WorkflowStepAttempt, ...],
-                    Exception | None,
-                    WorkflowStepStatus,
-                ]
-            ] = []
+            layer_results: list[_LayerStepResult] = []
+            eligible: list[tuple[WorkflowCandidateStep, Context]] = []
 
             for step in layer:
                 #
@@ -368,13 +438,9 @@ class WorkflowRunner:
                     blocked_step_ids.add(step.id)
 
                     layer_results.append(
-                        (
-                            step,
-                            None,
-                            None,
-                            (),
-                            None,
-                            WorkflowStepStatus.SKIPPED,
+                        _LayerStepResult(
+                            step=step,
+                            status=WorkflowStepStatus.SKIPPED,
                         )
                     )
 
@@ -388,79 +454,80 @@ class WorkflowRunner:
                     completed_steps=completed_steps,
                 ):
                     layer_results.append(
-                        (
-                            step,
-                            None,
-                            None,
-                            (),
-                            None,
-                            WorkflowStepStatus.SKIPPED,
+                        _LayerStepResult(
+                            step=step,
+                            status=WorkflowStepStatus.SKIPPED,
                         )
                     )
 
                     continue
 
-                step_context = self._build_step_context(
-                    layer_context=layer_context,
-                    step=step,
-                    completed_steps=completed_steps,
+                eligible.append(
+                    (
+                        step,
+                        self._build_step_context(
+                            layer_context=layer_context,
+                            step=step,
+                            completed_steps=completed_steps,
+                        ),
+                    )
                 )
 
-                execution, attempts, error = await self._execute_with_retry(
-                    strategy=step.strategy,
-                    context=step_context,
-                    retry_policy=step.retry_policy,
-                )
+            #
+            # Execute every eligible step of the layer concurrently.
+            #
+            outcomes = await self._execute_layer(
+                tuple(eligible),
+            )
 
-                if error is not None:
+            for (step, step_context), outcome in zip(
+                eligible,
+                outcomes,
+                strict=True,
+            ):
+                if outcome.error is not None:
                     layer_results.append(
-                        (
-                            step,
-                            step_context,
-                            None,
-                            attempts,
-                            error,
-                            WorkflowStepStatus.FAILED,
+                        _LayerStepResult(
+                            step=step,
+                            status=WorkflowStepStatus.FAILED,
+                            step_context=step_context,
+                            attempts=outcome.attempts,
+                            error=outcome.error,
                         )
                     )
 
-                    if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
-                        terminal_error = error
-                        break
-
-                    if step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
-                        blocked_step_ids.add(step.id)
-
                     continue
 
-                if execution is None:
+                if outcome.execution is None:
                     raise RuntimeError(
                         "Successful workflow step execution did not produce an execution result."
                     )
 
                 layer_results.append(
-                    (
-                        step,
-                        step_context,
-                        execution,
-                        attempts,
-                        None,
-                        WorkflowStepStatus.EXECUTED,
+                    _LayerStepResult(
+                        step=step,
+                        status=WorkflowStepStatus.EXECUTED,
+                        step_context=step_context,
+                        execution=outcome.execution,
+                        attempts=outcome.attempts,
                     )
                 )
 
             #
-            # Commit the layer in declared workflow order.
+            # Commit the layer in declared workflow order. The first
+            # FAIL_WORKFLOW failure in declared order stops the run once the
+            # whole layer is recorded.
             #
-            for (
-                step,
-                result_context,
-                execution,
-                attempts,
-                error,
-                status,
-            ) in layer_results:
-                if status is WorkflowStepStatus.SKIPPED:
+            declared_order = {step.id: index for index, step in enumerate(layer)}
+
+            layer_results.sort(
+                key=lambda result: declared_order[result.step.id],
+            )
+
+            for result in layer_results:
+                step = result.step
+
+                if result.status is WorkflowStepStatus.SKIPPED:
                     completed_steps.append(
                         WorkflowStepRun(
                             step_id=step.id,
@@ -474,8 +541,8 @@ class WorkflowRunner:
 
                     continue
 
-                if status is WorkflowStepStatus.FAILED:
-                    if error is None:
+                if result.status is WorkflowStepStatus.FAILED:
+                    if result.error is None:
                         raise RuntimeError("Failed workflow step is missing its failure.")
 
                     completed_steps.append(
@@ -484,22 +551,31 @@ class WorkflowRunner:
                             layer_index=layer_index,
                             status=WorkflowStepStatus.FAILED,
                             execution=None,
-                            attempts=attempts,
+                            attempts=result.attempts,
                             values=(),
                         )
                     )
 
+                    if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
+                        if terminal_error is None:
+                            terminal_error = result.error
+
+                    elif step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
+                        blocked_step_ids.add(step.id)
+
                     continue
+
+                execution = result.execution
 
                 if execution is None:
                     raise RuntimeError("Executed workflow step is missing its execution result.")
 
-                if result_context is None:
+                if result.step_context is None:
                     raise RuntimeError("Executed workflow step is missing its execution context.")
 
                 current_context = self._merge_execution_context(
                     current_context=current_context,
-                    execution_context=result_context,
+                    execution_context=result.step_context,
                     execution=execution,
                 )
 
@@ -518,7 +594,7 @@ class WorkflowRunner:
                         layer_index=layer_index,
                         status=WorkflowStepStatus.EXECUTED,
                         execution=execution,
-                        attempts=attempts,
+                        attempts=result.attempts,
                         values=values,
                     )
                 )
