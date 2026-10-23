@@ -178,10 +178,41 @@ def test_fail_workflow_propagates_original_exception() -> None:
             )
         )
 
+    #
+    # The independent sibling in the failing layer still finishes, but no
+    # later layer runs.
+    #
     assert executor.calls == [
         "Failing",
         "Failing",
+        "Independent",
     ]
+
+
+def test_fail_workflow_records_finished_siblings_and_stops() -> None:
+    run = asyncio.run(
+        WorkflowRunner(
+            executor=SelectiveFailureExecutor(),
+        ).run_recording_failures(
+            workflow=create_candidate(
+                failure_policy=WorkflowFailurePolicy.FAIL_WORKFLOW,
+            ),
+            context=Context(),
+        )
+    )
+
+    assert run.failed
+
+    assert tuple((step.step_id, step.status) for step in run.steps) == (
+        (
+            FAILING_STEP_ID,
+            WorkflowStepStatus.FAILED,
+        ),
+        (
+            INDEPENDENT_STEP_ID,
+            WorkflowStepStatus.EXECUTED,
+        ),
+    )
 
 
 def test_continue_records_failure_and_runs_downstream_work() -> None:
