@@ -427,6 +427,11 @@ reaches a judge; it is judged by `evaluate_failed_run` like any other.
 Each `WorkflowBenchmarkCaseResult` exposes the same facts per case:
 `run_failure`, `judge_calls`, and `judge_cost_usd`.
 
+`WorkflowBenchmarkResult.dataset_digest` and
+`WorkflowBenchmarkComparison.dataset_digest` hold the content digest of the
+exact benchmark revision executed. Saved execution and experiment records
+carry it as `benchmark_digest`.
+
 Benchmark results remain evidence.
 
 They do not mutate configured or production workflow state.
@@ -440,6 +445,7 @@ A completed benchmark run or comparison can be saved as one
 WorkflowBenchmarkExecutionRecord
 ├── id                      shared with the WorkflowBenchmarkResult or Ranking
 ├── benchmark_id
+├── benchmark_digest        content digest of the benchmark revision run
 ├── kind                    run | compare
 ├── candidates
 │   └── WorkflowBenchmarkExecutionCandidate
@@ -558,6 +564,44 @@ The state may permit ordered substitutes for a prompt step, but those
 substitutes are explicitly authorized in production state.
 
 There is no implicit portfolio failover during production execution.
+
+## Specification Revisions
+
+Workflow specifications are revisioned. The workflow ID is a lineage, and
+`WorkflowRepository.save` appends a `WorkflowSpecificationRevision`:
+
+```text
+WorkflowSpecificationRevision
+├── workflow_id
+├── number            1, 2, 3 … per workflow
+├── specification
+├── content_digest    sha256 of the specification's canonical JSON
+└── imported_at       None for specifications saved before revisions existed
+```
+
+`get` and `specifications` return the latest revisions; `latest_revision`,
+`revision(id, number)`, and `revisions(id)` read history. Re-saving earlier
+content appends a revision whose digest matches the earlier one, which
+`earliest_identical_revision` names.
+
+`SQLiteWorkflowRepository` stores revisions in
+`workflow_specification_revisions` and, on opening a database written before
+revisions, copies each `workflow_specifications` row in as revision 1.
+
+The revision travels with everything executed from it:
+
+```text
+WorkflowCatalogLoader      WorkflowCatalog.revisions: latest number per workflow
+generate_workflow_candidate(..., revision=)
+WorkflowCandidate.revision
+WorkflowCandidateSignature.workflow_revision
+WorkflowRun.workflow_revision
+WorkflowProductionState.specification_revision
+```
+
+Experiment and benchmark execution records hold signatures, so they name the
+revision they judged. Every new field is optional, so records written before
+revisions decode with `None`.
 
 ## Production Revisions
 

@@ -82,6 +82,7 @@ from azathoth.evaluation import (
     BenchmarkCatalog,
     BenchmarkCatalogLoader,
     BenchmarkDataset,
+    BenchmarkDatasetRevision,
     BenchmarkDocumentError,
     BenchmarkRepository,
     EvaluationEvidence,
@@ -110,6 +111,7 @@ from azathoth.evaluation import (
     UnsupportedComparisonError,
     decode_benchmark_document,
     default_comparison_evaluators,
+    earliest_identical_benchmark_revision,
     encode_benchmark_document,
     expectation_hash,
     first_json_difference,
@@ -1389,12 +1391,32 @@ Reusable benchmark datasets may be persisted through the storage-neutral
 It defines:
 
 ```text
-save(dataset)
+save(dataset)                 appends the next revision and returns it
 
-get(dataset_id)
+get(dataset_id)               the latest dataset
 
-datasets()
+datasets()                    every benchmark's latest dataset, first-import order
+
+latest_revision(dataset_id)
+
+revision(dataset_id, number)
+
+revisions(dataset_id)         oldest first
 ```
+
+The dataset ID is a lineage. Each save appends a `BenchmarkDatasetRevision`:
+
+```text
+BenchmarkDatasetRevision
+├── dataset_id
+├── number            1, 2, 3 … per benchmark
+├── dataset
+├── content_digest    sha256 of the dataset's canonical JSON
+└── imported_at       None for datasets saved before revisions existed
+```
+
+Re-saving earlier content appends a revision whose digest matches the earlier
+one; `earliest_identical_benchmark_revision` names it.
 
 The repository stores complete immutable `BenchmarkDataset` objects.
 
@@ -1410,12 +1432,17 @@ InMemoryBenchmarkRepository
 SQLiteBenchmarkRepository
 ```
 
-Both preserve datasets as durable configuration.
+Both preserve every revision as durable configuration. Nothing is ever
+replaced: a changed workload is a new revision, so evidence recorded against
+an earlier revision keeps meaning exactly the cases it judged.
 
-Persisting a duplicate dataset identity is rejected rather than silently
-replacing the existing workload.
+`SQLiteBenchmarkRepository` stores revisions in
+`benchmark_dataset_revisions`. A database written before revisions keeps one
+row per dataset in `benchmark_datasets`; opening it copies each such dataset
+in as revision 1 without an import time, and leaves the old table untouched.
 
-This gives benchmark datasets append-oriented durable identity semantics.
+Saved benchmark executions and experiments record the content digest of the
+revision they ran, which matches `content_digest` on that revision.
 
 # BenchmarkCatalogLoader
 
