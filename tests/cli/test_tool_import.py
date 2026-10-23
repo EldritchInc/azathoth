@@ -158,7 +158,7 @@ def test_tool_import_persists_complete_document(
     assert result == 0
     assert captured.err == ""
 
-    assert captured.out == (f"Imported tool {TOOL_ID}@1.0.0.\n")
+    assert captured.out == (f"Imported tool {TOOL_ID}@1.0.0 revision 1.\n")
 
     repository = SQLiteToolRepository(
         database,
@@ -244,121 +244,265 @@ def test_tool_import_rejects_invalid_document_before_creating_database(
     assert not database.exists()
 
 
-def test_tool_import_rejects_duplicate_definition_without_partial_import(
+OTHER_TOOL_ID = UUID("44444444-4444-4444-4444-444444444444")
+
+
+def create_changed_document() -> ToolDocument:
+    """Create the document with changed implementation source and no test case."""
+
+    return ToolDocument(
+        definition=create_definition(),
+        implementations=(
+            create_implementation().model_copy(
+                update={
+                    "source": (
+                        "def run(text: str) -> dict[str, int]:\n"
+                        "    return {'count': len(text.strip().split())}\n"
+                    ),
+                },
+            ),
+        ),
+    )
+
+
+def import_document(
+    tmp_path: Path,
+    document: ToolDocument,
+    *,
+    name: str = "tool.json",
+) -> int:
+    """Write one document and import it."""
+
+    path = tmp_path / name
+
+    write_document(
+        path,
+        document,
+    )
+
+    return import_tool(path)
+
+
+def test_tool_reimport_appends_an_identical_revision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     database = tmp_path / "azathoth.db"
-    document_path = tmp_path / "tool.json"
 
     configure_database(
         database=database,
         monkeypatch=monkeypatch,
     )
 
-    repository = SQLiteToolRepository(
-        database,
-    )
-
-    repository.save_definition(
-        create_definition(),
-    )
-
-    write_document(
-        document_path,
-    )
-
-    result = import_tool(
-        document_path,
-    )
+    assert import_document(tmp_path, create_document()) == 0
+    assert import_document(tmp_path, create_document()) == 0
 
     captured = capsys.readouterr()
 
-    assert result == 1
-    assert captured.out == ""
+    assert captured.err == ""
+    assert captured.out.splitlines() == [
+        f"Imported tool {TOOL_ID}@1.0.0 revision 1.",
+        f"Imported tool {TOOL_ID}@1.0.0 revision 2 (identical to revision 1).",
+    ]
 
-    assert captured.err == (f"Tool definition {TOOL_ID}@1.0.0 already exists.\n")
+    repository = SQLiteToolRepository(database)
 
-    assert repository.implementations() == ()
+    assert repository.implementations() == (create_implementation(),)
+    assert repository.test_cases() == (create_test_case(),)
+
+
+def test_tool_import_of_a_changed_document_makes_its_artifacts_current(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    import_document(tmp_path, create_document())
+    import_document(tmp_path, create_changed_document(), name="changed.json")
+
+    lines = capsys.readouterr().out.splitlines()
+
+    assert lines[-1] == f"Imported tool {TOOL_ID}@1.0.0 revision 2."
+
+    repository = SQLiteToolRepository(database)
+
+    assert repository.implementations() == create_changed_document().implementations
     assert repository.test_cases() == ()
 
 
-def test_tool_import_rejects_duplicate_implementation_without_partial_import(
+def test_tool_reimport_of_earlier_content_restores_its_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     database = tmp_path / "azathoth.db"
-    document_path = tmp_path / "tool.json"
 
     configure_database(
         database=database,
         monkeypatch=monkeypatch,
     )
 
-    repository = SQLiteToolRepository(
-        database,
+    import_document(tmp_path, create_document())
+    import_document(tmp_path, create_changed_document(), name="changed.json")
+    import_document(tmp_path, create_document())
+
+    lines = capsys.readouterr().out.splitlines()
+
+    assert lines[-1] == f"Imported tool {TOOL_ID}@1.0.0 revision 3 (identical to revision 1)."
+
+    repository = SQLiteToolRepository(database)
+
+    assert repository.implementations() == (create_implementation(),)
+    assert repository.test_cases() == (create_test_case(),)
+
+
+def test_tool_import_records_artifacts_saved_before_revisions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
     )
+
+    repository = SQLiteToolRepository(database)
+
+    repository.save_definition(create_definition())
+    repository.save_implementation(create_implementation())
+
+    assert import_document(tmp_path, create_document()) == 0
+
+    assert capsys.readouterr().out == f"Imported tool {TOOL_ID}@1.0.0 revision 2.\n"
+
+    first, second = repository.document_revisions(TOOL_ID)
+
+    assert first.imported_at is None
+    assert first.document == ToolDocument(
+        definition=create_definition(),
+        implementations=(create_implementation(),),
+    )
+    assert second.document == create_document()
+
+
+def test_tool_import_rejects_an_implementation_of_another_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    repository = SQLiteToolRepository(database)
 
     repository.save_implementation(
-        create_implementation(),
+        create_implementation().model_copy(
+            update={
+                "tool_id": OTHER_TOOL_ID,
+            },
+        )
     )
 
-    write_document(
-        document_path,
-    )
-
-    result = import_tool(
-        document_path,
-    )
+    result = import_document(tmp_path, create_document())
 
     captured = capsys.readouterr()
 
     assert result == 1
     assert captured.out == ""
-
-    assert captured.err == (f"Tool implementation {IMPLEMENTATION_ID} already exists.\n")
+    assert captured.err == (
+        f"Tool implementation {IMPLEMENTATION_ID} belongs to tool {OTHER_TOOL_ID}@1.0.0.\n"
+    )
 
     assert repository.definitions() == ()
     assert repository.test_cases() == ()
+    assert repository.document_revisions(TOOL_ID) == ()
 
 
-def test_tool_import_rejects_duplicate_test_case_without_partial_import(
+def test_tool_import_rejects_an_implementation_of_another_version(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     database = tmp_path / "azathoth.db"
-    document_path = tmp_path / "tool.json"
 
     configure_database(
         database=database,
         monkeypatch=monkeypatch,
     )
 
-    repository = SQLiteToolRepository(
-        database,
+    import_document(tmp_path, create_document())
+
+    capsys.readouterr()
+
+    second_version = ToolDocument(
+        definition=create_definition().model_copy(
+            update={
+                "version": "2.0.0",
+            },
+        ),
+        implementations=(
+            create_implementation().model_copy(
+                update={
+                    "tool_version": "2.0.0",
+                },
+            ),
+        ),
     )
+
+    result = import_document(tmp_path, second_version, name="second.json")
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.err == (
+        f"Tool implementation {IMPLEMENTATION_ID} belongs to tool {TOOL_ID}@1.0.0.\n"
+    )
+
+    assert SQLiteToolRepository(database).get_definition(TOOL_ID, "2.0.0") is None
+
+
+def test_tool_import_rejects_a_test_case_of_another_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    repository = SQLiteToolRepository(database)
 
     repository.save_test_case(
-        create_test_case(),
+        create_test_case().model_copy(
+            update={
+                "tool_id": OTHER_TOOL_ID,
+            },
+        )
     )
 
-    write_document(
-        document_path,
-    )
-
-    result = import_tool(
-        document_path,
-    )
+    result = import_document(tmp_path, create_document())
 
     captured = capsys.readouterr()
 
     assert result == 1
     assert captured.out == ""
-
-    assert captured.err == (f"Tool test case {TEST_CASE_ID} already exists.\n")
+    assert captured.err == f"Tool test case {TEST_CASE_ID} belongs to tool {OTHER_TOOL_ID}.\n"
 
     assert repository.definitions() == ()
     assert repository.implementations() == ()
