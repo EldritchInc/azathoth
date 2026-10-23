@@ -6,6 +6,7 @@ from azathoth.cli.dispatching.benchmarks import (
 from azathoth.cli.dispatching.experiments import dispatch_experiment_command
 from azathoth.cli.dispatching.goals import dispatch_goal_command
 from azathoth.cli.dispatching.invocations import dispatch_invocation_command
+from azathoth.cli.dispatching.judges import dispatch_judge_command
 from azathoth.cli.dispatching.models import dispatch_model_command
 from azathoth.cli.dispatching.runs import dispatch_run_command
 from azathoth.cli.dispatching.tools import dispatch_tool_command
@@ -16,6 +17,7 @@ __all__ = [
     "dispatch_experiment_command",
     "dispatch_goal_command",
     "dispatch_invocation_command",
+    "dispatch_judge_command",
     "dispatch_model_command",
     "dispatch_run_command",
     "dispatch_tool_command",

@@ -31,6 +31,11 @@ from azathoth.cli.goals import (
     list_goals,
     show_goal,
 )
+from azathoth.cli.judges import (
+    add_judge,
+    list_judges,
+    remove_judge,
+)
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
@@ -104,6 +109,7 @@ __all__ = [
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
     "WorkflowRunSource",
+    "add_judge",
     "authorize_model",
     "build_parser",
     "compare_benchmarks",
@@ -120,6 +126,7 @@ __all__ = [
     "list_benchmark_cases",
     "list_benchmarks",
     "list_goals",
+    "list_judges",
     "list_models",
     "list_portfolio_models",
     "list_tool_implementations",
@@ -139,6 +146,7 @@ __all__ = [
     "promote_configured_workflow",
     "promote_workflow",
     "record_run_feedback",
+    "remove_judge",
     "render_model_usage_report",
     "render_production_invocation",
     "render_production_invocation_result",

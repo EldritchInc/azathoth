@@ -44,6 +44,15 @@ from azathoth.cli.parsing.invocations import (
     INVOCATION_SHOW_ACTION,
     add_invocation_parser,
 )
+from azathoth.cli.parsing.judges import (
+    JUDGE_ACTION_ATTRIBUTE,
+    JUDGE_ADD_ACTION,
+    JUDGE_COMMAND,
+    JUDGE_IDENTIFIER_ATTRIBUTE,
+    JUDGE_LIST_ACTION,
+    JUDGE_REMOVE_ACTION,
+    add_judge_parser,
+)
 from azathoth.cli.parsing.models import (
     MODEL_ACTION_ATTRIBUTE,
     MODEL_AUTHORIZE_ACTION,
@@ -146,6 +155,8 @@ def build_parser() -> ArgumentParser:
 
     add_model_parser(commands)
 
+    add_judge_parser(commands)
+
     add_tool_parser(commands)
 
     add_benchmark_parser(commands)
@@ -186,6 +197,12 @@ __all__ = [
     "INVOCATION_COMMAND",
     "INVOCATION_ID_ATTRIBUTE",
     "INVOCATION_SHOW_ACTION",
+    "JUDGE_ACTION_ATTRIBUTE",
+    "JUDGE_ADD_ACTION",
+    "JUDGE_COMMAND",
+    "JUDGE_IDENTIFIER_ATTRIBUTE",
+    "JUDGE_LIST_ACTION",
+    "JUDGE_REMOVE_ACTION",
     "MODEL_ACTION_ATTRIBUTE",
     "MODEL_AUTHORIZE_ACTION",
     "MODEL_COMMAND",
@@ -247,5 +264,6 @@ __all__ = [
     "WORKFLOW_SHOW_ACTION",
     "add_benchmark_parser",
     "add_invocation_parser",
+    "add_judge_parser",
     "build_parser",
 ]
