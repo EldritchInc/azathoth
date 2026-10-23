@@ -1,5 +1,7 @@
 """Tests for canonical external workflow input events."""
 
+from datetime import UTC, datetime
+
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
     create_workflow_input_event,
@@ -90,3 +92,35 @@ def test_workflow_input_event_uses_context_event_defaults() -> None:
     )
 
     assert event.occurred_at is not None
+
+
+def test_workflow_input_event_uses_explicit_occurrence_time() -> None:
+    occurred_at = datetime(
+        2026,
+        10,
+        23,
+        7,
+        0,
+        tzinfo=UTC,
+    )
+
+    event = create_workflow_input_event(
+        "hello",
+        producer="test-client",
+        occurred_at=occurred_at,
+    )
+
+    assert event.occurred_at == occurred_at
+
+
+def test_workflow_input_event_defaults_to_current_time() -> None:
+    before = datetime.now(UTC)
+
+    event = create_workflow_input_event(
+        "hello",
+        producer="test-client",
+    )
+
+    after = datetime.now(UTC)
+
+    assert before <= event.occurred_at <= after

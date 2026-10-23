@@ -5,12 +5,19 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
+from azathoth.context import Context
+from azathoth.prompting import (
+    PromptBinding,
+    PromptTemplate,
+)
 from azathoth.workflows import (
+    WORKFLOW_INPUT_EVENT_TYPE,
     ProductionInvocation,
     ProductionInvocationErrorCode,
     ProductionInvocationFailure,
     ProductionInvocationSuccess,
     create_production_invocation,
+    create_workflow_input_event,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -48,7 +55,7 @@ def test_production_invocation_normalizes_object_payload_into_context() -> None:
         },
     )
 
-    assert len(invocation.initial_context.events) == 1
+    assert len(invocation.initial_context.events) == 2
 
     event = invocation.initial_context.events[0]
 
@@ -250,3 +257,60 @@ def test_production_invocation_error_codes_are_stable() -> None:
         "workflow_execution_failed",
         "timeout",
     )
+
+
+def test_production_invocation_emits_canonical_workflow_input_event() -> None:
+    invocation = create_production_invocation(
+        workflow_id=WORKFLOW_ID,
+        payload={
+            "request": "hello",
+        },
+    )
+
+    event = invocation.initial_context.latest(
+        WORKFLOW_INPUT_EVENT_TYPE,
+    )
+
+    assert event is not None
+    assert event is invocation.initial_context.events[1]
+    assert event.producer == "azathoth.production"
+    assert event.payload == {
+        "input": {
+            "request": "hello",
+        },
+    }
+    assert event.occurred_at == invocation.created_at
+
+
+def test_production_and_benchmark_inputs_render_the_same_prompt() -> None:
+    template = PromptTemplate(
+        text="Answer this request: {request}",
+        bindings=(
+            PromptBinding(
+                variable_name="request",
+                event_type=WORKFLOW_INPUT_EVENT_TYPE,
+                field_name="input",
+            ),
+        ),
+    )
+
+    production = template.render(
+        create_production_invocation(
+            workflow_id=WORKFLOW_ID,
+            payload="hello",
+        ).initial_context
+    )
+
+    benchmark = template.render(
+        Context(
+            events=(
+                create_workflow_input_event(
+                    "hello",
+                    producer="azathoth.benchmark",
+                ),
+            )
+        )
+    )
+
+    assert production == benchmark
+    assert production.text == "Answer this request: hello"
