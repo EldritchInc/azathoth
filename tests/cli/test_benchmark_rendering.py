@@ -103,3 +103,27 @@ def test_benchmark_rendering_reports_run_failures_before_totals() -> None:
     )
 
     assert "Accuracy: 0.750000\nRun failures: 1\nTotal Tokens: 120\n" in rendered
+
+
+def test_benchmark_rendering_omits_execution_without_an_identifier() -> None:
+    rendered = render_workflow_benchmark_result(
+        create_result(),
+        workflow_id=WORKFLOW_ID,
+    )
+
+    assert rendered.startswith(f"Benchmark ID: {BENCHMARK_ID}\n")
+    assert "Execution ID" not in rendered
+
+
+def test_benchmark_rendering_leads_with_the_execution_identifier() -> None:
+    result = create_result()
+
+    rendered = render_workflow_benchmark_result(
+        result,
+        workflow_id=WORKFLOW_ID,
+        execution_id=result.id,
+    )
+
+    assert rendered.startswith(
+        f"Execution ID: {result.id}\nBenchmark ID: {BENCHMARK_ID}\nWorkflow ID: {WORKFLOW_ID}\n"
+    )

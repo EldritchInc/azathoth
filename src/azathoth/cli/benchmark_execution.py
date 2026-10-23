@@ -12,6 +12,7 @@ from azathoth.evaluation import (
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowBenchmarkComparator,
+    WorkflowBenchmarkEvidenceRecorder,
     WorkflowBenchmarkRanker,
     WorkflowBenchmarkRanking,
     WorkflowBenchmarkResult,
@@ -28,15 +29,23 @@ async def execute_configured_benchmark(
     workflow_id: UUID,
     dataset: BenchmarkDataset,
     runner: WorkflowBenchmarkRunner | None = None,
+    recorder: WorkflowBenchmarkEvidenceRecorder | None = None,
 ) -> WorkflowBenchmarkResult:
     """Execute one configured workflow against a benchmark dataset.
 
     Without an explicit runner, semantic cases are judged by the runtime's
-    judge rotation, resolved before any case executes.
+    judge rotation, resolved before any case executes. The workflow candidate
+    is generated once, before any case executes, and runs every case, so the
+    whole benchmark judges one resolved configuration.
+
+    With a recorder, every case run, every evaluation, and one execution
+    record sharing the result's identity are saved.
 
     Raises:
         JudgeUnavailableError: The dataset has semantic cases and a judge
             cannot be used.
+        WorkflowNotConfiguredError: The workflow is not configured.
+        WorkflowGenerationError: The workflow cannot be generated.
     """
 
     benchmark_runner = (
@@ -50,19 +59,22 @@ async def execute_configured_benchmark(
         )
     )
 
-    def candidate_factory(
-        _case: BenchmarkCase,
-    ) -> WorkflowCandidate:
-        """Generate the configured workflow candidate for one case."""
+    candidate = runtime.generate_workflow_candidate(
+        workflow_id,
+    )
 
-        return runtime.generate_workflow_candidate(
-            workflow_id,
+    result = await benchmark_runner.run(
+        dataset,
+        _every_case(candidate),
+    )
+
+    if recorder is not None:
+        recorder.record_run(
+            result,
+            candidate=candidate,
         )
 
-    return await benchmark_runner.run(
-        dataset,
-        candidate_factory,
-    )
+    return result
 
 
 async def compare_configured_benchmarks(
@@ -72,16 +84,24 @@ async def compare_configured_benchmarks(
     dataset: BenchmarkDataset,
     scoring_policy: WorkflowScoringPolicy,
     comparator: WorkflowBenchmarkComparator | None = None,
+    recorder: WorkflowBenchmarkEvidenceRecorder | None = None,
 ) -> WorkflowBenchmarkRanking:
     """Compare configured workflows against one benchmark dataset.
 
     Without an explicit comparator, semantic cases are judged by the runtime's
-    judge rotation, resolved before any case executes.
+    judge rotation, resolved before any case executes. Every workflow
+    candidate is generated once, before any case executes.
+
+    With a recorder, every case run, every evaluation, and one execution
+    record sharing the ranking's identity are saved, together with the
+    scoring policy that produced the ranking.
 
     Raises:
         ValueError: Fewer than two workflows, or duplicate workflows.
         JudgeUnavailableError: The dataset has semantic cases and a judge
             cannot be used.
+        WorkflowNotConfiguredError: A workflow is not configured.
+        WorkflowGenerationError: A workflow cannot be generated.
     """
 
     if len(workflow_ids) < 2:
@@ -103,24 +123,8 @@ async def compare_configured_benchmarks(
         )
     )
 
-    def configured_candidate_factory(
-        workflow_id: UUID,
-    ) -> Callable[[BenchmarkCase], WorkflowCandidate]:
-        """Create a case-independent candidate factory for one workflow."""
-
-        def candidate_factory(
-            _case: BenchmarkCase,
-        ) -> WorkflowCandidate:
-            """Generate the configured workflow candidate."""
-
-            return runtime.generate_workflow_candidate(
-                workflow_id,
-            )
-
-        return candidate_factory
-
-    candidate_factories = {
-        str(workflow_id): configured_candidate_factory(
+    candidates = {
+        str(workflow_id): runtime.generate_workflow_candidate(
             workflow_id,
         )
         for workflow_id in workflow_ids
@@ -128,7 +132,7 @@ async def compare_configured_benchmarks(
 
     comparison = await benchmark_comparator.compare(
         dataset,
-        candidate_factories,
+        {name: _every_case(candidate) for name, candidate in candidates.items()},
     )
 
     scorer = WorkflowBenchmarkScorer(
@@ -139,9 +143,34 @@ async def compare_configured_benchmarks(
         scorer=scorer,
     )
 
-    return ranker.rank(
+    ranking = ranker.rank(
         comparison,
     )
+
+    if recorder is not None:
+        recorder.record_comparison(
+            comparison,
+            ranking,
+            candidates=candidates,
+            scoring_policy=scoring_policy,
+        )
+
+    return ranking
+
+
+def _every_case(
+    candidate: WorkflowCandidate,
+) -> Callable[[BenchmarkCase], WorkflowCandidate]:
+    """Return a candidate factory that runs one candidate for every case."""
+
+    def factory(
+        _case: BenchmarkCase,
+    ) -> WorkflowCandidate:
+        """Return the pre-generated candidate."""
+
+        return candidate
+
+    return factory
 
 
 def _outcome_evaluator(

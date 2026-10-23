@@ -19,9 +19,17 @@ from azathoth.evaluation import (
 )
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
+    SQLiteWorkflowBenchmarkExecutionRepository,
+    WorkflowBenchmarkEvidenceRecorder,
+    WorkflowBenchmarkExecutionCandidate,
+    WorkflowBenchmarkExecutionCase,
+    WorkflowBenchmarkExecutionKind,
+    WorkflowBenchmarkExecutionRecord,
     WorkflowBenchmarkRankedCandidate,
     WorkflowBenchmarkRanking,
+    WorkflowCandidateSignature,
     WorkflowGenerationError,
+    WorkflowMetadata,
     WorkflowScorecard,
     WorkflowScoringPolicy,
 )
@@ -90,6 +98,49 @@ def create_ranking() -> WorkflowBenchmarkRanking:
     )
 
 
+def create_execution(
+    ranking: WorkflowBenchmarkRanking,
+) -> WorkflowBenchmarkExecutionRecord:
+    """Create the execution record a recorded comparison saves for one ranking."""
+
+    candidates = tuple(
+        WorkflowBenchmarkExecutionCandidate(
+            workflow=WorkflowMetadata(
+                id=UUID(entry.name),
+                name=f"workflow {entry.rank}",
+                description="Classify input.",
+            ),
+            candidate_signature=WorkflowCandidateSignature(
+                workflow_id=UUID(entry.name),
+                strategy_ids=(UUID(int=entry.rank),),
+            ),
+            cases=(
+                WorkflowBenchmarkExecutionCase(
+                    case_id=CASE_ID,
+                    comparison=OutcomeComparison.EXACT,
+                    run_id=UUID(int=100 + entry.rank),
+                    evaluation_id=UUID(int=200 + entry.rank),
+                    passed=entry.rank == 1,
+                ),
+            ),
+            scorecard=entry.scorecard,
+        )
+        for entry in ranking.entries
+    )
+
+    return WorkflowBenchmarkExecutionRecord(
+        id=ranking.id,
+        benchmark_id=BENCHMARK_ID,
+        kind=WorkflowBenchmarkExecutionKind.COMPARE,
+        candidates=candidates,
+        ranking=tuple(candidate.id for candidate in candidates),
+        scoring_policy=WorkflowScoringPolicy(
+            target_latency_seconds=5.0,
+            target_cost_usd=0.001,
+        ),
+    )
+
+
 def configure_database(
     *,
     database: Path,
@@ -142,12 +193,15 @@ def test_benchmark_compare_executes_configured_workflows(
 
     ranking = create_ranking()
 
+    recorders: list[WorkflowBenchmarkEvidenceRecorder] = []
+
     async def fake_compare_configured_benchmarks(
         *,
         runtime: object,
         workflow_ids: tuple[UUID, ...],
         dataset: BenchmarkDataset,
         scoring_policy: WorkflowScoringPolicy,
+        recorder: WorkflowBenchmarkEvidenceRecorder,
     ) -> WorkflowBenchmarkRanking:
         calls.append(
             (
@@ -157,6 +211,9 @@ def test_benchmark_compare_executes_configured_workflows(
                 scoring_policy,
             )
         )
+
+        recorders.append(recorder)
+        recorder.executions.save(create_execution(ranking))
 
         return ranking
 
@@ -168,8 +225,8 @@ def test_benchmark_compare_executes_configured_workflows(
 
     monkeypatch.setattr(
         benchmark_commands,
-        "render_workflow_benchmark_ranking",
-        lambda ranking, *, benchmark_id: f"rendered {benchmark_id} {ranking.winner.name}",
+        "render_workflow_benchmark_comparison_execution",
+        lambda execution: f"rendered {execution.id} {execution.benchmark_id}",
     )
 
     status = compare_benchmarks(
@@ -209,9 +266,64 @@ def test_benchmark_compare_executes_configured_workflows(
         target_cost_usd=0.001,
     )
 
-    assert captured.out == (f"rendered {BENCHMARK_ID} {FIRST_WORKFLOW_ID}\n")
+    assert captured.out == (f"rendered {ranking.id} {BENCHMARK_ID}\n")
 
     assert captured.err == ""
+
+    (recorder,) = recorders
+
+    assert isinstance(
+        recorder.executions,
+        SQLiteWorkflowBenchmarkExecutionRepository,
+    )
+
+
+def test_benchmark_compare_fails_when_the_comparison_was_not_recorded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    monkeypatch.setattr(
+        benchmark_commands,
+        "load_runtime",
+        lambda _configuration: object(),
+    )
+
+    ranking = create_ranking()
+
+    async def unrecorded_compare_configured_benchmarks(
+        **_kwargs: object,
+    ) -> WorkflowBenchmarkRanking:
+        return ranking
+
+    monkeypatch.setattr(
+        benchmark_commands,
+        "compare_configured_benchmarks",
+        unrecorded_compare_configured_benchmarks,
+    )
+
+    status = compare_benchmarks(
+        benchmark_id=BENCHMARK_ID,
+        workflow_ids=(
+            FIRST_WORKFLOW_ID,
+            SECOND_WORKFLOW_ID,
+        ),
+        target_latency_seconds=5.0,
+        target_cost_usd=0.001,
+    )
+
+    captured = capsys.readouterr()
+
+    assert status == 1
+    assert captured.out == ""
+    assert captured.err == f"Benchmark execution {ranking.id} was not recorded.\n"
 
 
 def test_benchmark_compare_rejects_unknown_dataset_before_runtime_bootstrap(

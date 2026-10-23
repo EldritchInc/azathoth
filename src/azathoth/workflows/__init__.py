@@ -15,6 +15,18 @@ from azathoth.workflows.benchmark import (
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
 )
+from azathoth.workflows.benchmark_execution_repository import (
+    WorkflowBenchmarkExecutionRepository,
+)
+from azathoth.workflows.benchmark_record import (
+    WorkflowBenchmarkExecutionCandidate,
+    WorkflowBenchmarkExecutionCase,
+    WorkflowBenchmarkExecutionKind,
+    WorkflowBenchmarkExecutionRecord,
+)
+from azathoth.workflows.benchmark_recorder import (
+    WorkflowBenchmarkEvidenceRecorder,
+)
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
@@ -71,6 +83,10 @@ from azathoth.workflows.generation import (
 from azathoth.workflows.input import (
     WORKFLOW_INPUT_EVENT_TYPE,
     create_workflow_input_event,
+)
+from azathoth.workflows.memory_benchmark_execution_repository import (
+    InMemoryWorkflowBenchmarkExecutionRepository,
+    require_workflow_benchmark_execution_repository,
 )
 from azathoth.workflows.memory_experiment_repository import (
     InMemoryWorkflowExperimentRepository,
@@ -202,6 +218,9 @@ from azathoth.workflows.scoring import (
     WorkflowScoringPolicy,
     aggregate_workflow_scorecards,
 )
+from azathoth.workflows.sqlite_benchmark_execution_repository import (
+    SQLiteWorkflowBenchmarkExecutionRepository,
+)
 from azathoth.workflows.sqlite_experiment_repository import (
     SQLiteWorkflowExperimentRepository,
 )
@@ -273,6 +292,7 @@ __all__ = [
     "InMemoryWorkflowRunFeedbackRepository",
     "InMemoryWorkflowRepository",
     "InMemoryWorkflowRunEvaluationRepository",
+    "InMemoryWorkflowBenchmarkExecutionRepository",
     "InMemoryWorkflowExperimentRepository",
     "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
@@ -292,6 +312,7 @@ __all__ = [
     "RankedWorkflow",
     "SQLiteProductionInvocationRepository",
     "SQLiteProductionInvocationRunRepository",
+    "SQLiteWorkflowBenchmarkExecutionRepository",
     "SQLiteWorkflowExperimentRepository",
     "SQLiteWorkflowProductionRevisionRepository",
     "SQLiteWorkflowProductionStateRepository",
@@ -308,6 +329,12 @@ __all__ = [
     "WorkflowBenchmarkComparator",
     "WorkflowBenchmarkComparison",
     "WorkflowBenchmarkComparisonEntry",
+    "WorkflowBenchmarkEvidenceRecorder",
+    "WorkflowBenchmarkExecutionCandidate",
+    "WorkflowBenchmarkExecutionCase",
+    "WorkflowBenchmarkExecutionKind",
+    "WorkflowBenchmarkExecutionRecord",
+    "WorkflowBenchmarkExecutionRepository",
     "WorkflowBenchmarkRankedCandidate",
     "WorkflowBenchmarkRanker",
     "WorkflowBenchmarkRanking",
@@ -402,6 +429,7 @@ __all__ = [
     "production_uses_tool",
     "promote_workflow_candidate",
     "require_production_invocation_repository",
+    "require_workflow_benchmark_execution_repository",
     "require_workflow_experiment_repository",
     "require_workflow_production_revision_repository",
     "require_workflow_production_state_repository",

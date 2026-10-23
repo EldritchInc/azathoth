@@ -29,6 +29,11 @@ from azathoth.runtime import AzathothRuntime
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
+    InMemoryWorkflowBenchmarkExecutionRepository,
+    InMemoryWorkflowRunEvaluationRepository,
+    InMemoryWorkflowRunRepository,
+    WorkflowBenchmarkEvidenceRecorder,
+    WorkflowBenchmarkExecutionKind,
     WorkflowCatalog,
     WorkflowMetadata,
     WorkflowScoringPolicy,
@@ -353,3 +358,116 @@ def test_configured_comparison_rejects_duplicate_workflows() -> None:
                 scoring_policy=create_policy(),
             )
         )
+
+
+def create_recorder() -> WorkflowBenchmarkEvidenceRecorder:
+    """Create a recorder over empty in-memory repositories."""
+
+    return WorkflowBenchmarkEvidenceRecorder(
+        runs=InMemoryWorkflowRunRepository(),
+        evaluations=InMemoryWorkflowRunEvaluationRepository(),
+        executions=InMemoryWorkflowBenchmarkExecutionRepository(),
+    )
+
+
+def test_configured_comparison_records_execution_with_recorder() -> None:
+    recorder = create_recorder()
+
+    ranking = asyncio.run(
+        compare_configured_benchmarks(
+            runtime=create_runtime(),
+            workflow_ids=(
+                INCORRECT_WORKFLOW_ID,
+                CORRECT_WORKFLOW_ID,
+            ),
+            dataset=create_dataset(),
+            scoring_policy=create_policy(),
+            recorder=recorder,
+        )
+    )
+
+    (record,) = recorder.executions.executions()
+
+    assert record.id == ranking.id
+    assert record.kind is WorkflowBenchmarkExecutionKind.COMPARE
+    assert record.benchmark_id == DATASET_ID
+    assert record.scoring_policy == create_policy()
+    assert tuple(candidate.workflow.id for candidate in record.candidates) == (
+        INCORRECT_WORKFLOW_ID,
+        CORRECT_WORKFLOW_ID,
+    )
+    assert tuple(candidate.workflow.id for candidate in record.ranked_candidates) == (
+        CORRECT_WORKFLOW_ID,
+        INCORRECT_WORKFLOW_ID,
+    )
+
+
+def test_configured_comparison_records_scorecards_from_the_ranking() -> None:
+    recorder = create_recorder()
+
+    ranking = asyncio.run(
+        compare_configured_benchmarks(
+            runtime=create_runtime(),
+            workflow_ids=(
+                CORRECT_WORKFLOW_ID,
+                INCORRECT_WORKFLOW_ID,
+            ),
+            dataset=create_dataset(),
+            scoring_policy=create_policy(),
+            recorder=recorder,
+        )
+    )
+
+    (record,) = recorder.executions.executions()
+
+    assert tuple(candidate.scorecard for candidate in record.ranked_candidates) == tuple(
+        entry.scorecard for entry in ranking.entries
+    )
+    assert tuple(candidate.cases_passed for candidate in record.ranked_candidates) == (2, 0)
+
+
+def test_configured_comparison_records_every_run_and_evaluation() -> None:
+    recorder = create_recorder()
+
+    asyncio.run(
+        compare_configured_benchmarks(
+            runtime=create_runtime(),
+            workflow_ids=(
+                CORRECT_WORKFLOW_ID,
+                INCORRECT_WORKFLOW_ID,
+            ),
+            dataset=create_dataset(),
+            scoring_policy=create_policy(),
+            recorder=recorder,
+        )
+    )
+
+    (record,) = recorder.executions.executions()
+
+    recorded_run_ids = tuple(
+        case.run_id for candidate in record.candidates for case in candidate.cases
+    )
+
+    assert tuple(run.id for run in recorder.runs.runs()) == recorded_run_ids
+    assert (
+        tuple(evaluation.run_id for evaluation in recorder.evaluations.evaluations())
+        == recorded_run_ids
+    )
+
+
+def test_configured_comparison_records_nothing_when_rejected() -> None:
+    recorder = create_recorder()
+
+    with pytest.raises(ValueError):
+        asyncio.run(
+            compare_configured_benchmarks(
+                runtime=create_runtime(),
+                workflow_ids=(CORRECT_WORKFLOW_ID,),
+                dataset=create_dataset(),
+                scoring_policy=create_policy(),
+                recorder=recorder,
+            )
+        )
+
+    assert recorder.runs.runs() == ()
+    assert recorder.executions.executions() == ()

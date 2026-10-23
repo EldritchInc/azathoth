@@ -174,6 +174,29 @@ def test_summary_renders_experiment_run() -> None:
     )
 
 
+def test_summary_renders_benchmark_run() -> None:
+    rendered = render_workflow_run_summaries(
+        (successful_run(FIRST_RUN_ID),),
+        run_sources={
+            FIRST_RUN_ID: WorkflowRunSource.BENCHMARK,
+        },
+        latest_dispositions={},
+    )
+
+    assert rendered == (
+        f"{FIRST_RUN_ID}  2026-10-02T12:00:00+00:00  succeeded  1.500s  benchmark  -"
+    )
+
+
+def test_run_sources_use_stable_operator_labels() -> None:
+    assert tuple(source.value for source in WorkflowRunSource) == (
+        "configured",
+        "benchmark",
+        "experiment",
+        "production",
+    )
+
+
 def test_summary_preserves_given_order_one_line_per_run() -> None:
     rendered = render_workflow_run_summaries(
         (

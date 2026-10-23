@@ -19,6 +19,8 @@ from azathoth.evaluation import (
 )
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
+    SQLiteWorkflowBenchmarkExecutionRepository,
+    WorkflowBenchmarkEvidenceRecorder,
     WorkflowBenchmarkResult,
     WorkflowGenerationError,
 )
@@ -103,6 +105,8 @@ def test_benchmark_run_executes_persisted_dataset(
         ]
     ] = []
 
+    recorders: list[WorkflowBenchmarkEvidenceRecorder] = []
+
     result = WorkflowBenchmarkResult(
         dataset_id=BENCHMARK_ID,
     )
@@ -112,6 +116,7 @@ def test_benchmark_run_executes_persisted_dataset(
         runtime: object,
         workflow_id: UUID,
         dataset: BenchmarkDataset,
+        recorder: WorkflowBenchmarkEvidenceRecorder,
     ) -> WorkflowBenchmarkResult:
         calls.append(
             (
@@ -120,6 +125,8 @@ def test_benchmark_run_executes_persisted_dataset(
                 dataset,
             )
         )
+
+        recorders.append(recorder)
 
         return result
 
@@ -132,7 +139,9 @@ def test_benchmark_run_executes_persisted_dataset(
     monkeypatch.setattr(
         benchmark_commands,
         "render_workflow_benchmark_result",
-        lambda result, *, workflow_id: f"rendered {result.dataset_id} {workflow_id}",
+        lambda result, *, workflow_id, execution_id: (
+            f"rendered {result.dataset_id} {workflow_id} {execution_id}"
+        ),
     )
 
     status = run_benchmark(
@@ -152,7 +161,14 @@ def test_benchmark_run_executes_persisted_dataset(
         )
     ]
 
-    assert captured.out == (f"rendered {BENCHMARK_ID} {WORKFLOW_ID}\n")
+    assert captured.out == (f"rendered {BENCHMARK_ID} {WORKFLOW_ID} {result.id}\n")
+
+    (recorder,) = recorders
+
+    assert isinstance(
+        recorder.executions,
+        SQLiteWorkflowBenchmarkExecutionRepository,
+    )
 
     assert captured.err == ""
 

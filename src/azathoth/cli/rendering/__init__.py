@@ -1,5 +1,10 @@
 """Human-readable rendering for Azathoth CLI results."""
 
+from azathoth.cli.rendering.benchmark_executions import (
+    render_workflow_benchmark_comparison_execution,
+    render_workflow_benchmark_execution,
+    render_workflow_benchmark_execution_summaries,
+)
 from azathoth.cli.rendering.benchmarks import (
     render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
@@ -44,6 +49,9 @@ __all__ = [
     "render_production_invocation_result",
     "render_production_invocation_summaries",
     "render_tool_usage_report",
+    "render_workflow_benchmark_comparison_execution",
+    "render_workflow_benchmark_execution",
+    "render_workflow_benchmark_execution_summaries",
     "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
     "render_workflow_experiment",

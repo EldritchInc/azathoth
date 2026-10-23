@@ -16,6 +16,7 @@ class WorkflowRunSource(StrEnum):
     """Describe which operation produced one persisted workflow run."""
 
     CONFIGURED = "configured"
+    BENCHMARK = "benchmark"
     EXPERIMENT = "experiment"
     PRODUCTION = "production"
 

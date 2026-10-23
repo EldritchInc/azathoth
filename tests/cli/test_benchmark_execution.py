@@ -31,8 +31,14 @@ from azathoth.tools import (
 )
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
+    InMemoryWorkflowBenchmarkExecutionRepository,
+    InMemoryWorkflowRunEvaluationRepository,
+    InMemoryWorkflowRunRepository,
     ToolStepSpecification,
+    WorkflowBenchmarkEvidenceRecorder,
+    WorkflowBenchmarkExecutionKind,
     WorkflowBenchmarkRunner,
+    WorkflowCandidate,
     WorkflowCatalog,
     WorkflowContextReference,
     WorkflowInputBinding,
@@ -323,3 +329,104 @@ def test_configured_benchmark_accepts_explicit_runner() -> None:
 
     assert result.cases_run == 2
     assert result.cases_passed == 2
+
+
+def create_recorder() -> WorkflowBenchmarkEvidenceRecorder:
+    """Create a recorder over empty in-memory repositories."""
+
+    return WorkflowBenchmarkEvidenceRecorder(
+        runs=InMemoryWorkflowRunRepository(),
+        evaluations=InMemoryWorkflowRunEvaluationRepository(),
+        executions=InMemoryWorkflowBenchmarkExecutionRepository(),
+    )
+
+
+def test_configured_benchmark_generates_the_candidate_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime()
+    generate = runtime.generate_workflow_candidate
+    generated: list[UUID] = []
+
+    def counting_generate(
+        workflow_id: UUID,
+    ) -> WorkflowCandidate:
+        generated.append(workflow_id)
+
+        return generate(workflow_id)
+
+    monkeypatch.setattr(
+        runtime,
+        "generate_workflow_candidate",
+        counting_generate,
+    )
+
+    asyncio.run(
+        execute_configured_benchmark(
+            runtime=runtime,
+            workflow_id=WORKFLOW_ID,
+            dataset=create_dataset(),
+        )
+    )
+
+    assert generated == [WORKFLOW_ID]
+
+
+def test_configured_benchmark_records_execution_with_recorder() -> None:
+    recorder = create_recorder()
+
+    result = asyncio.run(
+        execute_configured_benchmark(
+            runtime=create_runtime(),
+            workflow_id=WORKFLOW_ID,
+            dataset=create_dataset(),
+            recorder=recorder,
+        )
+    )
+
+    (record,) = recorder.executions.executions()
+
+    assert record.id == result.id
+    assert record.kind is WorkflowBenchmarkExecutionKind.RUN
+    assert record.benchmark_id == DATASET_ID
+    assert record.candidates[0].workflow.id == WORKFLOW_ID
+    assert record.candidates[0].cases_passed == 2
+    assert record.case_ids == (
+        FIRST_CASE_ID,
+        SECOND_CASE_ID,
+    )
+
+
+def test_configured_benchmark_records_every_run_and_evaluation() -> None:
+    recorder = create_recorder()
+
+    result = asyncio.run(
+        execute_configured_benchmark(
+            runtime=create_runtime(),
+            workflow_id=WORKFLOW_ID,
+            dataset=create_dataset(),
+            recorder=recorder,
+        )
+    )
+
+    assert recorder.runs.runs() == tuple(case.run for case in result.cases)
+    assert tuple(evaluation.evaluation for evaluation in recorder.evaluations.evaluations()) == (
+        tuple(case.evaluation for case in result.cases)
+    )
+
+
+def test_configured_benchmark_records_nothing_for_unknown_workflow() -> None:
+    recorder = create_recorder()
+
+    with pytest.raises(WorkflowNotConfiguredError):
+        asyncio.run(
+            execute_configured_benchmark(
+                runtime=create_runtime(),
+                workflow_id=UNKNOWN_WORKFLOW_ID,
+                dataset=create_dataset(),
+                recorder=recorder,
+            )
+        )
+
+    assert recorder.runs.runs() == ()
+    assert recorder.executions.executions() == ()

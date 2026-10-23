@@ -16,6 +16,7 @@ from azathoth.cli.rendering import (
 )
 from azathoth.workflows import (
     SQLiteProductionInvocationRunRepository,
+    SQLiteWorkflowBenchmarkExecutionRepository,
     SQLiteWorkflowExperimentRepository,
     SQLiteWorkflowRepository,
     SQLiteWorkflowRunEvaluationRepository,
@@ -208,18 +209,28 @@ def _run_sources(
 ) -> dict[UUID, WorkflowRunSource]:
     """Return the known source of each run that did not come from configured execution.
 
-    Runs observed by an experiment came from optimization. Runs associated with
-    a production invocation came from production and take precedence.
+    Runs recorded by a benchmark execution came from `benchmark run` or
+    `benchmark compare`. Runs observed by an experiment came from
+    optimization. Runs associated with a production invocation came from
+    production and take precedence over both.
     """
 
     sources: dict[UUID, WorkflowRunSource] = {
-        case.run_id: WorkflowRunSource.EXPERIMENT
-        for experiment in SQLiteWorkflowExperimentRepository(
+        case.run_id: WorkflowRunSource.BENCHMARK
+        for execution in SQLiteWorkflowBenchmarkExecutionRepository(
             configuration.database,
-        ).experiments_for_workflow(workflow_id)
-        for observation in experiment.observations
-        for case in observation.cases
+        ).executions_for_workflow(workflow_id)
+        for candidate in execution.candidates
+        if candidate.workflow.id == workflow_id
+        for case in candidate.cases
     }
+
+    for experiment in SQLiteWorkflowExperimentRepository(
+        configuration.database,
+    ).experiments_for_workflow(workflow_id):
+        for observation in experiment.observations:
+            for case in observation.cases:
+                sources[case.run_id] = WorkflowRunSource.EXPERIMENT
 
     for association in SQLiteProductionInvocationRunRepository(
         configuration.database,

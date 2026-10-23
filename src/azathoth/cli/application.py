@@ -8,10 +8,12 @@ from azathoth.cli.benchmarks import (
     compare_benchmarks,
     import_benchmark,
     list_benchmark_cases,
+    list_benchmark_executions,
     list_benchmarks,
     run_benchmark,
     show_benchmark,
     show_benchmark_case,
+    show_benchmark_execution,
 )
 from azathoth.cli.dispatching import (
     dispatch_benchmark_command,
@@ -134,10 +136,12 @@ def _dispatch(
             compare_benchmarks=compare_benchmarks,
             import_benchmark=import_benchmark,
             list_benchmark_cases=list_benchmark_cases,
+            list_benchmark_executions=list_benchmark_executions,
             list_benchmarks=list_benchmarks,
             run_benchmark=run_benchmark,
             show_benchmark=show_benchmark,
             show_benchmark_case=show_benchmark_case,
+            show_benchmark_execution=show_benchmark_execution,
         )
 
     if command == GOAL_COMMAND:
