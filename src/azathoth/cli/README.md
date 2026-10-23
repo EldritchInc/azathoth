@@ -64,7 +64,7 @@ azathoth
 │   ├── show <WORKFLOW_ID>
 │   ├── run <WORKFLOW_ID>
 │   ├── optimize <WORKFLOW_ID>
-│   │   ├── --expected <JSON>
+│   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
 │   │   ├── --target-cost <USD>
 │   │   └── --generations <COUNT>
@@ -911,11 +911,11 @@ specification, or production state.
 
 # Empirically Optimize a Workflow
 
-Run empirical workflow optimization with:
+Run empirical workflow optimization against a durable benchmark with:
 
 ```bash
 azathoth workflow optimize <WORKFLOW_ID> \
-    --expected '<JSON>' \
+    --benchmark <BENCHMARK_ID> \
     --target-latency <SECONDS> \
     --target-cost <USD>
 ```
@@ -934,22 +934,8 @@ The default is:
 
 # Optimization Arguments
 
-The workflow must declare a result. Optimization fails before generating any
-candidates when it does not.
-
-`--expected` is required and must be valid JSON.
-
-Examples:
-
-```bash
---expected '"success"'
-```
-
-or:
-
-```bash
---expected '{"classification":"positive"}'
-```
+`--benchmark` is required and must be the UUID of a benchmark imported with
+`benchmark import`.
 
 `--target-latency` is required and is interpreted as seconds.
 
@@ -958,21 +944,78 @@ or:
 `--generations` controls the maximum number of empirical optimization
 generations.
 
-# CLI Expected Outcome
+There is no `--expected` option. What counts as a correct answer belongs to
+the benchmark's cases, each of which declares its own expected outcome and
+comparison.
 
-The CLI converts the supplied `--expected` JSON value into:
+# Optimization Preconditions
+
+Before loading the runtime, and therefore without provider credentials and
+without executing any case, the command rejects:
 
 ```text
-ExpectedOutcome
-├── description
-├── value = operator-supplied JSON
-└── comparison = exact
+an unconfigured benchmark
+    Benchmark dataset <BENCHMARK_ID> is not configured.
+
+a benchmark with no cases
+    Benchmark <BENCHMARK_ID> has no cases.
+
+a case whose comparison cannot be judged yet
+    Benchmark case <CASE_ID> uses comparison 'semantic', which is not supported yet.
+
+a workflow without a declared result
+    Workflow <WORKFLOW_ID> does not declare a result.
 ```
 
-Each candidate run is judged by comparing its declared result with that
-value.
+Each prints its message to standard error and exits with status `1`.
 
-The V1 CLI therefore uses exact expected-output evaluation for this command.
+# Benchmark-Driven Judging
+
+Every generation runs every candidate against every case of the benchmark.
+
+For each case:
+
+```text
+case input
+    │
+    ▼
+workflow.input.received event in the run's context
+    │
+    ▼
+candidate run
+    │
+    ▼
+declared result judged with the case's own comparison
+```
+
+Each candidate's per-case scorecards are averaged, dimension by dimension,
+into one combined scorecard. That combined scorecard is what the ranking and
+the model-substitution optimizer use, so a candidate wins by performing well
+across the benchmark rather than on one example.
+
+# Failed Runs Are Failed Cases
+
+A candidate run that fails without producing its declared result does not
+abort optimization and does not drop out of the ranking.
+
+It is recorded with a `workflow-run-failure` evaluation:
+
+```text
+Reason: Workflow run failed at step <STEP_ID>: <failure message>
+Evidence: expected = <expected value>
+Evidence: failed_step_id = "<STEP_ID>"
+Evidence: failure = {"exception_type": "...", "message": "..."}
+```
+
+The failed case scores zero quality, and it earns no latency or cost credit,
+because failing quickly and cheaply is not efficiency. A candidate that
+crashes therefore never outranks a correct one on speed or price alone.
+
+A run whose steps failed but which still produced its declared result, for
+example under the `continue` failure policy, is judged on that result like
+any other run.
+
+A generation in which every run failed still ranks and records normally.
 
 # CLI Scoring Targets
 
@@ -994,19 +1037,19 @@ They are not silently persisted as production policy by the CLI command.
 Conceptually:
 
 ```text
-configured WorkflowSpecification
+configured WorkflowSpecification          durable BenchmarkDataset
+        │                                         │
+        ▼                                         │
+runtime candidate generation                      │
+        │                                         │
+        ▼                                         │
+for each candidate, for each case ◄───────────────┘
+        │
+        ├── execute with the case input
+        └── judge the declared result with the case comparison
         │
         ▼
-runtime candidate generation
-        │
-        ▼
-execute
-        │
-        ▼
-evaluate against --expected
-        │
-        ▼
-score using latency / cost targets
+average per-case scorecards using latency / cost targets
         │
         ▼
 rank empirical evidence
@@ -1025,19 +1068,19 @@ The completed session is rendered to the operator.
 Every generation of `workflow optimize` leaves durable evidence:
 
 ```text
-each candidate execution
+each candidate execution of each case
     WorkflowRun                 persisted, succeeded or failed
-
-each successful execution
-    WorkflowRunEvaluation       persisted
+    WorkflowRunEvaluation       persisted, including run-failure evaluations
 
 each generation
     WorkflowExperimentRecord    persisted
 ```
 
-An experiment record holds one observation per successfully executed
-candidate, each referencing its run, its evaluation, its candidate signature,
-and its scorecard, plus the ranking of those runs.
+An experiment record names its benchmark and holds one observation per
+candidate. Each observation has its own identity, the candidate signature,
+the combined scorecard, and one case per benchmark case, in dataset order,
+recording the case ID, run ID, evaluation ID, and whether the case passed.
+The ranking lists observation IDs, best first.
 
 The record shares the identity of the in-memory experiment result, so the
 rendered session names it directly:
@@ -1057,15 +1100,20 @@ workflow optimize
 Experiment ID ──► experiment show
                         │
                         ▼
-                 Run ID ──► run show / run feedback
+              Case ... run <RUN_ID> ──► run show / run feedback
 ```
 
-A generation in which every candidate fails raises before ranking. Its failed
-runs remain persisted; no experiment record is written.
+Every run of an optimization candidate is observed by its experiment, so
+`workflow runs` lists those runs with the `experiment` source.
 
-Failed candidates appear as runs but not as experiment observations, because
-records hold only scored, ranked observations. As a consequence a failed
-optimization candidate is currently listed with the `configured` source.
+# Records From Earlier Versions
+
+Experiment records written before benchmark-driven optimization held a single
+run and evaluation per observation, ranked by run ID.
+
+They still decode and render. Each old observation becomes one case without a
+case ID or a known outcome, and its observation ID is its old run ID, so the
+old ranking still resolves. Old records have no benchmark.
 
 # List Workflow Experiments
 
@@ -1086,11 +1134,12 @@ azathoth workflow experiments <WORKFLOW_ID> --limit <COUNT>
 Experiments are listed newest first, one line per experiment:
 
 ```text
-<EXPERIMENT_ID>  2026-10-09T16:05:00+00:00  2 candidates  winner <RUN_ID>  overall 0.900000
+<EXPERIMENT_ID>  2026-10-09T16:05:00+00:00  2 candidates  5 cases  winner <OBSERVATION_ID>  overall 0.900000
 ```
 
-Each line contains the experiment ID, recorded time, candidate count, winning
-run, and winning overall score.
+Each line contains the experiment ID, recorded time, candidate count, the
+number of cases each candidate was judged on, winning observation, and winning
+overall score. A record from an earlier version counts one case.
 
 A configured workflow with no experiments prints nothing and exits
 successfully.
@@ -1118,23 +1167,34 @@ candidate order:
 ```text
 Experiment ID: <EXPERIMENT_ID>
 Recorded: 2026-10-09T16:05:00+00:00
+Benchmark: <BENCHMARK_ID>
 Candidates: 2
-Winner Run ID: <RUN_ID>
+Cases: 2
+Winner Observation ID: <OBSERVATION_ID>
 
 Rank 1
+Observation ID: <OBSERVATION_ID>
 Workflow: summarize
 Workflow ID: <WORKFLOW_ID>
-Run ID: <RUN_ID>
-Evaluation ID: <EVALUATION_ID>
 Strategy IDs: <STRATEGY_ID>
-Quality: 1.000000
+Passed: 1/2
+Case <CASE_ID>: passed  run <RUN_ID>  evaluation <EVALUATION_ID>
+Case <CASE_ID>: failed  run <RUN_ID>  evaluation <EVALUATION_ID>
+Quality: 0.500000
 Reliability: 1.000000
 Latency: 0.950000
 Cost: 0.800000
-Overall: 0.900000
+Overall: 0.812500
 ```
 
 A scorecard rationale is rendered when one was recorded.
+
+A record from an earlier version renders `Benchmark: none`,
+`Passed: unknown`, and its one case as:
+
+```text
+Case none: unknown  run <RUN_ID>  evaluation <EVALUATION_ID>
+```
 
 An unknown experiment fails with:
 
@@ -2134,9 +2194,109 @@ the case named:
 Benchmark case <CASE_ID>: Workflow result 'answer' from step <STEP_ID> was not produced.
 ```
 
+A run that fails without producing its declared result does not abort the
+command. The case is recorded with a `workflow-run-failure` evaluation and
+counts against accuracy, its comparison's pass count, and, in `compare`, the
+candidate's ranking. A run whose steps failed but which still produced its
+declared result is judged on that result.
+
+`benchmark run` reports failed runs after the per-comparison pass counts:
+
+```text
+Benchmark ID: <BENCHMARK_ID>
+Workflow ID: <WORKFLOW_ID>
+Cases Run: 5
+Cases Passed: 4
+Accuracy: 0.800000
+Passed (exact): 2/2
+Passed (normalized): 1/2
+Passed (schema): 1/1
+Run failures: 1
+Total Tokens: 412
+Total Latency: 2310 ms
+Total Cost: $0.000180
+```
+
 Benchmarking executes configured workflows.
 
 Like optimization, it produces evidence and does not promote.
+
+# Workflow Input
+
+External input reaches a workflow through one canonical context event,
+whichever command supplies it:
+
+```text
+benchmark run / benchmark compare / workflow optimize
+    each case's input
+            │
+            ▼
+workflow invoke --input
+    the caller's JSON
+            │
+            ▼
+workflow.input.received    payload {"input": <value>}
+```
+
+A context prompt that binds its variable to `workflow.input.received`, field
+`input`, therefore renders the same prompt when its workflow is benchmarked,
+optimized, or invoked in production. What a workflow is optimized against is
+exactly what production feeds it.
+
+Production invocations also keep their own `production.invocation.received`
+event, which invocation history reads.
+
+A workflow whose prompt is fixed text, such as
+`examples/workflows/simple-prompt.json`, ignores its input.
+
+# End-to-End From Checked-In Examples
+
+The sentiment examples exercise every stage from bash:
+
+```text
+examples/workflows/classify-sentiment.json     context prompt bound to the workflow input
+examples/benchmarks/classify-sentiment.json    five cases: exact 2, normalized 2, schema 1
+```
+
+```bash
+azathoth workflow import examples/workflows/classify-sentiment.json
+azathoth benchmark import examples/benchmarks/classify-sentiment.json
+
+azathoth model authorize <MODEL_IDENTIFIER>
+
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 \
+    --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
+    --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 \
+    --target-latency 5 \
+    --target-cost 0.001 \
+    --generations 2
+
+azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth experiment show <EXPERIMENT_ID>
+
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+
+azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
+    --input '"The checkout flow was painless."'
+```
+
+Invocation returns the declared result as the production emission:
+
+```text
+Invocation ID: <INVOCATION_ID>
+Status: succeeded
+Result:
+{
+  "result": "positive"
+}
+```
+
+The exact cases demand the bare lowercase label. The normalized cases accept
+any letter case and surrounding whitespace. The schema case accepts either
+label for neutral text, so it checks the answer's form rather than its
+judgment.
 
 # CLI JSON Arguments
 
@@ -2144,8 +2304,6 @@ The CLI parser accepts JSON-compatible command-line values for:
 
 ```text
 workflow invoke --input
-
-workflow optimize --expected
 ```
 
 Values are parsed using JSON rather than treated as raw strings.
@@ -2153,24 +2311,27 @@ Values are parsed using JSON rather than treated as raw strings.
 Therefore:
 
 ```bash
---expected '"success"'
+--input '"hello"'
 ```
 
 represents the JSON string:
 
 ```text
-success
+hello
 ```
 
 while:
 
 ```bash
---expected '{"status":"success"}'
+--input '{"request":"hello"}'
 ```
 
 represents a structured object.
 
 Invalid JSON is rejected at the command boundary.
+
+Benchmark expectations are not command-line arguments; they live in the
+benchmark document passed to `benchmark import`.
 
 # CLI Exit Semantics
 

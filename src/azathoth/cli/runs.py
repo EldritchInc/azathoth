@@ -213,11 +213,12 @@ def _run_sources(
     """
 
     sources: dict[UUID, WorkflowRunSource] = {
-        observation.run_id: WorkflowRunSource.EXPERIMENT
+        case.run_id: WorkflowRunSource.EXPERIMENT
         for experiment in SQLiteWorkflowExperimentRepository(
             configuration.database,
         ).experiments_for_workflow(workflow_id)
         for observation in experiment.observations
+        for case in observation.cases
     }
 
     for association in SQLiteProductionInvocationRunRepository(

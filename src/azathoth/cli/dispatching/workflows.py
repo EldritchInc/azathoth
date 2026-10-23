@@ -9,11 +9,11 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.parsing import (
-    EXPECTED_VALUE_ATTRIBUTE,
     GENERATIONS_ATTRIBUTE,
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ACTION_ATTRIBUTE,
+    WORKFLOW_BENCHMARK_ID_ATTRIBUTE,
     WORKFLOW_DOCUMENT_ATTRIBUTE,
     WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
     WORKFLOW_EXPERIMENTS_ACTION,
@@ -233,11 +233,11 @@ def dispatch_workflow_command(
                     WORKFLOW_ID_ATTRIBUTE,
                 ),
             ),
-            expected_value=cast(
-                JsonValue,
+            benchmark_id=cast(
+                UUID,
                 getattr(
                     arguments,
-                    EXPECTED_VALUE_ATTRIBUTE,
+                    WORKFLOW_BENCHMARK_ID_ATTRIBUTE,
                 ),
             ),
             target_latency_seconds=cast(

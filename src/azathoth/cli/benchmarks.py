@@ -6,6 +6,11 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth.cli.benchmark_checks import (
+    comparisons_supported,
+    configured_benchmark,
+    results_declared,
+)
 from azathoth.cli.benchmark_execution import (
     compare_configured_benchmarks,
     execute_configured_benchmark,
@@ -20,14 +25,12 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     BenchmarkDocumentError,
-    OutcomeEvaluator,
     SQLiteBenchmarkRepository,
     UnsupportedComparisonError,
     decode_benchmark_document,
 )
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
-    SQLiteWorkflowRepository,
     WorkflowGenerationError,
     WorkflowResultError,
     WorkflowScoringPolicy,
@@ -291,26 +294,18 @@ def run_benchmark(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
-
-    dataset = repository.get(
+    dataset = configured_benchmark(
+        configuration,
         benchmark_id,
     )
 
     if dataset is None:
-        print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
-            file=sys.stderr,
-        )
-
         return 1
 
-    if not _comparisons_supported(dataset):
+    if not comparisons_supported(dataset):
         return 1
 
-    if not _results_declared(
+    if not results_declared(
         configuration,
         (workflow_id,),
     ):
@@ -367,26 +362,18 @@ def compare_benchmarks(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
-
-    dataset = repository.get(
+    dataset = configured_benchmark(
+        configuration,
         benchmark_id,
     )
 
     if dataset is None:
-        print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
-            file=sys.stderr,
-        )
-
         return 1
 
-    if not _comparisons_supported(dataset):
+    if not comparisons_supported(dataset):
         return 1
 
-    if not _results_declared(
+    if not results_declared(
         configuration,
         workflow_ids,
     ):
@@ -428,61 +415,6 @@ def compare_benchmarks(
     )
 
     return 0
-
-
-def _comparisons_supported(
-    dataset: BenchmarkDataset,
-) -> bool:
-    """Report the first case whose comparison cannot be evaluated yet.
-
-    Checking before runtime bootstrap means an unsupported benchmark fails
-    without provider credentials and without executing any case.
-    """
-
-    evaluator = OutcomeEvaluator()
-
-    for case in dataset.cases:
-        try:
-            evaluator.require_supported(
-                case.expected.comparison,
-                subject=f"Benchmark case {case.id}",
-            )
-        except UnsupportedComparisonError as exc:
-            print(
-                str(exc),
-                file=sys.stderr,
-            )
-
-            return False
-
-    return True
-
-
-def _results_declared(
-    configuration: CliRuntimeConfiguration,
-    workflow_ids: tuple[UUID, ...],
-) -> bool:
-    """Report the first configured workflow that declares no result.
-
-    Unconfigured identifiers are left for runtime bootstrap to report.
-    """
-
-    repository = SQLiteWorkflowRepository(
-        configuration.database,
-    )
-
-    for workflow_id in workflow_ids:
-        specification = repository.get(workflow_id)
-
-        if specification is not None and specification.result is None:
-            print(
-                f"Workflow {workflow_id} does not declare a result.",
-                file=sys.stderr,
-            )
-
-            return False
-
-    return True
 
 
 __all__ = [

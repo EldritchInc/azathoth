@@ -5,9 +5,9 @@ from uuid import UUID
 
 import pytest
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    ExactMatchEvaluator,
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -158,6 +158,27 @@ def create_registry(
     )
 
 
+def create_success_benchmark(
+    description: str,
+) -> BenchmarkDataset:
+    """Create a one-case benchmark whose case expects success."""
+
+    return BenchmarkDataset(
+        name="expect-success",
+        description=description,
+        cases=(
+            BenchmarkCase(
+                input="request",
+                expected=ExpectedOutcome(
+                    description=description,
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+        ),
+    )
+
+
 def test_workflow_optimization_end_to_end() -> None:
     """Generate, experiment on, and replay workflow candidates."""
 
@@ -206,13 +227,7 @@ def test_workflow_optimization_end_to_end() -> None:
             ),
         ).run(
             workflows=candidates,
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Workflow should return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Workflow should return success."),
         )
     )
 

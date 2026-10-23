@@ -32,6 +32,12 @@ class StubWorkflowBenchmarkResult(WorkflowBenchmarkResult):
         return 0.75
 
     @property
+    def run_failures(self) -> int:
+        """Return deterministic run-failure count."""
+
+        return 1
+
+    @property
     def total_tokens(self) -> int:
         """Return deterministic token usage."""
 
@@ -88,3 +94,12 @@ def test_benchmark_rendering_includes_execution_totals() -> None:
     assert "Total Tokens: 120\n" in rendered
     assert "Total Latency: 875 ms\n" in rendered
     assert "Total Cost: $0.001234" in rendered
+
+
+def test_benchmark_rendering_reports_run_failures_before_totals() -> None:
+    rendered = render_workflow_benchmark_result(
+        create_result(),
+        workflow_id=WORKFLOW_ID,
+    )
+
+    assert "Accuracy: 0.750000\nRun failures: 1\nTotal Tokens: 120\n" in rendered

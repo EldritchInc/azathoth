@@ -1,0 +1,74 @@
+{
+  "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000000",
+  "name": "classify sentiment",
+  "description": "Judge sentiment classification with exact, normalized, and schema comparisons.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000001",
+      "input": "I absolutely loved this.",
+      "expected": {
+        "description": "Classify clearly positive text exactly.",
+        "value": "positive",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "positive"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000002",
+      "input": "This was a complete waste of money.",
+      "expected": {
+        "description": "Classify clearly negative text exactly.",
+        "value": "negative",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "negative"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000003",
+      "input": "Best purchase I have made all year!",
+      "expected": {
+        "description": "Classify positive text, ignoring case and surrounding whitespace.",
+        "value": "POSITIVE",
+        "comparison": "normalized"
+      },
+      "metadata": {
+        "category": "positive"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000004",
+      "input": "The service was rude and the food was cold.",
+      "expected": {
+        "description": "Classify negative text, ignoring case and surrounding whitespace.",
+        "value": "Negative",
+        "comparison": "normalized"
+      },
+      "metadata": {
+        "category": "negative"
+      }
+    },
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f21-000000000005",
+      "input": "The package arrived on Tuesday.",
+      "expected": {
+        "description": "Answer neutral text with one of the two allowed labels.",
+        "value": {
+          "type": "string",
+          "enum": [
+            "positive",
+            "negative"
+          ]
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "category": "format"
+      }
+    }
+  ]
+}

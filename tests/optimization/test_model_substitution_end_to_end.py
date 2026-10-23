@@ -3,9 +3,9 @@
 import asyncio
 from uuid import UUID
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    ExactMatchEvaluator,
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -253,6 +253,27 @@ def create_experiment_runner() -> WorkflowExperimentRunner:
     )
 
 
+def create_success_benchmark(
+    description: str,
+) -> BenchmarkDataset:
+    """Create a one-case benchmark whose case expects success."""
+
+    return BenchmarkDataset(
+        name="expect-success",
+        description=description,
+        cases=(
+            BenchmarkCase(
+                input="request",
+                expected=ExpectedOutcome(
+                    description=description,
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+        ),
+    )
+
+
 def test_model_substitution_session_generates_cheaper_population() -> None:
     workflow = create_workflow()
     catalog = create_model_catalog()
@@ -275,13 +296,7 @@ def test_model_substitution_session_generates_cheaper_population() -> None:
             ),
         ).run(
             initial_candidates=(initial,),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Return success."),
             max_generations=2,
         )
     )
@@ -319,13 +334,7 @@ def test_model_substitution_session_preserves_passing_quality() -> None:
             ),
         ).run(
             initial_candidates=(initial,),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Return success."),
             max_generations=2,
         )
     )
@@ -367,13 +376,7 @@ def test_model_substitution_session_improves_empirical_cost_score() -> None:
             ),
         ).run(
             initial_candidates=(initial,),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Return success."),
             max_generations=2,
         )
     )
@@ -420,13 +423,7 @@ def test_model_substitution_session_ranks_cheapest_passing_execution_first() -> 
             ),
         ).run(
             initial_candidates=(initial,),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Return success."),
             max_generations=2,
         )
     )
@@ -468,13 +465,7 @@ def test_model_substitution_session_retains_empirical_baseline() -> None:
             ),
         ).run(
             initial_candidates=(initial,),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Return success."),
             max_generations=2,
         )
     )

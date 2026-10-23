@@ -1,10 +1,15 @@
 """Deterministic workflow scorecard calculation."""
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.evaluation import EvaluationResult
 from azathoth.workflows.execution import (
     WorkflowRun,
+)
+from azathoth.workflows.run_failure import (
+    RUN_FAILURE_EVALUATOR_NAME,
 )
 from azathoth.workflows.scorecard import (
     WorkflowScorecard,
@@ -46,7 +51,13 @@ class WorkflowScorer:
         run: WorkflowRun,
         evaluation: EvaluationResult,
     ) -> WorkflowScorecard:
-        """Score one completed workflow run deterministically."""
+        """Score one completed workflow run deterministically.
+
+        A run judged by the run-failure evaluation failed without producing
+        its declared result. It earns no latency or cost credit, because
+        failing quickly and cheaply is not efficiency, so a crashing candidate
+        can never outrank a correct one on speed or price alone.
+        """
 
         quality_score = evaluation.score
 
@@ -59,17 +70,19 @@ class WorkflowScorer:
             + (1.0 - reliability.failure_rate)
         ) / 4.0
 
-        latency_score = self._normalized_target_score(
-            actual=run.duration_seconds,
-            target=self._policy.target_latency_seconds,
-        )
+        if evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME:
+            latency_score = 0.0
+            cost_score = 0.0
+        else:
+            latency_score = self._normalized_target_score(
+                actual=run.duration_seconds,
+                target=self._policy.target_latency_seconds,
+            )
 
-        total_cost_usd = self._total_cost_usd(run)
-
-        cost_score = self._normalized_target_score(
-            actual=total_cost_usd,
-            target=self._policy.target_cost_usd,
-        )
+            cost_score = self._normalized_target_score(
+                actual=self._total_cost_usd(run),
+                target=self._policy.target_cost_usd,
+            )
 
         overall_score = (quality_score + reliability_score + latency_score + cost_score) / 4.0
 
@@ -119,3 +132,32 @@ class WorkflowScorer:
             total_cost_usd += metrics.estimated_cost_usd
 
         return total_cost_usd
+
+
+def aggregate_workflow_scorecards(
+    scorecards: Sequence[WorkflowScorecard],
+    *,
+    rationale: str,
+) -> WorkflowScorecard:
+    """Return the per-dimension mean of several workflow scorecards.
+
+    Every dimension, including the overall score, is the unweighted mean of
+    that dimension across the scorecards, so each scorecard counts equally.
+
+    Raises:
+        ValueError: No scorecards were supplied.
+    """
+
+    if not scorecards:
+        raise ValueError("Cannot aggregate an empty collection of workflow scorecards.")
+
+    count = len(scorecards)
+
+    return WorkflowScorecard(
+        quality_score=sum(item.quality_score for item in scorecards) / count,
+        reliability_score=sum(item.reliability_score for item in scorecards) / count,
+        latency_score=sum(item.latency_score for item in scorecards) / count,
+        cost_score=sum(item.cost_score for item in scorecards) / count,
+        overall_score=sum(item.overall_score for item in scorecards) / count,
+        rationale=rationale,
+    )

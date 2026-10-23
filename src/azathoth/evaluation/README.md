@@ -303,9 +303,9 @@ It is never judged by a substitute evaluator.
 
 `supports(comparison)` and `require_supported(comparison, subject=...)` let
 callers check comparisons before doing any work. Benchmark execution checks
-every case before executing any of them, and optimization checks its expected
-outcome before generating any candidate, so unsupported work fails before it
-starts rather than partway through.
+every case before executing any of them, and optimization checks every case of
+its benchmark before generating any candidate, so unsupported work fails before
+it starts rather than partway through.
 
 # Evaluator Protocol
 
@@ -1103,7 +1103,9 @@ The evaluation package stores that input.
 It does not define how a workflow must convert that value into runtime
 execution context.
 
-That belongs to the execution/orchestration layer using the benchmark.
+That belongs to the execution/orchestration layer using the benchmark. The
+workflow layer delivers it as the canonical `workflow.input.received` event,
+payload `{"input": <value>}`, the same event production invocations emit.
 
 # Benchmark Expected Outcome
 

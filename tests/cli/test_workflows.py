@@ -13,7 +13,13 @@ from azathoth.cli import (
     show_workflow,
 )
 from azathoth.context import Context
-from azathoth.evaluation import ExpectedOutcome
+from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
+    ExpectedOutcome,
+    OutcomeComparison,
+    SQLiteBenchmarkRepository,
+)
 from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.prompting import (
     PortfolioModelSelection,
@@ -44,6 +50,8 @@ FIRST_WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 SECOND_WORKFLOW_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 UNKNOWN_WORKFLOW_ID = UUID("99999999-9999-9999-9999-999999999999")
+
+BENCHMARK_ID = UUID("77777777-7777-7777-7777-777777777777")
 
 FIRST_STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
 
@@ -486,6 +494,34 @@ def test_workflow_show_does_not_require_openrouter_credentials(
     assert "Name: mixed workflow" in captured.out
 
 
+def save_benchmark(
+    database: Path,
+) -> BenchmarkDataset:
+    """Persist one deterministic benchmark for optimization commands."""
+
+    dataset = BenchmarkDataset(
+        id=BENCHMARK_ID,
+        name="classification",
+        description="Classify sentiment.",
+        cases=(
+            BenchmarkCase(
+                input="I loved it.",
+                expected=ExpectedOutcome(
+                    description="Positive sentiment.",
+                    value={
+                        "classification": "positive",
+                    },
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+        ),
+    )
+
+    SQLiteBenchmarkRepository(database).save(dataset)
+
+    return dataset
+
+
 def test_optimize_workflow_renders_optimization_session(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -498,6 +534,8 @@ def test_optimize_workflow_renders_optimization_session(
     configuration = CliRuntimeConfiguration(
         database=tmp_path / "azathoth.db",
     )
+
+    save_benchmark(configuration.database)
 
     monkeypatch.setattr(
         CliRuntimeConfiguration,
@@ -530,7 +568,7 @@ def test_optimize_workflow_renders_optimization_session(
 
     result = workflow_commands.optimize_workflow(
         workflow_id=FIRST_WORKFLOW_ID,
-        expected_value="success",
+        benchmark_id=BENCHMARK_ID,
         target_latency_seconds=5.0,
         target_cost_usd=0.01,
         generations=2,
@@ -554,6 +592,8 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
     configuration = CliRuntimeConfiguration(
         database=tmp_path / "azathoth.db",
     )
+
+    benchmark = save_benchmark(configuration.database)
 
     monkeypatch.setattr(
         CliRuntimeConfiguration,
@@ -589,9 +629,7 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
     assert (
         workflow_commands.optimize_workflow(
             workflow_id=FIRST_WORKFLOW_ID,
-            expected_value={
-                "classification": "positive",
-            },
+            benchmark_id=BENCHMARK_ID,
             target_latency_seconds=2.5,
             target_cost_usd=0.004,
             generations=4,
@@ -599,16 +637,9 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
         == 0
     )
 
-    expected_outcome = received["expected_outcome"]
     scoring_policy = received["scoring_policy"]
 
-    assert isinstance(
-        expected_outcome,
-        ExpectedOutcome,
-    )
-    assert expected_outcome.value == {
-        "classification": "positive",
-    }
+    assert received["dataset"] == benchmark
 
     assert isinstance(
         scoring_policy,

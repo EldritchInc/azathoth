@@ -5,9 +5,9 @@ from uuid import UUID
 
 import pytest
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    ExactMatchEvaluator,
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -184,6 +184,27 @@ def create_registry(
     )
 
 
+def create_success_benchmark(
+    description: str,
+) -> BenchmarkDataset:
+    """Create a one-case benchmark whose case expects success."""
+
+    return BenchmarkDataset(
+        name="expect-success",
+        description=description,
+        cases=(
+            BenchmarkCase(
+                input="request",
+                expected=ExpectedOutcome(
+                    description=description,
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+        ),
+    )
+
+
 def test_workflow_optimization_session_end_to_end() -> None:
     """Run multiple workflow optimization generations end to end."""
 
@@ -235,13 +256,7 @@ def test_workflow_optimization_session_end_to_end() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Workflow should return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Workflow should return success."),
             max_generations=2,
         )
     )
@@ -293,7 +308,7 @@ def test_workflow_optimization_session_end_to_end() -> None:
 
 
 def test_workflow_optimization_session_survives_candidate_execution_failure() -> None:
-    """Optimization should continue when one candidate cannot execute."""
+    """Optimization continues and ranks a candidate that cannot execute last."""
 
     catalog = create_catalog()
 
@@ -351,13 +366,7 @@ def test_workflow_optimization_session_survives_candidate_execution_failure() ->
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Workflow should return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=create_success_benchmark("Workflow should return success."),
             max_generations=2,
         )
     )
@@ -375,12 +384,18 @@ def test_workflow_optimization_session_survives_candidate_execution_failure() ->
     for generation in session.generations:
         experiment = generation.previous_experiment
 
-        assert len(experiment.evidence) == 1
-        assert len(experiment.scorecards) == 1
+        assert len(experiment.evidence) == 2
+        assert len(experiment.scorecards) == 2
 
-        assert experiment.evidence[0].candidate_signature == (successful_candidate.signature)
+        assert tuple(evidence.candidate_signature for evidence in experiment.evidence) == (
+            failing_candidate.signature,
+            successful_candidate.signature,
+        )
 
-        assert experiment.winner == experiment.scorecards[0]
+        assert experiment.scorecards[0].quality_score == pytest.approx(0.0)
+
+        assert experiment.winner_evidence.candidate_signature == successful_candidate.signature
+        assert experiment.winner == experiment.scorecards[1]
         assert experiment.winner.quality_score == pytest.approx(1.0)
         assert experiment.winner.reliability_score == pytest.approx(1.0)
 

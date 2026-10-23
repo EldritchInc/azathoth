@@ -17,6 +17,7 @@ from azathoth.workflows import (
 )
 from tests.cli.test_optimization import (
     WORKFLOW_ID,
+    create_benchmark,
     create_models,
     create_portfolio,
     create_registry,
@@ -59,10 +60,12 @@ def test_optimization_rejects_workflow_without_result_before_generating_candidat
             optimize_configured_workflow(
                 runtime=runtime,
                 workflow_id=WORKFLOW_ID,
-                expected_outcome=ExpectedOutcome(
-                    description="Workflow returns success.",
-                    value="success",
-                    comparison=OutcomeComparison.EXACT,
+                dataset=create_benchmark(
+                    ExpectedOutcome(
+                        description="Workflow returns success.",
+                        value="success",
+                        comparison=OutcomeComparison.EXACT,
+                    ),
                 ),
                 scoring_policy=WorkflowScoringPolicy(
                     target_latency_seconds=60.0,

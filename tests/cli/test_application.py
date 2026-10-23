@@ -430,7 +430,7 @@ def test_cli_dispatches_workflow_optimize(
     def fake_optimize_workflow(
         *,
         workflow_id: UUID,
-        expected_value: JsonValue,
+        benchmark_id: UUID,
         target_latency_seconds: float,
         target_cost_usd: float,
         generations: int,
@@ -438,7 +438,7 @@ def test_cli_dispatches_workflow_optimize(
         received.update(
             {
                 "workflow_id": workflow_id,
-                "expected_value": expected_value,
+                "benchmark_id": benchmark_id,
                 "target_latency_seconds": target_latency_seconds,
                 "target_cost_usd": target_cost_usd,
                 "generations": generations,
@@ -458,8 +458,8 @@ def test_cli_dispatches_workflow_optimize(
             "workflow",
             "optimize",
             str(WORKFLOW_ID),
-            "--expected",
-            '"success"',
+            "--benchmark",
+            str(BENCHMARK_ID),
             "--target-latency",
             "5.0",
             "--target-cost",
@@ -473,34 +473,34 @@ def test_cli_dispatches_workflow_optimize(
 
     assert received == {
         "workflow_id": WORKFLOW_ID,
-        "expected_value": "success",
+        "benchmark_id": BENCHMARK_ID,
         "target_latency_seconds": 5.0,
         "target_cost_usd": 0.01,
         "generations": 3,
     }
 
 
-def test_cli_workflow_optimize_parses_structured_expected_json(
+def test_cli_workflow_optimize_defaults_to_one_generation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    expected_values: list[JsonValue] = []
+    observed_generations: list[int] = []
 
     def fake_optimize_workflow(
         *,
         workflow_id: UUID,
-        expected_value: JsonValue,
+        benchmark_id: UUID,
         target_latency_seconds: float,
         target_cost_usd: float,
         generations: int,
     ) -> int:
         del (
             workflow_id,
+            benchmark_id,
             target_latency_seconds,
             target_cost_usd,
-            generations,
         )
 
-        expected_values.append(expected_value)
+        observed_generations.append(generations)
 
         return 0
 
@@ -515,8 +515,8 @@ def test_cli_workflow_optimize_parses_structured_expected_json(
             "workflow",
             "optimize",
             str(WORKFLOW_ID),
-            "--expected",
-            '{"classification":"positive"}',
+            "--benchmark",
+            str(BENCHMARK_ID),
             "--target-latency",
             "5",
             "--target-cost",
@@ -525,11 +525,7 @@ def test_cli_workflow_optimize_parses_structured_expected_json(
     )
 
     assert result == 0
-    assert expected_values == [
-        {
-            "classification": "positive",
-        }
-    ]
+    assert observed_generations == [1]
 
 
 def test_cli_workflow_optimize_requires_scoring_targets(
@@ -541,8 +537,8 @@ def test_cli_workflow_optimize_requires_scoring_targets(
                 "workflow",
                 "optimize",
                 str(WORKFLOW_ID),
-                "--expected",
-                '"success"',
+                "--benchmark",
+                str(BENCHMARK_ID),
             )
         )
 
@@ -554,22 +550,15 @@ def test_cli_workflow_optimize_requires_scoring_targets(
     assert "--target-cost" in captured.err
 
 
-def test_cli_workflow_optimize_rejects_invalid_expected_json(
+def test_cli_workflow_optimize_requires_benchmark(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with pytest.raises(
-        (
-            SystemExit,
-            ValueError,
-        )
-    ):
+    with pytest.raises(SystemExit) as raised:
         main(
             (
                 "workflow",
                 "optimize",
                 str(WORKFLOW_ID),
-                "--expected",
-                "{not-json}",
                 "--target-latency",
                 "5",
                 "--target-cost",
@@ -577,7 +566,63 @@ def test_cli_workflow_optimize_rejects_invalid_expected_json(
             )
         )
 
-    capsys.readouterr()
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "--benchmark" in captured.err
+
+
+def test_cli_workflow_optimize_rejects_invalid_benchmark_id(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "optimize",
+                str(WORKFLOW_ID),
+                "--benchmark",
+                "not-a-uuid",
+                "--target-latency",
+                "5",
+                "--target-cost",
+                "0.01",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "--benchmark" in captured.err
+
+
+def test_cli_workflow_optimize_no_longer_accepts_expected(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "workflow",
+                "optimize",
+                str(WORKFLOW_ID),
+                "--benchmark",
+                str(BENCHMARK_ID),
+                "--expected",
+                '"success"',
+                "--target-latency",
+                "5",
+                "--target-cost",
+                "0.01",
+            )
+        )
+
+    captured = capsys.readouterr()
+
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert "--expected" in captured.err
 
 
 def test_workflow_promote_parser_accepts_workflow_id() -> None:

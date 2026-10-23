@@ -6,6 +6,12 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.cli.benchmark_checks import (
+    benchmark_has_cases,
+    comparisons_supported,
+    configured_benchmark,
+    results_declared,
+)
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
@@ -22,10 +28,6 @@ from azathoth.cli.workflow_configuration import (
     import_workflow,
     list_workflows,
     show_workflow,
-)
-from azathoth.evaluation import (
-    ExpectedOutcome,
-    OutcomeComparison,
 )
 from azathoth.runtime import WorkflowNotConfiguredError
 from azathoth.workflows import (
@@ -178,18 +180,44 @@ def invoke_workflow(
 def optimize_workflow(
     *,
     workflow_id: UUID,
-    expected_value: JsonValue,
+    benchmark_id: UUID,
     target_latency_seconds: float,
     target_cost_usd: float,
     generations: int,
 ) -> int:
-    """Empirically optimize one configured workflow and persist its evidence.
+    """Empirically optimize one configured workflow against a durable benchmark.
+
+    Every candidate runs every benchmark case, and each case judges the
+    workflow's declared result with its own comparison. A missing or empty
+    benchmark, an unsupported comparison, and a workflow without a declared
+    result are rejected before runtime bootstrap, without provider credentials
+    and without executing any case.
 
     Every generation's candidate runs, evaluations, and experiment record are
     saved to the configured database, so the session can be inspected later.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
+
+    dataset = configured_benchmark(
+        configuration,
+        benchmark_id,
+    )
+
+    if dataset is None:
+        return 1
+
+    if not benchmark_has_cases(dataset):
+        return 1
+
+    if not comparisons_supported(dataset):
+        return 1
+
+    if not results_declared(
+        configuration,
+        (workflow_id,),
+    ):
+        return 1
 
     runtime = load_runtime(configuration)
 
@@ -198,11 +226,7 @@ def optimize_workflow(
             optimize_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
-                expected_outcome=ExpectedOutcome(
-                    description=("Match the operator-supplied expected value."),
-                    value=expected_value,
-                    comparison=OutcomeComparison.EXACT,
-                ),
+                dataset=dataset,
                 scoring_policy=WorkflowScoringPolicy(
                     target_latency_seconds=target_latency_seconds,
                     target_cost_usd=target_cost_usd,

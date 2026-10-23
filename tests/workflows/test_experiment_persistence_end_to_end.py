@@ -34,6 +34,7 @@ from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
     WorkflowCatalogLoader,
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowMetadata,
@@ -312,13 +313,18 @@ def create_observation(
     return WorkflowExperimentObservation(
         workflow=run.workflow,
         candidate_signature=candidate.signature,
-        run_id=run.id,
-        evaluation_id=evaluation.id,
+        id=run.id,
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=run.id,
+                evaluation_id=evaluation.id,
+            ),
+        ),
         scorecard=scorecard,
     )
 
 
-def run_id_for_scorecard(
+def observation_id_for_scorecard(
     *,
     scorecard: WorkflowScorecard,
     observations: tuple[
@@ -326,10 +332,10 @@ def run_id_for_scorecard(
         ...,
     ],
 ) -> UUID:
-    """Return the unique run that produced one experiment scorecard."""
+    """Return the unique observation that produced one experiment scorecard."""
 
     matches = tuple(
-        observation.run_id for observation in observations if observation.scorecard == scorecard
+        observation.id for observation in observations if observation.scorecard == scorecard
     )
 
     assert len(matches) == 1
@@ -397,7 +403,7 @@ def test_durable_experiment_reconstructs_complete_source_evidence(
     )
 
     ranking_run_ids = tuple(
-        run_id_for_scorecard(
+        observation_id_for_scorecard(
             scorecard=entry.scorecard,
             observations=observations,
         )
@@ -445,15 +451,15 @@ def test_durable_experiment_reconstructs_complete_source_evidence(
 
     assert restored_experiment.winner.candidate_signature == passing_candidate.signature
 
-    assert restored_experiment.winner.run_id == passing_run.id
+    assert restored_experiment.winner.cases[0].run_id == passing_run.id
 
     restored_passing_run = SQLiteWorkflowRunRepository(evidence_database).get(
-        restored_experiment.winner.run_id
+        restored_experiment.winner.cases[0].run_id
     )
 
     assert restored_passing_run == passing_run
 
-    winner_evaluation_id = restored_experiment.winner.evaluation_id
+    winner_evaluation_id = restored_experiment.winner.cases[0].evaluation_id
 
     restored_passing_evaluation = SQLiteWorkflowRunEvaluationRepository(evidence_database).get(
         winner_evaluation_id
@@ -533,7 +539,7 @@ def test_experiment_ranking_preserves_empirical_winner(
         id=EXPERIMENT_ID,
         observations=observations,
         ranking=tuple(
-            run_id_for_scorecard(
+            observation_id_for_scorecard(
                 scorecard=entry.scorecard,
                 observations=observations,
             )
@@ -627,7 +633,7 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
         id=EXPERIMENT_ID,
         observations=observations,
         ranking=tuple(
-            run_id_for_scorecard(
+            observation_id_for_scorecard(
                 scorecard=entry.scorecard,
                 observations=observations,
             )
@@ -661,20 +667,21 @@ def test_experiment_references_match_persisted_runs_and_evaluations(
     assert restored is not None
 
     for observation in restored.observations:
-        persisted_run = SQLiteWorkflowRunRepository(evidence_database).get(observation.run_id)
+        for case in observation.cases:
+            persisted_run = SQLiteWorkflowRunRepository(evidence_database).get(case.run_id)
 
-        persisted_evaluation = SQLiteWorkflowRunEvaluationRepository(evidence_database).get(
-            observation.evaluation_id
-        )
+            persisted_evaluation = SQLiteWorkflowRunEvaluationRepository(evidence_database).get(
+                case.evaluation_id
+            )
 
-        assert persisted_run is not None
-        assert persisted_evaluation is not None
+            assert persisted_run is not None
+            assert persisted_evaluation is not None
 
-        assert persisted_run.id == observation.run_id
-        assert persisted_run.workflow == observation.workflow
+            assert persisted_run.id == case.run_id
+            assert persisted_run.workflow == observation.workflow
 
-        assert persisted_evaluation.id == observation.evaluation_id
-        assert persisted_evaluation.run_id == observation.run_id
+            assert persisted_evaluation.id == case.evaluation_id
+            assert persisted_evaluation.run_id == case.run_id
 
     assert tuple(observation.candidate_signature for observation in restored.observations) == tuple(
         candidate.signature for candidate in candidates
@@ -692,8 +699,13 @@ def test_experiment_can_be_discovered_from_workflow_identity(
             workflow_id=PASSING_WORKFLOW_ID,
             strategy_ids=(PASSING_STRATEGY_ID,),
         ),
-        run_id=UUID("88888888-8888-8888-8888-888888888888"),
-        evaluation_id=UUID("99999999-9999-9999-9999-999999999999"),
+        id=UUID("88888888-8888-8888-8888-888888888888"),
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=UUID("88888888-8888-8888-8888-888888888888"),
+                evaluation_id=UUID("99999999-9999-9999-9999-999999999999"),
+            ),
+        ),
         scorecard=WorkflowScorecard(
             quality_score=1.0,
             reliability_score=1.0,
@@ -710,8 +722,13 @@ def test_experiment_can_be_discovered_from_workflow_identity(
             workflow_id=FAILING_WORKFLOW_ID,
             strategy_ids=(FAILING_STRATEGY_ID,),
         ),
-        run_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        evaluation_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                evaluation_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            ),
+        ),
         scorecard=WorkflowScorecard(
             quality_score=0.0,
             reliability_score=1.0,
@@ -729,8 +746,8 @@ def test_experiment_can_be_discovered_from_workflow_identity(
             failing_observation,
         ),
         ranking=(
-            passing_observation.run_id,
-            failing_observation.run_id,
+            passing_observation.id,
+            failing_observation.id,
         ),
         recorded_at=RECORDED_AT,
     )

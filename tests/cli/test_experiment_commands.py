@@ -21,6 +21,7 @@ from azathoth.workflows import (
     SQLiteWorkflowExperimentRepository,
     SQLiteWorkflowRepository,
     WorkflowCandidateSignature,
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowMetadata,
@@ -135,8 +136,13 @@ def create_experiment(
                     workflow_id=workflow_id,
                     strategy_ids=(STRATEGY_ID,),
                 ),
-                run_id=run_id,
-                evaluation_id=UUID(int=experiment_id.int + (2 << 64)),
+                id=run_id,
+                cases=(
+                    WorkflowExperimentCaseObservation(
+                        run_id=run_id,
+                        evaluation_id=UUID(int=experiment_id.int + (2 << 64)),
+                    ),
+                ),
                 scorecard=WorkflowScorecard(
                     quality_score=1.0,
                     reliability_score=1.0,

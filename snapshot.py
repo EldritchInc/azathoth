@@ -8,6 +8,7 @@ Outputs:
 Includes:
     - src/azathoth/** (excluding ui/)
     - tests/**
+    - examples/**
     - docs/adrs/**
 
 Excludes:
@@ -19,16 +20,13 @@ Excludes:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 OUTPUT_FILE = PROJECT_ROOT / "project_snapshot.txt"
-
-SOURCE_ROOT = PROJECT_ROOT / "src" / "azathoth"
-TEST_ROOT = PROJECT_ROOT / "tests"
-ADR_ROOT = PROJECT_ROOT / "docs" / "adrs"
 
 EXCLUDED_DIRS = {
     "__pycache__",
@@ -42,6 +40,39 @@ EXCLUDED_SUFFIXES = {
 EXCLUDED_FILES = {
     ".DS_Store",
 }
+
+
+@dataclass(frozen=True)
+class SnapshotSection:
+    """One top-level directory included in the snapshot."""
+
+    heading: str
+    label: str
+    root: Path
+
+
+SECTIONS = (
+    SnapshotSection(
+        heading="SOURCE",
+        label="Source files",
+        root=PROJECT_ROOT / "src" / "azathoth",
+    ),
+    SnapshotSection(
+        heading="TESTS",
+        label="Test files",
+        root=PROJECT_ROOT / "tests",
+    ),
+    SnapshotSection(
+        heading="EXAMPLES",
+        label="Example files",
+        root=PROJECT_ROOT / "examples",
+    ),
+    SnapshotSection(
+        heading="ADRS",
+        label="ADR files",
+        root=PROJECT_ROOT / "docs" / "adrs",
+    ),
+)
 
 
 def separator(
@@ -117,16 +148,14 @@ def write_heading(
 def main() -> None:
     """Generate the complete project snapshot."""
 
-    source_files = iter_files(
-        SOURCE_ROOT,
-    )
-
-    test_files = iter_files(
-        TEST_ROOT,
-    )
-
-    adr_files = iter_files(
-        ADR_ROOT,
+    section_files = tuple(
+        (
+            section,
+            iter_files(
+                section.root,
+            ),
+        )
+        for section in SECTIONS
     )
 
     with OUTPUT_FILE.open(
@@ -137,41 +166,21 @@ def main() -> None:
 
         output.write(f"Project root: {PROJECT_ROOT}\n\n")
 
-        output.write(f"Source files: {len(source_files)}\n")
+        for section, files in section_files:
+            output.write(f"{section.label}: {len(files)}\n")
 
-        output.write(f"Test files: {len(test_files)}\n")
+        output.write("\n")
 
-        output.write(f"ADR files: {len(adr_files)}\n\n")
+        for section, files in section_files:
+            write_heading(
+                output,
+                section.heading,
+            )
 
-        write_heading(
-            output,
-            "SOURCE",
-        )
-
-        write_section(
-            output,
-            source_files,
-        )
-
-        write_heading(
-            output,
-            "TESTS",
-        )
-
-        write_section(
-            output,
-            test_files,
-        )
-
-        write_heading(
-            output,
-            "ADRS",
-        )
-
-        write_section(
-            output,
-            adr_files,
-        )
+            write_section(
+                output,
+                files,
+            )
 
     print(f"Wrote {OUTPUT_FILE}")
 

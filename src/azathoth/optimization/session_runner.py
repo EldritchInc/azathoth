@@ -2,11 +2,7 @@
 
 from typing import Protocol
 
-from azathoth.context import Context
-from azathoth.evaluation import (
-    Evaluator,
-    ExpectedOutcome,
-)
+from azathoth.evaluation import BenchmarkDataset
 from azathoth.optimization.session import WorkflowOptimizationSession
 from azathoth.optimization.workflow import WorkflowOptimizer
 from azathoth.workflows.candidate import WorkflowCandidate
@@ -20,11 +16,9 @@ class WorkflowExperimentService(Protocol):
         self,
         *,
         workflows: tuple[WorkflowCandidate, ...],
-        context: Context,
-        evaluator: Evaluator,
-        expected_outcome: ExpectedOutcome,
+        dataset: BenchmarkDataset,
     ) -> WorkflowExperimentResult:
-        """Execute and compare one workflow candidate population."""
+        """Execute and compare one workflow candidate population on a benchmark."""
 
         ...
 
@@ -45,12 +39,17 @@ class WorkflowOptimizationSessionRunner:
         self,
         *,
         initial_candidates: tuple[WorkflowCandidate, ...],
-        context: Context,
-        evaluator: Evaluator,
-        expected_outcome: ExpectedOutcome,
+        dataset: BenchmarkDataset,
         max_generations: int,
     ) -> WorkflowOptimizationSession:
-        """Run workflow experiments and optimization for multiple generations."""
+        """Run workflow experiments and optimization for multiple generations.
+
+        Every generation's candidates are judged against every case of the
+        same benchmark dataset.
+
+        Raises:
+            ValueError: Fewer than one generation was requested.
+        """
 
         if max_generations < 1:
             raise ValueError("Workflow optimization sessions require at least one generation.")
@@ -61,9 +60,7 @@ class WorkflowOptimizationSessionRunner:
         for generation in range(1, max_generations + 1):
             experiment = await self._experiment_runner.run(
                 workflows=current_candidates,
-                context=context,
-                evaluator=evaluator,
-                expected_outcome=expected_outcome,
+                dataset=dataset,
             )
 
             result = self._optimizer.optimize(

@@ -4,14 +4,11 @@ import asyncio
 from uuid import UUID
 
 import pytest
-from pydantic import JsonValue
 
 from azathoth.context import Context
 from azathoth.evaluation import (
-    EvaluationResult,
-    EvaluationStatus,
-    Evaluator,
-    EvaluatorMetadata,
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -41,6 +38,7 @@ STEP_ID = UUID("33333333-3333-3333-3333-333333333333")
 SECOND_STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
 STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
 SECOND_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
+DATASET_ID = UUID("77777777-7777-7777-7777-777777777777")
 
 
 class StaticStrategy:
@@ -79,22 +77,18 @@ class RecordingExperimentRunner:
 
     def __init__(self) -> None:
         self.candidate_populations: list[tuple[WorkflowCandidate, ...]] = []
+        self.datasets: list[BenchmarkDataset] = []
 
     async def run(
         self,
         *,
         workflows: tuple[WorkflowCandidate, ...],
-        context: Context,
-        evaluator: Evaluator,
-        expected_outcome: ExpectedOutcome,
+        dataset: BenchmarkDataset,
     ) -> WorkflowExperimentResult:
         """Record a population and return deterministic experiment evidence."""
 
-        del context
-        del evaluator
-        del expected_outcome
-
         self.candidate_populations.append(workflows)
+        self.datasets.append(dataset)
 
         winner = create_scorecard(
             overall_score=0.9,
@@ -157,36 +151,6 @@ class RecordingOptimizer:
         )
 
 
-class StubEvaluator:
-    """Provide deterministic evaluator behavior for session tests."""
-
-    @property
-    def metadata(self) -> EvaluatorMetadata:
-        """Return deterministic evaluator metadata."""
-
-        return EvaluatorMetadata(
-            name="stub",
-            description="Stub evaluator.",
-        )
-
-    async def evaluate(
-        self,
-        expected: ExpectedOutcome,
-        actual: JsonValue,
-    ) -> EvaluationResult:
-        """Return a deterministic passing evaluation."""
-
-        del expected
-        del actual
-
-        return EvaluationResult(
-            evaluator_name="stub",
-            score=1.0,
-            status=EvaluationStatus.PASSED,
-            reason="Passed.",
-        )
-
-
 def create_candidate(
     *,
     workflow_id: UUID,
@@ -244,13 +208,23 @@ def create_scorecard(
     )
 
 
-def create_expected_outcome() -> ExpectedOutcome:
-    """Create a deterministic expected outcome."""
+def create_dataset() -> BenchmarkDataset:
+    """Create a deterministic one-case benchmark."""
 
-    return ExpectedOutcome(
-        description="Workflow should return success.",
-        value="success",
-        comparison=OutcomeComparison.EXACT,
+    return BenchmarkDataset(
+        id=DATASET_ID,
+        name="session-runner",
+        description="Benchmark used for session runner tests.",
+        cases=(
+            BenchmarkCase(
+                input="request",
+                expected=ExpectedOutcome(
+                    description="Workflow should return success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+        ),
     )
 
 
@@ -263,9 +237,7 @@ def test_session_runner_records_requested_generations() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=create_candidates(),
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -288,9 +260,7 @@ def test_session_runner_preserves_initial_candidates() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=2,
         )
     )
@@ -312,9 +282,7 @@ def test_session_runner_experiments_on_each_generation_population() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -334,9 +302,7 @@ def test_session_runner_records_experiment_for_each_generation() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=create_candidates(),
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=2,
         )
     )
@@ -359,9 +325,7 @@ def test_session_runner_rejects_zero_generations() -> None:
                 optimizer=ReplayWorkflowOptimizer(),
             ).run(
                 initial_candidates=create_candidates(),
-                context=Context(),
-                evaluator=StubEvaluator(),
-                expected_outcome=create_expected_outcome(),
+                dataset=create_dataset(),
                 max_generations=0,
             )
         )
@@ -380,9 +344,7 @@ def test_session_runner_rejects_negative_generations() -> None:
                 optimizer=ReplayWorkflowOptimizer(),
             ).run(
                 initial_candidates=create_candidates(),
-                context=Context(),
-                evaluator=StubEvaluator(),
-                expected_outcome=create_expected_outcome(),
+                dataset=create_dataset(),
                 max_generations=-1,
             )
         )
@@ -399,9 +361,7 @@ def test_session_runner_calls_optimizer_for_each_generation() -> None:
             optimizer=optimizer,
         ).run(
             initial_candidates=create_candidates(),
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -427,9 +387,7 @@ def test_session_runner_propagates_transformed_candidate_populations() -> None:
             optimizer=optimizer,
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -459,9 +417,7 @@ def test_session_runner_passes_current_population_to_optimizer() -> None:
             optimizer=optimizer,
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -485,9 +441,7 @@ def test_session_runner_stops_at_requested_generation_limit() -> None:
             optimizer=optimizer,
         ).run(
             initial_candidates=create_candidates(),
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=4,
         )
     )
@@ -517,9 +471,7 @@ def test_session_runner_is_deterministic() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -530,9 +482,7 @@ def test_session_runner_is_deterministic() -> None:
             optimizer=ReplayWorkflowOptimizer(),
         ).run(
             initial_candidates=candidates,
-            context=Context(),
-            evaluator=StubEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
             max_generations=3,
         )
     )
@@ -561,3 +511,27 @@ def test_session_runner_is_deterministic() -> None:
     ]
 
     assert len(experiment_ids) == len(set(experiment_ids))
+
+
+def test_session_runner_judges_every_generation_on_the_same_benchmark() -> None:
+    """Every generation's experiment receives the session's benchmark dataset."""
+
+    dataset = create_dataset()
+    experiment_runner = RecordingExperimentRunner()
+
+    asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=ReplayWorkflowOptimizer(),
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=dataset,
+            max_generations=3,
+        )
+    )
+
+    assert experiment_runner.datasets == [
+        dataset,
+        dataset,
+        dataset,
+    ]

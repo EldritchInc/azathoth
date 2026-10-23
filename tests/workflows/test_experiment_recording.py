@@ -3,15 +3,16 @@
 import asyncio
 from uuid import UUID
 
-import pytest
-
 from azathoth.context import Context
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     EvaluationResult,
     EvaluationStatus,
     EvaluatorMetadata,
     ExpectedOutcome,
     OutcomeComparison,
+    OutcomeEvaluator,
 )
 from azathoth.strategies import (
     Strategy,
@@ -20,6 +21,7 @@ from azathoth.strategies import (
     StrategyOutcome,
 )
 from azathoth.workflows import (
+    RUN_FAILURE_EVALUATOR_NAME,
     InMemoryWorkflowExperimentRepository,
     InMemoryWorkflowRunEvaluationRepository,
     InMemoryWorkflowRunRepository,
@@ -52,6 +54,12 @@ WEAK_STRATEGY_ID = UUID("77777777-7777-7777-7777-777777777777")
 STRONG_STRATEGY_ID = UUID("88888888-8888-8888-8888-888888888888")
 
 BROKEN_STRATEGY_ID = UUID("99999999-9999-9999-9999-999999999999")
+
+DATASET_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+FIRST_CASE_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1")
+
+SECOND_CASE_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2")
 
 
 class StaticStrategy:
@@ -243,9 +251,39 @@ def broken_workflow() -> WorkflowCandidate:
     )
 
 
+def create_case(
+    case_id: UUID,
+) -> BenchmarkCase:
+    """Create one benchmark case expecting success."""
+
+    return BenchmarkCase(
+        id=case_id,
+        input=f"input-{case_id}",
+        expected=ExpectedOutcome(
+            description="Workflow should return success.",
+            value="success",
+            comparison=OutcomeComparison.EXACT,
+        ),
+    )
+
+
+def create_dataset(
+    *case_ids: UUID,
+) -> BenchmarkDataset:
+    """Create a benchmark whose cases all expect success."""
+
+    return BenchmarkDataset(
+        id=DATASET_ID,
+        name="recorded-experiment",
+        description="Benchmark used for recorded experiment tests.",
+        cases=tuple(create_case(case_id) for case_id in (case_ids or (FIRST_CASE_ID,))),
+    )
+
+
 def run_experiment(
     repositories: Repositories,
     *workflows: WorkflowCandidate,
+    dataset: BenchmarkDataset | None = None,
 ) -> WorkflowExperimentResult:
     """Run one recorded experiment over the given candidates."""
 
@@ -257,16 +295,15 @@ def run_experiment(
                     target_cost_usd=0.10,
                 ),
             ),
+            evaluator=OutcomeEvaluator(
+                {
+                    OutcomeComparison.EXACT: ExactEvaluator(),
+                }
+            ),
             recorder=repositories.recorder,
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=ExactEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Workflow should return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
-            ),
+            dataset=dataset if dataset is not None else create_dataset(),
         )
     )
 
@@ -308,7 +345,7 @@ def test_recorded_experiment_persists_every_candidate_run() -> None:
     )
 
 
-def test_recorded_experiment_persists_evaluations_of_successful_runs_only() -> None:
+def test_recorded_experiment_persists_evaluations_of_every_run() -> None:
     repositories = Repositories()
 
     run_experiment(
@@ -322,11 +359,18 @@ def test_recorded_experiment_persists_evaluations_of_successful_runs_only() -> N
 
     assert tuple(evaluation.run_id for evaluation in evaluations) == (
         run_id_for(repositories, WEAK_WORKFLOW_ID),
+        run_id_for(repositories, BROKEN_WORKFLOW_ID),
         run_id_for(repositories, STRONG_WORKFLOW_ID),
     )
     assert tuple(evaluation.evaluation.status for evaluation in evaluations) == (
         EvaluationStatus.FAILED,
+        EvaluationStatus.FAILED,
         EvaluationStatus.PASSED,
+    )
+    assert tuple(evaluation.evaluation.evaluator_name for evaluation in evaluations) == (
+        "exact-evaluator",
+        RUN_FAILURE_EVALUATOR_NAME,
+        "exact-evaluator",
     )
 
 
@@ -356,19 +400,26 @@ def test_recorded_experiment_observations_reference_persisted_evidence() -> None
     )
 
     record = repositories.experiments.experiments()[0]
-    weak_run_id = run_id_for(repositories, WEAK_WORKFLOW_ID)
-    strong_run_id = run_id_for(repositories, STRONG_WORKFLOW_ID)
 
-    assert tuple(observation.run_id for observation in record.observations) == (
-        weak_run_id,
-        strong_run_id,
+    assert tuple(
+        case.run_id for observation in record.observations for case in observation.cases
+    ) == (
+        run_id_for(repositories, WEAK_WORKFLOW_ID),
+        run_id_for(repositories, BROKEN_WORKFLOW_ID),
+        run_id_for(repositories, STRONG_WORKFLOW_ID),
     )
 
     for observation in record.observations:
-        evaluation = repositories.evaluations.get(observation.evaluation_id)
+        assert len(observation.cases) == 1
+
+        case = observation.cases[0]
+
+        evaluation = repositories.evaluations.get(case.evaluation_id)
 
         assert evaluation is not None
-        assert evaluation.run_id == observation.run_id
+        assert evaluation.run_id == case.run_id
+        assert case.case_id == FIRST_CASE_ID
+        assert case.passed is evaluation.evaluation.passed
         assert observation.candidate_signature.workflow_id == observation.workflow.id
 
 
@@ -383,23 +434,81 @@ def test_recorded_experiment_ranks_runs_like_the_result() -> None:
 
     record = repositories.experiments.experiments()[0]
 
-    assert record.ranking == (
+    assert tuple(observation.cases[0].run_id for observation in record.ranked_observations) == (
         run_id_for(repositories, STRONG_WORKFLOW_ID),
         run_id_for(repositories, WEAK_WORKFLOW_ID),
     )
+    assert record.ranking == tuple(observation.id for observation in record.ranked_observations)
     assert record.winner.workflow.id == STRONG_WORKFLOW_ID
     assert record.winner.scorecard == result.winner
 
 
-def test_failed_population_persists_runs_without_experiment_record() -> None:
+def test_failed_population_persists_runs_evaluations_and_record() -> None:
     repositories = Repositories()
 
-    with pytest.raises(ValueError):
-        run_experiment(
-            repositories,
-            broken_workflow(),
-        )
+    result = run_experiment(
+        repositories,
+        broken_workflow(),
+    )
+
+    broken_run_id = run_id_for(repositories, BROKEN_WORKFLOW_ID)
 
     assert tuple(run.workflow.id for run in repositories.runs.runs()) == (BROKEN_WORKFLOW_ID,)
-    assert repositories.evaluations.evaluations() == ()
-    assert repositories.experiments.experiments() == ()
+    assert tuple(evaluation.run_id for evaluation in repositories.evaluations.evaluations()) == (
+        broken_run_id,
+    )
+
+    record = repositories.experiments.experiments()[0]
+
+    assert record.id == result.id
+    assert record.winner.workflow.id == BROKEN_WORKFLOW_ID
+    assert record.winner.cases[0].run_id == broken_run_id
+    assert record.winner.cases[0].passed is False
+    assert record.winner.scorecard.quality_score == 0.0
+
+
+def test_recorded_experiment_names_its_benchmark() -> None:
+    repositories = Repositories()
+
+    run_experiment(
+        repositories,
+        strong_workflow(),
+    )
+
+    assert repositories.experiments.experiments()[0].benchmark_id == DATASET_ID
+
+
+def test_recorded_experiment_observes_every_case_in_dataset_order() -> None:
+    repositories = Repositories()
+
+    run_experiment(
+        repositories,
+        weak_workflow(),
+        strong_workflow(),
+        dataset=create_dataset(
+            FIRST_CASE_ID,
+            SECOND_CASE_ID,
+        ),
+    )
+
+    record = repositories.experiments.experiments()[0]
+
+    for observation in record.observations:
+        runs = repositories.runs.runs_for_workflow(observation.workflow.id)
+
+        assert tuple(case.case_id for case in observation.cases) == (
+            FIRST_CASE_ID,
+            SECOND_CASE_ID,
+        )
+        assert tuple(case.run_id for case in observation.cases) == tuple(run.id for run in runs)
+
+        for case in observation.cases:
+            evaluation = repositories.evaluations.get(case.evaluation_id)
+
+            assert evaluation is not None
+            assert evaluation.run_id == case.run_id
+            assert case.passed is evaluation.evaluation.passed
+
+    assert record.winner.workflow.id == STRONG_WORKFLOW_ID
+    assert record.winner.cases_passed == 2
+    assert record.observations[0].cases_passed == 0

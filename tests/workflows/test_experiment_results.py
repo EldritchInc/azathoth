@@ -5,7 +5,6 @@ from dataclasses import replace
 
 import pytest
 
-from azathoth.context import Context
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -24,7 +23,8 @@ from tests.workflows.test_experiment_runner import (
     WORKFLOW_ID_B,
     RecordingEvaluator,
     StaticStrategy,
-    create_expected_outcome,
+    create_dataset,
+    create_outcome_evaluator,
     create_scorer,
     create_workflow,
 )
@@ -73,11 +73,10 @@ def test_experiment_judges_declared_result_rather_than_last_step() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(evaluator),
         ).run(
             workflows=(candidate,),
-            context=Context(),
-            evaluator=evaluator,
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -124,11 +123,10 @@ def test_experiment_rejects_candidate_without_result_before_executing_any() -> N
         asyncio.run(
             WorkflowExperimentRunner(
                 scorer=create_scorer(),
+                evaluator=create_outcome_evaluator(RecordingEvaluator()),
             ).run(
                 workflows=workflows,
-                context=Context(),
-                evaluator=RecordingEvaluator(),
-                expected_outcome=create_expected_outcome(),
+                dataset=create_dataset(),
             )
         )
 
