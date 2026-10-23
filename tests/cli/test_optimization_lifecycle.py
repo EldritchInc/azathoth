@@ -11,6 +11,13 @@ from azathoth.cli import (
     optimize_workflow,
     render_workflow_optimization_session,
 )
+from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
+    ExpectedOutcome,
+    OutcomeComparison,
+    SQLiteBenchmarkRepository,
+)
 from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.prompting import (
     PortfolioModelSelection,
@@ -46,6 +53,8 @@ WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 STEP_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 STRATEGY_ID = UUID("33333333-3333-3333-3333-333333333333")
+
+BENCHMARK_ID = UUID("44444444-4444-4444-4444-444444444444")
 
 EXPENSIVE_IDENTIFIER = "test-provider/expensive"
 CHEAP_IDENTIFIER = "test-provider/cheap"
@@ -103,6 +112,28 @@ def create_workflow() -> WorkflowSpecification:
         result=WorkflowValueReference(
             producer_step_id=STEP_ID,
             name="answer",
+        ),
+    )
+
+
+def create_benchmark() -> BenchmarkDataset:
+    """Create the benchmark whose two cases both expect success."""
+
+    return BenchmarkDataset(
+        id=BENCHMARK_ID,
+        name="optimization-lifecycle",
+        description="Both cases expect the workflow to return success.",
+        cases=tuple(
+            BenchmarkCase(
+                id=UUID(int=BENCHMARK_ID.int + index),
+                input=f"request {index}",
+                expected=ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            )
+            for index in (1, 2)
         ),
     )
 
@@ -231,6 +262,10 @@ def test_cli_workflow_optimization_empirically_selects_cheaper_candidate(
         workflow,
     )
 
+    SQLiteBenchmarkRepository(database).save(
+        create_benchmark(),
+    )
+
     configuration = CliRuntimeConfiguration(
         database=database,
     )
@@ -283,7 +318,7 @@ def test_cli_workflow_optimization_empirically_selects_cheaper_candidate(
 
     result = optimize_workflow(
         workflow_id=WORKFLOW_ID,
-        expected_value="success",
+        benchmark_id=BENCHMARK_ID,
         target_latency_seconds=60.0,
         target_cost_usd=0.01,
         generations=2,

@@ -1,6 +1,7 @@
 """Release acceptance coverage for the complete OSS V1 CLI lifecycle."""
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -10,6 +11,13 @@ from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     main,
     render_workflow_optimization_session,
+)
+from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
+    ExpectedOutcome,
+    OutcomeComparison,
+    encode_benchmark_document,
 )
 from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.prompting import (
@@ -46,6 +54,8 @@ SIMPLE_PROMPT_DOCUMENT = PROJECT_ROOT / "examples" / "workflows" / "simple-promp
 
 EXPENSIVE_IDENTIFIER = "test-provider/expensive"
 CHEAP_IDENTIFIER = "test-provider/cheap"
+
+BENCHMARK_ID = UUID("5ca1ab1e-0000-4000-8000-000000000001")
 
 
 class CostedDeterministicLanguageModel:
@@ -359,6 +369,50 @@ def test_oss_v1_release_lifecycle(
     assert 'Output:\n"success"\n' in captured.out
 
     #
+    # A durable benchmark is imported for empirical optimization.
+    #
+
+    benchmark_document = tmp_path / "benchmark.json"
+
+    benchmark_document.write_text(
+        encode_benchmark_document(
+            BenchmarkDataset(
+                id=BENCHMARK_ID,
+                name="release-acceptance",
+                description="Release acceptance expects the workflow to return success.",
+                cases=(
+                    BenchmarkCase(
+                        id=UUID("5ca1ab1e-0000-4000-8000-000000000002"),
+                        input={"request": "release acceptance"},
+                        expected=ExpectedOutcome(
+                            description="Workflow returns success.",
+                            value="success",
+                            comparison=OutcomeComparison.EXACT,
+                        ),
+                    ),
+                ),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            (
+                "benchmark",
+                "import",
+                str(benchmark_document),
+            )
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.err == ""
+    assert captured.out == f"Imported benchmark dataset {BENCHMARK_ID}.\n"
+
+    #
     # Empirical optimization discovers the cheaper passing candidate.
     #
 
@@ -391,8 +445,8 @@ def test_oss_v1_release_lifecycle(
                 "workflow",
                 "optimize",
                 str(workflow_id),
-                "--expected",
-                '"success"',
+                "--benchmark",
+                str(BENCHMARK_ID),
                 "--target-latency",
                 "60",
                 "--target-cost",

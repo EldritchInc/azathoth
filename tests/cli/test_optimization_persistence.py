@@ -10,6 +10,7 @@ from azathoth.cli import (
     optimize_workflow,
     render_workflow_optimization_session,
 )
+from azathoth.evaluation import SQLiteBenchmarkRepository
 from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.workflows import (
     SQLiteWorkflowExperimentRepository,
@@ -18,7 +19,9 @@ from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
 )
 from tests.cli.test_optimization_lifecycle import (
+    BENCHMARK_ID,
     WORKFLOW_ID,
+    create_benchmark,
     create_runtime,
     create_workflow,
 )
@@ -35,6 +38,7 @@ def optimize_with_database(
     workflow = create_workflow()
 
     SQLiteWorkflowRepository(database).save(workflow)
+    SQLiteBenchmarkRepository(database).save(create_benchmark())
 
     configuration = CliRuntimeConfiguration(
         database=database,
@@ -73,7 +77,7 @@ def optimize_with_database(
 
     result = optimize_workflow(
         workflow_id=WORKFLOW_ID,
-        expected_value="success",
+        benchmark_id=BENCHMARK_ID,
         target_latency_seconds=60.0,
         target_cost_usd=0.01,
         generations=2,
@@ -135,11 +139,13 @@ def test_optimize_persists_every_candidate_run_and_evaluation(
         len(generation.previous_experiment.evidence) for generation in session.generations
     )
 
+    executions = evaluated_candidates * len(create_benchmark().cases)
+
     runs = SQLiteWorkflowRunRepository(database).runs()
     evaluations = SQLiteWorkflowRunEvaluationRepository(database).evaluations()
 
-    assert len(runs) == evaluated_candidates
-    assert len(evaluations) == evaluated_candidates
+    assert len(runs) == executions
+    assert len(evaluations) == executions
     assert {evaluation.run_id for evaluation in evaluations} == {run.id for run in runs}
 
 
@@ -157,8 +163,14 @@ def test_optimize_experiment_records_reference_persisted_evidence(
     run_repository = SQLiteWorkflowRunRepository(database)
     evaluation_repository = SQLiteWorkflowRunEvaluationRepository(database)
 
+    case_ids = tuple(case.id for case in create_benchmark().cases)
+
     for record in SQLiteWorkflowExperimentRepository(database).experiments():
+        assert record.benchmark_id == BENCHMARK_ID
+
         for observation in record.observations:
+            assert tuple(case.case_id for case in observation.cases) == case_ids
+
             for case in observation.cases:
                 run = run_repository.get(case.run_id)
                 evaluation = evaluation_repository.get(case.evaluation_id)

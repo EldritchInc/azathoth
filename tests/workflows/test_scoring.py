@@ -10,6 +10,8 @@ from azathoth.context import Context
 from azathoth.evaluation import (
     EvaluationResult,
     EvaluationStatus,
+    ExpectedOutcome,
+    OutcomeComparison,
 )
 from azathoth.execution import ExecutionResult
 from azathoth.strategies import StrategyExecutionMetrics
@@ -22,6 +24,7 @@ from azathoth.workflows import (
     WorkflowStepFailure,
     WorkflowStepRun,
     WorkflowStepStatus,
+    evaluate_failed_run,
 )
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -563,3 +566,92 @@ def test_scoring_policy_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         policy.target_latency_seconds = 20.0
+
+
+def create_expected() -> ExpectedOutcome:
+    """Create the expectation a failed run could not meet."""
+
+    return ExpectedOutcome(
+        description="Workflow returns result.",
+        value="result",
+        comparison=OutcomeComparison.EXACT,
+    )
+
+
+def test_scoring_gives_failed_run_no_latency_or_cost_credit() -> None:
+    run = create_run(
+        steps=(create_failed_step(),),
+        duration_seconds=0.1,
+    )
+
+    scorecard = WorkflowScorer(
+        policy=create_policy(),
+    ).score(
+        run=run,
+        evaluation=evaluate_failed_run(
+            run,
+            create_expected(),
+        ),
+    )
+
+    assert scorecard.quality_score == 0.0
+    assert scorecard.latency_score == 0.0
+    assert scorecard.cost_score == 0.0
+    assert scorecard.overall_score == pytest.approx(scorecard.reliability_score / 4.0)
+
+
+def test_scoring_ranks_crashing_run_below_slow_expensive_correct_run() -> None:
+    scorer = WorkflowScorer(
+        policy=create_policy(),
+    )
+
+    crashed = create_run(
+        steps=(create_failed_step(),),
+        duration_seconds=0.1,
+    )
+
+    crashed_scorecard = scorer.score(
+        run=crashed,
+        evaluation=evaluate_failed_run(
+            crashed,
+            create_expected(),
+        ),
+    )
+
+    correct_scorecard = scorer.score(
+        run=create_run(
+            duration_seconds=100.0,
+            estimated_cost_usd=1.0,
+        ),
+        evaluation=create_evaluation(
+            score=1.0,
+        ),
+    )
+
+    assert correct_scorecard.latency_score == pytest.approx(0.1)
+    assert correct_scorecard.cost_score == pytest.approx(0.1)
+    assert crashed_scorecard.overall_score < correct_scorecard.overall_score
+
+
+def test_scoring_keeps_latency_and_cost_credit_for_tolerated_step_failure() -> None:
+    run = create_run(
+        steps=(
+            create_failed_step(),
+            create_executed_step(
+                step_id=SECOND_STEP_ID,
+                estimated_cost_usd=0.05,
+            ),
+        ),
+    )
+
+    scorecard = WorkflowScorer(
+        policy=create_policy(),
+    ).score(
+        run=run,
+        evaluation=create_evaluation(
+            score=1.0,
+        ),
+    )
+
+    assert scorecard.latency_score == 1.0
+    assert scorecard.cost_score == 1.0
