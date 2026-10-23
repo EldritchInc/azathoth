@@ -54,6 +54,17 @@ from azathoth.evaluation.outcome import (
 )
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 from azathoth.evaluation.schema import SchemaEvaluator
+from azathoth.evaluation.semantic import (
+    SEMANTIC_EVALUATOR_NAME,
+    SEMANTIC_EVALUATOR_VERSION,
+    InvalidJudgeResponseError,
+    SemanticEvaluator,
+    SemanticJudgingError,
+    judge_call_count,
+    judge_calls_cost_usd,
+    parse_judge_verdict,
+    semantic_judge_prompt,
+)
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
 )
@@ -62,6 +73,8 @@ from azathoth.evaluation.sqlite_judge_repository import (
 )
 
 __all__ = [
+    "SEMANTIC_EVALUATOR_NAME",
+    "SEMANTIC_EVALUATOR_VERSION",
     "BenchmarkCase",
     "BenchmarkCatalog",
     "BenchmarkCatalogLoader",
@@ -76,6 +89,7 @@ __all__ = [
     "ExactMatchEvaluator",
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
+    "InvalidJudgeResponseError",
     "InMemoryJudgeRotationRepository",
     "JsonDifference",
     "JsonSchemaViolation",
@@ -88,6 +102,8 @@ __all__ = [
     "SQLiteBenchmarkRepository",
     "SQLiteJudgeRotationRepository",
     "SchemaEvaluator",
+    "SemanticEvaluator",
+    "SemanticJudgingError",
     "UnsupportedComparisonError",
     "decode_benchmark_document",
     "default_comparison_evaluators",
@@ -97,9 +113,13 @@ __all__ = [
     "json_schema_validator",
     "json_schema_violations",
     "json_type_name",
+    "judge_call_count",
+    "judge_calls_cost_usd",
     "json_values_equal",
     "normalize_json_value",
     "normalize_text",
+    "parse_judge_verdict",
     "require_benchmark_repository",
     "require_judge_rotation_repository",
+    "semantic_judge_prompt",
 ]
