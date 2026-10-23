@@ -564,6 +564,82 @@ transformation.
 
 Each generation has evidence connecting it to the generation that follows.
 
+## Benchmark-Driven Experiments
+
+Every generation of a session is judged against the same `BenchmarkDataset`.
+
+```python
+await WorkflowOptimizationSessionRunner(
+    experiment_runner=experiment_runner,
+    optimizer=optimizer,
+).run(
+    initial_candidates=(candidate,),
+    dataset=dataset,
+    max_generations=2,
+)
+```
+
+The `WorkflowExperimentService` protocol takes the same dataset:
+
+```python
+async def run(
+    self,
+    *,
+    workflows: tuple[WorkflowCandidate, ...],
+    dataset: BenchmarkDataset,
+) -> WorkflowExperimentResult: ...
+```
+
+`WorkflowExperimentRunner` runs every candidate against every case. Each case's
+input reaches the run as the canonical `workflow.input.received` event, and the
+candidate's declared result is judged with that case's own comparison.
+
+The per-case scorecards are combined with `aggregate_workflow_scorecards`, the
+same per-dimension mean that benchmark comparison uses, so each candidate
+enters the ranking with one scorecard that reflects the whole benchmark:
+
+```text
+candidate
+    │
+    ├── case 1 ──► run ──► evaluation ──► scorecard
+    ├── case 2 ──► run ──► evaluation ──► scorecard
+    └── case n ──► run ──► evaluation ──► scorecard
+                                              │
+                                              ▼
+                                  combined scorecard ──► ranking
+```
+
+Before any candidate executes, the runner rejects an empty dataset
+(`Benchmark <BENCHMARK_ID> has no cases.`), any unsupported comparison, and any
+candidate without a declared result. A benchmark therefore never runs partway.
+
+The model-substitution optimizer consumes the ranked combined scorecards
+unchanged. It expands from the candidate that performed best across the
+benchmark, not from the one that happened to answer one example.
+
+## Failed Runs Are Failed Cases
+
+A run that fails without producing its declared result is evidence, not an
+absence of evidence.
+
+It is judged by `evaluate_failed_run`, recorded under the evaluator
+`workflow-run-failure` with a score of `0.0`, and kept in the experiment:
+
+```text
+Workflow run failed at step <STEP_ID>: <failure message>
+```
+
+`WorkflowScorer` gives such a run no latency or cost credit. Failing quickly
+and cheaply is not efficiency, and without this rule a candidate that always
+crashed could outrank a correct but slow, expensive one.
+
+A run whose steps failed but which still produced its declared result was
+designed to tolerate that failure, so it is judged on its result. Its
+reliability score still reflects the failed steps.
+
+A generation in which every run failed ranks and records normally, with zero
+quality throughout, so the session continues and the evidence is preserved.
+
 ## Strategy-Level Optimization
 
 The optimization package also contains a lower-level empirical optimization
@@ -929,14 +1005,14 @@ WorkflowSpecification
 candidate generation
         │
         ▼
-WorkflowCandidate population
+WorkflowCandidate population          BenchmarkDataset
+        │                                     │
+        ▼                                     │
+WorkflowExperimentRunner ◄────────────────────┘
         │
-        ▼
-WorkflowExperimentRunner
-        │
-        ├── execute
-        ├── evaluate
-        ├── score
+        ├── execute every case
+        ├── evaluate each declared result
+        ├── score each case and combine
         └── rank
         │
         ▼
@@ -986,6 +1062,10 @@ evidence before optimization
 candidate proposals are not trusted automatically
 
 experiments determine observed performance
+
+every generation is judged against the same benchmark
+
+failed runs count against a candidate rather than disappearing
 
 ranking remains separate from mutation
 

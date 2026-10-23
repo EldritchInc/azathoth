@@ -1,0 +1,67 @@
+{
+  "metadata": {
+    "id": "5e2e0b6a-3c1d-4b7e-9f20-000000000001",
+    "name": "classify sentiment",
+    "description": "Classify the sentiment of the supplied text as positive or negative.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "5e2e0b6a-3c1d-4b7e-9f20-000000000002",
+      "specification": {
+        "metadata": {
+          "id": "5e2e0b6a-3c1d-4b7e-9f20-000000000003",
+          "name": "classify sentiment",
+          "description": "Classify supplied text with a language model.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "Classify the sentiment of the following text as positive or negative.\n\nReply with exactly one lowercase word: positive or negative. Do not include quotation marks, punctuation, Markdown, explanation, or any other text.\n\nText: {text}",
+          "bindings": [
+            {
+              "variable_name": "text",
+              "event_type": "workflow.input.received",
+              "field_name": "input"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [],
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "sentiment",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "producer_step_id": "5e2e0b6a-3c1d-4b7e-9f20-000000000002",
+    "name": "sentiment"
+  }
+}

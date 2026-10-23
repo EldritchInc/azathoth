@@ -285,23 +285,60 @@ It does not silently mutate durable workflow configuration.
 
 ## Experiments
 
-Experiments compare executable workflow candidates using empirical execution.
+Experiments compare executable workflow candidates using empirical execution
+against a benchmark.
 
-`WorkflowExperimentRunner` executes candidates and produces experiment
-evidence.
+`WorkflowExperimentRunner.run(workflows=..., dataset=...)` runs every
+candidate against every case of a `BenchmarkDataset`, judges each declared
+result with the case's own comparison, combines each candidate's per-case
+scorecards with `aggregate_workflow_scorecards`, and ranks the combined
+scorecards.
 
 The experiment model includes:
 
 - `WorkflowExperimentEvidence`
 - `WorkflowExperimentResult`
+- `WorkflowExperimentCaseObservation`
 - `WorkflowExperimentObservation`
 - `WorkflowExperimentRecord`
 
 Experiment records can be persisted through `WorkflowExperimentRepository`
 implementations.
 
-Every candidate must declare a result. The runner checks this before any
-candidate executes, and judges the declared result of each run.
+Before any candidate executes, the runner rejects an empty dataset, any
+unsupported comparison, and any candidate without a declared result. Failed
+runs are recorded and scored as failed cases; see "Failed Runs" below.
+
+A durable record names its benchmark and holds one observation per candidate:
+
+```text
+WorkflowExperimentRecord
+├── id                      shared with the in-memory WorkflowExperimentResult
+├── benchmark_id            None for records written before benchmarks
+├── observations
+│   └── WorkflowExperimentObservation
+│       ├── id
+│       ├── workflow / candidate_signature
+│       ├── scorecard       combined across cases
+│       └── cases
+│           └── WorkflowExperimentCaseObservation
+│               ├── case_id         None when no benchmark case applied
+│               ├── run_id
+│               ├── evaluation_id
+│               └── passed          None for records written before cases
+├── ranking                 observation IDs, best first
+└── recorded_at
+```
+
+Run and evaluation IDs are unique across every case of every observation, and
+the ranking covers every observation exactly once. `winner`,
+`ranked_observations`, `observation(id)`, and `observation_for_run(run_id)`
+navigate a record.
+
+Records written before multi-case experiments decode unchanged: a `mode="before"`
+validator turns each old single-run observation into one case without a case
+ID, reusing the old run ID as the observation ID so the old run-ID ranking
+still resolves.
 
 Experiment results identify empirical winners without automatically changing
 production state.
@@ -341,8 +378,37 @@ The benchmark surface includes:
 - `WorkflowBenchmarkComparison`
 
 Each case judges the workflow's declared result. Benchmarking a workflow
-without a declared result fails before any case executes, and a case whose run
-does not produce the result fails with `WorkflowResultError` naming the case.
+without a declared result fails before any case executes, and a successful run
+that does not produce the result fails with `WorkflowResultError` naming the
+case.
+
+Each case's input enters the run's context as the canonical
+`workflow.input.received` event, created by `create_workflow_input_event`.
+
+## Failed Runs
+
+`WorkflowBenchmarkRunner` executes cases with `run_recording_failures`, so a
+`fail_workflow` failure never aborts a benchmark, a comparison, or an
+experiment. Each run is then judged result first:
+
+```text
+declared result produced?
+    yes ──► judged with the case's comparison, even if some steps failed
+    no, and the run failed ──► evaluate_failed_run
+    no, and the run succeeded ──► WorkflowResultError
+```
+
+Steps may fail by design under the `continue` and `skip_dependents` policies,
+so a run that still produced its result is judged on it.
+
+`evaluate_failed_run(run, expected)` returns a failing `EvaluationResult` from
+the evaluator `workflow-run-failure` 1.0.0 with score `0.0`, naming the first
+failed step and its final attempt's failure. It is persisted and rendered like
+any other evaluation, and `WorkflowBenchmarkResult.run_failures` counts the
+cases it judged.
+
+`WorkflowScorer` gives a run judged this way no latency or cost credit, so a
+crashing candidate never outranks a correct one on speed or price alone.
 
 Benchmark results remain evidence.
 
@@ -471,6 +537,12 @@ recorded in production state.
 ## Production Invocation
 
 `ProductionInvocation` records one external call against a workflow identity.
+
+Its initial context records the caller's input twice, at the invocation's
+creation time: as `production.invocation.received`, which invocation history
+reads, and as the canonical `workflow.input.received` event that benchmark
+cases also emit. A prompt bound to the workflow input therefore renders
+identically when its workflow is optimized and when it is invoked.
 
 It is created independently of any production revision identity.
 
