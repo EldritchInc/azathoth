@@ -7,3 +7,7 @@ class AzathothRuntimeError(Exception):
 
 class WorkflowNotConfiguredError(AzathothRuntimeError):
     """Raised when a requested workflow is absent from the runtime."""
+
+
+class JudgeUnavailableError(AzathothRuntimeError):
+    """Raised when semantic judging is needed but a judge cannot be used."""
