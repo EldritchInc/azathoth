@@ -11,8 +11,10 @@ from uuid import UUID
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.evaluation import (
     BenchmarkDataset,
+    OutcomeComparison,
     OutcomeEvaluator,
     SQLiteBenchmarkRepository,
+    SQLiteJudgeRotationRepository,
     UnsupportedComparisonError,
 )
 from azathoth.workflows import SQLiteWorkflowRepository
@@ -56,13 +58,39 @@ def benchmark_has_cases(
 
 
 def comparisons_supported(
+    configuration: CliRuntimeConfiguration,
     dataset: BenchmarkDataset,
 ) -> bool:
-    """Report the first case whose comparison cannot be evaluated yet."""
+    """Report the first case whose comparison cannot be evaluated.
+
+    A semantic case can be evaluated only when the durable judge rotation has
+    at least one judge. Whether those judges are authorized and available is
+    checked once the runtime is loaded.
+    """
 
     evaluator = OutcomeEvaluator()
 
+    judges_configured = bool(
+        SQLiteJudgeRotationRepository(
+            configuration.database,
+        )
+        .rotation()
+        .entries
+    )
+
     for case in dataset.cases:
+        if case.expected.comparison is OutcomeComparison.SEMANTIC:
+            if not judges_configured:
+                print(
+                    f"Benchmark case {case.id} uses comparison 'semantic', "
+                    "but no judges are configured.",
+                    file=sys.stderr,
+                )
+
+                return False
+
+            continue
+
         try:
             evaluator.require_supported(
                 case.expected.comparison,

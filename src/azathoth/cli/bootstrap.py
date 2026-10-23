@@ -3,6 +3,7 @@
 import asyncio
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.evaluation import SQLiteJudgeRotationRepository
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -30,7 +31,12 @@ from azathoth.workflows import (
 def load_runtime(
     configuration: CliRuntimeConfiguration,
 ) -> AzathothRuntime:
-    """Reconstruct durable configuration and compose an executable runtime."""
+    """Reconstruct durable configuration and compose an executable runtime.
+
+    The semantic judge rotation is loaded but not resolved: judges are checked
+    only when a command asks the runtime for semantic judging, so an unusable
+    judge never blocks commands that do not judge semantically.
+    """
 
     workflows = WorkflowCatalogLoader(
         SQLiteWorkflowRepository(configuration.database)
@@ -63,6 +69,7 @@ def load_runtime(
         language_models=language_models,
         tools=tools,
         tool_implementations=tool_implementations,
+        judges=SQLiteJudgeRotationRepository(configuration.database).rotation(),
     )
 
 

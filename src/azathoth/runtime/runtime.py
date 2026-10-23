@@ -2,12 +2,22 @@
 
 from uuid import UUID
 
+from azathoth.evaluation import (
+    JudgeRotation,
+    OutcomeEvaluator,
+    SemanticEvaluator,
+    default_comparison_evaluators,
+)
 from azathoth.providers import (
+    LanguageModel,
     LanguageModelRegistry,
     ModelCatalog,
     ModelPortfolio,
 )
-from azathoth.runtime.exceptions import WorkflowNotConfiguredError
+from azathoth.runtime.exceptions import (
+    JudgeUnavailableError,
+    WorkflowNotConfiguredError,
+)
 from azathoth.tools import (
     ToolCatalog,
     ToolImplementationCatalog,
@@ -35,6 +45,7 @@ class AzathothRuntime:
         production_states: tuple[WorkflowProductionState, ...] = (),
         tools: ToolCatalog | None = None,
         tool_implementations: ToolImplementationCatalog | None = None,
+        judges: JudgeRotation | None = None,
     ) -> None:
         self._workflows = workflows
 
@@ -62,6 +73,8 @@ class AzathothRuntime:
         self._tool_resolver = ToolResolver(self._tools)
 
         self._tool_implementation_resolver = ToolImplementationResolver(self._tool_implementations)
+
+        self._judges = judges if judges is not None else JudgeRotation()
 
     @property
     def workflows(self) -> WorkflowCatalog:
@@ -137,6 +150,61 @@ class AzathothRuntime:
         """Return organizational model-selection authorization."""
 
         return self._portfolio
+
+    @property
+    def judges(
+        self,
+    ) -> JudgeRotation:
+        """Return the durable rotation of semantic judges."""
+
+        return self._judges
+
+    def outcome_evaluator(
+        self,
+        *,
+        semantic: bool = False,
+    ) -> OutcomeEvaluator:
+        """Return the evaluator that judges benchmark and experiment outcomes.
+
+        Deterministic comparisons are always supported. With `semantic`, the
+        judge rotation is resolved as well, and every judge must be authorized
+        in the model portfolio and currently available, so a semantic benchmark
+        never starts with a judge it cannot use. Without `semantic`, judges are
+        not resolved, so an unusable judge never blocks deterministic work.
+
+        Raises:
+            JudgeUnavailableError: Semantic judging was requested and the
+                rotation is empty, or a judge is not authorized or not
+                currently available.
+        """
+
+        if not semantic:
+            return OutcomeEvaluator()
+
+        if not self._judges.entries:
+            raise JudgeUnavailableError("No semantic judges are configured.")
+
+        models: dict[str, LanguageModel] = {}
+
+        for identifier in self._judges.identifiers:
+            if self._portfolio.get(identifier) is None:
+                raise JudgeUnavailableError(f"Judge model {identifier} is not authorized.")
+
+            language_model = self._language_models.get(identifier)
+
+            if self._models.get(identifier) is None or language_model is None:
+                raise JudgeUnavailableError(f"Judge model {identifier} is not currently available.")
+
+            models[identifier] = language_model
+
+        return OutcomeEvaluator(
+            default_comparison_evaluators(
+                semantic=SemanticEvaluator(
+                    rotation=self._judges,
+                    models=models,
+                ),
+            )
+        )
 
     def generate_workflow_candidate(
         self,

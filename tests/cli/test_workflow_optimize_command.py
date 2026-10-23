@@ -142,7 +142,7 @@ def test_optimize_rejects_empty_benchmark_before_runtime(
     assert captured.err == f"Benchmark {BENCHMARK_ID} has no cases.\n"
 
 
-def test_optimize_rejects_unsupported_comparison_before_runtime(
+def test_optimize_rejects_semantic_case_without_judges_before_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -170,7 +170,7 @@ def test_optimize_rejects_unsupported_comparison_before_runtime(
     assert captured.out == ""
     assert captured.err == (
         f"Benchmark case {SEMANTIC_CASE_ID} uses comparison 'semantic', "
-        "which is not supported yet.\n"
+        "but no judges are configured.\n"
     )
 
 

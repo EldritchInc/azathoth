@@ -103,6 +103,11 @@ azathoth
 │   ├── portfolio
 │   └── usage <MODEL_IDENTIFIER>
 │
+├── judge
+│   ├── add <MODEL_IDENTIFIER>
+│   ├── list
+│   └── remove <MODEL_IDENTIFIER>
+│
 ├── tool
 │   ├── import <FILE>
 │   ├── list
@@ -960,14 +965,25 @@ an unconfigured benchmark
 a benchmark with no cases
     Benchmark <BENCHMARK_ID> has no cases.
 
-a case whose comparison cannot be judged yet
-    Benchmark case <CASE_ID> uses comparison 'semantic', which is not supported yet.
+a semantic case while the judge rotation is empty
+    Benchmark case <CASE_ID> uses comparison 'semantic', but no judges are configured.
 
 a workflow without a declared result
     Workflow <WORKFLOW_ID> does not declare a result.
 ```
 
 Each prints its message to standard error and exits with status `1`.
+
+Once the runtime is loaded, and still before any candidate is generated, a
+benchmark with semantic cases requires every judge in the rotation to be
+authorized and currently available:
+
+```text
+Judge model <MODEL_IDENTIFIER> is not authorized.
+Judge model <MODEL_IDENTIFIER> is not currently available.
+```
+
+A benchmark without semantic cases never checks the judges.
 
 # Benchmark-Driven Judging
 
@@ -1961,6 +1977,18 @@ dependent production workflows on standard error as a warning.
 
 Only active production blocks deauthorization.
 
+# Deauthorization Is Guarded by the Judge Rotation
+
+A model in the semantic judge rotation cannot be deauthorized, even with
+`--force`, because every judge must be authorized:
+
+```text
+Model 'openrouter/some-model' is a semantic judge and was not deauthorized.
+Remove it from the rotation first with: azathoth judge remove openrouter/some-model
+```
+
+The rotation is checked before production dependents.
+
 Configured workflows that pin the model, and historical runs that executed it,
 do not. Use `model usage` to inspect those before deauthorizing.
 
@@ -2150,6 +2178,87 @@ azathoth goal list
 azathoth goal show <GOAL_ID>
 ```
 
+# Judge Commands
+
+Semantic benchmark cases are judged by a durable rotation of language-model
+judges. The `judge` command family operates that rotation:
+
+```bash
+azathoth judge add <MODEL_IDENTIFIER>
+azathoth judge list
+azathoth judge remove <MODEL_IDENTIFIER>
+```
+
+# Add a Judge
+
+```bash
+azathoth judge add <MODEL_IDENTIFIER>
+```
+
+appends one model to the end of the rotation:
+
+```text
+Added judge <MODEL_IDENTIFIER>.
+```
+
+Judges see benchmark data, so a judge must be a model the organization has
+authorized, exactly like any model a workflow may select. Adding loads the
+runtime and requires the model to be currently available and authorized:
+
+```text
+Model '<MODEL_IDENTIFIER>' is not currently available.
+Model '<MODEL_IDENTIFIER>' is not authorized.
+Judge '<MODEL_IDENTIFIER>' is already in the rotation.
+```
+
+A rotation of one judge is valid.
+
+# List and Remove Judges
+
+```bash
+azathoth judge list
+```
+
+prints the rotation in order, one identifier per line, and prints nothing for
+an empty rotation.
+
+```bash
+azathoth judge remove <MODEL_IDENTIFIER>
+```
+
+removes one judge:
+
+```text
+Removed judge <MODEL_IDENTIFIER>.
+Judge '<MODEL_IDENTIFIER>' is not in the rotation.
+```
+
+`judge list` and `judge remove` read and write durable state only. They need
+no provider credentials, so a judge whose model is no longer available can
+still be removed.
+
+# How Judges Are Used
+
+Each semantic case is assigned a first judge by a stable hash of its
+expectation, so every candidate judged on that case meets the same judge and
+rankings compare like with like. If that judge errors or replies without a
+usable verdict, the next judge in rotation order is tried.
+
+When every judge fails, the command stops with exit status `1` rather than
+recording a failed case, because a judge outage is a failure of Azathoth, not
+of the candidate:
+
+```text
+Semantic judging failed with every judge: <judge> raised RuntimeError: down.
+```
+
+Judge calls are Azathoth's own cost. They are recorded in each semantic
+evaluation's evidence, shown by `run show`, and never charged to a workflow
+run, a benchmark total, or a scorecard.
+
+Changing the rotation changes how cases are assigned to judges, so compare
+results produced under the same rotation.
+
 # Benchmark Commands
 
 The benchmark command family manages durable benchmark datasets and evaluates
@@ -2216,6 +2325,37 @@ Total Tokens: 412
 Total Latency: 2310 ms
 Total Cost: $0.000180
 ```
+
+# Semantic Benchmark Cases
+
+A case with comparison `semantic` is judged by the judge rotation.
+
+Before the runtime loads, `benchmark run` and `benchmark compare` reject a
+semantic case while the rotation is empty:
+
+```text
+Benchmark case <CASE_ID> uses comparison 'semantic', but no judges are configured.
+```
+
+After the runtime loads, and before any case executes, every judge must be
+authorized and currently available. A benchmark without semantic cases never
+checks the judges, so an unusable judge never blocks deterministic work.
+
+When any case was judged semantically, `benchmark run` reports judging after
+the workflow's own totals, kept apart because it is not the workflow's cost:
+
+```text
+Passed (semantic): 3/3
+Run failures: 0
+Total Tokens: 96
+Total Latency: 1840 ms
+Total Cost: $0.000120
+Judge Calls: 3
+Judge Cost: $0.000450
+```
+
+`Judge Calls` counts every judge call, including fallbacks after a failed or
+unusable reply.
 
 Benchmarking executes configured workflows.
 
@@ -2297,6 +2437,20 @@ The exact cases demand the bare lowercase label. The normalized cases accept
 any letter case and surrounding whitespace. The schema case accepts either
 label for neutral text, so it checks the answer's form rather than its
 judgment.
+
+`examples/benchmarks/classify-sentiment-semantic.json` judges the same
+workflow by meaning. Its three semantic cases need at least one authorized
+judge:
+
+```bash
+azathoth model authorize <JUDGE_MODEL_IDENTIFIER>
+azathoth judge add <JUDGE_MODEL_IDENTIFIER>
+
+azathoth benchmark import examples/benchmarks/classify-sentiment-semantic.json
+
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f22-000000000000 \
+    --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
 
 # CLI JSON Arguments
 

@@ -4,6 +4,7 @@ import sys
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.evaluation import SQLiteJudgeRotationRepository
 from azathoth.providers import (
     ModelCapability,
     ModelMetadata,
@@ -117,6 +118,10 @@ def deauthorize_model(
     Deauthorization is refused while active production holds the model as a
     primary or approved substitute, because those workflows would lose a model
     they are pinned to. Forcing proceeds anyway and reports the dependents.
+
+    Deauthorization is always refused, even when forced, while the model is in
+    the semantic judge rotation: judges must be authorized, so the judge must
+    be removed from the rotation first.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -125,6 +130,24 @@ def deauthorize_model(
     if runtime.portfolio.get(identifier) is None:
         print(
             f"Model {identifier!r} is not authorized.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    if (
+        SQLiteJudgeRotationRepository(
+            configuration.database,
+        ).get(identifier)
+        is not None
+    ):
+        print(
+            f"Model {identifier!r} is a semantic judge and was not deauthorized.",
+            file=sys.stderr,
+        )
+
+        print(
+            f"Remove it from the rotation first with: azathoth judge remove {identifier}",
             file=sys.stderr,
         )
 

@@ -18,6 +18,7 @@ from azathoth.cli.dispatching import (
     dispatch_experiment_command,
     dispatch_goal_command,
     dispatch_invocation_command,
+    dispatch_judge_command,
     dispatch_model_command,
     dispatch_run_command,
     dispatch_tool_command,
@@ -32,6 +33,11 @@ from azathoth.cli.goals import (
     list_goals,
     show_goal,
 )
+from azathoth.cli.judges import (
+    add_judge,
+    list_judges,
+    remove_judge,
+)
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
@@ -45,6 +51,7 @@ from azathoth.cli.parsing import (
     EXPERIMENT_COMMAND,
     GOAL_COMMAND,
     INVOCATION_COMMAND,
+    JUDGE_COMMAND,
     MODEL_COMMAND,
     RUN_COMMAND,
     TOOL_COMMAND,
@@ -186,6 +193,14 @@ def _dispatch(
             list_portfolio_models=list_portfolio_models,
             model_usage=model_usage,
             show_model=show_model,
+        )
+
+    if command == JUDGE_COMMAND:
+        return dispatch_judge_command(
+            arguments,
+            add_judge=add_judge,
+            list_judges=list_judges,
+            remove_judge=remove_judge,
         )
 
     if command == TOOL_COMMAND:

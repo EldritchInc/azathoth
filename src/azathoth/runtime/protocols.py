@@ -3,6 +3,10 @@
 from typing import Protocol
 from uuid import UUID
 
+from azathoth.evaluation import (
+    JudgeRotation,
+    OutcomeEvaluator,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -72,6 +76,23 @@ class RuntimeEnvironment(Protocol):
         self,
     ) -> ToolImplementationResolver:
         """Return implementation resolution for configured tools."""
+
+        ...
+
+    @property
+    def judges(
+        self,
+    ) -> JudgeRotation:
+        """Return the durable rotation of semantic judges."""
+
+        ...
+
+    def outcome_evaluator(
+        self,
+        *,
+        semantic: bool = False,
+    ) -> OutcomeEvaluator:
+        """Return the evaluator that judges outcomes, with judges when requested."""
 
         ...
 

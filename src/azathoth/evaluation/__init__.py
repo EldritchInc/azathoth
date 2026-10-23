@@ -21,9 +21,19 @@ from azathoth.evaluation.json_schema import (
     json_schema_validator,
     json_schema_violations,
 )
+from azathoth.evaluation.judge_repository import JudgeRotationRepository
+from azathoth.evaluation.judges import (
+    JudgeEntry,
+    JudgeRotation,
+    expectation_hash,
+)
 from azathoth.evaluation.memory_benchmark_repository import (
     InMemoryBenchmarkRepository,
     require_benchmark_repository,
+)
+from azathoth.evaluation.memory_judge_repository import (
+    InMemoryJudgeRotationRepository,
+    require_judge_rotation_repository,
 )
 from azathoth.evaluation.models import (
     EvaluationEvidence,
@@ -44,11 +54,27 @@ from azathoth.evaluation.outcome import (
 )
 from azathoth.evaluation.protocols import Evaluator, EvaluatorMetadata
 from azathoth.evaluation.schema import SchemaEvaluator
+from azathoth.evaluation.semantic import (
+    SEMANTIC_EVALUATOR_NAME,
+    SEMANTIC_EVALUATOR_VERSION,
+    InvalidJudgeResponseError,
+    SemanticEvaluator,
+    SemanticJudgingError,
+    judge_call_count,
+    judge_calls_cost_usd,
+    parse_judge_verdict,
+    semantic_judge_prompt,
+)
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
 )
+from azathoth.evaluation.sqlite_judge_repository import (
+    SQLiteJudgeRotationRepository,
+)
 
 __all__ = [
+    "SEMANTIC_EVALUATOR_NAME",
+    "SEMANTIC_EVALUATOR_VERSION",
     "BenchmarkCase",
     "BenchmarkCatalog",
     "BenchmarkCatalogLoader",
@@ -63,23 +89,37 @@ __all__ = [
     "ExactMatchEvaluator",
     "ExpectedOutcome",
     "InMemoryBenchmarkRepository",
+    "InvalidJudgeResponseError",
+    "InMemoryJudgeRotationRepository",
     "JsonDifference",
     "JsonSchemaViolation",
+    "JudgeEntry",
+    "JudgeRotation",
+    "JudgeRotationRepository",
     "NormalizedMatchEvaluator",
     "OutcomeComparison",
     "OutcomeEvaluator",
     "SQLiteBenchmarkRepository",
+    "SQLiteJudgeRotationRepository",
     "SchemaEvaluator",
+    "SemanticEvaluator",
+    "SemanticJudgingError",
     "UnsupportedComparisonError",
     "decode_benchmark_document",
     "default_comparison_evaluators",
     "encode_benchmark_document",
+    "expectation_hash",
     "first_json_difference",
     "json_schema_validator",
     "json_schema_violations",
     "json_type_name",
+    "judge_call_count",
+    "judge_calls_cost_usd",
     "json_values_equal",
     "normalize_json_value",
     "normalize_text",
+    "parse_judge_verdict",
     "require_benchmark_repository",
+    "require_judge_rotation_repository",
+    "semantic_judge_prompt",
 ]

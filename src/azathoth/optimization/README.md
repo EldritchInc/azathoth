@@ -640,6 +640,19 @@ reliability score still reflects the failed steps.
 A generation in which every run failed ranks and records normally, with zero
 quality throughout, so the session continues and the evidence is preserved.
 
+## Semantic Judging Is Azathoth's Cost
+
+Benchmarks may judge cases semantically with the durable judge rotation.
+Every candidate meets the same judge on a given case, so rankings compare
+candidates under the same judge.
+
+Judge calls are recorded as evaluation evidence and never enter a candidate's
+run, so they never change a candidate's latency or cost score. Optimizing
+against an expensive judge and a free one produces the same scorecards.
+
+A judging failure stops the session rather than scoring a candidate down,
+because a judge outage is not the candidate's fault.
+
 ## Strategy-Level Optimization
 
 The optimization package also contains a lower-level empirical optimization

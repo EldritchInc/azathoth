@@ -4,7 +4,7 @@ from uuid import UUID
 
 from azathoth.evaluation import (
     BenchmarkDataset,
-    OutcomeEvaluator,
+    OutcomeComparison,
 )
 from azathoth.optimization import (
     ModelSubstitutionWorkflowOptimizer,
@@ -34,9 +34,11 @@ async def optimize_configured_workflow(
 
     Every generation runs each candidate against every benchmark case and
     judges the workflow's declared result with each case's own comparison. A
-    workflow without a declared result, an empty benchmark, and an
-    unsupported comparison are all rejected before any candidate is generated
-    or executed.
+    workflow without a declared result, an empty benchmark, an unsupported
+    comparison, and an unusable judge for a semantic case are all rejected
+    before any candidate is generated or executed. Semantic cases are judged
+    by the runtime's judge rotation; judge cost is recorded as evaluation
+    evidence and never charged to a candidate.
 
     When a recorder is supplied, every generation's candidate runs,
     evaluations, and experiment record are persisted as durable evidence.
@@ -46,6 +48,8 @@ async def optimize_configured_workflow(
         UnsupportedComparisonError: A benchmark case uses a comparison with
             no evaluator.
         WorkflowResultError: The configured workflow declares no result.
+        JudgeUnavailableError: The benchmark has semantic cases and a judge
+            cannot be used.
     """
 
     specification = runtime.workflows.get(
@@ -58,7 +62,9 @@ async def optimize_configured_workflow(
     if not dataset.cases:
         raise ValueError(f"Benchmark {dataset.id} has no cases.")
 
-    evaluator = OutcomeEvaluator()
+    evaluator = runtime.outcome_evaluator(
+        semantic=dataset.uses_comparison(OutcomeComparison.SEMANTIC),
+    )
 
     for case in dataset.cases:
         evaluator.require_supported(

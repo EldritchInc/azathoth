@@ -76,10 +76,13 @@ The V1 evaluation package exports:
 
 ```python
 from azathoth.evaluation import (
+    SEMANTIC_EVALUATOR_NAME,
+    SEMANTIC_EVALUATOR_VERSION,
     BenchmarkCase,
     BenchmarkCatalog,
     BenchmarkCatalogLoader,
     BenchmarkDataset,
+    BenchmarkDocumentError,
     BenchmarkRepository,
     EvaluationEvidence,
     EvaluationResult,
@@ -89,23 +92,39 @@ from azathoth.evaluation import (
     ExactMatchEvaluator,
     ExpectedOutcome,
     InMemoryBenchmarkRepository,
+    InvalidJudgeResponseError,
+    InMemoryJudgeRotationRepository,
     JsonDifference,
     JsonSchemaViolation,
+    JudgeEntry,
+    JudgeRotation,
+    JudgeRotationRepository,
     NormalizedMatchEvaluator,
     OutcomeComparison,
     OutcomeEvaluator,
     SQLiteBenchmarkRepository,
+    SQLiteJudgeRotationRepository,
     SchemaEvaluator,
+    SemanticEvaluator,
+    SemanticJudgingError,
     UnsupportedComparisonError,
+    decode_benchmark_document,
     default_comparison_evaluators,
+    encode_benchmark_document,
+    expectation_hash,
     first_json_difference,
     json_schema_validator,
     json_schema_violations,
     json_type_name,
+    judge_call_count,
+    judge_calls_cost_usd,
     json_values_equal,
     normalize_json_value,
     normalize_text,
+    parse_judge_verdict,
     require_benchmark_repository,
+    require_judge_rotation_repository,
+    semantic_judge_prompt,
 )
 ```
 
@@ -191,7 +210,7 @@ schema
     a JSON Schema the output must satisfy
 
 semantic
-    the expected meaning (judged in a later release)
+    the expected meaning, judged by a language-model judge
 ```
 
 # OutcomeComparison
@@ -268,7 +287,8 @@ ExpectedOutcome.comparison
         ├── exact       → ExactMatchEvaluator
         ├── normalized  → NormalizedMatchEvaluator
         ├── schema      → SchemaEvaluator
-        └── semantic    → UnsupportedComparisonError
+        └── semantic    → SemanticEvaluator, when judges are supplied
+                          UnsupportedComparisonError, otherwise
 ```
 
 It is the default evaluator for benchmark execution and configured workflow
@@ -276,19 +296,24 @@ optimization.
 
 The delegated evaluator produces the result, so recorded evaluations name the
 evaluator that actually judged the output (`exact-match`, `normalized-match`,
-`json-schema`), never the router.
+`json-schema`, `semantic-judge`), never the router.
 
-The built-in mapping is returned by `default_comparison_evaluators()`. Callers
-may supply their own mapping:
+The built-in mapping is returned by `default_comparison_evaluators()`. It
+covers exact, normalized, and schema comparisons, and includes semantic
+comparisons only when a semantic evaluator is supplied:
 
 ```python
 OutcomeEvaluator(
-    {
-        OutcomeComparison.EXACT: ExactMatchEvaluator(),
-        OutcomeComparison.SEMANTIC: custom_semantic_evaluator,
-    }
+    default_comparison_evaluators(
+        semantic=SemanticEvaluator(
+            rotation=rotation,
+            models=judge_models,
+        ),
+    )
 )
 ```
+
+Callers may also supply their own mapping entirely.
 
 # Unsupported Comparisons Are Rejected
 
@@ -299,7 +324,9 @@ A comparison with no evaluator raises `UnsupportedComparisonError`, a
 <subject> uses comparison 'semantic', which is not supported yet.
 ```
 
-It is never judged by a substitute evaluator.
+It is never judged by a substitute evaluator. Semantic comparisons are
+unsupported whenever no semantic evaluator was supplied, which is how an
+evaluator without judges rejects them.
 
 `supports(comparison)` and `require_supported(comparison, subject=...)` let
 callers check comparisons before doing any work. Benchmark execution checks
@@ -891,6 +918,122 @@ name = "json-schema"
 
 version = "1.0.0"
 ```
+
+# SemanticEvaluator
+
+`SemanticEvaluator` judges whether an actual value means what the expected
+value means. It is named `semantic-judge` and versioned `1.0.0`.
+
+A language-model judge receives one fixed prompt containing the expectation's
+description, the expected value as JSON, and the actual value as JSON. It must
+reply with one JSON object and no other text:
+
+```json
+{"verdict": "pass", "reason": "<one sentence>"}
+```
+
+The verdict is binary, like every other comparison, so semantic results sit in
+the same per-comparison pass counts as exact, normalized, and schema results:
+
+```text
+pass ──► score 1.0, threshold 1.0, PASSED
+fail ──► score 0.0, threshold 1.0, FAILED
+```
+
+One surrounding Markdown code fence and surrounding whitespace are tolerated.
+Anything else that is not a usable verdict, such as text that is not JSON,
+a verdict other than lowercase `pass` or `fail`, or a missing or blank reason,
+is an invalid reply.
+
+# The Judge Rotation
+
+Judges come from a durable, ordered `JudgeRotation` of `JudgeEntry` models,
+each identified as `<provider>/<model>`. A rotation of one judge is valid.
+
+The rotation is persisted through `JudgeRotationRepository` implementations,
+`InMemoryJudgeRotationRepository` and `SQLiteJudgeRotationRepository`, which
+keep judges in the order they were added and reject duplicates:
+
+```text
+Judge '<IDENTIFIER>' is already in the rotation.
+Judge '<IDENTIFIER>' is not in the rotation.
+```
+
+# Judges Are Assigned Per Expectation
+
+`rotation.judges_for(expected)` returns every judge in the order it should try
+one expectation. The first judge is chosen by a stable hash of the expectation:
+
+```text
+sha256(canonical JSON of description, value, comparison) mod judge count
+```
+
+The rest follow in rotation order, wrapping around.
+
+Assignment depends only on the expectation, never on the candidate or on call
+order, so every candidate judged against the same benchmark case meets the
+same judge first. Rankings compare candidates under the same judge rather
+than letting judge-to-judge variance leak into the comparison.
+
+The hash ignores object key order and is identical across processes and
+platforms. Adding or removing a judge changes the judge count and therefore
+reassigns cases, which is a configuration change like any other.
+
+# Judge Fallback
+
+A judge that raises, or replies without a usable verdict, is followed by the
+next judge in its try order. The first usable verdict decides the evaluation.
+
+```text
+assigned judge ──► error or invalid reply
+next judge     ──► usable verdict ──► evaluation
+```
+
+Every judge receives the identical prompt.
+
+# Judging Failures Are Not Candidate Failures
+
+When every judge fails, `SemanticEvaluator` raises `SemanticJudgingError`, a
+`ValueError`, naming every attempt:
+
+```text
+Semantic judging failed with every judge: <judge> raised RuntimeError: down; <judge> replied without a usable verdict: reply is not JSON.
+```
+
+A judging failure is an infrastructure failure of Azathoth itself, not of the
+judged candidate. It is never recorded as a failed case: the command running
+the benchmark stops instead, so a judge outage can never corrupt a ranking.
+
+# SemanticEvaluator Evidence
+
+A semantic evaluation records:
+
+```text
+expected        the expected value
+actual          the judged value
+judge           the judge whose verdict decided the evaluation
+verdict         pass or fail
+judge_reason    the judge's one-sentence reason
+judge_calls     every call made, in order
+```
+
+Each judge call records its judge, its status (`verdict`, `invalid_response`,
+or `error`), a detail for failed calls, and its usage: prompt, completion, and
+total tokens, latency, and estimated cost. A call that raised before replying
+records no usage and costs nothing.
+
+`judge_call_count(evaluation)` and `judge_calls_cost_usd(evaluation)` read that
+evidence. Both return zero for evaluations by any other evaluator.
+
+# Judge Cost Is Not Candidate Cost
+
+Judging is the cost of running Azathoth, not the cost of the workflow being
+judged.
+
+Judge calls are recorded only as evaluation evidence. They are never part of
+a `WorkflowRun`, so they never enter a run's cost, a benchmark's total cost,
+or any scorecard's latency or cost dimension. Benchmark results report them
+separately as `judge_calls` and `judge_cost_usd`.
 
 # Evaluation Is Not Execution
 

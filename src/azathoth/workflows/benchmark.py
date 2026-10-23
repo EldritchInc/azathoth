@@ -12,6 +12,8 @@ from azathoth.evaluation import (
     EvaluationResult,
     OutcomeComparison,
     OutcomeEvaluator,
+    judge_call_count,
+    judge_calls_cost_usd,
 )
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.execution import WorkflowRun
@@ -90,6 +92,28 @@ class WorkflowBenchmarkResult(BaseModel):
         return sum(
             case.evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME for case in self.cases
         )
+
+    @property
+    def judged_semantically(self) -> bool:
+        """Return whether any executed case used the semantic comparison."""
+
+        return any(case.comparison is OutcomeComparison.SEMANTIC for case in self.cases)
+
+    @property
+    def judge_calls(self) -> int:
+        """Return how many semantic judge calls the benchmark made."""
+
+        return sum(judge_call_count(case.evaluation) for case in self.cases)
+
+    @property
+    def judge_cost_usd(self) -> float:
+        """Return the semantic judges' cost, which is never charged to the workflow.
+
+        Judging is the cost of running Azathoth itself, so it is reported here
+        and never added to any run's cost or to `total_cost_usd`.
+        """
+
+        return sum(judge_calls_cost_usd(case.evaluation) for case in self.cases)
 
     @property
     def accuracy(self) -> float:

@@ -32,14 +32,28 @@ class UnsupportedComparisonError(ValueError):
         )
 
 
-def default_comparison_evaluators() -> dict[OutcomeComparison, Evaluator]:
-    """Return the built-in evaluator for every supported comparison."""
+def default_comparison_evaluators(
+    *,
+    semantic: Evaluator | None = None,
+) -> dict[OutcomeComparison, Evaluator]:
+    """Return the built-in evaluator for every supported comparison.
 
-    return {
+    Exact, normalized, and schema comparisons are always supported. Semantic
+    comparisons need language-model judges, so they are supported only when a
+    semantic evaluator is supplied; without one they stay unsupported and are
+    rejected before any work starts.
+    """
+
+    evaluators: dict[OutcomeComparison, Evaluator] = {
         OutcomeComparison.EXACT: ExactMatchEvaluator(),
         OutcomeComparison.NORMALIZED: NormalizedMatchEvaluator(),
         OutcomeComparison.SCHEMA: SchemaEvaluator(),
     }
+
+    if semantic is not None:
+        evaluators[OutcomeComparison.SEMANTIC] = semantic
+
+    return evaluators
 
 
 class OutcomeEvaluator:
