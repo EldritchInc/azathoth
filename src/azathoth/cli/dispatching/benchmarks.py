@@ -13,6 +13,10 @@ from azathoth.cli.parsing import (
     BENCHMARK_CASES_ACTION,
     BENCHMARK_COMPARE_ACTION,
     BENCHMARK_DOCUMENT_ATTRIBUTE,
+    BENCHMARK_EXECUTION_ID_ATTRIBUTE,
+    BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE,
+    BENCHMARK_EXECUTION_SHOW_ACTION,
+    BENCHMARK_EXECUTIONS_ACTION,
     BENCHMARK_ID_ATTRIBUTE,
     BENCHMARK_IMPORT_ACTION,
     BENCHMARK_LIST_ACTION,
@@ -30,6 +34,7 @@ BenchmarkListHandler = Callable[[], int]
 BenchmarkImportHandler = Callable[[Path], int]
 BenchmarkRunHandler = Callable[..., int]
 BenchmarkCompareHandler = Callable[..., int]
+BenchmarkExecutionListHandler = Callable[..., int]
 
 
 def dispatch_benchmark_command(
@@ -38,10 +43,12 @@ def dispatch_benchmark_command(
     compare_benchmarks: BenchmarkCompareHandler,
     import_benchmark: BenchmarkImportHandler,
     list_benchmark_cases: BenchmarkIdentifierHandler,
+    list_benchmark_executions: BenchmarkExecutionListHandler,
     list_benchmarks: BenchmarkListHandler,
     run_benchmark: BenchmarkRunHandler,
     show_benchmark: BenchmarkIdentifierHandler,
     show_benchmark_case: BenchmarkCaseHandler,
+    show_benchmark_execution: BenchmarkIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed benchmark command."""
 
@@ -158,6 +165,36 @@ def dispatch_benchmark_command(
                     TARGET_COST_ATTRIBUTE,
                 ),
             ),
+        )
+
+    if action == BENCHMARK_EXECUTIONS_ACTION:
+        return list_benchmark_executions(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == BENCHMARK_EXECUTION_SHOW_ACTION:
+        return show_benchmark_execution(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_EXECUTION_ID_ATTRIBUTE,
+                ),
+            )
         )
 
     return None

@@ -6,6 +6,7 @@ from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
+from azathoth.cli.parsing.common import positive_integer
 from azathoth.cli.parsing.workflows import (
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
@@ -19,6 +20,8 @@ BENCHMARK_ACTION_ATTRIBUTE = "benchmark_action"
 BENCHMARK_CASES_ACTION = "cases"
 BENCHMARK_CASE_SHOW_ACTION = "case-show"
 BENCHMARK_COMPARE_ACTION = "compare"
+BENCHMARK_EXECUTION_SHOW_ACTION = "execution-show"
+BENCHMARK_EXECUTIONS_ACTION = "executions"
 BENCHMARK_IMPORT_ACTION = "import"
 BENCHMARK_LIST_ACTION = "list"
 BENCHMARK_RUN_ACTION = "run"
@@ -27,6 +30,8 @@ BENCHMARK_SHOW_ACTION = "show"
 BENCHMARK_DOCUMENT_ATTRIBUTE = "benchmark_document"
 BENCHMARK_ID_ATTRIBUTE = "benchmark_id"
 BENCHMARK_CASE_ID_ATTRIBUTE = "benchmark_case_id"
+BENCHMARK_EXECUTION_ID_ATTRIBUTE = "benchmark_execution_id"
+BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE = "benchmark_execution_limit"
 BENCHMARK_WORKFLOW_IDS_ATTRIBUTE = "workflow_ids"
 
 
@@ -163,4 +168,37 @@ def add_benchmark_parser(
         required=True,
         metavar="USD",
         help="Target workflow execution cost in USD.",
+    )
+
+    benchmark_executions_parser = benchmark_actions.add_parser(
+        BENCHMARK_EXECUTIONS_ACTION,
+        help="List saved runs and comparisons of one benchmark, newest first.",
+    )
+
+    benchmark_executions_parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID whose executions to list.",
+    )
+
+    benchmark_executions_parser.add_argument(
+        "--limit",
+        dest=BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent executions to list.",
+    )
+
+    benchmark_execution_show_parser = benchmark_actions.add_parser(
+        BENCHMARK_EXECUTION_SHOW_ACTION,
+        help="Show one saved benchmark run or comparison with every case.",
+    )
+
+    benchmark_execution_show_parser.add_argument(
+        BENCHMARK_EXECUTION_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="EXECUTION_ID",
+        help="Benchmark execution UUID to inspect.",
     )

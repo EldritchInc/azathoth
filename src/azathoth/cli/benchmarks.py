@@ -19,6 +19,8 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
     render_workflow_benchmark_comparison_execution,
+    render_workflow_benchmark_execution,
+    render_workflow_benchmark_execution_summaries,
     render_workflow_benchmark_result,
 )
 from azathoth.evaluation import (
@@ -452,6 +454,84 @@ def compare_benchmarks(
     return 0
 
 
+def list_benchmark_executions(
+    benchmark_id: UUID,
+    *,
+    limit: int | None = None,
+) -> int:
+    """List saved runs and comparisons of one benchmark, newest first.
+
+    Executions are listed for benchmarks that are configured or that have
+    saved executions, so executions of a benchmark since removed remain
+    inspectable. An identifier with neither fails, so a mistyped identifier
+    is not mistaken for a benchmark that never ran. Only durable state is
+    read, so no provider credentials are needed.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    executions = SQLiteWorkflowBenchmarkExecutionRepository(
+        configuration.database,
+    ).executions_for_benchmark(benchmark_id)
+
+    if (
+        not executions
+        and SQLiteBenchmarkRepository(
+            configuration.database,
+        ).get(benchmark_id)
+        is None
+    ):
+        print(
+            f"Benchmark dataset {benchmark_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    newest_first = sorted(
+        reversed(executions),
+        key=lambda execution: execution.recorded_at,
+        reverse=True,
+    )
+
+    if limit is not None:
+        newest_first = newest_first[:limit]
+
+    if not newest_first:
+        return 0
+
+    print(render_workflow_benchmark_execution_summaries(newest_first))
+
+    return 0
+
+
+def show_benchmark_execution(
+    execution_id: UUID,
+) -> int:
+    """Show one saved benchmark run or comparison with every candidate and case.
+
+    Only durable state is read, so no provider credentials are needed.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    execution = SQLiteWorkflowBenchmarkExecutionRepository(
+        configuration.database,
+    ).get(execution_id)
+
+    if execution is None:
+        print(
+            f"Benchmark execution {execution_id} was not found.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(render_workflow_benchmark_execution(execution))
+
+    return 0
+
+
 def _benchmark_recorder(
     configuration: CliRuntimeConfiguration,
 ) -> WorkflowBenchmarkEvidenceRecorder:
@@ -474,8 +554,10 @@ __all__ = [
     "compare_benchmarks",
     "import_benchmark",
     "list_benchmark_cases",
+    "list_benchmark_executions",
     "list_benchmarks",
     "render_workflow_benchmark_result",
     "show_benchmark",
     "show_benchmark_case",
+    "show_benchmark_execution",
 ]
