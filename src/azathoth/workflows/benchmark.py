@@ -23,12 +23,17 @@ from azathoth.workflows.result import (
     WorkflowResultError,
     workflow_result,
 )
+from azathoth.workflows.run_failure import (
+    RUN_FAILURE_EVALUATOR_NAME,
+    evaluate_failed_run,
+)
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.scorecard import WorkflowScorecard
 from azathoth.workflows.scoring import (
     WorkflowScorer,
     WorkflowScoringPolicy,
 )
+from azathoth.workflows.value import WorkflowValueReference
 
 
 class WorkflowBenchmarkCaseResult(BaseModel):
@@ -71,6 +76,19 @@ class WorkflowBenchmarkResult(BaseModel):
         """Return the number of benchmark cases that passed evaluation."""
 
         return sum(case.evaluation.passed for case in self.cases)
+
+    @property
+    def run_failures(self) -> int:
+        """Return the number of cases judged as failed runs.
+
+        A case is a run failure when its run failed without producing the
+        declared result. Runs whose steps failed but which still produced the
+        declared result are judged normally and are not counted here.
+        """
+
+        return sum(
+            case.evaluation.evaluator_name == RUN_FAILURE_EVALUATOR_NAME for case in self.cases
+        )
 
     @property
     def accuracy(self) -> float:
@@ -253,11 +271,18 @@ class WorkflowBenchmarkRunner:
         case executes, so a dataset containing an unsupported comparison never
         partially runs.
 
+        Failed runs never abort the benchmark. A run that produced its declared
+        result is judged on it even when some of its steps failed, because
+        workflows may tolerate step failures by design. A failed run that did
+        not produce its declared result is recorded with a failing run-failure
+        evaluation.
+
         Raises:
             UnsupportedComparisonError: A case uses a comparison with no
                 evaluator.
-            WorkflowResultError: A candidate declares no result, or a run did
-                not produce its declared result exactly once.
+            WorkflowResultError: A candidate declares no result, a successful
+                run did not produce its declared result, or a run produced it
+                more than once.
         """
 
         for case in dataset.cases:
@@ -287,22 +312,15 @@ class WorkflowBenchmarkRunner:
                 )
             )
 
-            run = await self._runner.run(
+            run = await self._runner.run_recording_failures(
                 candidate,
                 context,
             )
 
-            try:
-                actual = workflow_result(
-                    run,
-                    candidate.result,
-                )
-            except WorkflowResultError as exc:
-                raise WorkflowResultError(f"Benchmark case {case.id}: {exc}") from exc
-
-            evaluation = await self._evaluator.evaluate(
-                case.expected,
-                actual,
+            evaluation = await self._evaluate_case(
+                case=case,
+                run=run,
+                result=candidate.result,
             )
 
             results.append(
@@ -317,6 +335,46 @@ class WorkflowBenchmarkRunner:
         return WorkflowBenchmarkResult(
             dataset_id=dataset.id,
             cases=tuple(results),
+        )
+
+    async def _evaluate_case(
+        self,
+        *,
+        case: BenchmarkCase,
+        run: WorkflowRun,
+        result: WorkflowValueReference,
+    ) -> EvaluationResult:
+        """Judge one case's run on its declared result.
+
+        Raises:
+            WorkflowResultError: A successful run did not produce its declared
+                result, or a run produced it more than once.
+        """
+
+        produced = any(
+            value.name == result.name
+            for value in run.values_from(
+                result.producer_step_id,
+            )
+        )
+
+        if run.failed and not produced:
+            return evaluate_failed_run(
+                run,
+                case.expected,
+            )
+
+        try:
+            actual = workflow_result(
+                run,
+                result,
+            )
+        except WorkflowResultError as exc:
+            raise WorkflowResultError(f"Benchmark case {case.id}: {exc}") from exc
+
+        return await self._evaluator.evaluate(
+            case.expected,
+            actual,
         )
 
 

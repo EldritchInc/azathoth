@@ -16,7 +16,9 @@ def render_workflow_benchmark_result(
     """Render aggregate workflow benchmark evidence.
 
     Pass counts are broken down by comparison after overall accuracy, so
-    benchmarks mixing comparisons show which kind of case is failing.
+    benchmarks mixing comparisons show which kind of case is failing. The
+    run-failure count follows, so failed runs are told apart from wrong
+    answers.
     """
 
     return "\n".join(
@@ -30,6 +32,7 @@ def render_workflow_benchmark_result(
                 f"Passed ({tally.comparison.value}): {tally.cases_passed}/{tally.cases_run}"
                 for tally in result.comparison_tallies
             ),
+            f"Run failures: {result.run_failures}",
             f"Total Tokens: {result.total_tokens}",
             f"Total Latency: {result.total_latency_ms} ms",
             f"Total Cost: ${result.total_cost_usd:.6f}",
