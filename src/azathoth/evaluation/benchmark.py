@@ -40,6 +40,14 @@ class BenchmarkDataset(BaseModel):
 
         return self
 
+    def uses_comparison(
+        self,
+        comparison: OutcomeComparison,
+    ) -> bool:
+        """Return whether any case is judged with one comparison."""
+
+        return any(case.expected.comparison is comparison for case in self.cases)
+
     def comparison_counts(
         self,
     ) -> dict[OutcomeComparison, int]:

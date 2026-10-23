@@ -29,7 +29,10 @@ from azathoth.cli.workflow_configuration import (
     list_workflows,
     show_workflow,
 )
-from azathoth.runtime import WorkflowNotConfiguredError
+from azathoth.runtime import (
+    JudgeUnavailableError,
+    WorkflowNotConfiguredError,
+)
 from azathoth.workflows import (
     ProductionInvocationFailure,
     SQLiteProductionInvocationRepository,
@@ -210,7 +213,10 @@ def optimize_workflow(
     if not benchmark_has_cases(dataset):
         return 1
 
-    if not comparisons_supported(dataset):
+    if not comparisons_supported(
+        configuration,
+        dataset,
+    ):
         return 1
 
     if not results_declared(
@@ -248,6 +254,7 @@ def optimize_workflow(
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
+        JudgeUnavailableError,
         ValueError,
     ) as exc:
         print(

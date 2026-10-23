@@ -25,11 +25,15 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
     BenchmarkDocumentError,
+    SemanticJudgingError,
     SQLiteBenchmarkRepository,
     UnsupportedComparisonError,
     decode_benchmark_document,
 )
-from azathoth.runtime import WorkflowNotConfiguredError
+from azathoth.runtime import (
+    JudgeUnavailableError,
+    WorkflowNotConfiguredError,
+)
 from azathoth.workflows import (
     WorkflowGenerationError,
     WorkflowResultError,
@@ -302,7 +306,10 @@ def run_benchmark(
     if dataset is None:
         return 1
 
-    if not comparisons_supported(dataset):
+    if not comparisons_supported(
+        configuration,
+        dataset,
+    ):
         return 1
 
     if not results_declared(
@@ -326,7 +333,9 @@ def run_benchmark(
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
+        JudgeUnavailableError,
         UnsupportedComparisonError,
+        SemanticJudgingError,
         WorkflowResultError,
     ) as exc:
         print(
@@ -370,7 +379,10 @@ def compare_benchmarks(
     if dataset is None:
         return 1
 
-    if not comparisons_supported(dataset):
+    if not comparisons_supported(
+        configuration,
+        dataset,
+    ):
         return 1
 
     if not results_declared(
@@ -398,6 +410,7 @@ def compare_benchmarks(
     except (
         WorkflowNotConfiguredError,
         WorkflowGenerationError,
+        JudgeUnavailableError,
         ValueError,
     ) as exc:
         print(

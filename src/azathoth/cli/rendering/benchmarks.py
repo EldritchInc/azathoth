@@ -18,26 +18,36 @@ def render_workflow_benchmark_result(
     Pass counts are broken down by comparison after overall accuracy, so
     benchmarks mixing comparisons show which kind of case is failing. The
     run-failure count follows, so failed runs are told apart from wrong
-    answers.
+    answers. When any case was judged semantically, judge calls and judge
+    cost follow the workflow totals, kept apart because judging is
+    Azathoth's own cost rather than the workflow's.
     """
 
-    return "\n".join(
-        (
-            f"Benchmark ID: {result.dataset_id}",
-            f"Workflow ID: {workflow_id}",
-            f"Cases Run: {result.cases_run}",
-            f"Cases Passed: {result.cases_passed}",
-            f"Accuracy: {result.accuracy:.6f}",
-            *(
-                f"Passed ({tally.comparison.value}): {tally.cases_passed}/{tally.cases_run}"
-                for tally in result.comparison_tallies
-            ),
-            f"Run failures: {result.run_failures}",
-            f"Total Tokens: {result.total_tokens}",
-            f"Total Latency: {result.total_latency_ms} ms",
-            f"Total Cost: ${result.total_cost_usd:.6f}",
+    lines = [
+        f"Benchmark ID: {result.dataset_id}",
+        f"Workflow ID: {workflow_id}",
+        f"Cases Run: {result.cases_run}",
+        f"Cases Passed: {result.cases_passed}",
+        f"Accuracy: {result.accuracy:.6f}",
+        *(
+            f"Passed ({tally.comparison.value}): {tally.cases_passed}/{tally.cases_run}"
+            for tally in result.comparison_tallies
+        ),
+        f"Run failures: {result.run_failures}",
+        f"Total Tokens: {result.total_tokens}",
+        f"Total Latency: {result.total_latency_ms} ms",
+        f"Total Cost: ${result.total_cost_usd:.6f}",
+    ]
+
+    if result.judged_semantically:
+        lines.extend(
+            (
+                f"Judge Calls: {result.judge_calls}",
+                f"Judge Cost: ${result.judge_cost_usd:.6f}",
+            )
         )
-    )
+
+    return "\n".join(lines)
 
 
 def render_workflow_benchmark_ranking(
