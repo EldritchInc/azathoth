@@ -532,6 +532,7 @@ class WorkflowRunner:
 
         run = WorkflowRun(
             workflow=workflow.metadata,
+            workflow_revision=workflow.revision,
             steps=tuple(completed_steps),
             initial_context=context,
             final_context=current_context,

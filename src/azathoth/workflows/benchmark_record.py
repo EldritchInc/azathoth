@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from azathoth.evaluation import OutcomeComparison
+from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.workflows.benchmark import WorkflowBenchmarkComparisonTally
 from azathoth.workflows.candidate import WorkflowCandidateSignature
 from azathoth.workflows.models import WorkflowMetadata
@@ -223,6 +224,11 @@ class WorkflowBenchmarkExecutionRecord(BaseModel):
     id: UUID = Field(default_factory=uuid4)
 
     benchmark_id: UUID
+
+    benchmark_digest: str | None = Field(
+        default=None,
+        pattern=CONTENT_DIGEST_PATTERN,
+    )
 
     kind: WorkflowBenchmarkExecutionKind
 

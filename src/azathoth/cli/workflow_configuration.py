@@ -14,8 +14,11 @@ from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
+    WorkflowSpecificationRevision,
     WorkflowValueReference,
     decode_workflow_document,
+    earliest_identical_revision,
+    encode_workflow_document,
 )
 
 
@@ -36,26 +39,40 @@ def list_workflows() -> int:
 
 def show_workflow(
     workflow_id: UUID,
+    *,
+    revision: int | None = None,
 ) -> int:
-    """Show one configured durable workflow."""
+    """Show one imported revision of a durable workflow, the latest by default.
+
+    Only durable state is read, so no provider credentials are needed.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    runtime = load_runtime(configuration)
+    repository = SQLiteWorkflowRepository(configuration.database)
 
-    specification = runtime.workflows.get(workflow_id)
+    selected = _selected_revision(
+        repository,
+        workflow_id,
+        revision,
+    )
 
-    if specification is None:
-        print(
-            f"Workflow {workflow_id} is not configured.",
-            file=sys.stderr,
-        )
-
+    if selected is None:
         return 1
+
+    latest = repository.latest_revision(workflow_id)
+
+    specification = selected.specification
 
     metadata = specification.metadata
 
     print(f"ID: {metadata.id}")
+
+    print(f"Revision: {selected.number} of {latest.number if latest is not None else '?'}")
+
+    print(f"Imported: {_render_imported_at(selected)}")
+
+    print(f"Content Digest: {selected.content_digest}")
 
     print(f"Name: {metadata.name}")
 
@@ -108,6 +125,125 @@ def show_workflow(
     return 0
 
 
+def export_workflow(
+    workflow_id: UUID,
+    *,
+    revision: int | None = None,
+) -> int:
+    """Print one imported revision of a workflow as an importable JSON document.
+
+    The document is exactly what `workflow import` accepts, so exporting a
+    revision and importing it again appends a revision with identical
+    content. Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    selected = _selected_revision(
+        SQLiteWorkflowRepository(configuration.database),
+        workflow_id,
+        revision,
+    )
+
+    if selected is None:
+        return 1
+
+    print(encode_workflow_document(selected.specification))
+
+    return 0
+
+
+def list_workflow_history(
+    workflow_id: UUID,
+    *,
+    limit: int | None = None,
+) -> int:
+    """List the imported revisions of one workflow, newest first.
+
+    Each line contains the revision number, import time, the first twelve
+    characters of the content digest, the declared version, and the name.
+    A revision with the same content as an earlier one names the earliest
+    such revision, so reverts are visible. Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    history = SQLiteWorkflowRepository(configuration.database).revisions(workflow_id)
+
+    if not history:
+        print(
+            f"Workflow {workflow_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    newest_first = tuple(reversed(history))
+
+    if limit is not None:
+        newest_first = newest_first[:limit]
+
+    for selected in newest_first:
+        metadata = selected.specification.metadata
+
+        identical = earliest_identical_revision(
+            history,
+            selected,
+        )
+
+        note = f"  identical to revision {identical.number}" if identical is not None else ""
+
+        print(
+            f"{selected.number}  {_render_imported_at(selected)}  "
+            f"{selected.content_digest[:12]}  {metadata.version}  {metadata.name}{note}"
+        )
+
+    return 0
+
+
+def _selected_revision(
+    repository: SQLiteWorkflowRepository,
+    workflow_id: UUID,
+    revision: int | None,
+) -> WorkflowSpecificationRevision | None:
+    """Return the requested revision, printing the failure when there is none."""
+
+    if repository.latest_revision(workflow_id) is None:
+        print(
+            f"Workflow {workflow_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return None
+
+    if revision is None:
+        return repository.latest_revision(workflow_id)
+
+    selected = repository.revision(
+        workflow_id,
+        revision,
+    )
+
+    if selected is None:
+        print(
+            f"Workflow {workflow_id} has no revision {revision}.",
+            file=sys.stderr,
+        )
+
+    return selected
+
+
+def _render_imported_at(
+    revision: WorkflowSpecificationRevision,
+) -> str:
+    """Render when one revision was imported, or that it is unknown."""
+
+    if revision.imported_at is None:
+        return "unknown"
+
+    return revision.imported_at.isoformat()
+
+
 def import_workflow(
     document_path: Path,
 ) -> int:
@@ -116,6 +252,11 @@ def import_workflow(
     Imported workflows must declare their result, the one value evaluation
     judges and production returns. Documents without one are rejected before
     anything is persisted.
+
+    Importing never replaces anything: each import appends the next revision
+    under the document's workflow ID. Re-importing earlier content, for
+    example to revert a change, is reported as identical to the earliest
+    revision with the same content.
     """
 
     try:
@@ -150,17 +291,16 @@ def import_workflow(
 
     repository = SQLiteWorkflowRepository(configuration.database)
 
-    try:
-        repository.save(specification)
-    except ValueError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
+    revision = repository.save(specification)
 
-        return 1
+    identical = earliest_identical_revision(
+        repository.revisions(specification.metadata.id),
+        revision,
+    )
 
-    print(f"Imported workflow {specification.metadata.id}.")
+    note = f" (identical to revision {identical.number})" if identical is not None else ""
+
+    print(f"Imported workflow {specification.metadata.id} revision {revision.number}{note}.")
 
     return 0
 

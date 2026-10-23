@@ -38,6 +38,12 @@ def render_workflow_experiment(
         f"Experiment ID: {experiment.id}",
         f"Recorded: {experiment.recorded_at.isoformat()}",
         f"Benchmark: {benchmark}",
+        "Benchmark Digest: "
+        + (
+            experiment.benchmark_digest[:12]
+            if experiment.benchmark_digest is not None
+            else "unknown"
+        ),
         f"Candidates: {len(experiment.observations)}",
         f"Cases: {_case_count(experiment)}",
         f"Winner Observation ID: {experiment.winner.id}",
@@ -101,6 +107,12 @@ def _append_observation(
             f"Observation ID: {observation.id}",
             f"Workflow: {observation.workflow.name}",
             f"Workflow ID: {observation.workflow.id}",
+            "Workflow Revision: "
+            + (
+                str(observation.candidate_signature.workflow_revision)
+                if observation.candidate_signature.workflow_revision is not None
+                else "unknown"
+            ),
             "Strategy IDs: "
             + ", ".join(
                 str(strategy_id) for strategy_id in observation.candidate_signature.strategy_ids

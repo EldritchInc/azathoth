@@ -268,6 +268,7 @@ def test_detail_renders_benchmark_experiment_with_cases_in_rank_order() -> None:
             f"Experiment ID: {FIRST_EXPERIMENT_ID}",
             "Recorded: 2026-10-09T16:00:00+00:00",
             f"Benchmark: {BENCHMARK_ID}",
+            "Benchmark Digest: unknown",
             "Candidates: 2",
             "Cases: 2",
             f"Winner Observation ID: {WINNING_OBSERVATION_ID}",
@@ -276,6 +277,7 @@ def test_detail_renders_benchmark_experiment_with_cases_in_rank_order() -> None:
             f"Observation ID: {WINNING_OBSERVATION_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {SECOND_STRATEGY_ID}",
             "Passed: 2/2",
             (
@@ -297,6 +299,7 @@ def test_detail_renders_benchmark_experiment_with_cases_in_rank_order() -> None:
             f"Observation ID: {LOSING_OBSERVATION_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {FIRST_STRATEGY_ID}",
             "Passed: 1/2",
             (
@@ -322,6 +325,7 @@ def test_detail_renders_legacy_experiment_without_benchmark_or_outcomes() -> Non
             f"Experiment ID: {FIRST_EXPERIMENT_ID}",
             "Recorded: 2026-10-09T16:00:00+00:00",
             "Benchmark: none",
+            "Benchmark Digest: unknown",
             "Candidates: 2",
             "Cases: 1",
             f"Winner Observation ID: {LEGACY_WINNING_RUN_ID}",
@@ -330,6 +334,7 @@ def test_detail_renders_legacy_experiment_without_benchmark_or_outcomes() -> Non
             f"Observation ID: {LEGACY_WINNING_RUN_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {SECOND_STRATEGY_ID}",
             "Passed: unknown",
             (
@@ -346,6 +351,7 @@ def test_detail_renders_legacy_experiment_without_benchmark_or_outcomes() -> Non
             f"Observation ID: {LEGACY_LOSING_RUN_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {FIRST_STRATEGY_ID}",
             "Passed: unknown",
             (

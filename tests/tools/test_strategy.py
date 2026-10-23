@@ -7,6 +7,7 @@ import pytest
 from pydantic import JsonValue
 
 from azathoth.context import Context, ContextEvent
+from azathoth.revisions import content_digest
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyResourceBinding,
@@ -273,6 +274,7 @@ def test_tool_strategy_records_resolved_implementation_resource() -> None:
                 "tool_id": str(TOOL_ID),
                 "tool_version": "1.0.0",
                 "runtime": "python",
+                "implementation_digest": content_digest(strategy.implementation),
             },
         ),
     )

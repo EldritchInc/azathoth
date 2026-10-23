@@ -41,6 +41,7 @@ def render_workflow_benchmark_execution(
         f"Recorded: {execution.recorded_at.isoformat()}",
         f"Kind: {execution.kind.value}",
         f"Benchmark ID: {execution.benchmark_id}",
+        f"Benchmark Digest: {_render_digest(execution.benchmark_digest)}",
         f"Candidates: {len(execution.candidates)}",
         f"Cases: {len(execution.case_ids)}",
     ]
@@ -70,6 +71,12 @@ def render_workflow_benchmark_execution(
                 f"Candidate ID: {candidate.id}",
                 f"Workflow: {candidate.workflow.name}",
                 f"Workflow ID: {candidate.workflow.id}",
+                "Workflow Revision: "
+                + (
+                    str(candidate.candidate_signature.workflow_revision)
+                    if candidate.candidate_signature.workflow_revision is not None
+                    else "unknown"
+                ),
                 "Strategy IDs: "
                 + ", ".join(
                     str(strategy_id) for strategy_id in candidate.candidate_signature.strategy_ids
@@ -232,3 +239,11 @@ def _scorecard(
         )
 
     return candidate.scorecard
+
+
+def _render_digest(
+    digest: str | None,
+) -> str:
+    """Render the short form `benchmark history` lists, or that it is unknown."""
+
+    return digest[:12] if digest is not None else "unknown"

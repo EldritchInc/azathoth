@@ -23,6 +23,7 @@ def render_workflow_run(
     lines = [
         f"Workflow: {run.workflow.name}",
         f"Workflow ID: {run.workflow.id}",
+        f"Workflow Revision: {_render_revision(run.workflow_revision)}",
         f"Run ID: {run.id}",
         f"Status: {'succeeded' if run.succeeded else 'failed'}",
         f"Duration: {run.duration_seconds:.3f}s",
@@ -155,3 +156,11 @@ def _render_attribute(
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _render_revision(
+    revision: int | None,
+) -> str:
+    """Render one workflow revision number, or that it is unknown."""
+
+    return str(revision) if revision is not None else "unknown"

@@ -62,6 +62,11 @@ azathoth
 │   ├── import <FILE>
 │   ├── list
 │   ├── show <WORKFLOW_ID>
+│   │   └── --revision <NUMBER>
+│   ├── history <WORKFLOW_ID>
+│   │   └── --limit <COUNT>
+│   ├── export <WORKFLOW_ID>
+│   │   └── --revision <NUMBER>
 │   ├── run <WORKFLOW_ID>
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
@@ -113,6 +118,12 @@ azathoth
 │   ├── list
 │   ├── show <TOOL_ID>
 │   │   └── --version <VERSION>
+│   ├── history <TOOL_ID>
+│   │   ├── --version <VERSION>
+│   │   └── --limit <COUNT>
+│   ├── export <TOOL_ID>
+│   │   ├── --version <VERSION>
+│   │   └── --revision <NUMBER>
 │   ├── versions <TOOL_ID>
 │   ├── implementations <TOOL_ID>
 │   │   └── --version <VERSION>
@@ -132,6 +143,11 @@ azathoth
     ├── import <FILE>
     ├── list
     ├── show <BENCHMARK_ID>
+    │   └── --revision <NUMBER>
+    ├── history <BENCHMARK_ID>
+    │   └── --limit <COUNT>
+    ├── export <BENCHMARK_ID>
+    │   └── --revision <NUMBER>
     ├── cases <BENCHMARK_ID>
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── run <BENCHMARK_ID>
@@ -499,7 +515,13 @@ WorkflowSpecification
 SQLiteWorkflowRepository
 ```
 
-Import persists durable workflow intent.
+Import persists durable workflow intent as a new revision:
+
+```text
+Imported workflow <WORKFLOW_ID> revision 1.
+```
+
+Import never replaces anything. See "Workflow Revisions" below.
 
 The document must declare a result. A document without one is rejected before
 anything is saved:
@@ -583,11 +605,16 @@ azathoth workflow show <WORKFLOW_ID>
 
 The identifier is a workflow UUID.
 
-The command renders workflow metadata, the declared result, and configured
-step structure:
+The command renders the latest revision by default, or the one named with
+`--revision <NUMBER>`. It shows the revision, its import time and content
+digest, workflow metadata, the declared result, and configured step
+structure:
 
 ```text
 ID: <WORKFLOW_ID>
+Revision: 2 of 2
+Imported: 2026-10-23T15:30:40+00:00
+Content Digest: <SHA256>
 Name: simple prompt
 Version: 1.0.0
 Description: Return a concise answer to one request.
@@ -605,7 +632,85 @@ Such a workflow can still be inspected and run, but benchmarking, optimizing,
 and promoting it fail until it is re-imported with a result.
 
 It does not need to turn that specification into a `WorkflowCandidate` merely
-to inspect it.
+to inspect it, and it reads durable state only, without provider credentials.
+
+# Workflow Revisions
+
+The workflow ID is a lineage. Every `workflow import` appends the next
+revision under it; nothing is ever edited in place:
+
+```text
+workflow import v1.json   ──►  revision 1
+workflow import v2.json   ──►  revision 2
+workflow import v1.json   ──►  revision 3 (identical to revision 1)
+```
+
+To revert a workflow, import the earlier document again. The new revision
+records the revert, and its output names the earliest revision with the same
+content:
+
+```text
+Imported workflow <WORKFLOW_ID> revision 3 (identical to revision 1).
+```
+
+Content identity is a sha256 digest of the specification's canonical JSON, so
+key order and formatting in the file do not matter.
+
+List the revisions of one workflow, newest first, with:
+
+```bash
+azathoth workflow history <WORKFLOW_ID>
+azathoth workflow history <WORKFLOW_ID> --limit <COUNT>
+```
+
+```text
+3  2026-10-23T15:31:02+00:00  4f1a9c0e2b7d  1.0.0  simple prompt  identical to revision 1
+2  2026-10-23T15:30:40+00:00  91d07a3c55e2  1.0.0  simple prompt
+1  unknown                    4f1a9c0e2b7d  1.0.0  simple prompt
+```
+
+Each line contains the revision number, import time, the first twelve
+characters of the content digest, the declared version, and the name.
+
+Print any revision as a document `workflow import` accepts with:
+
+```bash
+azathoth workflow export <WORKFLOW_ID>
+azathoth workflow export <WORKFLOW_ID> --revision <NUMBER> > workflow.json
+```
+
+Exporting and importing again appends a revision identical to the exported
+one.
+
+Execution always uses the latest revision:
+
+```text
+workflow run / workflow optimize / workflow promote / benchmark run / benchmark compare
+    latest revision only
+```
+
+Only `show` and `export` take `--revision`. Running an older revision means
+importing it again, so every execution traces to an import.
+
+Every run records the revision it executed. `run show`, `experiment show`,
+and `benchmark execution-show` render it as:
+
+```text
+Workflow Revision: 2
+```
+
+and production state records the revision that was promoted.
+
+Workflows imported before revisions existed become revision 1 the first time
+the database is opened. Their import time was never recorded, so it renders
+as `unknown`, as do the revisions of records written before revisions.
+
+An unknown workflow fails with `Workflow <WORKFLOW_ID> is not configured.`;
+an unknown revision fails with:
+
+```text
+Workflow <WORKFLOW_ID> has no revision <NUMBER>.
+```
 
 # Inspection Versus Execution
 
@@ -807,11 +912,15 @@ Each executed step also lists the resources its strategy bound:
 
 ```text
 Resource: model openrouter/some-model
-Resource: tool <IMPLEMENTATION_ID> (runtime=python, tool_id=<TOOL_ID>, tool_version=1.0.0)
+Resource: tool <IMPLEMENTATION_ID> (implementation_digest=<SHA256>, runtime=python, tool_id=<TOOL_ID>, tool_version=1.0.0)
 ```
 
 Attributes are sorted by name. Structured attribute values render as compact
 JSON.
+
+A tool binding records the content digest of the implementation that ran.
+Implementation IDs stay stable across tool revisions while their source may
+change, so the digest is what pins the exact code a run executed.
 
 This is the reverse of usage discovery:
 
@@ -1192,6 +1301,7 @@ candidate order:
 Experiment ID: <EXPERIMENT_ID>
 Recorded: 2026-10-09T16:05:00+00:00
 Benchmark: <BENCHMARK_ID>
+Benchmark Digest: 4f1a9c0e2b7d
 Candidates: 2
 Cases: 2
 Winner Observation ID: <OBSERVATION_ID>
@@ -1200,6 +1310,7 @@ Rank 1
 Observation ID: <OBSERVATION_ID>
 Workflow: summarize
 Workflow ID: <WORKFLOW_ID>
+Workflow Revision: 2
 Strategy IDs: <STRATEGY_ID>
 Passed: 1/2
 Case <CASE_ID>: passed  run <RUN_ID>  evaluation <EVALUATION_ID>
@@ -1820,8 +1931,12 @@ azathoth workflow rollback
 
 Production changes remain explicit promotions.
 
-Revision history is inspectable with `workflow revisions`, but no command
-executes or restores a historical revision.
+Production revision history is inspectable with `workflow revisions`, but no
+command executes or restores a historical production revision.
+
+To return to earlier workflow content, export or locate the earlier
+specification revision with `workflow history` and `workflow export`, import
+it again, and promote it explicitly.
 
 A dedicated rollback convenience operation is not part of the frozen V1
 operator surface.
@@ -2123,6 +2238,8 @@ azathoth tool
 ├── import
 ├── list
 ├── show
+├── history
+├── export
 ├── versions
 ├── implementations
 ├── implementation-show
@@ -2139,6 +2256,56 @@ Commands that act on one exact definition version take:
 ```bash
 --version <VERSION>
 ```
+
+# Tool Revisions
+
+A tool document bundles one exact definition version with its
+implementations and test cases. Every `tool import` appends the next revision
+of that `<TOOL_ID>@<VERSION>`; nothing is ever rejected for already existing:
+
+```text
+Imported tool <TOOL_ID>@1.0.0 revision 2.
+Imported tool <TOOL_ID>@1.0.0 revision 3 (identical to revision 1).
+```
+
+The latest revision of each version defines the current artifacts that
+workflows resolve and `tool show`, `implementations`, and `test-cases` list.
+An implementation or test case the previous revision held and the new one
+drops is no longer current, unless the latest revision of another version of
+the same tool still holds that test case. Re-importing an earlier document
+restores its artifacts exactly.
+
+A document is rejected, with nothing saved, when an implementation ID belongs
+to another tool or another version, or a test case ID belongs to another
+tool:
+
+```text
+Tool implementation <IMPLEMENTATION_ID> belongs to tool <TOOL_ID>@<VERSION>.
+Tool test case <TEST_CASE_ID> belongs to tool <TOOL_ID>.
+```
+
+List every version's revisions, newest first, with:
+
+```bash
+azathoth tool history <TOOL_ID>
+azathoth tool history <TOOL_ID> --version <VERSION> --limit <COUNT>
+```
+
+```text
+2.0.0  1  2026-10-23T15:52:10+00:00  7c21e0a94f3b  1 implementations  1 test cases
+1.0.0  3  2026-10-23T15:51:58+00:00  4f1a9c0e2b7d  1 implementations  1 test cases  identical to revision 1
+```
+
+Print any revision of one version as an importable document with:
+
+```bash
+azathoth tool export <TOOL_ID> --version <VERSION>
+azathoth tool export <TOOL_ID> --version <VERSION> --revision <NUMBER>
+```
+
+Tool versions saved before revisions existed become revision 1 of their
+version, without an import time. Test cases belong to a tool rather than to
+one version, so each such revision holds every test case of its tool.
 
 # Trace Tool Usage
 
@@ -2275,10 +2442,30 @@ configured workflows against them.
 ```bash
 azathoth benchmark import <FILE>
 azathoth benchmark list
-azathoth benchmark show <BENCHMARK_ID>
+azathoth benchmark show <BENCHMARK_ID> [--revision <NUMBER>]
+azathoth benchmark history <BENCHMARK_ID> [--limit <COUNT>]
+azathoth benchmark export <BENCHMARK_ID> [--revision <NUMBER>]
 azathoth benchmark cases <BENCHMARK_ID>
 azathoth benchmark case-show <BENCHMARK_ID> <CASE_ID>
 ```
+
+Benchmarks are revisioned exactly like workflows. Every import appends the
+next revision; re-importing an earlier document reverts to its content:
+
+```text
+Imported benchmark dataset <BENCHMARK_ID> revision 3 (identical to revision 1).
+```
+
+`benchmark show` adds `Revision`, `Imported`, and `Content Digest` lines, and
+`benchmark history` lists one line per revision, newest first:
+
+```text
+3  2026-10-23T16:02:11+00:00  4f1a9c0e2b7d  1.0.0  5 cases  classify-sentiment  identical to revision 1
+```
+
+Runs, comparisons, optimization, `cases`, and `case-show` always use the
+latest revision. A changed benchmark is a new revision, never an edit, so a
+saved execution's case IDs always mean the cases it judged.
 
 Execute one configured workflow against a dataset with:
 
@@ -2422,6 +2609,7 @@ Execution ID: <EXECUTION_ID>
 Recorded: 2026-10-23T12:32:00+00:00
 Kind: compare
 Benchmark ID: <BENCHMARK_ID>
+Benchmark Digest: 4f1a9c0e2b7d
 Candidates: 2
 Cases: 5
 Target Latency: 5.000000 s
@@ -2432,6 +2620,7 @@ Rank 1
 Candidate ID: <CANDIDATE_ID>
 Workflow: classify-sentiment
 Workflow ID: <WORKFLOW_ID>
+Workflow Revision: 2
 Strategy IDs: <STRATEGY_ID>
 Passed: 5/5
 Accuracy: 1.000000
@@ -2451,6 +2640,11 @@ Case <CASE_ID>: passed  exact  run <RUN_ID>  evaluation <EVALUATION_ID>
 
 A `run` execution shows `Kind: run`, no targets or winner, and one block
 headed `Candidate` without scorecard lines.
+
+`Benchmark Digest` is the first twelve characters of the content digest of the
+exact benchmark revision executed, the same short form `benchmark history`
+prints, so an execution matches its revision by eye. `experiment show`
+renders the same line. Records written before digests show `unknown`.
 
 An unknown execution fails with:
 

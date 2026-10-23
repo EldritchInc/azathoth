@@ -7,6 +7,7 @@ from azathoth.evaluation import (
     BenchmarkDataset,
     OutcomeEvaluator,
 )
+from azathoth.revisions import content_digest
 from azathoth.workflows.benchmark import (
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
@@ -232,6 +233,7 @@ class WorkflowExperimentRunner:
         return WorkflowExperimentRecord(
             id=result.id,
             benchmark_id=dataset.id,
+            benchmark_digest=content_digest(dataset),
             observations=observations,
             ranking=tuple(observations[index].id for index in ranking),
         )

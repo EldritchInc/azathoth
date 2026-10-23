@@ -6,9 +6,11 @@ from typing import cast
 
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
+    export_benchmark,
     import_benchmark,
     list_benchmark_cases,
     list_benchmark_executions,
+    list_benchmark_history,
     list_benchmarks,
     run_benchmark,
     show_benchmark,
@@ -73,7 +75,9 @@ from azathoth.cli.runs import (
 )
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
+    export_tool,
     import_tool,
+    list_tool_history,
     list_tool_implementations,
     list_tool_test_cases,
     list_tool_versions,
@@ -87,8 +91,10 @@ from azathoth.cli.usage import (
     tool_usage,
 )
 from azathoth.cli.workflows import (
+    export_workflow,
     import_workflow,
     invoke_workflow,
+    list_workflow_history,
     list_workflows,
     optimize_workflow,
     promote_workflow,
@@ -134,9 +140,11 @@ def _dispatch(
         return dispatch_benchmark_command(
             arguments,
             compare_benchmarks=compare_benchmarks,
+            export_benchmark=export_benchmark,
             import_benchmark=import_benchmark,
             list_benchmark_cases=list_benchmark_cases,
             list_benchmark_executions=list_benchmark_executions,
+            list_benchmark_history=list_benchmark_history,
             list_benchmarks=list_benchmarks,
             run_benchmark=run_benchmark,
             show_benchmark=show_benchmark,
@@ -155,9 +163,11 @@ def _dispatch(
     if command == WORKFLOW_COMMAND:
         return dispatch_workflow_command(
             arguments,
+            export_workflow=export_workflow,
             import_workflow=import_workflow,
             invoke_workflow=invoke_workflow,
             list_workflow_experiments=list_workflow_experiments,
+            list_workflow_history=list_workflow_history,
             list_workflow_invocations=list_workflow_invocations,
             list_workflow_revisions=list_workflow_revisions,
             list_workflow_runs=list_workflow_runs,
@@ -210,7 +220,9 @@ def _dispatch(
     if command == TOOL_COMMAND:
         return dispatch_tool_command(
             arguments,
+            export_tool=export_tool,
             import_tool=import_tool,
+            list_tool_history=list_tool_history,
             list_tool_implementations=list_tool_implementations,
             list_tool_test_cases=list_tool_test_cases,
             list_tool_versions=list_tool_versions,

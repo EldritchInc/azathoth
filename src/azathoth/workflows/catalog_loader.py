@@ -1,5 +1,7 @@
 """Hydrate immutable workflow artifacts from a repository."""
 
+from uuid import UUID
+
 from azathoth.workflows.catalog import WorkflowCatalog
 from azathoth.workflows.repository import WorkflowRepository
 
@@ -16,8 +18,21 @@ class WorkflowCatalogLoader:
     def load_catalog(
         self,
     ) -> WorkflowCatalog:
-        """Load all persisted workflow specifications."""
+        """Load every workflow's latest specification and its revision number."""
+
+        specifications = self._repository.specifications()
+
+        revisions: dict[UUID, int] = {}
+
+        for specification in specifications:
+            revision = self._repository.latest_revision(
+                specification.metadata.id,
+            )
+
+            if revision is not None:
+                revisions[specification.metadata.id] = revision.number
 
         return WorkflowCatalog(
-            specifications=self._repository.specifications(),
+            specifications=specifications,
+            revisions=revisions,
         )

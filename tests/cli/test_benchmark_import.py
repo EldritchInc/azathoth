@@ -92,7 +92,7 @@ def test_benchmark_import_persists_complete_dataset(
     assert result == 0
     assert captured.err == ""
 
-    assert captured.out == (f"Imported benchmark dataset {BENCHMARK_ID}.\n")
+    assert captured.out == (f"Imported benchmark dataset {BENCHMARK_ID} revision 1.\n")
 
     repository = SQLiteBenchmarkRepository(
         database,
@@ -164,7 +164,7 @@ def test_benchmark_import_rejects_invalid_document_before_creating_database(
     assert not database.exists()
 
 
-def test_benchmark_import_rejects_duplicate_dataset(
+def test_benchmark_reimport_appends_an_identical_revision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -198,9 +198,11 @@ def test_benchmark_import_rejects_duplicate_dataset(
 
     captured = capsys.readouterr()
 
-    assert result == 1
-    assert captured.out == ""
-
-    assert captured.err == (f"Benchmark dataset {BENCHMARK_ID} already exists.\n")
+    assert result == 0
+    assert captured.err == ""
+    assert captured.out == (
+        f"Imported benchmark dataset {BENCHMARK_ID} revision 2 (identical to revision 1).\n"
+    )
 
     assert repository.datasets() == (create_dataset(),)
+    assert tuple(revision.number for revision in repository.revisions(BENCHMARK_ID)) == (1, 2)

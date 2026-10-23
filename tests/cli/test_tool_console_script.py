@@ -99,7 +99,7 @@ def test_installed_cli_imports_checked_in_tool_example(
 
     assert result.returncode == 0
 
-    assert result.stdout == (f"Imported tool {TOOL_ID}@1.0.0.\n")
+    assert result.stdout == (f"Imported tool {TOOL_ID}@1.0.0 revision 1.\n")
 
     assert result.stderr == ""
     assert database.exists()

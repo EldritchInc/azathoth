@@ -22,6 +22,8 @@ BENCHMARK_CASE_SHOW_ACTION = "case-show"
 BENCHMARK_COMPARE_ACTION = "compare"
 BENCHMARK_EXECUTION_SHOW_ACTION = "execution-show"
 BENCHMARK_EXECUTIONS_ACTION = "executions"
+BENCHMARK_EXPORT_ACTION = "export"
+BENCHMARK_HISTORY_ACTION = "history"
 BENCHMARK_IMPORT_ACTION = "import"
 BENCHMARK_LIST_ACTION = "list"
 BENCHMARK_RUN_ACTION = "run"
@@ -32,6 +34,8 @@ BENCHMARK_ID_ATTRIBUTE = "benchmark_id"
 BENCHMARK_CASE_ID_ATTRIBUTE = "benchmark_case_id"
 BENCHMARK_EXECUTION_ID_ATTRIBUTE = "benchmark_execution_id"
 BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE = "benchmark_execution_limit"
+BENCHMARK_HISTORY_LIMIT_ATTRIBUTE = "benchmark_history_limit"
+BENCHMARK_REVISION_ATTRIBUTE = "benchmark_revision"
 BENCHMARK_WORKFLOW_IDS_ATTRIBUTE = "workflow_ids"
 
 
@@ -64,6 +68,57 @@ def add_benchmark_parser(
         type=UUID,
         metavar="BENCHMARK_ID",
         help="Benchmark dataset UUID to inspect.",
+    )
+
+    benchmark_show_parser.add_argument(
+        "--revision",
+        dest=BENCHMARK_REVISION_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="NUMBER",
+        help="Imported revision to inspect. Defaults to the latest.",
+    )
+
+    benchmark_history_parser = benchmark_actions.add_parser(
+        BENCHMARK_HISTORY_ACTION,
+        help="List imported revisions of one benchmark, newest first.",
+    )
+
+    benchmark_history_parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID whose imported revisions to list.",
+    )
+
+    benchmark_history_parser.add_argument(
+        "--limit",
+        dest=BENCHMARK_HISTORY_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent revisions to list.",
+    )
+
+    benchmark_export_parser = benchmark_actions.add_parser(
+        BENCHMARK_EXPORT_ACTION,
+        help="Print one imported benchmark revision as an importable JSON document.",
+    )
+
+    benchmark_export_parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID to export.",
+    )
+
+    benchmark_export_parser.add_argument(
+        "--revision",
+        dest=BENCHMARK_REVISION_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="NUMBER",
+        help="Imported revision to export. Defaults to the latest.",
     )
 
     benchmark_cases_parser = benchmark_actions.add_parser(

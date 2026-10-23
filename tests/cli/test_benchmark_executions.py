@@ -172,9 +172,11 @@ def dispatch(
     return dispatch_benchmark_command(
         arguments,
         compare_benchmarks=unused,
+        export_benchmark=unused,
         import_benchmark=unused,
         list_benchmark_cases=unused,
         list_benchmark_executions=list_benchmark_executions,
+        list_benchmark_history=unused,
         list_benchmarks=unused,
         run_benchmark=unused,
         show_benchmark=unused,

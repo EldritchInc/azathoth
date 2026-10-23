@@ -16,6 +16,8 @@ WORKFLOW_COMMAND = "workflow"
 WORKFLOW_ACTION_ATTRIBUTE = "workflow_action"
 
 WORKFLOW_EXPERIMENTS_ACTION = "experiments"
+WORKFLOW_EXPORT_ACTION = "export"
+WORKFLOW_HISTORY_ACTION = "history"
 WORKFLOW_IMPORT_ACTION = "import"
 WORKFLOW_INVOCATIONS_ACTION = "invocations"
 WORKFLOW_INVOKE_ACTION = "invoke"
@@ -31,11 +33,13 @@ WORKFLOW_SHOW_ACTION = "show"
 WORKFLOW_BENCHMARK_ID_ATTRIBUTE = "workflow_benchmark_id"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE = "workflow_experiment_limit"
+WORKFLOW_HISTORY_LIMIT_ATTRIBUTE = "workflow_history_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
 WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
+WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE = "workflow_specification_revision"
 
 TARGET_LATENCY_ATTRIBUTE = "target_latency_seconds"
 TARGET_COST_ATTRIBUTE = "target_cost_usd"
@@ -71,6 +75,57 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to inspect.",
+    )
+
+    workflow_show_parser.add_argument(
+        "--revision",
+        dest=WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="NUMBER",
+        help="Imported revision to inspect. Defaults to the latest.",
+    )
+
+    workflow_history_parser = workflow_actions.add_parser(
+        WORKFLOW_HISTORY_ACTION,
+        help="List imported revisions of one workflow, newest first.",
+    )
+
+    workflow_history_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose imported revisions to list.",
+    )
+
+    workflow_history_parser.add_argument(
+        "--limit",
+        dest=WORKFLOW_HISTORY_LIMIT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="COUNT",
+        help="Maximum number of most recent revisions to list.",
+    )
+
+    workflow_export_parser = workflow_actions.add_parser(
+        WORKFLOW_EXPORT_ACTION,
+        help="Print one imported workflow revision as an importable JSON document.",
+    )
+
+    workflow_export_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID to export.",
+    )
+
+    workflow_export_parser.add_argument(
+        "--revision",
+        dest=WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="NUMBER",
+        help="Imported revision to export. Defaults to the latest.",
     )
 
     workflow_import_parser = workflow_actions.add_parser(

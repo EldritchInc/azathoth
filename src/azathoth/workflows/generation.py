@@ -40,8 +40,13 @@ def generate_workflow_candidate(
     portfolio: ModelPortfolio,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    revision: int | None = None,
 ) -> WorkflowCandidate:
-    """Generate one executable candidate from a workflow specification."""
+    """Generate one executable candidate from a workflow specification.
+
+    The revision names the imported specification revision being generated,
+    and is carried by the candidate into its signature and every run.
+    """
 
     executable_steps: list[WorkflowCandidateStep] = []
 
@@ -111,6 +116,7 @@ def generate_workflow_candidate(
         metadata=specification.metadata,
         steps=tuple(executable_steps),
         result=specification.result,
+        revision=revision,
     )
 
 

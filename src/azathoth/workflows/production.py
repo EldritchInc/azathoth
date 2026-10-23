@@ -58,11 +58,20 @@ class WorkflowProductionEmission(BaseModel):
 
 
 class WorkflowProductionState(BaseModel):
-    """Represent the durable workflow configuration active in production."""
+    """Represent the durable workflow configuration active in production.
+
+    The specification revision names the imported revision that was
+    promoted. It is absent for states promoted before revisions existed.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     specification: WorkflowSpecification
+
+    specification_revision: int | None = Field(
+        default=None,
+        ge=1,
+    )
 
     model_substitutions: tuple[
         WorkflowProductionModelSubstitution,

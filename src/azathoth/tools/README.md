@@ -107,6 +107,8 @@ from azathoth.tools import (
     ToolCatalog,
     ToolCatalogLoader,
     ToolDefinition,
+    ToolDocument,
+    ToolDocumentRevision,
     ToolEntrypointError,
     ToolExecutionError,
     ToolExecutor,
@@ -127,6 +129,9 @@ from azathoth.tools import (
     ToolVerification,
     ToolVerifier,
     UnsupportedToolRuntimeError,
+    decode_tool_document,
+    earliest_identical_tool_revision,
+    encode_tool_document,
     require_tool_repository,
 )
 ```
@@ -1225,9 +1230,52 @@ ToolTestCase
 ```
 
 The repository exposes independent save, get, and ordered collection operations
-for each.
+for each, plus revisioned tool documents:
+
+```text
+save_document(document)                        appends the next revision
+latest_document_revision(tool_id, version)
+document_revision(tool_id, version, number)
+document_revisions(tool_id)                    every version, import order
+```
 
 It does not execute or resolve any of them.
+
+# Tool Document Revisions
+
+A `ToolDocument` bundles one exact definition version with its
+implementations and test cases. Each `save_document` appends a
+`ToolDocumentRevision` under that `<TOOL_ID>@<VERSION>`:
+
+```text
+ToolDocumentRevision
+├── tool_id / tool_version
+├── number            1, 2, 3 … per tool version
+├── document
+├── content_digest    sha256 of the document's canonical JSON
+└── imported_at       None for versions saved before revisions existed
+```
+
+The definition, implementation, and test case collections hold the current
+artifacts, defined by the latest revision of each version:
+
+- the new revision's definition, implementations, and test cases are added,
+  or replaced in place
+- implementations and test cases the previous revision held and the new one
+  drops are removed
+- a test case still held by the latest revision of another version of the
+  same tool stays current
+
+A document whose implementation ID belongs to another tool or another version,
+or whose test case ID belongs to another tool, is rejected and changes
+nothing. Versions saved artifact by artifact before revisions are first
+recorded as revision 1 of their own, holding the version's implementations
+and every test case of the tool.
+
+`ToolStrategy` records the content digest of the implementation it ran as the
+`implementation_digest` attribute of its resource binding. Implementation IDs
+survive revisions while their source may change, so the digest pins the exact
+code a run executed.
 
 # Repository Semantics
 
@@ -1264,15 +1312,12 @@ These responsibilities are deliberately separate.
 
 # Durable Artifacts Are Append-Oriented
 
-The current repository implementations reject replacement of an already stored
-artifact identity.
+The single-artifact savers reject replacement of an already stored artifact
+identity.
 
-That means definitions, implementations, and test cases behave as explicit
-durable artifacts rather than mutable records silently overwritten under the
-same identity.
-
-Changes should be represented through appropriate new durable identity or
-version semantics instead of accidental replacement.
+Changes to a tool are represented as new document revisions rather than
+silent overwrites: history keeps every revision, and the current artifacts
+follow the latest one.
 
 # ToolCatalogLoader
 

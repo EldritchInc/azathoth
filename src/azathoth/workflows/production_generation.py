@@ -28,7 +28,11 @@ def generate_production_workflow_candidate(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
 ) -> WorkflowCandidate:
-    """Generate one executable candidate using production model authority."""
+    """Generate one executable candidate using production model authority.
+
+    The candidate carries the promoted specification revision, so production
+    runs name the revision they execute.
+    """
 
     specification = _resolve_production_specification(
         state=state,
@@ -43,6 +47,7 @@ def generate_production_workflow_candidate(
         portfolio=ModelPortfolio(),
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
+        revision=state.specification_revision,
     )
 
 

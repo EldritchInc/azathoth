@@ -17,9 +17,13 @@ from azathoth.cli.parsing import (
     BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE,
     BENCHMARK_EXECUTION_SHOW_ACTION,
     BENCHMARK_EXECUTIONS_ACTION,
+    BENCHMARK_EXPORT_ACTION,
+    BENCHMARK_HISTORY_ACTION,
+    BENCHMARK_HISTORY_LIMIT_ATTRIBUTE,
     BENCHMARK_ID_ATTRIBUTE,
     BENCHMARK_IMPORT_ACTION,
     BENCHMARK_LIST_ACTION,
+    BENCHMARK_REVISION_ATTRIBUTE,
     BENCHMARK_RUN_ACTION,
     BENCHMARK_SHOW_ACTION,
     BENCHMARK_WORKFLOW_IDS_ATTRIBUTE,
@@ -35,18 +39,21 @@ BenchmarkImportHandler = Callable[[Path], int]
 BenchmarkRunHandler = Callable[..., int]
 BenchmarkCompareHandler = Callable[..., int]
 BenchmarkExecutionListHandler = Callable[..., int]
+BenchmarkRevisionHandler = Callable[..., int]
 
 
 def dispatch_benchmark_command(
     arguments: Namespace,
     *,
     compare_benchmarks: BenchmarkCompareHandler,
+    export_benchmark: BenchmarkRevisionHandler,
     import_benchmark: BenchmarkImportHandler,
     list_benchmark_cases: BenchmarkIdentifierHandler,
     list_benchmark_executions: BenchmarkExecutionListHandler,
+    list_benchmark_history: BenchmarkExecutionListHandler,
     list_benchmarks: BenchmarkListHandler,
     run_benchmark: BenchmarkRunHandler,
-    show_benchmark: BenchmarkIdentifierHandler,
+    show_benchmark: BenchmarkRevisionHandler,
     show_benchmark_case: BenchmarkCaseHandler,
     show_benchmark_execution: BenchmarkIdentifierHandler,
 ) -> int | None:
@@ -72,7 +79,39 @@ def dispatch_benchmark_command(
                     arguments,
                     BENCHMARK_ID_ATTRIBUTE,
                 ),
-            )
+            ),
+            revision=_benchmark_revision(arguments),
+        )
+
+    if action == BENCHMARK_EXPORT_ACTION:
+        return export_benchmark(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            revision=_benchmark_revision(arguments),
+        )
+
+    if action == BENCHMARK_HISTORY_ACTION:
+        return list_benchmark_history(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    BENCHMARK_HISTORY_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
         )
 
     if action == BENCHMARK_CASES_ACTION:
@@ -198,3 +237,18 @@ def dispatch_benchmark_command(
         )
 
     return None
+
+
+def _benchmark_revision(
+    arguments: Namespace,
+) -> int | None:
+    """Return the requested imported benchmark revision number, if any."""
+
+    return cast(
+        int | None,
+        getattr(
+            arguments,
+            BENCHMARK_REVISION_ATTRIBUTE,
+            None,
+        ),
+    )

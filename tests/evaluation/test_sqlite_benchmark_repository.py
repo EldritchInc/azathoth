@@ -3,8 +3,6 @@
 from pathlib import Path
 from uuid import UUID
 
-import pytest
-
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -113,20 +111,18 @@ def test_sqlite_benchmark_repository_preserves_insertion_order(
     )
 
 
-def test_sqlite_benchmark_repository_rejects_duplicate_dataset(
+def test_sqlite_benchmark_repository_appends_a_revision_for_a_resave(
     tmp_path: Path,
 ) -> None:
     repository = SQLiteBenchmarkRepository(tmp_path / "benchmarks.db")
 
     dataset = create_dataset()
 
-    repository.save(dataset)
+    first = repository.save(dataset)
+    second = repository.save(dataset)
 
-    with pytest.raises(
-        ValueError,
-        match=(f"Benchmark dataset {FIRST_DATASET_ID} already exists"),
-    ):
-        repository.save(dataset)
+    assert (first.number, second.number) == (1, 2)
+    assert repository.datasets() == (dataset,)
 
 
 def test_sqlite_benchmark_repository_survives_repository_reconstruction(

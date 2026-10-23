@@ -9,6 +9,10 @@ from azathoth.evaluation.benchmark_document import (
     encode_benchmark_document,
 )
 from azathoth.evaluation.benchmark_repository import BenchmarkRepository
+from azathoth.evaluation.benchmark_revision import (
+    BenchmarkDatasetRevision,
+    earliest_identical_benchmark_revision,
+)
 from azathoth.evaluation.exact import ExactMatchEvaluator
 from azathoth.evaluation.json_equality import (
     JsonDifference,
@@ -79,6 +83,7 @@ __all__ = [
     "BenchmarkCatalog",
     "BenchmarkCatalogLoader",
     "BenchmarkDataset",
+    "BenchmarkDatasetRevision",
     "BenchmarkDocumentError",
     "BenchmarkRepository",
     "EvaluationEvidence",
@@ -107,6 +112,7 @@ __all__ = [
     "UnsupportedComparisonError",
     "decode_benchmark_document",
     "default_comparison_evaluators",
+    "earliest_identical_benchmark_revision",
     "encode_benchmark_document",
     "expectation_hash",
     "first_json_difference",

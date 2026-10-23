@@ -2,8 +2,6 @@
 
 from uuid import UUID
 
-import pytest
-
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
@@ -182,17 +180,15 @@ def test_in_memory_repository_preserves_insertion_order() -> None:
     )
 
 
-def test_in_memory_repository_rejects_duplicate_workflow() -> None:
+def test_in_memory_repository_appends_a_revision_for_a_resave() -> None:
     repository = InMemoryWorkflowRepository()
     specification = create_workflow()
 
-    repository.save(specification)
+    first = repository.save(specification)
+    second = repository.save(specification)
 
-    with pytest.raises(
-        ValueError,
-        match=f"Workflow specification {WORKFLOW_ID} already exists",
-    ):
-        repository.save(specification)
+    assert (first.number, second.number) == (1, 2)
+    assert repository.specifications() == (specification,)
 
 
 def test_repository_preserves_complete_workflow_specification() -> None:

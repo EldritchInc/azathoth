@@ -92,13 +92,23 @@ class WorkflowStepRun(BaseModel):
 
 
 class WorkflowRun(BaseModel):
-    """The complete recorded result of executing one workflow candidate."""
+    """The complete recorded result of executing one workflow candidate.
+
+    The workflow revision names the specification revision the executed
+    candidate was generated from. It is absent for runs of unrevisioned
+    candidates and for runs recorded before revisions existed.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
 
     workflow: WorkflowMetadata
+
+    workflow_revision: int | None = Field(
+        default=None,
+        ge=1,
+    )
     steps: tuple[WorkflowStepRun, ...] = Field(min_length=1)
 
     initial_context: Context

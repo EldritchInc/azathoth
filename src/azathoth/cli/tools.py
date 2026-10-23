@@ -9,47 +9,14 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
-    ToolDocument,
     ToolDocumentError,
+    ToolDocumentRevision,
     ToolImplementation,
     ToolTestCase,
     decode_tool_document,
+    earliest_identical_tool_revision,
+    encode_tool_document,
 )
-
-
-def _tool_document_duplicate_error(
-    *,
-    repository: SQLiteToolRepository,
-    document: ToolDocument,
-) -> str | None:
-    """Return a duplicate-artifact error before mutating persistence."""
-
-    definition = document.definition
-
-    if (
-        repository.get_definition(
-            definition.id,
-            definition.version,
-        )
-        is not None
-    ):
-        return f"Tool definition {definition.id}@{definition.version} already exists."
-
-    existing_implementation_ids = {
-        implementation.id for implementation in repository.implementations()
-    }
-
-    for implementation in document.implementations:
-        if implementation.id in existing_implementation_ids:
-            return f"Tool implementation {implementation.id} already exists."
-
-    existing_test_case_ids = {test_case.id for test_case in repository.test_cases()}
-
-    for test_case in document.test_cases:
-        if test_case.id in existing_test_case_ids:
-            return f"Tool test case {test_case.id} already exists."
-
-    return None
 
 
 def list_tools() -> int:
@@ -331,10 +298,142 @@ def _print_tool_test_case(
     )
 
 
+def list_tool_history(
+    tool_id: UUID,
+    *,
+    version: str | None = None,
+    limit: int | None = None,
+) -> int:
+    """List the imported revisions of one tool, newest first.
+
+    Each line contains the tool version, revision number, import time, the
+    first twelve characters of the content digest, and the document's
+    implementation and test case counts. A revision with the same content as
+    an earlier revision of its version names the earliest such revision.
+    Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    history = SQLiteToolRepository(
+        configuration.database,
+    ).document_revisions(tool_id)
+
+    selected = tuple(
+        revision for revision in history if version is None or revision.tool_version == version
+    )
+
+    if not selected:
+        reference = f"{tool_id}@{version}" if version is not None else str(tool_id)
+
+        print(
+            f"Tool {reference} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    newest_first = tuple(reversed(selected))
+
+    if limit is not None:
+        newest_first = newest_first[:limit]
+
+    for revision in newest_first:
+        identical = earliest_identical_tool_revision(
+            history,
+            revision,
+        )
+
+        note = f"  identical to revision {identical.number}" if identical is not None else ""
+
+        print(
+            f"{revision.tool_version}  {revision.number}  {_render_imported_at(revision)}  "
+            f"{revision.content_digest[:12]}  "
+            f"{len(revision.document.implementations)} implementations  "
+            f"{len(revision.document.test_cases)} test cases{note}"
+        )
+
+    return 0
+
+
+def export_tool(
+    tool_id: UUID,
+    *,
+    version: str,
+    revision: int | None = None,
+) -> int:
+    """Print one imported tool revision as an importable JSON document.
+
+    The latest revision of the exact version is exported unless another is
+    named. Importing the output again appends a revision with identical
+    content. Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    latest = repository.latest_document_revision(
+        tool_id,
+        version,
+    )
+
+    if latest is None:
+        print(
+            f"Tool {tool_id}@{version} is not configured.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    selected = (
+        latest
+        if revision is None
+        else repository.document_revision(
+            tool_id,
+            version,
+            revision,
+        )
+    )
+
+    if selected is None:
+        print(
+            f"Tool {tool_id}@{version} has no revision {revision}.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(encode_tool_document(selected.document))
+
+    return 0
+
+
+def _render_imported_at(
+    revision: ToolDocumentRevision,
+) -> str:
+    """Render when one revision was imported, or that it is unknown."""
+
+    if revision.imported_at is None:
+        return "unknown"
+
+    return revision.imported_at.isoformat()
+
+
 def import_tool(
     document_path: Path,
 ) -> int:
-    """Import one portable durable tool document."""
+    """Import one portable durable tool document.
+
+    Importing never replaces history: each import appends the next revision
+    of the document's exact tool version and makes its artifacts current.
+    Re-importing earlier content is reported as identical to the earliest
+    revision with the same content. A document whose artifact IDs belong to
+    another tool, or whose implementation IDs belong to another version, is
+    rejected before anything is saved.
+    """
 
     try:
         encoded = document_path.read_text(
@@ -366,40 +465,32 @@ def import_tool(
         configuration.database,
     )
 
-    duplicate_error = _tool_document_duplicate_error(
-        repository=repository,
-        document=document,
-    )
-
-    if duplicate_error is not None:
+    try:
+        revision = repository.save_document(document)
+    except ValueError as exc:
         print(
-            duplicate_error,
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    repository.save_definition(
-        document.definition,
+    identical = earliest_identical_tool_revision(
+        repository.document_revisions(revision.tool_id),
+        revision,
     )
 
-    for implementation in document.implementations:
-        repository.save_implementation(
-            implementation,
-        )
+    note = f" (identical to revision {identical.number})" if identical is not None else ""
 
-    for test_case in document.test_cases:
-        repository.save_test_case(
-            test_case,
-        )
-
-    print(f"Imported tool {document.definition.id}@{document.definition.version}.")
+    print(f"Imported tool {revision.reference} revision {revision.number}{note}.")
 
     return 0
 
 
 __all__ = [
+    "export_tool",
     "import_tool",
+    "list_tool_history",
     "list_tool_implementations",
     "list_tool_test_cases",
     "list_tool_versions",

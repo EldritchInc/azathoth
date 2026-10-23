@@ -25,7 +25,9 @@ from azathoth.cli.rendering import (
     render_workflow_run,
 )
 from azathoth.cli.workflow_configuration import (
+    export_workflow,
     import_workflow,
+    list_workflow_history,
     list_workflows,
     show_workflow,
 )
@@ -274,8 +276,10 @@ def optimize_workflow(
 
 
 __all__ = [
+    "export_workflow",
     "import_workflow",
     "invoke_workflow",
+    "list_workflow_history",
     "list_workflows",
     "optimize_workflow",
     "promote_workflow",
