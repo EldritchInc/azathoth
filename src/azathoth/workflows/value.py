@@ -55,6 +55,15 @@ class WorkflowContextReference(BaseModel):
     field_name: str = Field(min_length=1)
 
 
+class WorkflowInputResolutionError(RuntimeError):
+    """Raised when an eligible step has no value to bind to one of its inputs.
+
+    The runner records the step as failed under its own failure policy
+    instead of aborting the run, because a redundant or tolerated upstream
+    failure can legitimately leave an input without a value.
+    """
+
+
 class WorkflowValueResolutionError(ValueError):
     """Raised when a workflow value binding cannot resolve an output path."""
 

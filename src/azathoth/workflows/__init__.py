@@ -292,6 +292,7 @@ from azathoth.workflows.usage_report import (
 from azathoth.workflows.value import (
     WorkflowContextReference,
     WorkflowInputBinding,
+    WorkflowInputResolutionError,
     WorkflowNamedValueReference,
     WorkflowResultReference,
     WorkflowValue,
@@ -379,6 +380,7 @@ __all__ = [
     "WorkflowHistoricalModelUsage",
     "WorkflowHistoricalToolUsage",
     "WorkflowInputBinding",
+    "WorkflowInputResolutionError",
     "WorkflowMetadata",
     "WorkflowModelUsageEntry",
     "WorkflowModelUsageReport",

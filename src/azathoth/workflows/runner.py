@@ -30,6 +30,7 @@ from azathoth.workflows.references import (
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import (
     WorkflowContextReference,
+    WorkflowInputResolutionError,
     WorkflowNamedValueReference,
     WorkflowValue,
     WorkflowValueReference,
@@ -193,7 +194,13 @@ class WorkflowRunner:
         workflow_steps: tuple[WorkflowCandidateStep, ...],
         completed_steps: list[WorkflowStepRun],
     ) -> Context:
-        """Add resolved workflow inputs to a step-local context."""
+        """Add resolved workflow inputs to a step-local context.
+
+        Raises:
+            WorkflowInputResolutionError: An input value reference has no
+                committed value, or a context input has no matching event or
+                field.
+        """
 
         step_context = layer_context
 
@@ -215,8 +222,18 @@ class WorkflowRunner:
                 )
 
                 if value is None:
-                    raise RuntimeError(
-                        "Validated workflow input could not resolve a committed workflow value."
+                    if isinstance(
+                        source,
+                        WorkflowValueReference,
+                    ):
+                        raise WorkflowInputResolutionError(
+                            f"Workflow input {binding.name!r} could not resolve value "
+                            f"{source.name!r} from step {source.producer_step_id}."
+                        )
+
+                    raise WorkflowInputResolutionError(
+                        f"Workflow input {binding.name!r} could not resolve value "
+                        f"{source.name!r} from any step it depends on."
                     )
 
                 step_context = step_context.append(
@@ -247,14 +264,14 @@ class WorkflowRunner:
             )
 
             if event is None:
-                raise RuntimeError(
+                raise WorkflowInputResolutionError(
                     f"Workflow context input {binding.name!r} "
                     "could not resolve event type "
                     f"{source.event_type!r}."
                 )
 
             if source.field_name not in event.payload:
-                raise RuntimeError(
+                raise WorkflowInputResolutionError(
                     f"Workflow context input {binding.name!r} "
                     "could not resolve field "
                     f"{source.field_name!r} from event type "
@@ -275,6 +292,39 @@ class WorkflowRunner:
             )
 
         return step_context
+
+    @staticmethod
+    def _input_resolution_failure(
+        *,
+        step: WorkflowCandidateStep,
+        error: WorkflowInputResolutionError,
+    ) -> _LayerStepResult:
+        """Return the failed layer result of a step whose input did not resolve.
+
+        The step records exactly one failed attempt carrying the resolution
+        error, and its strategy is never executed.
+        """
+
+        resolved_at = datetime.now(
+            tz=UTC,
+        )
+
+        return _LayerStepResult(
+            step=step,
+            status=WorkflowStepStatus.FAILED,
+            attempts=(
+                WorkflowStepAttempt(
+                    attempt_number=1,
+                    started_at=resolved_at,
+                    completed_at=resolved_at,
+                    failure=WorkflowStepFailure(
+                        exception_type=type(error).__name__,
+                        message=str(error),
+                    ),
+                ),
+            ),
+            error=error,
+        )
 
     async def _execute_with_retry(
         self,
@@ -510,15 +560,31 @@ class WorkflowRunner:
 
                     continue
 
+                #
+                # An input without a value fails the step under its own
+                # policy. Resolution is deterministic, so it is never retried.
+                #
+                try:
+                    step_context = self._build_step_context(
+                        layer_context=layer_context,
+                        step=step,
+                        workflow_steps=workflow.steps,
+                        completed_steps=completed_steps,
+                    )
+                except WorkflowInputResolutionError as error:
+                    layer_results.append(
+                        self._input_resolution_failure(
+                            step=step,
+                            error=error,
+                        )
+                    )
+
+                    continue
+
                 eligible.append(
                     (
                         step,
-                        self._build_step_context(
-                            layer_context=layer_context,
-                            step=step,
-                            workflow_steps=workflow.steps,
-                            completed_steps=completed_steps,
-                        ),
+                        step_context,
                     )
                 )
 
