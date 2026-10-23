@@ -32,6 +32,7 @@ from azathoth.workflows.scorecard import WorkflowScorecard
 from azathoth.workflows.scoring import (
     WorkflowScorer,
     WorkflowScoringPolicy,
+    aggregate_workflow_scorecards,
 )
 from azathoth.workflows.value import WorkflowValueReference
 
@@ -447,16 +448,11 @@ class WorkflowBenchmarkScorer:
             for case in candidate.result.cases
         )
 
-        count = len(case_scorecards)
-
-        scorecard = WorkflowScorecard(
-            quality_score=sum(item.quality_score for item in case_scorecards) / count,
-            reliability_score=sum(item.reliability_score for item in case_scorecards) / count,
-            latency_score=sum(item.latency_score for item in case_scorecards) / count,
-            cost_score=sum(item.cost_score for item in case_scorecards) / count,
-            overall_score=sum(item.overall_score for item in case_scorecards) / count,
+        scorecard = aggregate_workflow_scorecards(
+            case_scorecards,
             rationale=(
-                f"Benchmark aggregate for candidate {candidate.name!r} across {count} cases."
+                f"Benchmark aggregate for candidate {candidate.name!r} "
+                f"across {len(case_scorecards)} cases."
             ),
         )
 

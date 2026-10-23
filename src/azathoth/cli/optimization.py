@@ -2,10 +2,8 @@
 
 from uuid import UUID
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    Evaluator,
-    ExpectedOutcome,
+    BenchmarkDataset,
     OutcomeEvaluator,
 )
 from azathoth.optimization import (
@@ -27,26 +25,26 @@ async def optimize_configured_workflow(
     *,
     runtime: RuntimeEnvironment,
     workflow_id: UUID,
-    expected_outcome: ExpectedOutcome,
+    dataset: BenchmarkDataset,
     scoring_policy: WorkflowScoringPolicy,
     max_generations: int,
-    context: Context | None = None,
-    evaluator: Evaluator | None = None,
     recorder: WorkflowExperimentEvidenceRecorder | None = None,
 ) -> WorkflowOptimizationSession:
     """Run empirical model-substitution optimization for one workflow.
 
-    Candidates are judged on the workflow's declared result. Without an
-    explicit evaluator, the expected outcome is judged by the evaluator for its
-    comparison. A workflow without a declared result and an unsupported
-    comparison are both rejected before any candidate is generated or executed.
+    Every generation runs each candidate against every benchmark case and
+    judges the workflow's declared result with each case's own comparison. A
+    workflow without a declared result, an empty benchmark, and an
+    unsupported comparison are all rejected before any candidate is generated
+    or executed.
 
     When a recorder is supplied, every generation's candidate runs,
     evaluations, and experiment record are persisted as durable evidence.
 
     Raises:
-        UnsupportedComparisonError: The default evaluator cannot judge the
-            expected outcome's comparison.
+        ValueError: The benchmark contains no cases.
+        UnsupportedComparisonError: A benchmark case uses a comparison with
+            no evaluator.
         WorkflowResultError: The configured workflow declares no result.
     """
 
@@ -57,14 +55,16 @@ async def optimize_configured_workflow(
     if specification is not None and specification.result is None:
         raise WorkflowResultError(f"Workflow {workflow_id} does not declare a result.")
 
-    if evaluator is None:
-        outcome_evaluator = OutcomeEvaluator()
+    if not dataset.cases:
+        raise ValueError(f"Benchmark {dataset.id} has no cases.")
 
-        outcome_evaluator.require_supported(
-            expected_outcome.comparison,
+    evaluator = OutcomeEvaluator()
+
+    for case in dataset.cases:
+        evaluator.require_supported(
+            case.expected.comparison,
+            subject=f"Benchmark case {case.id}",
         )
-
-        evaluator = outcome_evaluator
 
     initial_candidate = runtime.generate_workflow_candidate(
         workflow_id,
@@ -74,6 +74,7 @@ async def optimize_configured_workflow(
         scorer=WorkflowScorer(
             policy=scoring_policy,
         ),
+        evaluator=evaluator,
         recorder=recorder,
     )
 
@@ -91,8 +92,6 @@ async def optimize_configured_workflow(
 
     return await session_runner.run(
         initial_candidates=(initial_candidate,),
-        context=context if context is not None else Context(),
-        evaluator=evaluator,
-        expected_outcome=expected_outcome,
+        dataset=dataset,
         max_generations=max_generations,
     )

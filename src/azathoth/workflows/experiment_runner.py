@@ -1,18 +1,18 @@
 """Workflow experiment orchestration."""
 
-from dataclasses import dataclass
+from collections.abc import Callable
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    EvaluationResult,
-    Evaluator,
-    ExpectedOutcome,
+    BenchmarkCase,
+    BenchmarkDataset,
+    OutcomeEvaluator,
+)
+from azathoth.workflows.benchmark import (
+    WorkflowBenchmarkResult,
+    WorkflowBenchmarkRunner,
 )
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
-)
-from azathoth.workflows.execution import (
-    WorkflowRun,
 )
 from azathoth.workflows.experiment import (
     WorkflowExperimentEvidence,
@@ -31,7 +31,6 @@ from azathoth.workflows.ranker import (
 )
 from azathoth.workflows.result import (
     WorkflowResultError,
-    workflow_result,
 )
 from azathoth.workflows.run_evaluation import (
     WorkflowRunEvaluation,
@@ -39,22 +38,21 @@ from azathoth.workflows.run_evaluation import (
 from azathoth.workflows.runner import (
     WorkflowRunner,
 )
+from azathoth.workflows.scorecard import (
+    WorkflowScorecard,
+)
 from azathoth.workflows.scoring import (
     WorkflowScorer,
+    aggregate_workflow_scorecards,
 )
-from azathoth.workflows.value import WorkflowValueReference
-
-
-@dataclass(frozen=True)
-class _ScoredExecution:
-    """Keep one successful execution together with its evaluation."""
-
-    run: WorkflowRun
-    evaluation: EvaluationResult
 
 
 class WorkflowExperimentRunner:
-    """Execute, evaluate, score, and rank workflow candidates.
+    """Execute, evaluate, score, and rank workflow candidates over a benchmark.
+
+    Every candidate runs every benchmark case. Each case judges the candidate's
+    declared result with the case's own comparison, and the per-case
+    scorecards are averaged into one scorecard per candidate for ranking.
 
     When a recorder is supplied, every candidate run, every evaluation, and
     one experiment record are persisted as durable evidence. Without one, the
@@ -66,10 +64,15 @@ class WorkflowExperimentRunner:
         *,
         scorer: WorkflowScorer,
         runner: WorkflowRunner | None = None,
+        evaluator: OutcomeEvaluator | None = None,
         ranker: WorkflowRanker | None = None,
         recorder: WorkflowExperimentEvidenceRecorder | None = None,
     ) -> None:
-        self._runner = runner if runner is not None else WorkflowRunner()
+        self._evaluator = evaluator if evaluator is not None else OutcomeEvaluator()
+        self._benchmark_runner = WorkflowBenchmarkRunner(
+            runner=runner if runner is not None else WorkflowRunner(),
+            evaluator=self._evaluator,
+        )
         self._scorer = scorer
         self._ranker = ranker if ranker is not None else WorkflowRanker()
         self._recorder = recorder
@@ -78,77 +81,63 @@ class WorkflowExperimentRunner:
         self,
         *,
         workflows: tuple[WorkflowCandidate, ...],
-        context: Context,
-        evaluator: Evaluator,
-        expected_outcome: ExpectedOutcome,
+        dataset: BenchmarkDataset,
     ) -> WorkflowExperimentResult:
-        """Execute, evaluate, score, and rank successful workflow candidates.
+        """Execute every candidate against every benchmark case and rank them.
 
-        Each successful run is judged on its candidate's declared result. Every
-        candidate must declare a result, checked before any candidate executes.
+        The dataset must contain cases, every case comparison must be
+        supported, and every candidate must declare a result, all checked
+        before any candidate executes. Failed runs are recorded and scored as
+        failed cases rather than discarded, so a generation in which every run
+        failed still ranks and records normally.
 
         Raises:
+            ValueError: The dataset contains no cases.
+            UnsupportedComparisonError: A case uses a comparison with no
+                evaluator.
             WorkflowResultError: A candidate declares no result, or a
-                successful run did not produce its declared result exactly once.
+                successful run did not produce its declared result exactly
+                once.
         """
 
-        results = tuple(_declared_result(workflow) for workflow in workflows)
+        if not dataset.cases:
+            raise ValueError(f"Benchmark {dataset.id} has no cases.")
+
+        for case in dataset.cases:
+            self._evaluator.require_supported(
+                case.expected.comparison,
+                subject=f"Benchmark case {case.id}",
+            )
+
+        for workflow in workflows:
+            _require_declared_result(workflow)
 
         evidence: list[WorkflowExperimentEvidence] = []
-        executions: list[_ScoredExecution] = []
+        benchmarks: list[WorkflowBenchmarkResult] = []
 
-        for workflow, declared_result in zip(
-            workflows,
-            results,
-            strict=True,
-        ):
-            run = await self._runner.run_recording_failures(
-                workflow=workflow,
-                context=context,
+        for workflow in workflows:
+            benchmark = await self._benchmark_runner.run(
+                dataset,
+                _every_case(workflow),
             )
 
             if self._recorder is not None:
-                self._recorder.runs.save(run)
-
-            if run.failed:
-                continue
-
-            evaluation = await evaluator.evaluate(
-                expected=expected_outcome,
-                actual=workflow_result(
-                    run,
-                    declared_result,
-                ),
-            )
-
-            if self._recorder is not None:
-                self._recorder.evaluations.save(
-                    WorkflowRunEvaluation(
-                        run_id=run.id,
-                        evaluation=evaluation,
+                for case_result in benchmark.cases:
+                    self._recorder.runs.save(case_result.run)
+                    self._recorder.evaluations.save(
+                        WorkflowRunEvaluation(
+                            run_id=case_result.run.id,
+                            evaluation=case_result.evaluation,
+                        )
                     )
-                )
-
-            scorecard = self._scorer.score(
-                run=run,
-                evaluation=evaluation,
-            )
 
             evidence.append(
                 WorkflowExperimentEvidence(
                     candidate_signature=workflow.signature,
-                    scorecard=scorecard,
+                    scorecard=self._score(benchmark),
                 )
             )
-            executions.append(
-                _ScoredExecution(
-                    run=run,
-                    evaluation=evaluation,
-                )
-            )
-
-        if workflows and not evidence:
-            raise ValueError("Workflow experiment produced no successful candidate executions.")
+            benchmarks.append(benchmark)
 
         scorecards = tuple(observation.scorecard for observation in evidence)
 
@@ -165,43 +154,66 @@ class WorkflowExperimentRunner:
             self._recorder.experiments.save(
                 self._record(
                     result=result,
-                    executions=tuple(executions),
+                    dataset=dataset,
+                    workflows=workflows,
+                    benchmarks=tuple(benchmarks),
                 )
             )
 
         return result
 
+    def _score(
+        self,
+        benchmark: WorkflowBenchmarkResult,
+    ) -> WorkflowScorecard:
+        """Combine one candidate's per-case scorecards into one scorecard."""
+
+        return aggregate_workflow_scorecards(
+            tuple(
+                self._scorer.score(
+                    run=case.run,
+                    evaluation=case.evaluation,
+                )
+                for case in benchmark.cases
+            ),
+            rationale=(f"Benchmark aggregate across {len(benchmark.cases)} cases."),
+        )
+
     @staticmethod
     def _record(
         *,
         result: WorkflowExperimentResult,
-        executions: tuple[_ScoredExecution, ...],
+        dataset: BenchmarkDataset,
+        workflows: tuple[WorkflowCandidate, ...],
+        benchmarks: tuple[WorkflowBenchmarkResult, ...],
     ) -> WorkflowExperimentRecord:
         """Build the durable record sharing the experiment result's identity.
 
-        Observations keep candidate order. Ranking entries are matched to
-        evidence positions the same way the result orders its evidence, so the
-        record's observation ranking agrees with the result's ranked evidence.
-        Each observation holds its candidate's one execution as a single case
-        without a case identifier.
+        Observations keep candidate order, each holding one case per benchmark
+        case in dataset order. Ranking entries are matched to evidence
+        positions the same way the result orders its evidence, so the record's
+        observation ranking agrees with the result's ranked evidence.
         """
 
         observations = tuple(
             WorkflowExperimentObservation(
-                workflow=execution.run.workflow,
+                workflow=workflow.metadata,
                 candidate_signature=entry.candidate_signature,
-                cases=(
+                cases=tuple(
                     WorkflowExperimentCaseObservation(
-                        run_id=execution.run.id,
-                        evaluation_id=execution.evaluation.id,
-                        passed=execution.evaluation.passed,
-                    ),
+                        case_id=case.case_id,
+                        run_id=case.run.id,
+                        evaluation_id=case.evaluation.id,
+                        passed=case.evaluation.passed,
+                    )
+                    for case in benchmark.cases
                 ),
                 scorecard=entry.scorecard,
             )
-            for entry, execution in zip(
+            for entry, workflow, benchmark in zip(
                 result.evidence,
-                executions,
+                workflows,
+                benchmarks,
                 strict=True,
             )
         )
@@ -219,15 +231,29 @@ class WorkflowExperimentRunner:
 
         return WorkflowExperimentRecord(
             id=result.id,
+            benchmark_id=dataset.id,
             observations=observations,
             ranking=tuple(observations[index].id for index in ranking),
         )
 
 
-def _declared_result(
+def _every_case(
     workflow: WorkflowCandidate,
-) -> WorkflowValueReference:
-    """Return the declared result of one experiment candidate.
+) -> Callable[[BenchmarkCase], WorkflowCandidate]:
+    """Return a candidate factory that runs one candidate for every case."""
+
+    def factory(
+        case: BenchmarkCase,
+    ) -> WorkflowCandidate:
+        return workflow
+
+    return factory
+
+
+def _require_declared_result(
+    workflow: WorkflowCandidate,
+) -> None:
+    """Reject an experiment candidate that declares no result.
 
     Raises:
         WorkflowResultError: The candidate declares no result.
@@ -235,5 +261,3 @@ def _declared_result(
 
     if workflow.result is None:
         raise WorkflowResultError(f"Workflow {workflow.metadata.id} does not declare a result.")
-
-    return workflow.result

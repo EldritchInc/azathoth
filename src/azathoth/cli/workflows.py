@@ -24,6 +24,8 @@ from azathoth.cli.workflow_configuration import (
     show_workflow,
 )
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -185,8 +187,10 @@ def optimize_workflow(
 ) -> int:
     """Empirically optimize one configured workflow and persist its evidence.
 
-    Every generation's candidate runs, evaluations, and experiment record are
-    saved to the configured database, so the session can be inspected later.
+    The expected value is judged as a one-case benchmark with no input, using
+    exact comparison. Every generation's candidate runs, evaluations, and
+    experiment record are saved to the configured database, so the session
+    can be inspected later.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -198,10 +202,19 @@ def optimize_workflow(
             optimize_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
-                expected_outcome=ExpectedOutcome(
-                    description=("Match the operator-supplied expected value."),
-                    value=expected_value,
-                    comparison=OutcomeComparison.EXACT,
+                dataset=BenchmarkDataset(
+                    name="expected-value",
+                    description="Match the operator-supplied expected value.",
+                    cases=(
+                        BenchmarkCase(
+                            input=None,
+                            expected=ExpectedOutcome(
+                                description=("Match the operator-supplied expected value."),
+                                value=expected_value,
+                                comparison=OutcomeComparison.EXACT,
+                            ),
+                        ),
+                    ),
                 ),
                 scoring_policy=WorkflowScoringPolicy(
                     target_latency_seconds=target_latency_seconds,

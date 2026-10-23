@@ -200,6 +200,7 @@ from azathoth.workflows.scorecard import (
 from azathoth.workflows.scoring import (
     WorkflowScorer,
     WorkflowScoringPolicy,
+    aggregate_workflow_scorecards,
 )
 from azathoth.workflows.sqlite_experiment_repository import (
     SQLiteWorkflowExperimentRepository,
@@ -381,6 +382,7 @@ __all__ = [
     "WorkflowValueReference",
     "WorkflowValueResolutionError",
     "active_production_revision",
+    "aggregate_workflow_scorecards",
     "complete_production_invocation",
     "create_production_invocation",
     "create_workflow_input_event",
