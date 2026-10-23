@@ -31,6 +31,9 @@ class WorkflowSpecificationRevision(BaseModel):
     number and nothing is ever replaced. Re-importing an earlier document,
     for example to revert a change, appends a new revision whose digest
     matches the earlier one.
+
+    Specifications imported before revisions existed become revision 1 with
+    no import time, because their import time was never recorded.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -47,7 +50,7 @@ class WorkflowSpecificationRevision(BaseModel):
         pattern=CONTENT_DIGEST_PATTERN,
     )
 
-    imported_at: datetime = Field(
+    imported_at: datetime | None = Field(
         default_factory=utc_now,
     )
 

@@ -4,41 +4,88 @@ from uuid import UUID
 
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.repository import WorkflowRepository
+from azathoth.workflows.revision import WorkflowSpecificationRevision
 
 
 class InMemoryWorkflowRepository:
-    """Store workflow specifications in insertion order."""
+    """Store revisioned workflow specifications in import order."""
 
     def __init__(self) -> None:
-        self._specifications: dict[UUID, WorkflowSpecification] = {}
+        self._revisions: dict[
+            UUID,
+            list[WorkflowSpecificationRevision],
+        ] = {}
 
     def save(
         self,
         specification: WorkflowSpecification,
-    ) -> None:
-        """Persist one workflow specification without replacing existing data."""
+    ) -> WorkflowSpecificationRevision:
+        """Append one specification as its workflow's next revision."""
 
-        workflow_id = specification.metadata.id
+        history = self._revisions.setdefault(
+            specification.metadata.id,
+            [],
+        )
 
-        if workflow_id in self._specifications:
-            raise ValueError(f"Workflow specification {workflow_id} already exists.")
+        revision = WorkflowSpecificationRevision.create(
+            specification,
+            number=len(history) + 1,
+        )
 
-        self._specifications[workflow_id] = specification
+        history.append(revision)
+
+        return revision
 
     def get(
         self,
         workflow_id: UUID,
     ) -> WorkflowSpecification | None:
-        """Return a workflow specification by identifier."""
+        """Return a workflow's latest specification."""
 
-        return self._specifications.get(workflow_id)
+        revision = self.latest_revision(workflow_id)
+
+        return revision.specification if revision is not None else None
 
     def specifications(
         self,
     ) -> tuple[WorkflowSpecification, ...]:
-        """Return all persisted workflow specifications in insertion order."""
+        """Return every workflow's latest specification in first-import order."""
 
-        return tuple(self._specifications.values())
+        return tuple(history[-1].specification for history in self._revisions.values())
+
+    def latest_revision(
+        self,
+        workflow_id: UUID,
+    ) -> WorkflowSpecificationRevision | None:
+        """Return a workflow's latest revision."""
+
+        history = self._revisions.get(workflow_id)
+
+        return history[-1] if history else None
+
+    def revision(
+        self,
+        workflow_id: UUID,
+        number: int,
+    ) -> WorkflowSpecificationRevision | None:
+        """Return one numbered revision of a workflow."""
+
+        return next(
+            (
+                revision
+                for revision in self._revisions.get(workflow_id, ())
+                if revision.number == number
+            ),
+            None,
+        )
+
+    def revisions(
+        self,
+        workflow_id: UUID,
+    ) -> tuple[WorkflowSpecificationRevision, ...]:
+        """Return every revision of a workflow, oldest first."""
+
+        return tuple(self._revisions.get(workflow_id, ()))
 
 
 def require_workflow_repository(

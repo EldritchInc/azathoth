@@ -16,6 +16,7 @@ from azathoth.workflows import (
     WorkflowDocumentError,
     WorkflowValueReference,
     decode_workflow_document,
+    earliest_identical_revision,
 )
 
 
@@ -116,6 +117,11 @@ def import_workflow(
     Imported workflows must declare their result, the one value evaluation
     judges and production returns. Documents without one are rejected before
     anything is persisted.
+
+    Importing never replaces anything: each import appends the next revision
+    under the document's workflow ID. Re-importing earlier content, for
+    example to revert a change, is reported as identical to the earliest
+    revision with the same content.
     """
 
     try:
@@ -150,17 +156,16 @@ def import_workflow(
 
     repository = SQLiteWorkflowRepository(configuration.database)
 
-    try:
-        repository.save(specification)
-    except ValueError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
+    revision = repository.save(specification)
 
-        return 1
+    identical = earliest_identical_revision(
+        repository.revisions(specification.metadata.id),
+        revision,
+    )
 
-    print(f"Imported workflow {specification.metadata.id}.")
+    note = f" (identical to revision {identical.number})" if identical is not None else ""
+
+    print(f"Imported workflow {specification.metadata.id} revision {revision.number}{note}.")
 
     return 0
 
