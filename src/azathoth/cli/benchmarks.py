@@ -25,12 +25,14 @@ from azathoth.cli.rendering import (
 )
 from azathoth.evaluation import (
     BenchmarkCase,
-    BenchmarkDataset,
+    BenchmarkDatasetRevision,
     BenchmarkDocumentError,
     SemanticJudgingError,
     SQLiteBenchmarkRepository,
     UnsupportedComparisonError,
     decode_benchmark_document,
+    earliest_identical_benchmark_revision,
+    encode_benchmark_document,
 )
 from azathoth.runtime import (
     JudgeUnavailableError,
@@ -64,8 +66,10 @@ def list_benchmarks() -> int:
 
 def show_benchmark(
     benchmark_id: UUID,
+    *,
+    revision: int | None = None,
 ) -> int:
-    """Show one durable benchmark dataset."""
+    """Show one imported revision of a benchmark dataset, the latest by default."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -73,11 +77,74 @@ def show_benchmark(
         configuration.database,
     )
 
-    dataset = repository.get(
+    selected = _selected_revision(
+        repository,
         benchmark_id,
+        revision,
     )
 
-    if dataset is None:
+    if selected is None:
+        return 1
+
+    latest = repository.latest_revision(benchmark_id)
+
+    _print_benchmark_dataset(
+        selected,
+        latest_number=latest.number if latest is not None else selected.number,
+    )
+
+    return 0
+
+
+def export_benchmark(
+    benchmark_id: UUID,
+    *,
+    revision: int | None = None,
+) -> int:
+    """Print one imported benchmark revision as an importable JSON document.
+
+    Importing the output again appends a revision with identical content.
+    Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    selected = _selected_revision(
+        SQLiteBenchmarkRepository(
+            configuration.database,
+        ),
+        benchmark_id,
+        revision,
+    )
+
+    if selected is None:
+        return 1
+
+    print(encode_benchmark_document(selected.dataset))
+
+    return 0
+
+
+def list_benchmark_history(
+    benchmark_id: UUID,
+    *,
+    limit: int | None = None,
+) -> int:
+    """List the imported revisions of one benchmark, newest first.
+
+    Each line contains the revision number, import time, the first twelve
+    characters of the content digest, the declared version, the case count,
+    and the name. A revision with the same content as an earlier one names
+    the earliest such revision. Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    history = SQLiteBenchmarkRepository(
+        configuration.database,
+    ).revisions(benchmark_id)
+
+    if not history:
         print(
             f"Benchmark dataset {benchmark_id} is not configured.",
             file=sys.stderr,
@@ -85,11 +152,73 @@ def show_benchmark(
 
         return 1
 
-    _print_benchmark_dataset(
-        dataset,
-    )
+    newest_first = tuple(reversed(history))
+
+    if limit is not None:
+        newest_first = newest_first[:limit]
+
+    for selected in newest_first:
+        identical = earliest_identical_benchmark_revision(
+            history,
+            selected,
+        )
+
+        note = f"  identical to revision {identical.number}" if identical is not None else ""
+
+        dataset = selected.dataset
+
+        print(
+            f"{selected.number}  {_render_imported_at(selected)}  "
+            f"{selected.content_digest[:12]}  {dataset.version}  "
+            f"{len(dataset.cases)} cases  {dataset.name}{note}"
+        )
 
     return 0
+
+
+def _selected_revision(
+    repository: SQLiteBenchmarkRepository,
+    benchmark_id: UUID,
+    revision: int | None,
+) -> BenchmarkDatasetRevision | None:
+    """Return the requested revision, printing the failure when there is none."""
+
+    latest = repository.latest_revision(benchmark_id)
+
+    if latest is None:
+        print(
+            f"Benchmark dataset {benchmark_id} is not configured.",
+            file=sys.stderr,
+        )
+
+        return None
+
+    if revision is None:
+        return latest
+
+    selected = repository.revision(
+        benchmark_id,
+        revision,
+    )
+
+    if selected is None:
+        print(
+            f"Benchmark dataset {benchmark_id} has no revision {revision}.",
+            file=sys.stderr,
+        )
+
+    return selected
+
+
+def _render_imported_at(
+    revision: BenchmarkDatasetRevision,
+) -> str:
+    """Render when one revision was imported, or that it is unknown."""
+
+    if revision.imported_at is None:
+        return "unknown"
+
+    return revision.imported_at.isoformat()
 
 
 def list_benchmark_cases(
@@ -166,11 +295,18 @@ def show_benchmark_case(
 
 
 def _print_benchmark_dataset(
-    dataset: BenchmarkDataset,
+    revision: BenchmarkDatasetRevision,
+    *,
+    latest_number: int,
 ) -> None:
-    """Render one durable reusable benchmark workload."""
+    """Render one imported revision of a reusable benchmark workload."""
+
+    dataset = revision.dataset
 
     print(f"ID: {dataset.id}")
+    print(f"Revision: {revision.number} of {latest_number}")
+    print(f"Imported: {_render_imported_at(revision)}")
+    print(f"Content Digest: {revision.content_digest}")
     print(f"Name: {dataset.name}")
     print(f"Version: {dataset.version}")
     print(f"Description: {dataset.description}")
@@ -241,7 +377,12 @@ def _indent(
 def import_benchmark(
     document_path: Path,
 ) -> int:
-    """Import one durable benchmark dataset from a JSON document."""
+    """Import one durable benchmark dataset from a JSON document.
+
+    Importing never replaces anything: each import appends the next revision
+    under the document's benchmark ID. Re-importing earlier content is
+    reported as identical to the earliest revision with the same content.
+    """
 
     try:
         document = document_path.read_text(
@@ -273,19 +414,18 @@ def import_benchmark(
         configuration.database,
     )
 
-    try:
-        repository.save(
-            dataset,
-        )
-    except ValueError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
+    saved = repository.save(
+        dataset,
+    )
 
-        return 1
+    identical = earliest_identical_benchmark_revision(
+        repository.revisions(dataset.id),
+        saved,
+    )
 
-    print(f"Imported benchmark dataset {dataset.id}.")
+    note = f" (identical to revision {identical.number})" if identical is not None else ""
+
+    print(f"Imported benchmark dataset {dataset.id} revision {saved.number}{note}.")
 
     return 0
 
@@ -552,7 +692,9 @@ def _benchmark_recorder(
 
 __all__ = [
     "compare_benchmarks",
+    "export_benchmark",
     "import_benchmark",
+    "list_benchmark_history",
     "list_benchmark_cases",
     "list_benchmark_executions",
     "list_benchmarks",

@@ -7,9 +7,11 @@ from azathoth.cli.benchmark_execution import (
 )
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
+    export_benchmark,
     import_benchmark,
     list_benchmark_cases,
     list_benchmark_executions,
+    list_benchmark_history,
     list_benchmarks,
     run_benchmark,
     show_benchmark,
@@ -126,6 +128,7 @@ __all__ = [
     "deauthorize_model",
     "execute_configured_benchmark",
     "execute_configured_workflow",
+    "export_benchmark",
     "import_benchmark",
     "import_goal",
     "export_tool",
@@ -136,6 +139,7 @@ __all__ = [
     "invoke_workflow",
     "list_benchmark_cases",
     "list_benchmark_executions",
+    "list_benchmark_history",
     "list_benchmarks",
     "list_goals",
     "list_judges",

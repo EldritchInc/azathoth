@@ -6,9 +6,11 @@ from typing import cast
 
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
+    export_benchmark,
     import_benchmark,
     list_benchmark_cases,
     list_benchmark_executions,
+    list_benchmark_history,
     list_benchmarks,
     run_benchmark,
     show_benchmark,
@@ -138,9 +140,11 @@ def _dispatch(
         return dispatch_benchmark_command(
             arguments,
             compare_benchmarks=compare_benchmarks,
+            export_benchmark=export_benchmark,
             import_benchmark=import_benchmark,
             list_benchmark_cases=list_benchmark_cases,
             list_benchmark_executions=list_benchmark_executions,
+            list_benchmark_history=list_benchmark_history,
             list_benchmarks=list_benchmarks,
             run_benchmark=run_benchmark,
             show_benchmark=show_benchmark,
