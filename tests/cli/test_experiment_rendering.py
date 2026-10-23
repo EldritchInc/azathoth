@@ -9,6 +9,7 @@ from azathoth.cli import (
 )
 from azathoth.workflows import (
     WorkflowCandidateSignature,
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowMetadata,
@@ -80,8 +81,13 @@ def create_observation(
             workflow_id=WORKFLOW_ID,
             strategy_ids=(strategy_id,),
         ),
-        run_id=run_id,
-        evaluation_id=evaluation_id,
+        id=run_id,
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=run_id,
+                evaluation_id=evaluation_id,
+            ),
+        ),
         scorecard=scorecard,
     )
 

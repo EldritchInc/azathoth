@@ -159,10 +159,11 @@ def test_optimize_experiment_records_reference_persisted_evidence(
 
     for record in SQLiteWorkflowExperimentRepository(database).experiments():
         for observation in record.observations:
-            run = run_repository.get(observation.run_id)
-            evaluation = evaluation_repository.get(observation.evaluation_id)
+            for case in observation.cases:
+                run = run_repository.get(case.run_id)
+                evaluation = evaluation_repository.get(case.evaluation_id)
 
-            assert run is not None
-            assert run.workflow.id == WORKFLOW_ID
-            assert evaluation is not None
-            assert evaluation.run_id == observation.run_id
+                assert run is not None
+                assert run.workflow.id == WORKFLOW_ID
+                assert evaluation is not None
+                assert evaluation.run_id == case.run_id

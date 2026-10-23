@@ -359,16 +359,24 @@ def test_recorded_experiment_observations_reference_persisted_evidence() -> None
     weak_run_id = run_id_for(repositories, WEAK_WORKFLOW_ID)
     strong_run_id = run_id_for(repositories, STRONG_WORKFLOW_ID)
 
-    assert tuple(observation.run_id for observation in record.observations) == (
+    assert tuple(
+        case.run_id for observation in record.observations for case in observation.cases
+    ) == (
         weak_run_id,
         strong_run_id,
     )
 
     for observation in record.observations:
-        evaluation = repositories.evaluations.get(observation.evaluation_id)
+        assert len(observation.cases) == 1
+
+        case = observation.cases[0]
+
+        evaluation = repositories.evaluations.get(case.evaluation_id)
 
         assert evaluation is not None
-        assert evaluation.run_id == observation.run_id
+        assert evaluation.run_id == case.run_id
+        assert case.case_id is None
+        assert case.passed is evaluation.evaluation.passed
         assert observation.candidate_signature.workflow_id == observation.workflow.id
 
 
@@ -383,10 +391,11 @@ def test_recorded_experiment_ranks_runs_like_the_result() -> None:
 
     record = repositories.experiments.experiments()[0]
 
-    assert record.ranking == (
+    assert tuple(observation.cases[0].run_id for observation in record.ranked_observations) == (
         run_id_for(repositories, STRONG_WORKFLOW_ID),
         run_id_for(repositories, WEAK_WORKFLOW_ID),
     )
+    assert record.ranking == tuple(observation.id for observation in record.ranked_observations)
     assert record.winner.workflow.id == STRONG_WORKFLOW_ID
     assert record.winner.scorecard == result.winner
 

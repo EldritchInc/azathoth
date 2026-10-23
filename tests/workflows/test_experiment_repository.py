@@ -8,6 +8,7 @@ import pytest
 from azathoth.workflows import (
     InMemoryWorkflowExperimentRepository,
     WorkflowCandidateSignature,
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowExperimentRepository,
@@ -62,8 +63,13 @@ def create_observation(
             workflow_id=workflow_id,
             strategy_ids=(strategy_id,),
         ),
-        run_id=run_id,
-        evaluation_id=evaluation_id,
+        id=run_id,
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=run_id,
+                evaluation_id=evaluation_id,
+            ),
+        ),
         scorecard=WorkflowScorecard(
             quality_score=score,
             reliability_score=score,

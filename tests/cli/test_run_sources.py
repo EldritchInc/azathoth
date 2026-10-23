@@ -9,6 +9,7 @@ from azathoth.cli import list_workflow_runs
 from azathoth.workflows import (
     SQLiteWorkflowExperimentRepository,
     WorkflowCandidateSignature,
+    WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
     WorkflowScorecard,
@@ -40,8 +41,13 @@ def create_observation(
             workflow_id=WORKFLOW_ID,
             strategy_ids=(STRATEGY_ID,),
         ),
-        run_id=run_id,
-        evaluation_id=UUID(int=run_id.int + (1 << 64)),
+        id=run_id,
+        cases=(
+            WorkflowExperimentCaseObservation(
+                run_id=run_id,
+                evaluation_id=UUID(int=run_id.int + (1 << 64)),
+            ),
+        ),
         scorecard=WorkflowScorecard(
             quality_score=overall_score,
             reliability_score=overall_score,
