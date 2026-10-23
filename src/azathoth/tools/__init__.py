@@ -37,6 +37,10 @@ from azathoth.tools.requirements import (
     ToolRequirements,
 )
 from azathoth.tools.resolution import ToolResolver
+from azathoth.tools.revision import (
+    ToolDocumentRevision,
+    earliest_identical_tool_revision,
+)
 from azathoth.tools.sqlite_repository import SQLiteToolRepository
 from azathoth.tools.strategy import ToolStrategy
 from azathoth.tools.testing import ToolTestCase
@@ -52,6 +56,7 @@ __all__ = [
     "ToolDefinition",
     "ToolDocument",
     "ToolDocumentError",
+    "ToolDocumentRevision",
     "ToolEntrypointError",
     "ToolExecutionError",
     "ToolExecutor",
@@ -73,6 +78,7 @@ __all__ = [
     "ToolVerifier",
     "UnsupportedToolRuntimeError",
     "decode_tool_document",
+    "earliest_identical_tool_revision",
     "encode_tool_document",
     "require_tool_repository",
 ]

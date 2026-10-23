@@ -9,47 +9,12 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
-    ToolDocument,
     ToolDocumentError,
     ToolImplementation,
     ToolTestCase,
     decode_tool_document,
+    earliest_identical_tool_revision,
 )
-
-
-def _tool_document_duplicate_error(
-    *,
-    repository: SQLiteToolRepository,
-    document: ToolDocument,
-) -> str | None:
-    """Return a duplicate-artifact error before mutating persistence."""
-
-    definition = document.definition
-
-    if (
-        repository.get_definition(
-            definition.id,
-            definition.version,
-        )
-        is not None
-    ):
-        return f"Tool definition {definition.id}@{definition.version} already exists."
-
-    existing_implementation_ids = {
-        implementation.id for implementation in repository.implementations()
-    }
-
-    for implementation in document.implementations:
-        if implementation.id in existing_implementation_ids:
-            return f"Tool implementation {implementation.id} already exists."
-
-    existing_test_case_ids = {test_case.id for test_case in repository.test_cases()}
-
-    for test_case in document.test_cases:
-        if test_case.id in existing_test_case_ids:
-            return f"Tool test case {test_case.id} already exists."
-
-    return None
 
 
 def list_tools() -> int:
@@ -334,7 +299,15 @@ def _print_tool_test_case(
 def import_tool(
     document_path: Path,
 ) -> int:
-    """Import one portable durable tool document."""
+    """Import one portable durable tool document.
+
+    Importing never replaces history: each import appends the next revision
+    of the document's exact tool version and makes its artifacts current.
+    Re-importing earlier content is reported as identical to the earliest
+    revision with the same content. A document whose artifact IDs belong to
+    another tool, or whose implementation IDs belong to another version, is
+    rejected before anything is saved.
+    """
 
     try:
         encoded = document_path.read_text(
@@ -366,34 +339,24 @@ def import_tool(
         configuration.database,
     )
 
-    duplicate_error = _tool_document_duplicate_error(
-        repository=repository,
-        document=document,
-    )
-
-    if duplicate_error is not None:
+    try:
+        revision = repository.save_document(document)
+    except ValueError as exc:
         print(
-            duplicate_error,
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    repository.save_definition(
-        document.definition,
+    identical = earliest_identical_tool_revision(
+        repository.document_revisions(revision.tool_id),
+        revision,
     )
 
-    for implementation in document.implementations:
-        repository.save_implementation(
-            implementation,
-        )
+    note = f" (identical to revision {identical.number})" if identical is not None else ""
 
-    for test_case in document.test_cases:
-        repository.save_test_case(
-            test_case,
-        )
-
-    print(f"Imported tool {document.definition.id}@{document.definition.version}.")
+    print(f"Imported tool {revision.reference} revision {revision.number}{note}.")
 
     return 0
 

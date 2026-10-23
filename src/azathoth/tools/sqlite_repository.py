@@ -5,12 +5,25 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.tools.definition import ToolDefinition
+from azathoth.tools.document import ToolDocument
 from azathoth.tools.implementation import ToolImplementation
+from azathoth.tools.revision import (
+    ToolDocumentRevision,
+    document_artifact_conflict,
+    retired_artifact_ids,
+    unrevisioned_document,
+)
 from azathoth.tools.testing import ToolTestCase
 
 
 class SQLiteToolRepository:
-    """Persist durable tool artifacts in a SQLite database."""
+    """Persist durable tool artifacts in a SQLite database.
+
+    Tool document revisions live in `tool_document_revisions`. The definition,
+    implementation, and test case tables hold the current artifacts. Opening a
+    database whose tool versions predate revisions records each such version
+    as revision 1, without an import time.
+    """
 
     def __init__(
         self,
@@ -168,6 +181,203 @@ class SQLiteToolRepository:
             ToolTestCase.model_validate_json(payload) for payload in self._all("tool_test_cases")
         )
 
+    def save_document(
+        self,
+        document: ToolDocument,
+    ) -> ToolDocumentRevision:
+        """Append one document as the next revision of its tool version.
+
+        The revision and the change to current artifacts are written in one
+        immediate transaction. Versions of the tool saved artifact by artifact
+        are first recorded as revision 1 of their own. Retired implementations
+        and test cases are removed, and the document's artifacts are added or
+        replaced in place.
+
+        Raises:
+            ValueError: An artifact ID in the document belongs to another
+                tool, or an implementation ID to another version.
+        """
+
+        definition = document.definition
+
+        connection = sqlite3.connect(
+            self._database,
+            isolation_level=None,
+        )
+
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+
+            try:
+                implementations = _implementations(connection)
+                test_cases = _test_cases(connection)
+
+                conflict = document_artifact_conflict(
+                    document,
+                    implementations=implementations,
+                    test_cases=test_cases,
+                )
+
+                if conflict is not None:
+                    raise ValueError(conflict)
+
+                _record_unrevisioned_versions(
+                    connection,
+                    tool_id=definition.id,
+                )
+
+                previous = _latest_revision(
+                    connection,
+                    definition.id,
+                    definition.version,
+                )
+
+                revision = ToolDocumentRevision.create(
+                    document,
+                    number=previous.number + 1 if previous is not None else 1,
+                )
+
+                retired_implementations, retired_test_cases = retired_artifact_ids(
+                    previous=previous.document if previous is not None else None,
+                    current=document,
+                    other_versions=_latest_documents_of_other_versions(
+                        connection,
+                        definition,
+                    ),
+                )
+
+                _insert_revision(
+                    connection,
+                    revision,
+                )
+
+                for implementation_id in retired_implementations:
+                    connection.execute(
+                        "DELETE FROM tool_implementations WHERE artifact_id = ?",
+                        (str(implementation_id),),
+                    )
+
+                for test_case_id in retired_test_cases:
+                    connection.execute(
+                        "DELETE FROM tool_test_cases WHERE artifact_id = ?",
+                        (str(test_case_id),),
+                    )
+
+                connection.execute(
+                    """
+                    INSERT INTO tool_definitions (
+                        artifact_id,
+                        artifact_version,
+                        payload
+                    )
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (artifact_id, artifact_version)
+                    DO UPDATE SET payload = excluded.payload
+                    """,
+                    (
+                        str(definition.id),
+                        definition.version,
+                        definition.model_dump_json(),
+                    ),
+                )
+
+                for implementation in document.implementations:
+                    _upsert(
+                        connection,
+                        table="tool_implementations",
+                        artifact_id=implementation.id,
+                        payload=implementation.model_dump_json(),
+                    )
+
+                for test_case in document.test_cases:
+                    _upsert(
+                        connection,
+                        table="tool_test_cases",
+                        artifact_id=test_case.id,
+                        payload=test_case.model_dump_json(),
+                    )
+
+                connection.execute("COMMIT")
+            except BaseException:
+                connection.execute("ROLLBACK")
+                raise
+        finally:
+            connection.close()
+
+        return revision
+
+    def latest_document_revision(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> ToolDocumentRevision | None:
+        """Return the latest revision of one exact tool version."""
+
+        connection = sqlite3.connect(self._database)
+
+        try:
+            return _latest_revision(
+                connection,
+                tool_id,
+                version,
+            )
+        finally:
+            connection.close()
+
+    def document_revision(
+        self,
+        tool_id: UUID,
+        version: str,
+        number: int,
+    ) -> ToolDocumentRevision | None:
+        """Return one numbered revision of one exact tool version."""
+
+        connection = sqlite3.connect(self._database)
+
+        try:
+            row = connection.execute(
+                """
+                SELECT payload
+                FROM tool_document_revisions
+                WHERE tool_id = ? AND tool_version = ? AND number = ?
+                """,
+                (
+                    str(tool_id),
+                    version,
+                    number,
+                ),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        if row is None:
+            return None
+
+        return _deserialize_revision(row[0])
+
+    def document_revisions(
+        self,
+        tool_id: UUID,
+    ) -> tuple[ToolDocumentRevision, ...]:
+        """Return every revision of every version of one tool, in import order."""
+
+        connection = sqlite3.connect(self._database)
+
+        try:
+            rows = connection.execute(
+                """
+                SELECT payload
+                FROM tool_document_revisions
+                WHERE tool_id = ?
+                ORDER BY sequence
+                """,
+                (str(tool_id),),
+            ).fetchall()
+        finally:
+            connection.close()
+
+        return tuple(_deserialize_revision(row[0]) for row in rows)
+
     def _initialize(self) -> None:
         """Create repository tables and migrate definition identity."""
 
@@ -198,11 +408,30 @@ class SQLiteToolRepository:
                     artifact_id TEXT NOT NULL UNIQUE,
                     payload TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS tool_document_revisions (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_id TEXT NOT NULL,
+                    tool_version TEXT NOT NULL,
+                    number INTEGER NOT NULL,
+                    content_digest TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    UNIQUE (
+                        tool_id,
+                        tool_version,
+                        number
+                    )
+                );
                 """
             )
 
             self._migrate_tool_definitions(
                 connection,
+            )
+
+            _record_unrevisioned_versions(
+                connection,
+                tool_id=None,
             )
 
             connection.commit()
@@ -374,3 +603,228 @@ class SQLiteToolRepository:
             payloads.append(payload)
 
         return tuple(payloads)
+
+
+def _payloads(
+    connection: sqlite3.Connection,
+    table: str,
+) -> tuple[str, ...]:
+    """Return every serialized artifact of one table in insertion order."""
+
+    rows = connection.execute(
+        f"""
+        SELECT payload
+        FROM {table}
+        ORDER BY sequence
+        """
+    ).fetchall()
+
+    payloads: list[str] = []
+
+    for row in rows:
+        payload = row[0]
+
+        if not isinstance(payload, str):
+            raise TypeError(f"Persisted payload in {table} was not text.")
+
+        payloads.append(payload)
+
+    return tuple(payloads)
+
+
+def _implementations(
+    connection: sqlite3.Connection,
+) -> tuple[ToolImplementation, ...]:
+    """Return every current implementation."""
+
+    return tuple(
+        ToolImplementation.model_validate_json(payload)
+        for payload in _payloads(connection, "tool_implementations")
+    )
+
+
+def _test_cases(
+    connection: sqlite3.Connection,
+) -> tuple[ToolTestCase, ...]:
+    """Return every current test case."""
+
+    return tuple(
+        ToolTestCase.model_validate_json(payload)
+        for payload in _payloads(connection, "tool_test_cases")
+    )
+
+
+def _upsert(
+    connection: sqlite3.Connection,
+    *,
+    table: str,
+    artifact_id: UUID,
+    payload: str,
+) -> None:
+    """Insert one current artifact, or replace its payload in place."""
+
+    connection.execute(
+        f"""
+        INSERT INTO {table} (
+            artifact_id,
+            payload
+        )
+        VALUES (?, ?)
+        ON CONFLICT (artifact_id)
+        DO UPDATE SET payload = excluded.payload
+        """,
+        (
+            str(artifact_id),
+            payload,
+        ),
+    )
+
+
+def _insert_revision(
+    connection: sqlite3.Connection,
+    revision: ToolDocumentRevision,
+) -> None:
+    """Insert one tool document revision row."""
+
+    connection.execute(
+        """
+        INSERT INTO tool_document_revisions (
+            tool_id,
+            tool_version,
+            number,
+            content_digest,
+            payload
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            str(revision.tool_id),
+            revision.tool_version,
+            revision.number,
+            revision.content_digest,
+            revision.model_dump_json(),
+        ),
+    )
+
+
+def _latest_revision(
+    connection: sqlite3.Connection,
+    tool_id: UUID,
+    version: str,
+) -> ToolDocumentRevision | None:
+    """Return the latest revision of one exact tool version."""
+
+    row = connection.execute(
+        """
+        SELECT payload
+        FROM tool_document_revisions
+        WHERE tool_id = ? AND tool_version = ?
+        ORDER BY number DESC
+        LIMIT 1
+        """,
+        (
+            str(tool_id),
+            version,
+        ),
+    ).fetchone()
+
+    if row is None:
+        return None
+
+    return _deserialize_revision(row[0])
+
+
+def _latest_documents_of_other_versions(
+    connection: sqlite3.Connection,
+    definition: ToolDefinition,
+) -> tuple[ToolDocument, ...]:
+    """Return the latest document of every other revisioned version of a tool."""
+
+    rows = connection.execute(
+        """
+        SELECT DISTINCT tool_version
+        FROM tool_document_revisions
+        WHERE tool_id = ? AND tool_version != ?
+        """,
+        (
+            str(definition.id),
+            definition.version,
+        ),
+    ).fetchall()
+
+    documents: list[ToolDocument] = []
+
+    for row in rows:
+        latest = _latest_revision(
+            connection,
+            definition.id,
+            str(row[0]),
+        )
+
+        if latest is not None:
+            documents.append(latest.document)
+
+    return tuple(documents)
+
+
+def _record_unrevisioned_versions(
+    connection: sqlite3.Connection,
+    *,
+    tool_id: UUID | None,
+) -> None:
+    """Record unrevisioned tool versions as revision 1, without an import time.
+
+    With a tool ID, only that tool's versions are considered; otherwise every
+    tool's are. Versions that already have revisions are left alone, so this
+    is safe to run whenever a repository opens.
+    """
+
+    definitions = tuple(
+        ToolDefinition.model_validate_json(payload)
+        for payload in _payloads(connection, "tool_definitions")
+    )
+
+    pending = tuple(
+        definition
+        for definition in definitions
+        if (tool_id is None or definition.id == tool_id)
+        and _latest_revision(connection, definition.id, definition.version) is None
+    )
+
+    if not pending:
+        return
+
+    implementations = _implementations(connection)
+    test_cases = _test_cases(connection)
+
+    for definition in pending:
+        _insert_revision(
+            connection,
+            ToolDocumentRevision.create(
+                unrevisioned_document(
+                    definition,
+                    implementations=implementations,
+                    test_cases=test_cases,
+                ),
+                number=1,
+            ).model_copy(
+                update={
+                    "imported_at": None,
+                },
+            ),
+        )
+
+
+def _deserialize_revision(
+    payload: object,
+) -> ToolDocumentRevision:
+    """Reconstruct one persisted tool document revision.
+
+    Raises:
+        TypeError: The persisted payload is not text.
+    """
+
+    if not isinstance(payload, str):
+        raise TypeError("Persisted tool revision payload was not text.")
+
+    return ToolDocumentRevision.model_validate_json(payload)
