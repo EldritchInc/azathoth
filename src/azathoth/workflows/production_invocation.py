@@ -11,6 +11,7 @@ from azathoth.context import (
     Context,
     ContextEvent,
 )
+from azathoth.workflows.input import create_workflow_input_event
 
 PRODUCTION_INVOCATION_EVENT_TYPE = "production.invocation.received"
 PRODUCTION_INVOCATION_PRODUCER = "azathoth.production"
@@ -79,7 +80,14 @@ def create_production_invocation(
     payload: JsonValue,
     caller_metadata: Mapping[str, JsonValue] | None = None,
 ) -> ProductionInvocation:
-    """Create one production invocation from caller-supplied JSON input."""
+    """Create one production invocation from caller-supplied JSON input.
+
+    The input is recorded twice at the invocation's creation time: once as
+    the production invocation event, and once as the canonical workflow input
+    event that benchmark cases also emit. A workflow whose prompt binds the
+    workflow input therefore renders identically when optimized against a
+    benchmark and when invoked in production.
+    """
 
     invocation_id = uuid4()
     created_at = utc_now()
@@ -91,6 +99,11 @@ def create_production_invocation(
                 payload={
                     "input": payload,
                 },
+                producer=PRODUCTION_INVOCATION_PRODUCER,
+                occurred_at=created_at,
+            ),
+            create_workflow_input_event(
+                payload,
                 producer=PRODUCTION_INVOCATION_PRODUCER,
                 occurred_at=created_at,
             ),
