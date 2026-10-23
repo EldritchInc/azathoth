@@ -276,6 +276,7 @@ def test_detail_renders_benchmark_experiment_with_cases_in_rank_order() -> None:
             f"Observation ID: {WINNING_OBSERVATION_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {SECOND_STRATEGY_ID}",
             "Passed: 2/2",
             (
@@ -297,6 +298,7 @@ def test_detail_renders_benchmark_experiment_with_cases_in_rank_order() -> None:
             f"Observation ID: {LOSING_OBSERVATION_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {FIRST_STRATEGY_ID}",
             "Passed: 1/2",
             (
@@ -330,6 +332,7 @@ def test_detail_renders_legacy_experiment_without_benchmark_or_outcomes() -> Non
             f"Observation ID: {LEGACY_WINNING_RUN_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {SECOND_STRATEGY_ID}",
             "Passed: unknown",
             (
@@ -346,6 +349,7 @@ def test_detail_renders_legacy_experiment_without_benchmark_or_outcomes() -> Non
             f"Observation ID: {LEGACY_LOSING_RUN_ID}",
             "Workflow: rendered workflow",
             f"Workflow ID: {WORKFLOW_ID}",
+            "Workflow Revision: unknown",
             f"Strategy IDs: {FIRST_STRATEGY_ID}",
             "Passed: unknown",
             (

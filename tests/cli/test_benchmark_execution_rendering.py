@@ -284,6 +284,7 @@ def test_run_execution_rendering_shows_its_candidate_and_every_case() -> None:
         f"Candidate ID: {execution.candidates[0].id}\n"
         "Workflow: workflow 1\n"
         f"Workflow ID: {FIRST_WORKFLOW_ID}\n"
+        "Workflow Revision: unknown\n"
         f"Strategy IDs: {UUID(int=1)}\n"
         "Passed: 1/2\n"
         "Accuracy: 0.500000\n"
