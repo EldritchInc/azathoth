@@ -70,6 +70,12 @@ def render_workflow_benchmark_execution(
                 f"Candidate ID: {candidate.id}",
                 f"Workflow: {candidate.workflow.name}",
                 f"Workflow ID: {candidate.workflow.id}",
+                "Workflow Revision: "
+                + (
+                    str(candidate.candidate_signature.workflow_revision)
+                    if candidate.candidate_signature.workflow_revision is not None
+                    else "unknown"
+                ),
                 "Strategy IDs: "
                 + ", ".join(
                     str(strategy_id) for strategy_id in candidate.candidate_signature.strategy_ids

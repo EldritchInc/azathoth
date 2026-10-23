@@ -99,8 +99,10 @@ from azathoth.cli.usage import (
     tool_usage,
 )
 from azathoth.cli.workflows import (
+    export_workflow,
     import_workflow,
     invoke_workflow,
+    list_workflow_history,
     list_workflows,
     optimize_workflow,
     promote_workflow,
@@ -125,6 +127,7 @@ __all__ = [
     "import_benchmark",
     "import_goal",
     "import_tool",
+    "export_workflow",
     "import_workflow",
     "invoke_active_production_workflow",
     "invoke_workflow",
@@ -140,6 +143,7 @@ __all__ = [
     "list_tool_versions",
     "list_tools",
     "list_workflow_experiments",
+    "list_workflow_history",
     "list_workflow_invocations",
     "list_workflow_revisions",
     "list_workflow_runs",

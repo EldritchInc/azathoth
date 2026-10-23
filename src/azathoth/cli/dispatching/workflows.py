@@ -17,6 +17,9 @@ from azathoth.cli.parsing import (
     WORKFLOW_DOCUMENT_ATTRIBUTE,
     WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE,
     WORKFLOW_EXPERIMENTS_ACTION,
+    WORKFLOW_EXPORT_ACTION,
+    WORKFLOW_HISTORY_ACTION,
+    WORKFLOW_HISTORY_LIMIT_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
@@ -33,6 +36,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_RUN_LIMIT_ATTRIBUTE,
     WORKFLOW_RUNS_ACTION,
     WORKFLOW_SHOW_ACTION,
+    WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
 )
 
 WorkflowIdentifierHandler = Callable[[UUID], int]
@@ -41,14 +45,17 @@ WorkflowListHandler = Callable[[], int]
 WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
 WorkflowHistoryHandler = Callable[..., int]
+WorkflowRevisionHandler = Callable[..., int]
 
 
 def dispatch_workflow_command(
     arguments: Namespace,
     *,
+    export_workflow: WorkflowRevisionHandler,
     import_workflow: WorkflowImportHandler,
     invoke_workflow: WorkflowInvokeHandler,
     list_workflow_experiments: WorkflowHistoryHandler,
+    list_workflow_history: WorkflowHistoryHandler,
     list_workflow_invocations: WorkflowHistoryHandler,
     list_workflow_revisions: WorkflowHistoryHandler,
     list_workflow_runs: WorkflowHistoryHandler,
@@ -56,7 +63,7 @@ def dispatch_workflow_command(
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowIdentifierHandler,
     run_workflow: WorkflowIdentifierHandler,
-    show_workflow: WorkflowIdentifierHandler,
+    show_workflow: WorkflowRevisionHandler,
     show_workflow_production: WorkflowIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed workflow command."""
@@ -82,7 +89,41 @@ def dispatch_workflow_command(
             ),
         )
 
-        return show_workflow(workflow_id)
+        return show_workflow(
+            workflow_id,
+            revision=_specification_revision(arguments),
+        )
+
+    if action == WORKFLOW_EXPORT_ACTION:
+        return export_workflow(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            revision=_specification_revision(arguments),
+        )
+
+    if action == WORKFLOW_HISTORY_ACTION:
+        return list_workflow_history(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            limit=cast(
+                int | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_HISTORY_LIMIT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
 
     if action == WORKFLOW_IMPORT_ACTION:
         workflow_document = cast(
@@ -264,3 +305,18 @@ def dispatch_workflow_command(
         )
 
     return None
+
+
+def _specification_revision(
+    arguments: Namespace,
+) -> int | None:
+    """Return the requested imported revision number, if any."""
+
+    return cast(
+        int | None,
+        getattr(
+            arguments,
+            WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
+            None,
+        ),
+    )

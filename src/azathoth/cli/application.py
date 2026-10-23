@@ -87,8 +87,10 @@ from azathoth.cli.usage import (
     tool_usage,
 )
 from azathoth.cli.workflows import (
+    export_workflow,
     import_workflow,
     invoke_workflow,
+    list_workflow_history,
     list_workflows,
     optimize_workflow,
     promote_workflow,
@@ -155,9 +157,11 @@ def _dispatch(
     if command == WORKFLOW_COMMAND:
         return dispatch_workflow_command(
             arguments,
+            export_workflow=export_workflow,
             import_workflow=import_workflow,
             invoke_workflow=invoke_workflow,
             list_workflow_experiments=list_workflow_experiments,
+            list_workflow_history=list_workflow_history,
             list_workflow_invocations=list_workflow_invocations,
             list_workflow_revisions=list_workflow_revisions,
             list_workflow_runs=list_workflow_runs,

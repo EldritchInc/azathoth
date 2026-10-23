@@ -101,6 +101,12 @@ def _append_observation(
             f"Observation ID: {observation.id}",
             f"Workflow: {observation.workflow.name}",
             f"Workflow ID: {observation.workflow.id}",
+            "Workflow Revision: "
+            + (
+                str(observation.candidate_signature.workflow_revision)
+                if observation.candidate_signature.workflow_revision is not None
+                else "unknown"
+            ),
             "Strategy IDs: "
             + ", ".join(
                 str(strategy_id) for strategy_id in observation.candidate_signature.strategy_ids
