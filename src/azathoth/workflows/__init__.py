@@ -184,6 +184,11 @@ from azathoth.workflows.run_evaluation import WorkflowRunEvaluation
 from azathoth.workflows.run_evaluation_repository import (
     WorkflowRunEvaluationRepository,
 )
+from azathoth.workflows.run_failure import (
+    RUN_FAILURE_EVALUATOR_NAME,
+    RUN_FAILURE_EVALUATOR_VERSION,
+    evaluate_failed_run,
+)
 from azathoth.workflows.run_repository import WorkflowRunRepository
 from azathoth.workflows.runner import (
     WorkflowRunner,
@@ -293,6 +298,8 @@ __all__ = [
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
+    "RUN_FAILURE_EVALUATOR_NAME",
+    "RUN_FAILURE_EVALUATOR_VERSION",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
@@ -377,6 +384,7 @@ __all__ = [
     "create_workflow_input_event",
     "decode_workflow_document",
     "emit_production_result",
+    "evaluate_failed_run",
     "encode_workflow_document",
     "execute_production_invocation",
     "invoke_production_workflow",
