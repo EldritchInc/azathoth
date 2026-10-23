@@ -5,9 +5,9 @@ from uuid import UUID
 
 import pytest
 
-from azathoth.context import Context
 from azathoth.evaluation import (
-    ExactMatchEvaluator,
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -230,12 +230,19 @@ def test_workflow_experiment_end_to_end() -> None:
                 balanced_candidate,
                 best_candidate,
             ),
-            context=Context(),
-            evaluator=ExactMatchEvaluator(),
-            expected_outcome=ExpectedOutcome(
-                description="Workflow should return success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
+            dataset=BenchmarkDataset(
+                name="experiment-end-to-end",
+                description="Benchmark expecting success.",
+                cases=(
+                    BenchmarkCase(
+                        input="request",
+                        expected=ExpectedOutcome(
+                            description="Workflow should return success.",
+                            value="success",
+                            comparison=OutcomeComparison.EXACT,
+                        ),
+                    ),
+                ),
             ),
         )
     )

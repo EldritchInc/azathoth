@@ -13,7 +13,10 @@ from azathoth.cli import (
     show_workflow,
 )
 from azathoth.context import Context
-from azathoth.evaluation import ExpectedOutcome
+from azathoth.evaluation import (
+    BenchmarkDataset,
+    OutcomeComparison,
+)
 from azathoth.optimization import WorkflowOptimizationSession
 from azathoth.prompting import (
     PortfolioModelSelection,
@@ -599,14 +602,17 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
         == 0
     )
 
-    expected_outcome = received["expected_outcome"]
+    dataset = received["dataset"]
     scoring_policy = received["scoring_policy"]
 
     assert isinstance(
-        expected_outcome,
-        ExpectedOutcome,
+        dataset,
+        BenchmarkDataset,
     )
-    assert expected_outcome.value == {
+    assert len(dataset.cases) == 1
+    assert dataset.cases[0].input is None
+    assert dataset.cases[0].expected.comparison is OutcomeComparison.EXACT
+    assert dataset.cases[0].expected.value == {
         "classification": "positive",
     }
 

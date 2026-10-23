@@ -3,8 +3,12 @@
 import asyncio
 from uuid import UUID
 
+import pytest
+
 from azathoth.cli import optimize_configured_workflow
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     ExpectedOutcome,
     OutcomeComparison,
 )
@@ -193,6 +197,40 @@ def create_runtime() -> AzathothRuntime:
     )
 
 
+BENCHMARK_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+
+def case_id(
+    index: int,
+) -> UUID:
+    """Return the deterministic identifier of one benchmark case."""
+
+    return UUID(int=BENCHMARK_ID.int + index)
+
+
+def create_benchmark(
+    *expectations: ExpectedOutcome,
+) -> BenchmarkDataset:
+    """Create a benchmark with one case per expectation, in order."""
+
+    return BenchmarkDataset(
+        id=BENCHMARK_ID,
+        name="optimization",
+        description="Benchmark used for optimization tests.",
+        cases=tuple(
+            BenchmarkCase(
+                id=case_id(index),
+                input=f"request {index}",
+                expected=expected,
+            )
+            for index, expected in enumerate(
+                expectations,
+                start=1,
+            )
+        ),
+    )
+
+
 def test_optimize_configured_workflow_runs_requested_generations() -> None:
     runtime = create_runtime()
 
@@ -200,10 +238,12 @@ def test_optimize_configured_workflow_runs_requested_generations() -> None:
         optimize_configured_workflow(
             runtime=runtime,
             workflow_id=WORKFLOW_ID,
-            expected_outcome=ExpectedOutcome(
-                description="Workflow returns success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
             ),
             scoring_policy=WorkflowScoringPolicy(
                 target_latency_seconds=60.0,
@@ -223,10 +263,12 @@ def test_optimize_configured_workflow_starts_from_runtime_candidate() -> None:
         optimize_configured_workflow(
             runtime=runtime,
             workflow_id=WORKFLOW_ID,
-            expected_outcome=ExpectedOutcome(
-                description="Workflow returns success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
             ),
             scoring_policy=WorkflowScoringPolicy(
                 target_latency_seconds=60.0,
@@ -247,10 +289,12 @@ def test_optimize_configured_workflow_generates_cheaper_candidate() -> None:
         optimize_configured_workflow(
             runtime=runtime,
             workflow_id=WORKFLOW_ID,
-            expected_outcome=ExpectedOutcome(
-                description="Workflow returns success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
             ),
             scoring_policy=WorkflowScoringPolicy(
                 target_latency_seconds=60.0,
@@ -272,10 +316,12 @@ def test_optimize_configured_workflow_empirically_evaluates_generated_candidate(
         optimize_configured_workflow(
             runtime=runtime,
             workflow_id=WORKFLOW_ID,
-            expected_outcome=ExpectedOutcome(
-                description="Workflow returns success.",
-                value="success",
-                comparison=OutcomeComparison.EXACT,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
             ),
             scoring_policy=WorkflowScoringPolicy(
                 target_latency_seconds=60.0,
@@ -292,3 +338,66 @@ def test_optimize_configured_workflow_empirically_evaluates_generated_candidate(
     assert len(second_experiment.evidence) == 2
 
     assert second_experiment.winner.overall_score >= first_experiment.winner.overall_score
+
+
+def test_optimize_configured_workflow_averages_quality_across_cases() -> None:
+    session = asyncio.run(
+        optimize_configured_workflow(
+            runtime=create_runtime(),
+            workflow_id=WORKFLOW_ID,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+                ExpectedOutcome(
+                    description="Workflow returns failure.",
+                    value="failure",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+            scoring_policy=WorkflowScoringPolicy(
+                target_latency_seconds=60.0,
+                target_cost_usd=0.01,
+            ),
+            max_generations=1,
+        )
+    )
+
+    evidence = session.generations[0].previous_experiment.evidence
+
+    assert len(evidence) == 1
+    assert evidence[0].scorecard.quality_score == 0.5
+
+
+def test_optimize_configured_workflow_rejects_empty_benchmark_before_generating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime()
+
+    def fail_generation(*args: object, **kwargs: object) -> object:
+        raise AssertionError("Candidates must not be generated.")
+
+    monkeypatch.setattr(
+        runtime,
+        "generate_workflow_candidate",
+        fail_generation,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"^Benchmark {BENCHMARK_ID} has no cases.$",
+    ):
+        asyncio.run(
+            optimize_configured_workflow(
+                runtime=runtime,
+                workflow_id=WORKFLOW_ID,
+                dataset=create_benchmark(),
+                scoring_policy=WorkflowScoringPolicy(
+                    target_latency_seconds=60.0,
+                    target_cost_usd=0.01,
+                ),
+                max_generations=1,
+            )
+        )

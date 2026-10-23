@@ -7,11 +7,16 @@ import pytest
 
 from azathoth.context import Context
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     EvaluationResult,
     EvaluationStatus,
+    Evaluator,
     EvaluatorMetadata,
     ExpectedOutcome,
     OutcomeComparison,
+    OutcomeEvaluator,
+    UnsupportedComparisonError,
 )
 from azathoth.strategies import (
     Strategy,
@@ -20,6 +25,7 @@ from azathoth.strategies import (
     StrategyOutcome,
 )
 from azathoth.workflows import (
+    WORKFLOW_INPUT_EVENT_TYPE,
     WorkflowCandidate,
     WorkflowCandidateStep,
     WorkflowExperimentResult,
@@ -48,6 +54,14 @@ STRATEGY_ID_A = UUID("77777777-7777-7777-7777-777777777777")
 STRATEGY_ID_B = UUID("88888888-8888-8888-8888-888888888888")
 
 STRATEGY_ID_C = UUID("99999999-9999-9999-9999-999999999999")
+
+DATASET_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+CASE_ID_A = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1")
+
+CASE_ID_B = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2")
+
+CASE_ID_C = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3")
 
 
 class StaticStrategy:
@@ -228,6 +242,115 @@ def create_expected_outcome() -> ExpectedOutcome:
     )
 
 
+def create_dataset() -> BenchmarkDataset:
+    """Create a one-case benchmark expecting success."""
+
+    return BenchmarkDataset(
+        id=DATASET_ID,
+        name="experiment-runner",
+        description="Benchmark used for experiment runner tests.",
+        cases=(
+            BenchmarkCase(
+                id=CASE_ID_A,
+                input="request",
+                expected=create_expected_outcome(),
+            ),
+        ),
+    )
+
+
+def create_case(
+    *,
+    case_id: UUID,
+    input_value: str,
+    expected_value: str,
+    comparison: OutcomeComparison = OutcomeComparison.EXACT,
+) -> BenchmarkCase:
+    """Create one deterministic benchmark case."""
+
+    return BenchmarkCase(
+        id=case_id,
+        input=input_value,
+        expected=ExpectedOutcome(
+            description=f"Workflow should return {expected_value}.",
+            value=expected_value,
+            comparison=comparison,
+        ),
+    )
+
+
+def create_multi_case_dataset(
+    *cases: BenchmarkCase,
+) -> BenchmarkDataset:
+    """Create a benchmark from explicit cases."""
+
+    return BenchmarkDataset(
+        id=DATASET_ID,
+        name="experiment-runner-multi-case",
+        description="Multi-case benchmark used for experiment runner tests.",
+        cases=cases,
+    )
+
+
+def create_outcome_evaluator(
+    evaluator: Evaluator,
+) -> OutcomeEvaluator:
+    """Route exact comparisons to one test evaluator."""
+
+    return OutcomeEvaluator(
+        {
+            OutcomeComparison.EXACT: evaluator,
+        }
+    )
+
+
+class EchoInputStrategy:
+    """Return the benchmark input received through the workflow context."""
+
+    def __init__(self) -> None:
+        self._metadata = StrategyMetadata(
+            id=STRATEGY_ID_A,
+            name="echo-input",
+            description="Echo the workflow input.",
+        )
+        self.inputs: list[object] = []
+
+    @property
+    def metadata(self) -> StrategyMetadata:
+        """Return deterministic strategy metadata."""
+
+        return self._metadata
+
+    async def run(
+        self,
+        context: Context,
+    ) -> StrategyOutcome:
+        """Return the received workflow input as output."""
+
+        event = context.latest(
+            WORKFLOW_INPUT_EVENT_TYPE,
+        )
+
+        assert event is not None
+
+        value = event.payload["input"]
+
+        self.inputs.append(value)
+
+        return StrategyOutcome(
+            output=value,
+            metrics=StrategyExecutionMetrics(
+                provider="test-provider",
+                model="test-model",
+                prompt_tokens=10,
+                completion_tokens=1,
+                total_tokens=11,
+                latency_ms=100,
+                estimated_cost_usd=0.05,
+            ),
+        )
+
+
 def test_experiment_runner_executes_every_workflow() -> None:
     """Every candidate workflow should execute exactly once."""
 
@@ -261,11 +384,10 @@ def test_experiment_runner_executes_every_workflow() -> None:
     asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -314,11 +436,10 @@ def test_experiment_runner_evaluates_every_workflow_output() -> None:
     asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(evaluator),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=evaluator,
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -358,11 +479,10 @@ def test_experiment_runner_produces_scorecard_for_every_workflow() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -398,11 +518,10 @@ def test_experiment_runner_associates_scorecards_with_candidate_signatures() -> 
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -453,11 +572,10 @@ def test_experiment_runner_ranks_workflow_scorecards() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -497,11 +615,10 @@ def test_experiment_runner_exposes_winner() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -539,11 +656,10 @@ def test_experiment_runner_preserves_input_order_for_exact_ties() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -561,11 +677,10 @@ def test_experiment_runner_rejects_empty_workflow_collection() -> None:
         asyncio.run(
             WorkflowExperimentRunner(
                 scorer=create_scorer(),
+                evaluator=create_outcome_evaluator(RecordingEvaluator()),
             ).run(
                 workflows=(),
-                context=Context(),
-                evaluator=RecordingEvaluator(),
-                expected_outcome=create_expected_outcome(),
+                dataset=create_dataset(),
             )
         )
 
@@ -599,11 +714,10 @@ def test_experiment_runner_result_round_trips_through_json() -> None:
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -655,11 +769,10 @@ def test_experiment_runner_continues_after_candidate_execution_failure() -> None
     asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -708,11 +821,10 @@ def test_experiment_runner_does_not_evaluate_failed_candidate() -> None:
     asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(evaluator),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=evaluator,
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
@@ -760,27 +872,71 @@ def test_experiment_runner_ranks_successfully_executed_candidates_after_failure(
     result = asyncio.run(
         WorkflowExperimentRunner(
             scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(RecordingEvaluator()),
         ).run(
             workflows=workflows,
-            context=Context(),
-            evaluator=RecordingEvaluator(),
-            expected_outcome=create_expected_outcome(),
+            dataset=create_dataset(),
         )
     )
 
-    assert len(result.scorecards) == 2
+    assert len(result.scorecards) == 3
 
     assert tuple(observation.candidate_signature for observation in result.evidence) == (
         workflows[0].signature,
+        workflows[1].signature,
         workflows[2].signature,
     )
 
-    assert result.winner == result.scorecards[1]
+    assert result.winner == result.scorecards[2]
     assert result.winner.quality_score == pytest.approx(1.0)
 
 
-def test_experiment_runner_rejects_population_when_every_candidate_fails() -> None:
-    """An experiment cannot invent a winner when every candidate fails."""
+def test_experiment_runner_scores_failed_candidate_as_failed_case() -> None:
+    """A failed candidate is ranked with zero quality behind successful runs."""
+
+    workflows = (
+        create_workflow(
+            workflow_id=WORKFLOW_ID_A,
+            step_id=STEP_ID_A,
+            strategy=StaticStrategy(
+                strategy_id=STRATEGY_ID_A,
+                output="failure",
+                estimated_cost_usd=0.05,
+            ),
+            name="workflow-a",
+        ),
+        create_workflow(
+            workflow_id=WORKFLOW_ID_B,
+            step_id=STEP_ID_B,
+            strategy=FailingStrategy(
+                strategy_id=STRATEGY_ID_B,
+                message="candidate-b failed",
+            ),
+            name="workflow-b",
+        ),
+    )
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=workflows,
+            dataset=create_dataset(),
+        )
+    )
+
+    failed = result.evidence[1].scorecard
+
+    assert failed.quality_score == 0.0
+    assert failed.reliability_score < result.evidence[0].scorecard.reliability_score
+    assert tuple(evidence.candidate_signature for evidence in result.ranked_evidence) == (
+        workflows[0].signature,
+        workflows[1].signature,
+    )
+
+
+def test_experiment_runner_ranks_population_when_every_candidate_fails() -> None:
+    """A generation in which every run failed still ranks every candidate."""
 
     workflows = (
         create_workflow(
@@ -812,17 +968,352 @@ def test_experiment_runner_rejects_population_when_every_candidate_fails() -> No
         ),
     )
 
+    evaluator = RecordingEvaluator()
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+            evaluator=create_outcome_evaluator(evaluator),
+        ).run(
+            workflows=workflows,
+            dataset=create_dataset(),
+        )
+    )
+
+    assert evaluator.actual_values == []
+    assert len(result.ranking.entries) == 3
+    assert all(scorecard.quality_score == 0.0 for scorecard in result.scorecards)
+    assert tuple(evidence.candidate_signature for evidence in result.ranked_evidence) == (
+        workflows[0].signature,
+        workflows[1].signature,
+        workflows[2].signature,
+    )
+
+
+def test_experiment_runner_runs_every_candidate_for_every_case() -> None:
+    """Each candidate executes once per benchmark case."""
+
+    strategy_a = StaticStrategy(
+        strategy_id=STRATEGY_ID_A,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    strategy_b = StaticStrategy(
+        strategy_id=STRATEGY_ID_B,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=(
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_A,
+                    step_id=STEP_ID_A,
+                    strategy=strategy_a,
+                    name="workflow-a",
+                ),
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_B,
+                    step_id=STEP_ID_B,
+                    strategy=strategy_b,
+                    name="workflow-b",
+                ),
+            ),
+            dataset=create_multi_case_dataset(
+                create_case(
+                    case_id=CASE_ID_A,
+                    input_value="first",
+                    expected_value="success",
+                ),
+                create_case(
+                    case_id=CASE_ID_B,
+                    input_value="second",
+                    expected_value="success",
+                ),
+                create_case(
+                    case_id=CASE_ID_C,
+                    input_value="third",
+                    expected_value="success",
+                ),
+            ),
+        )
+    )
+
+    assert strategy_a.calls == 3
+    assert strategy_b.calls == 3
+
+
+def test_experiment_runner_supplies_each_case_input_to_context() -> None:
+    """Every case's input reaches its run through the workflow context."""
+
+    strategy = EchoInputStrategy()
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=(
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_A,
+                    step_id=STEP_ID_A,
+                    strategy=strategy,
+                    name="workflow-a",
+                ),
+            ),
+            dataset=create_multi_case_dataset(
+                create_case(
+                    case_id=CASE_ID_A,
+                    input_value="alpha",
+                    expected_value="alpha",
+                ),
+                create_case(
+                    case_id=CASE_ID_B,
+                    input_value="beta",
+                    expected_value="beta",
+                ),
+            ),
+        )
+    )
+
+    assert strategy.inputs == [
+        "alpha",
+        "beta",
+    ]
+    assert result.winner.quality_score == pytest.approx(1.0)
+
+
+def test_experiment_runner_judges_each_case_with_its_own_comparison() -> None:
+    """Each case's result is judged by the evaluator for its comparison."""
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=(
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_A,
+                    step_id=STEP_ID_A,
+                    strategy=StaticStrategy(
+                        strategy_id=STRATEGY_ID_A,
+                        output="success",
+                        estimated_cost_usd=0.05,
+                    ),
+                    name="workflow-a",
+                ),
+            ),
+            dataset=create_multi_case_dataset(
+                create_case(
+                    case_id=CASE_ID_A,
+                    input_value="first",
+                    expected_value="SUCCESS",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+                create_case(
+                    case_id=CASE_ID_B,
+                    input_value="second",
+                    expected_value="SUCCESS",
+                    comparison=OutcomeComparison.NORMALIZED,
+                ),
+            ),
+        )
+    )
+
+    assert result.winner.quality_score == pytest.approx(0.5)
+
+
+def test_experiment_runner_combines_case_scorecards_by_mean() -> None:
+    """A candidate's scorecard is the per-dimension mean of its case scorecards."""
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=(
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_A,
+                    step_id=STEP_ID_A,
+                    strategy=StaticStrategy(
+                        strategy_id=STRATEGY_ID_A,
+                        output="success",
+                        estimated_cost_usd=0.05,
+                    ),
+                    name="workflow-a",
+                ),
+            ),
+            dataset=create_multi_case_dataset(
+                create_case(
+                    case_id=CASE_ID_A,
+                    input_value="first",
+                    expected_value="success",
+                ),
+                create_case(
+                    case_id=CASE_ID_B,
+                    input_value="second",
+                    expected_value="other",
+                ),
+                create_case(
+                    case_id=CASE_ID_C,
+                    input_value="third",
+                    expected_value="other",
+                ),
+                create_case(
+                    case_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"),
+                    input_value="fourth",
+                    expected_value="other",
+                ),
+            ),
+        )
+    )
+
+    scorecard = result.winner
+
+    assert scorecard.quality_score == pytest.approx(0.25)
+    assert scorecard.reliability_score == pytest.approx(1.0)
+    assert scorecard.latency_score == pytest.approx(1.0)
+    assert scorecard.cost_score == pytest.approx(1.0)
+    assert scorecard.overall_score == pytest.approx((0.25 + 1.0 + 1.0 + 1.0) / 4.0)
+    assert scorecard.rationale == "Benchmark aggregate across 4 cases."
+
+
+def test_experiment_runner_scores_failed_case_among_passing_cases() -> None:
+    """A run that fails on one case counts as a failed case, not an abort."""
+
+    class FailOnInputStrategy(StaticStrategy):
+        """Fail only when the workflow input is the configured value."""
+
+        async def run(
+            self,
+            _context: Context,
+        ) -> StrategyOutcome:
+            """Fail on the configured input and succeed otherwise."""
+
+            event = _context.latest(
+                WORKFLOW_INPUT_EVENT_TYPE,
+            )
+
+            if event is not None and event.payload["input"] == "explode":
+                self.calls += 1
+
+                raise RuntimeError("Provider unavailable.")
+
+            return await super().run(_context)
+
+    strategy = FailOnInputStrategy(
+        strategy_id=STRATEGY_ID_A,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    result = asyncio.run(
+        WorkflowExperimentRunner(
+            scorer=create_scorer(),
+        ).run(
+            workflows=(
+                create_workflow(
+                    workflow_id=WORKFLOW_ID_A,
+                    step_id=STEP_ID_A,
+                    strategy=strategy,
+                    name="workflow-a",
+                ),
+            ),
+            dataset=create_multi_case_dataset(
+                create_case(
+                    case_id=CASE_ID_A,
+                    input_value="fine",
+                    expected_value="success",
+                ),
+                create_case(
+                    case_id=CASE_ID_B,
+                    input_value="explode",
+                    expected_value="success",
+                ),
+            ),
+        )
+    )
+
+    assert strategy.calls == 2
+    assert result.winner.quality_score == pytest.approx(0.5)
+
+
+def test_experiment_runner_rejects_empty_dataset_before_execution() -> None:
+    """A benchmark without cases is rejected before any candidate executes."""
+
+    strategy = StaticStrategy(
+        strategy_id=STRATEGY_ID_A,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    dataset = create_multi_case_dataset()
+
     with pytest.raises(
         ValueError,
-        match="Workflow experiment produced no successful candidate executions.",
-    ):
+    ) as error:
         asyncio.run(
             WorkflowExperimentRunner(
                 scorer=create_scorer(),
             ).run(
-                workflows=workflows,
-                context=Context(),
-                evaluator=RecordingEvaluator(),
-                expected_outcome=create_expected_outcome(),
+                workflows=(
+                    create_workflow(
+                        workflow_id=WORKFLOW_ID_A,
+                        step_id=STEP_ID_A,
+                        strategy=strategy,
+                        name="workflow-a",
+                    ),
+                ),
+                dataset=dataset,
             )
         )
+
+    assert str(error.value) == f"Benchmark {DATASET_ID} has no cases."
+    assert strategy.calls == 0
+
+
+def test_experiment_runner_rejects_unsupported_comparison_before_execution() -> None:
+    """A benchmark with an unsupported comparison never partially runs."""
+
+    strategy = StaticStrategy(
+        strategy_id=STRATEGY_ID_A,
+        output="success",
+        estimated_cost_usd=0.05,
+    )
+
+    with pytest.raises(
+        UnsupportedComparisonError,
+    ) as error:
+        asyncio.run(
+            WorkflowExperimentRunner(
+                scorer=create_scorer(),
+            ).run(
+                workflows=(
+                    create_workflow(
+                        workflow_id=WORKFLOW_ID_A,
+                        step_id=STEP_ID_A,
+                        strategy=strategy,
+                        name="workflow-a",
+                    ),
+                ),
+                dataset=create_multi_case_dataset(
+                    create_case(
+                        case_id=CASE_ID_A,
+                        input_value="first",
+                        expected_value="success",
+                    ),
+                    create_case(
+                        case_id=CASE_ID_B,
+                        input_value="second",
+                        expected_value="success",
+                        comparison=OutcomeComparison.SEMANTIC,
+                    ),
+                ),
+            )
+        )
+
+    assert str(error.value) == (
+        f"Benchmark case {CASE_ID_B} uses comparison 'semantic', which is not supported yet."
+    )
+    assert strategy.calls == 0
