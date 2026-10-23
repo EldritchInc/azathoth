@@ -186,6 +186,11 @@ from azathoth.workflows.ranking import (
     RankedWorkflow,
     WorkflowRanking,
 )
+from azathoth.workflows.references import (
+    WorkflowOutputDeclaringStep,
+    declaring_step_ids,
+    resolve_named_value,
+)
 from azathoth.workflows.reliability import (
     WorkflowReliabilityMetrics,
 )
@@ -284,6 +289,7 @@ from azathoth.workflows.usage_report import (
 from azathoth.workflows.value import (
     WorkflowContextReference,
     WorkflowInputBinding,
+    WorkflowNamedValueReference,
     WorkflowValue,
     WorkflowValueBinding,
     WorkflowValueReference,
@@ -372,6 +378,8 @@ __all__ = [
     "WorkflowMetadata",
     "WorkflowModelUsageEntry",
     "WorkflowModelUsageReport",
+    "WorkflowNamedValueReference",
+    "WorkflowOutputDeclaringStep",
     "WorkflowProductionEmission",
     "WorkflowProductionModelSubstitution",
     "WorkflowProductionModelUsage",
@@ -418,6 +426,7 @@ __all__ = [
     "complete_production_invocation",
     "create_production_invocation",
     "create_workflow_input_event",
+    "declaring_step_ids",
     "decode_workflow_document",
     "earliest_identical_revision",
     "emit_production_result",
@@ -443,6 +452,7 @@ __all__ = [
     "require_workflow_run_evaluation_repository",
     "require_workflow_run_feedback_repository",
     "require_workflow_run_repository",
+    "resolve_named_value",
     "resolve_production_model_selection",
     "tool_usage_report",
     "workflow_result",

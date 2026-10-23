@@ -5,8 +5,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from azathoth.workflows.references import declaring_step_ids
 from azathoth.workflows.steps import WorkflowStepSpecification
-from azathoth.workflows.value import WorkflowValueReference
+from azathoth.workflows.value import (
+    WorkflowNamedValueReference,
+    WorkflowValueReference,
+)
 
 
 class WorkflowMetadata(BaseModel):
@@ -111,6 +115,21 @@ class WorkflowSpecification(BaseModel):
 
             for input_binding in step.inputs:
                 source = input_binding.source
+
+                if isinstance(
+                    source,
+                    WorkflowNamedValueReference,
+                ):
+                    if not declaring_step_ids(
+                        source.name,
+                        (steps_by_id[dependency_id] for dependency_id in step.depends_on),
+                    ):
+                        raise ValueError(
+                            "Workflow input bindings must name a value "
+                            "declared by a step the consumer depends on."
+                        )
+
+                    continue
 
                 if not isinstance(
                     source,

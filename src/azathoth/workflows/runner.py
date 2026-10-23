@@ -23,9 +23,14 @@ from azathoth.workflows.execution import (
     WorkflowStepStatus,
 )
 from azathoth.workflows.failure import WorkflowFailurePolicy
+from azathoth.workflows.references import (
+    declaring_step_ids,
+    resolve_named_value,
+)
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import (
     WorkflowContextReference,
+    WorkflowNamedValueReference,
     WorkflowValue,
     WorkflowValueReference,
 )
@@ -142,11 +147,50 @@ class WorkflowRunner:
         return True
 
     @classmethod
+    def _resolve_input_value(
+        cls,
+        *,
+        source: WorkflowValueReference | WorkflowNamedValueReference,
+        step: WorkflowCandidateStep,
+        workflow_steps: tuple[WorkflowCandidateStep, ...],
+        completed_steps: list[WorkflowStepRun],
+    ) -> WorkflowValue | None:
+        """Return the committed value an input value reference resolves to.
+
+        A name-only reference resolves among the step's dependencies that
+        declare the name, preferring them in workflow step order.
+        """
+
+        if isinstance(
+            source,
+            WorkflowValueReference,
+        ):
+            return cls._find_workflow_value(
+                completed_steps=completed_steps,
+                producer_step_id=source.producer_step_id,
+                name=source.name,
+            )
+
+        return resolve_named_value(
+            source.name,
+            producer_step_ids=declaring_step_ids(
+                source.name,
+                (
+                    workflow_step
+                    for workflow_step in workflow_steps
+                    if workflow_step.id in step.depends_on
+                ),
+            ),
+            values=(value for step_run in completed_steps for value in step_run.values),
+        )
+
+    @classmethod
     def _build_step_context(
         cls,
         *,
         layer_context: Context,
         step: WorkflowCandidateStep,
+        workflow_steps: tuple[WorkflowCandidateStep, ...],
         completed_steps: list[WorkflowStepRun],
     ) -> Context:
         """Add resolved workflow inputs to a step-local context."""
@@ -158,12 +202,16 @@ class WorkflowRunner:
 
             if isinstance(
                 source,
-                WorkflowValueReference,
+                (
+                    WorkflowValueReference,
+                    WorkflowNamedValueReference,
+                ),
             ):
-                value = cls._find_workflow_value(
+                value = cls._resolve_input_value(
+                    source=source,
+                    step=step,
+                    workflow_steps=workflow_steps,
                     completed_steps=completed_steps,
-                    producer_step_id=source.producer_step_id,
-                    name=source.name,
                 )
 
                 if value is None:
@@ -468,6 +516,7 @@ class WorkflowRunner:
                         self._build_step_context(
                             layer_context=layer_context,
                             step=step,
+                            workflow_steps=workflow.steps,
                             completed_steps=completed_steps,
                         ),
                     )

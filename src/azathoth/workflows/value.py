@@ -24,6 +24,24 @@ class WorkflowValueReference(BaseModel):
     name: str = Field(min_length=1)
 
 
+class WorkflowNamedValueReference(BaseModel):
+    """Identify a workflow value by name alone among redundant producers.
+
+    A step input written as `{"name": "address"}` resolves among the steps it
+    depends on that declare an output with this name. The first of them, in
+    workflow step order, that actually produced the value supplies it, so a
+    redundant producer that was skipped or failed under a tolerant policy is
+    passed over reproducibly.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    name: str = Field(min_length=1)
+
+
 class WorkflowContextReference(BaseModel):
     """Identify a field in the latest matching execution context event."""
 
@@ -84,4 +102,4 @@ class WorkflowInputBinding(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(min_length=1)
-    source: WorkflowValueReference | WorkflowContextReference
+    source: WorkflowValueReference | WorkflowNamedValueReference | WorkflowContextReference
