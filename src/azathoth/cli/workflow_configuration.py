@@ -14,9 +14,10 @@ from azathoth.workflows import (
     SQLiteWorkflowRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
+    WorkflowResultReference,
     WorkflowSpecificationRevision,
-    WorkflowValueReference,
     decode_workflow_document,
+    describe_value_reference,
     earliest_identical_revision,
     encode_workflow_document,
 )
@@ -323,11 +324,11 @@ def _step_type(
 
 
 def _render_result(
-    result: WorkflowValueReference | None,
+    result: WorkflowResultReference | None,
 ) -> str:
     """Render one workflow's declared result reference."""
 
     if result is None:
         return "undeclared"
 
-    return f"step {result.producer_step_id} output {result.name}"
+    return describe_value_reference(result)

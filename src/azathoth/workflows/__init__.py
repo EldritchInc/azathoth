@@ -189,6 +189,8 @@ from azathoth.workflows.ranking import (
 from azathoth.workflows.references import (
     WorkflowOutputDeclaringStep,
     declaring_step_ids,
+    describe_value_reference,
+    reference_producer_step_ids,
     resolve_named_value,
 )
 from azathoth.workflows.reliability import (
@@ -198,6 +200,7 @@ from azathoth.workflows.repository import WorkflowRepository
 from azathoth.workflows.result import (
     WorkflowResultError,
     workflow_result,
+    workflow_result_produced,
 )
 from azathoth.workflows.retry import (
     WorkflowRetryPolicy,
@@ -290,6 +293,7 @@ from azathoth.workflows.value import (
     WorkflowContextReference,
     WorkflowInputBinding,
     WorkflowNamedValueReference,
+    WorkflowResultReference,
     WorkflowValue,
     WorkflowValueBinding,
     WorkflowValueReference,
@@ -393,6 +397,7 @@ __all__ = [
     "WorkflowReliabilityMetrics",
     "WorkflowRepository",
     "WorkflowResultError",
+    "WorkflowResultReference",
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunEvaluation",
@@ -427,6 +432,7 @@ __all__ = [
     "create_production_invocation",
     "create_workflow_input_event",
     "declaring_step_ids",
+    "describe_value_reference",
     "decode_workflow_document",
     "earliest_identical_revision",
     "emit_production_result",
@@ -443,6 +449,7 @@ __all__ = [
     "production_model_usages",
     "production_uses_tool",
     "promote_workflow_candidate",
+    "reference_producer_step_ids",
     "require_production_invocation_repository",
     "require_workflow_benchmark_execution_repository",
     "require_workflow_experiment_repository",
@@ -456,6 +463,7 @@ __all__ = [
     "resolve_production_model_selection",
     "tool_usage_report",
     "workflow_result",
+    "workflow_result_produced",
     "workflow_uses_model",
     "workflow_uses_tool",
     "workflows_using_model",

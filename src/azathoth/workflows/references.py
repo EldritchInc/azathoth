@@ -5,8 +5,10 @@ from typing import Protocol
 from uuid import UUID
 
 from azathoth.workflows.value import (
+    WorkflowResultReference,
     WorkflowValue,
     WorkflowValueBinding,
+    WorkflowValueReference,
 )
 
 
@@ -40,6 +42,43 @@ def declaring_step_ids(
     return tuple(step.id for step in steps if any(output.name == name for output in step.outputs))
 
 
+def reference_producer_step_ids(
+    reference: WorkflowResultReference,
+    steps: Iterable[WorkflowOutputDeclaringStep],
+) -> tuple[UUID, ...]:
+    """Return the candidate producers of a value reference, in preference order.
+
+    An explicit reference has exactly its named producer. A name-only
+    reference has every given step that declares the name, in the given
+    order.
+    """
+
+    if isinstance(
+        reference,
+        WorkflowValueReference,
+    ):
+        return (reference.producer_step_id,)
+
+    return declaring_step_ids(
+        reference.name,
+        steps,
+    )
+
+
+def describe_value_reference(
+    reference: WorkflowResultReference,
+) -> str:
+    """Return the operator-facing description of one value reference."""
+
+    if isinstance(
+        reference,
+        WorkflowValueReference,
+    ):
+        return f"step {reference.producer_step_id} output {reference.name}"
+
+    return f"output {reference.name} (first producer in step order)"
+
+
 def resolve_named_value(
     name: str,
     *,
@@ -69,5 +108,7 @@ def resolve_named_value(
 __all__ = [
     "WorkflowOutputDeclaringStep",
     "declaring_step_ids",
+    "describe_value_reference",
+    "reference_producer_step_ids",
     "resolve_named_value",
 ]

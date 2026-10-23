@@ -42,6 +42,10 @@ class WorkflowNamedValueReference(BaseModel):
     name: str = Field(min_length=1)
 
 
+WorkflowResultReference = WorkflowValueReference | WorkflowNamedValueReference
+"""Reference a workflow's declared result explicitly or by name alone."""
+
+
 class WorkflowContextReference(BaseModel):
     """Identify a field in the latest matching execution context event."""
 

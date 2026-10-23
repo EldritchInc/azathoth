@@ -36,8 +36,13 @@ from azathoth.workflows.production_model_resolution import (
     ProductionModelSubstitutesUnavailableError,
     ProductionPrimaryModelUnavailableError,
 )
+from azathoth.workflows.references import (
+    reference_producer_step_ids,
+    resolve_named_value,
+)
 from azathoth.workflows.run_repository import WorkflowRunRepository
 from azathoth.workflows.runner import WorkflowRunner
+from azathoth.workflows.value import WorkflowValueReference
 
 
 class ProductionEmissionError(RuntimeError):
@@ -182,7 +187,15 @@ def emit_production_result(
     state: WorkflowProductionState,
     run: WorkflowRun,
 ) -> dict[str, JsonValue]:
-    """Return only workflow values explicitly exposed by production policy."""
+    """Return only workflow values explicitly exposed by production policy.
+
+    An emission naming its value alone resolves to the first step, in the
+    promoted specification's step order, that produced it.
+
+    Raises:
+        ProductionEmissionError: An explicit emission was not produced exactly
+            once, or a name-only emission was not produced by any step.
+    """
 
     result: dict[
         str,
@@ -190,10 +203,32 @@ def emit_production_result(
     ] = {}
 
     for emission in state.emissions:
+        source = emission.source
+
+        if not isinstance(
+            source,
+            WorkflowValueReference,
+        ):
+            value = resolve_named_value(
+                source.name,
+                producer_step_ids=reference_producer_step_ids(
+                    source,
+                    state.specification.steps,
+                ),
+                values=run.values,
+            )
+
+            if value is None:
+                raise ProductionEmissionError(
+                    "Declared production emission was not produced uniquely."
+                )
+
+            result[emission.name] = value.value
+
+            continue
+
         matches = tuple(
-            value
-            for value in run.values_from(emission.source.producer_step_id)
-            if value.name == emission.source.name
+            value for value in run.values_from(source.producer_step_id) if value.name == source.name
         )
 
         if len(matches) != 1:

@@ -15,7 +15,11 @@ from azathoth.prompting import (
     PromptStrategySpec,
 )
 from azathoth.workflows.models import WorkflowSpecification
-from azathoth.workflows.value import WorkflowValueReference
+from azathoth.workflows.references import declaring_step_ids
+from azathoth.workflows.value import (
+    WorkflowResultReference,
+    WorkflowValueReference,
+)
 
 
 def utc_now() -> datetime:
@@ -54,7 +58,7 @@ class WorkflowProductionEmission(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(min_length=1)
-    source: WorkflowValueReference
+    source: WorkflowResultReference
 
 
 class WorkflowProductionState(BaseModel):
@@ -144,6 +148,20 @@ class WorkflowProductionState(BaseModel):
         steps_by_id = {step.id: step for step in self.specification.steps}
 
         for emission in self.emissions:
+            if not isinstance(
+                emission.source,
+                WorkflowValueReference,
+            ):
+                if not declaring_step_ids(
+                    emission.source.name,
+                    self.specification.steps,
+                ):
+                    raise ValueError(
+                        "Production emissions must reference declared workflow outputs."
+                    )
+
+                continue
+
             producer = steps_by_id.get(emission.source.producer_step_id)
 
             if producer is None:
