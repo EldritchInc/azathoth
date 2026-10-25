@@ -208,6 +208,8 @@ class WorkflowExperimentRunner:
                         run_id=case.run.id,
                         evaluation_id=case.evaluation.id,
                         passed=case.evaluation.passed,
+                        judge_calls=case.judge_calls,
+                        judge_cost_usd=case.judge_cost_usd,
                     )
                     for case in benchmark.cases
                 ),
