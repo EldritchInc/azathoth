@@ -43,7 +43,11 @@ class WorkflowCandidateSignature(BaseModel):
 
 @dataclass(frozen=True)
 class WorkflowCandidateStep:
-    """An executable strategy bound to one workflow step."""
+    """An executable strategy bound to one workflow step.
+
+    The message and value emission are carried unchanged from the step
+    specification. They are presentation only and never affect execution.
+    """
 
     id: UUID
     strategy: Strategy
@@ -55,6 +59,8 @@ class WorkflowCandidateStep:
         default_factory=WorkflowRetryPolicy,
     )
     failure_policy: WorkflowFailurePolicy = WorkflowFailurePolicy.FAIL_WORKFLOW
+    message: str | None = None
+    emit_values: bool = False
 
 
 @dataclass(frozen=True)

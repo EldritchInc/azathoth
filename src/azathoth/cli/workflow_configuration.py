@@ -115,6 +115,12 @@ def show_workflow(
             if step.specification.requirement.version is not None:
                 print(f"Tool Version: {step.specification.requirement.version}")
 
+        if step.message is not None:
+            print(f"Message: {step.message}")
+
+        if step.emit_values:
+            print("Emits values: yes")
+
         print(f"Dependencies: {len(step.depends_on)}")
 
         print(f"Inputs: {len(step.inputs)}")
