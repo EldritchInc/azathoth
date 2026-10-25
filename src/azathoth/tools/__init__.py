@@ -7,6 +7,12 @@ from azathoth.tools.definition import (
     ToolInputSchema,
     ToolOutputSchema,
 )
+from azathoth.tools.dispatch import (
+    RuntimeToolExecutor,
+    default_tool_executors,
+    supported_tool_runtimes,
+    unsupported_runtime_message,
+)
 from azathoth.tools.document import (
     ToolDocument,
     ToolDocumentError,
@@ -18,7 +24,10 @@ from azathoth.tools.exceptions import (
     ToolExecutionError,
     UnsupportedToolRuntimeError,
 )
-from azathoth.tools.execution import PythonToolExecutor
+from azathoth.tools.execution import (
+    PYTHON_TOOL_RUNTIME,
+    PythonToolExecutor,
+)
 from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.implementation_catalog import ToolImplementationCatalog
 from azathoth.tools.implementation_resolution import (
@@ -49,7 +58,9 @@ from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
     "InMemoryToolRepository",
+    "PYTHON_TOOL_RUNTIME",
     "PythonToolExecutor",
+    "RuntimeToolExecutor",
     "SQLiteToolRepository",
     "ToolCatalog",
     "ToolCatalogLoader",
@@ -78,7 +89,10 @@ __all__ = [
     "ToolVerifier",
     "UnsupportedToolRuntimeError",
     "decode_tool_document",
+    "default_tool_executors",
     "earliest_identical_tool_revision",
     "encode_tool_document",
     "require_tool_repository",
+    "supported_tool_runtimes",
+    "unsupported_runtime_message",
 ]

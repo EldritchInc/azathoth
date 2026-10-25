@@ -15,10 +15,11 @@ from azathoth.strategies import (
     StrategyMetadata,
 )
 from azathoth.tools import (
-    PythonToolExecutor,
+    RuntimeToolExecutor,
     ToolImplementationResolver,
     ToolResolver,
     ToolStrategy,
+    unsupported_runtime_message,
 )
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
@@ -156,6 +157,17 @@ def _generate_tool_strategy(
 
         implementation = implementations[0]
 
+        executor = RuntimeToolExecutor()
+
+        #
+        # Fail fast: an implementation no executor can run is rejected
+        # before any workflow step executes.
+        #
+        if not executor.supports(implementation.runtime):
+            raise WorkflowGenerationError(
+                unsupported_runtime_message(implementation),
+            )
+
         return ToolStrategy(
             metadata=StrategyMetadata(
                 id=definition.id,
@@ -164,7 +176,7 @@ def _generate_tool_strategy(
                 version=definition.version,
             ),
             implementation=implementation,
-            executor=PythonToolExecutor(),
+            executor=executor,
         )
 
     raise WorkflowGenerationError(
