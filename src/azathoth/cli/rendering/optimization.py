@@ -20,15 +20,25 @@ from azathoth.workflows import (
 def render_workflow_optimization_session(
     session: WorkflowOptimizationSession,
 ) -> str:
-    """Render one empirical workflow optimization session."""
+    """Render one empirical workflow optimization session.
+
+    Judge calls and their cost are reported for the whole session and for
+    each generation, summed over every candidate the generation evaluated.
+    They are the cost of evaluating candidates, never charged to any
+    candidate, so they appear beside the scores rather than in them.
+    """
 
     initial_workflow = session.initial_candidates[0].metadata
+
+    experiments = tuple(result.previous_experiment for result in session.generations)
 
     lines = [
         f"Workflow: {initial_workflow.name}",
         f"Workflow ID: {initial_workflow.id}",
         f"Initial Candidates: {len(session.initial_candidates)}",
         f"Generations: {len(session.generations)}",
+        f"Total Judge Calls: {sum(experiment.judge_calls for experiment in experiments)}",
+        f"Total Judge Cost: ${sum(experiment.judge_cost_usd for experiment in experiments):.6f}",
     ]
 
     evaluated_candidates = tuple(session.initial_candidates)
@@ -47,6 +57,8 @@ def render_workflow_optimization_session(
                 f"Generation {result.generation}",
                 f"Experiment ID: {experiment.id}",
                 f"Evaluated Candidates: {len(experiment.evidence)}",
+                f"Judge Calls: {experiment.judge_calls}",
+                f"Judge Cost: ${experiment.judge_cost_usd:.6f}",
                 "Winner:",
             )
         )

@@ -15,12 +15,28 @@ from azathoth.workflows.scorecard import WorkflowScorecard
 
 
 class WorkflowExperimentEvidence(BaseModel):
-    """Associate one resolved workflow candidate with its scorecard."""
+    """Associate one resolved workflow candidate with its scorecard.
+
+    Judge calls and their cost are spent evaluating the candidate, never by
+    the candidate itself, and judges never run in production. They are
+    recorded beside the scorecard and never count toward it, so they cannot
+    affect scoring or ranking.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     candidate_signature: WorkflowCandidateSignature
     scorecard: WorkflowScorecard
+
+    judge_calls: int = Field(
+        default=0,
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+    )
 
 
 class WorkflowExperimentResult(BaseModel):
@@ -38,6 +54,18 @@ class WorkflowExperimentResult(BaseModel):
     )
 
     ranking: WorkflowRanking
+
+    @property
+    def judge_calls(self) -> int:
+        """Return how many judge calls evaluating every candidate made."""
+
+        return sum(observation.judge_calls for observation in self.evidence)
+
+    @property
+    def judge_cost_usd(self) -> float:
+        """Return the total cost of every judge call evaluating every candidate."""
+
+        return sum(observation.judge_cost_usd for observation in self.evidence)
 
     @model_validator(mode="after")
     def validate_ranking_evidence(

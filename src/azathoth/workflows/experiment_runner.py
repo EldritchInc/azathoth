@@ -136,6 +136,8 @@ class WorkflowExperimentRunner:
                 WorkflowExperimentEvidence(
                     candidate_signature=workflow.signature,
                     scorecard=self._score(benchmark),
+                    judge_calls=benchmark.judge_calls,
+                    judge_cost_usd=benchmark.judge_cost_usd,
                 )
             )
             benchmarks.append(benchmark)
