@@ -4,6 +4,7 @@ from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
 
+from azathoth.cli.benchmark_cases import add_benchmark_case
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
     export_benchmark,
@@ -139,6 +140,7 @@ def _dispatch(
     if command == BENCHMARK_COMMAND:
         return dispatch_benchmark_command(
             arguments,
+            add_benchmark_case=add_benchmark_case,
             compare_benchmarks=compare_benchmarks,
             export_benchmark=export_benchmark,
             import_benchmark=import_benchmark,

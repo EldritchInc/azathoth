@@ -6,10 +6,18 @@ from pathlib import Path
 from typing import cast
 from uuid import UUID
 
+from pydantic import JsonValue
+
+from azathoth.cli.benchmark_cases import SuppliedExpectedValue
 from azathoth.cli.parsing import (
     BENCHMARK_ACTION_ATTRIBUTE,
+    BENCHMARK_ADD_CASE_ACTION,
+    BENCHMARK_CASE_COMPARISON_ATTRIBUTE,
+    BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE,
+    BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
     BENCHMARK_CASE_ID_ATTRIBUTE,
     BENCHMARK_CASE_SHOW_ACTION,
+    BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
     BENCHMARK_CASES_ACTION,
     BENCHMARK_COMPARE_ACTION,
     BENCHMARK_DOCUMENT_ATTRIBUTE,
@@ -31,7 +39,9 @@ from azathoth.cli.parsing import (
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
 )
+from azathoth.evaluation.models import OutcomeComparison
 
+BenchmarkAddCaseHandler = Callable[..., int]
 BenchmarkIdentifierHandler = Callable[[UUID], int]
 BenchmarkCaseHandler = Callable[[UUID, UUID], int]
 BenchmarkListHandler = Callable[[], int]
@@ -45,6 +55,7 @@ BenchmarkRevisionHandler = Callable[..., int]
 def dispatch_benchmark_command(
     arguments: Namespace,
     *,
+    add_benchmark_case: BenchmarkAddCaseHandler,
     compare_benchmarks: BenchmarkCompareHandler,
     export_benchmark: BenchmarkRevisionHandler,
     import_benchmark: BenchmarkImportHandler,
@@ -154,6 +165,42 @@ def dispatch_benchmark_command(
             )
         )
 
+    if action == BENCHMARK_ADD_CASE_ACTION:
+        return add_benchmark_case(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_ID_ATTRIBUTE,
+                ),
+            ),
+            run_id=cast(
+                UUID,
+                getattr(
+                    arguments,
+                    BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
+                ),
+            ),
+            comparison=OutcomeComparison(
+                cast(
+                    str,
+                    getattr(
+                        arguments,
+                        BENCHMARK_CASE_COMPARISON_ATTRIBUTE,
+                    ),
+                )
+            ),
+            expected=_supplied_expected_value(arguments),
+            description=cast(
+                str | None,
+                getattr(
+                    arguments,
+                    BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
     if action == BENCHMARK_RUN_ACTION:
         return run_benchmark(
             benchmark_id=cast(
@@ -251,4 +298,30 @@ def _benchmark_revision(
             BENCHMARK_REVISION_ATTRIBUTE,
             None,
         ),
+    )
+
+
+def _supplied_expected_value(
+    arguments: Namespace,
+) -> SuppliedExpectedValue | None:
+    """Return the expected value supplied for a new benchmark case, if any.
+
+    The option is absent from the parsed arguments unless it was given, so a
+    supplied JSON null is still an expected value.
+    """
+
+    if not hasattr(
+        arguments,
+        BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
+    ):
+        return None
+
+    return SuppliedExpectedValue(
+        value=cast(
+            JsonValue,
+            getattr(
+                arguments,
+                BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
+            ),
+        )
     )

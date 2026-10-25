@@ -1,6 +1,10 @@
 """Azathoth command-line interface."""
 
 from azathoth.cli.application import main
+from azathoth.cli.benchmark_cases import (
+    SuppliedExpectedValue,
+    add_benchmark_case,
+)
 from azathoth.cli.benchmark_execution import (
     compare_configured_benchmarks,
     execute_configured_benchmark,
@@ -125,8 +129,10 @@ __all__ = [
     "DEFAULT_DATABASE",
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
+    "SuppliedExpectedValue",
     "WorkflowRunInput",
     "WorkflowRunSource",
+    "add_benchmark_case",
     "add_judge",
     "authorize_model",
     "build_parser",

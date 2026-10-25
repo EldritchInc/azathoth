@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
-from argparse import ArgumentParser, _SubParsersAction
+from argparse import SUPPRESS, ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
-from azathoth.cli.parsing.common import positive_integer
+from azathoth.cli.parsing.common import (
+    json_value,
+    positive_integer,
+)
 from azathoth.cli.parsing.workflows import (
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
 )
+from azathoth.evaluation.models import OutcomeComparison
 
 BENCHMARK_COMMAND = "benchmark"
 
 BENCHMARK_ACTION_ATTRIBUTE = "benchmark_action"
 
+BENCHMARK_ADD_CASE_ACTION = "add-case"
 BENCHMARK_CASES_ACTION = "cases"
 BENCHMARK_CASE_SHOW_ACTION = "case-show"
 BENCHMARK_COMPARE_ACTION = "compare"
@@ -29,6 +34,10 @@ BENCHMARK_LIST_ACTION = "list"
 BENCHMARK_RUN_ACTION = "run"
 BENCHMARK_SHOW_ACTION = "show"
 
+BENCHMARK_CASE_COMPARISON_ATTRIBUTE = "benchmark_case_comparison"
+BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE = "benchmark_case_description"
+BENCHMARK_CASE_EXPECTED_ATTRIBUTE = "benchmark_case_expected"
+BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE = "benchmark_case_source_run_id"
 BENCHMARK_DOCUMENT_ATTRIBUTE = "benchmark_document"
 BENCHMARK_ID_ATTRIBUTE = "benchmark_id"
 BENCHMARK_CASE_ID_ATTRIBUTE = "benchmark_case_id"
@@ -162,6 +171,55 @@ def add_benchmark_parser(
         type=Path,
         metavar="FILE",
         help="Benchmark dataset JSON document to import.",
+    )
+
+    benchmark_add_case_parser = benchmark_actions.add_parser(
+        BENCHMARK_ADD_CASE_ACTION,
+        help="Append a case replaying one recorded run's input as a new benchmark revision.",
+    )
+
+    benchmark_add_case_parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID to append the case to.",
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--from-run",
+        dest=BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
+        type=UUID,
+        required=True,
+        metavar="RUN_ID",
+        help="Recorded run whose workflow input becomes the case input.",
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--comparison",
+        dest=BENCHMARK_CASE_COMPARISON_ATTRIBUTE,
+        choices=tuple(comparison.value for comparison in OutcomeComparison),
+        required=True,
+        help="Comparison that judges the case's expected value.",
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--expected",
+        dest=BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
+        default=SUPPRESS,
+        type=json_value,
+        metavar="JSON",
+        help=(
+            "Expected value as JSON. Defaults to the corrected output of the "
+            "run's latest bad feedback that carries one."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--description",
+        dest=BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE,
+        default=None,
+        metavar="TEXT",
+        help="Description of the expected outcome. Defaults to one naming the run.",
     )
 
     benchmark_run_parser = benchmark_actions.add_parser(
