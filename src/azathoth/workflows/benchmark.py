@@ -435,7 +435,11 @@ class WorkflowBenchmarkRunner:
             steps=steps,
         )
 
-        if run.failed and not produced:
+        #
+        # A run without its result is judged a failure whenever a step
+        # failed, whether the run halted or tolerated the failure.
+        #
+        if run.failed_step_count > 0 and not produced:
             return evaluate_failed_run(
                 run,
                 case.expected,

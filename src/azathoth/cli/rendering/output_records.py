@@ -124,18 +124,21 @@ def workflow_run_record(
 ) -> OutputRecord:
     """Return the terminal record of one configured workflow run.
 
-    A failed run reports the first failed step in recorded order with its
-    actual failure, because configured runs are the workflow author's tool.
-    A successful run without a declared result omits `value`, so it cannot
-    be mistaken for a result of null.
+    A run that halted reports the step that halted it with its actual
+    failure, because configured runs are the workflow author's tool. A run
+    that completed despite tolerated step failures reports its result. A
+    successful run without a declared result omits `value`, so it cannot be
+    mistaken for a result of null.
     """
 
-    failed_step = next(
-        (step for step in run.steps if step.status is WorkflowStepStatus.FAILED),
-        None,
-    )
+    if run.failed:
+        failed_step = next(
+            step
+            for step in run.steps
+            if step.status is WorkflowStepStatus.FAILED
+            and (run.halting_step_id is None or step.step_id == run.halting_step_id)
+        )
 
-    if failed_step is not None:
         failure = failed_step.attempts[-1].failure
 
         assert failure is not None

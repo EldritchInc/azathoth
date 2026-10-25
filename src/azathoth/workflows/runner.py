@@ -618,6 +618,7 @@ class WorkflowRunner:
         completed_steps: list[WorkflowStepRun] = []
         blocked_step_ids: set[UUID] = set()
         terminal_error: Exception | None = None
+        halting_step_id: UUID | None = None
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
             layer_context = current_context
@@ -798,6 +799,7 @@ class WorkflowRunner:
                     if step.failure_policy is WorkflowFailurePolicy.FAIL_WORKFLOW:
                         if terminal_error is None:
                             terminal_error = result.error
+                            halting_step_id = step.id
 
                     elif step.failure_policy is WorkflowFailurePolicy.SKIP_DEPENDENTS:
                         blocked_step_ids.add(step.id)
@@ -849,6 +851,8 @@ class WorkflowRunner:
             final_context=current_context,
             started_at=started_at,
             completed_at=completed_at,
+            halted=terminal_error is not None,
+            halting_step_id=halting_step_id,
         )
 
         return _WorkflowExecutionResult(
