@@ -33,6 +33,7 @@ from azathoth.workflows.value import (
     WorkflowInputResolutionError,
     WorkflowNamedValueReference,
     WorkflowValue,
+    WorkflowValueBinding,
     WorkflowValueReference,
 )
 
@@ -332,6 +333,7 @@ class WorkflowRunner:
         strategy: Strategy,
         context: Context,
         retry_policy: WorkflowRetryPolicy,
+        outputs: tuple[WorkflowValueBinding, ...] = (),
     ) -> tuple[
         ExecutionResult | None,
         tuple[WorkflowStepAttempt, ...],
@@ -341,6 +343,12 @@ class WorkflowRunner:
 
         Before each retry, the runner waits the delay the policy assigns to
         that attempt. A zero delay retries immediately.
+
+        An attempt succeeds only when every declared output binding resolves
+        against its output. A binding that does not resolve fails the attempt
+        with its `WorkflowValueResolutionError`, so it is retried like any
+        other failure: a model may produce the declared shape on a later
+        attempt.
         """
 
         attempts: list[WorkflowStepAttempt] = []
@@ -358,6 +366,9 @@ class WorkflowRunner:
                     strategy,
                     context,
                 )
+
+                for binding in outputs:
+                    binding.resolve(execution.output)
 
                 completed_at = datetime.now(
                     tz=UTC,
@@ -429,6 +440,7 @@ class WorkflowRunner:
                         strategy=step.strategy,
                         context=step_context,
                         retry_policy=step.retry_policy,
+                        outputs=step.outputs,
                     )
                 )
                 for step, step_context in eligible
@@ -629,7 +641,8 @@ class WorkflowRunner:
                 )
 
             #
-            # Commit the layer in declared workflow order. The first
+            # Commit the layer in declared workflow order. Output bindings
+            # already resolved during the successful attempt. The first
             # FAIL_WORKFLOW failure in declared order stops the run once the
             # whole layer is recorded.
             #
