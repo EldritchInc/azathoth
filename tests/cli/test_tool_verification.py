@@ -313,7 +313,7 @@ def test_tool_verify_continues_after_unsupported_runtime(
     assert "Runtime: javascript" in captured.out
     assert "Status: error" in captured.out
 
-    assert "PythonToolExecutor only supports the 'python' runtime." in captured.out
+    assert "No tool executor supports runtime 'javascript'." in captured.out
 
     assert f"Implementation ID: {SECOND_IMPLEMENTATION_ID}" in captured.out
 
