@@ -248,6 +248,8 @@ def test_cli_promoted_workflow_is_immediately_invokable(
             str(WORKFLOW_ID),
             "--input",
             '{"request":"execute production"}',
+            "--output",
+            "text",
         )
     )
 

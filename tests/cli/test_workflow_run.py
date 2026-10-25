@@ -11,6 +11,7 @@ from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     run_workflow,
 )
+from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.context import Context
 from azathoth.prompting import (
     PortfolioModelSelection,
@@ -226,7 +227,10 @@ def test_workflow_run_renders_completed_execution(
         create_runtime(),
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 
@@ -296,7 +300,10 @@ def test_workflow_run_reports_non_executable_workflow(
         runtime,
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 
@@ -320,7 +327,10 @@ def test_workflow_run_renders_failed_run_and_returns_nonzero(
         create_failed_run(),
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 
@@ -340,7 +350,10 @@ def test_workflow_run_persists_successful_run(
         create_runtime(),
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 
@@ -364,7 +377,10 @@ def test_workflow_run_persists_failed_run(
         failed,
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     assert result == 1
     assert SQLiteWorkflowRunRepository(database).get(failed.id) == failed

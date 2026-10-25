@@ -354,6 +354,8 @@ def test_oss_v1_release_lifecycle(
                 "workflow",
                 "run",
                 str(workflow_id),
+                "--output",
+                "text",
             )
         )
         == 0
@@ -602,6 +604,8 @@ def test_oss_v1_release_lifecycle(
                 str(workflow_id),
                 "--input",
                 '{"request":"release acceptance"}',
+                "--output",
+                "text",
             )
         )
         == 0

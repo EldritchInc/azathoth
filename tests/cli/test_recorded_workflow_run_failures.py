@@ -10,6 +10,7 @@ from azathoth.cli import (
     execute_configured_workflow,
     run_workflow,
 )
+from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.context import Context
 from azathoth.execution import (
     ExecutionResult,
@@ -148,7 +149,10 @@ def test_workflow_run_renders_real_step_failure_and_returns_nonzero(
         tmp_path,
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 
@@ -170,7 +174,10 @@ def test_workflow_run_persists_real_step_failure(
         tmp_path,
     )
 
-    result = run_workflow(WORKFLOW_ID)
+    result = run_workflow(
+        WORKFLOW_ID,
+        output=WorkflowOutputFormat.TEXT,
+    )
 
     captured = capsys.readouterr()
 

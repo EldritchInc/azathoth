@@ -179,6 +179,8 @@ def test_cli_production_invocation_persists_complete_lifecycle(
             str(WORKFLOW_ID),
             "--input",
             '{"request":"execute production","private":"do not expose"}',
+            "--output",
+            "text",
         )
     )
 
@@ -271,6 +273,8 @@ def test_cli_undeployed_production_invocation_persists_terminal_failure(
             str(UNDEPLOYED_WORKFLOW_ID),
             "--input",
             '{"request":"execute production"}',
+            "--output",
+            "text",
         )
     )
 
@@ -348,6 +352,8 @@ def test_cli_production_invocation_uses_persisted_active_state(
                 str(WORKFLOW_ID),
                 "--input",
                 '"production request"',
+                "--output",
+                "text",
             )
         )
         == 0
