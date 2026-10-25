@@ -119,8 +119,11 @@ def test_continue_failure_statistics() -> None:
     assert run.failed_step_count == 1
     assert run.skipped_step_count == 0
 
-    assert run.failed
-    assert not run.succeeded
+    #
+    # The failure was tolerated, so the run completed and succeeded.
+    #
+    assert run.succeeded
+    assert not run.failed
 
 
 def test_skip_dependents_statistics() -> None:
@@ -152,8 +155,11 @@ def test_skip_dependents_statistics() -> None:
     assert run.failed_step_count == 1
     assert run.skipped_step_count == 2
 
-    assert run.failed
-    assert not run.succeeded
+    #
+    # The failure was tolerated, so the run completed and succeeded.
+    #
+    assert run.succeeded
+    assert not run.failed
 
 
 def test_skipped_steps_do_not_count_as_attempts() -> None:

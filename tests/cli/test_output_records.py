@@ -24,6 +24,7 @@ from azathoth.workflows import (
     ProductionInvocationSuccess,
     WorkflowCandidate,
     WorkflowCandidateStep,
+    WorkflowFailurePolicy,
     WorkflowNamedValueReference,
     WorkflowRun,
     WorkflowRunner,
@@ -291,8 +292,15 @@ def test_successful_run_without_declared_result_omits_value() -> None:
     }
 
 
-def test_failed_run_reports_its_first_failed_step() -> None:
-    candidate = create_candidate(silent_step())
+def test_halted_run_reports_the_step_that_halted_it() -> None:
+    candidate = create_candidate(
+        create_step(
+            step_id=FIRST_STEP_ID,
+            strategy_id=FIRST_STRATEGY_ID,
+            name="Counter",
+            failure_policy=WorkflowFailurePolicy.FAIL_WORKFLOW,
+        )
+    )
 
     run = run_candidate(
         candidate,
@@ -312,6 +320,29 @@ def test_failed_run_reports_its_first_failed_step() -> None:
         "step_id": str(FIRST_STEP_ID),
         "exception_type": "RuntimeError",
         "message": "Counter failed",
+    }
+
+
+def test_completed_run_with_a_tolerated_failure_reports_its_missing_result() -> None:
+    candidate = create_candidate(silent_step())
+
+    run = run_candidate(
+        candidate,
+        executor=CountingExecutor(
+            failing=frozenset({"Counter"}),
+        ),
+    )
+
+    assert run.succeeded
+    assert workflow_run_record(
+        run,
+        result=COUNT_RESULT,
+        steps=candidate.steps,
+    ) == {
+        "type": "error",
+        "run_id": str(run.id),
+        "code": RESULT_NOT_PRODUCED_CODE,
+        "message": "Workflow result 'count' was not produced by any workflow step.",
     }
 
 

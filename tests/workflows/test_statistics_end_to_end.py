@@ -259,8 +259,11 @@ def test_execution_statistics_are_computed_end_to_end() -> None:
     assert run.total_attempt_count == 4
     assert run.retry_count == 2
 
-    assert run.failed
-    assert not run.succeeded
+    #
+    # The failure was tolerated by SKIP_DEPENDENTS, so the run completed.
+    #
+    assert run.succeeded
+    assert not run.failed
 
 
 def test_execution_statistics_match_recorded_history_end_to_end() -> None:
@@ -323,8 +326,9 @@ def test_execution_statistics_round_trip_with_workflow_run() -> None:
     assert restored == run
     assert restored.statistics == run.statistics
 
-    assert restored.failed
-    assert not restored.succeeded
+    assert restored.succeeded
+    assert not restored.failed
+    assert restored.halted is False
 
     assert restored.retry_count == 2
     assert restored.total_attempt_count == 4
