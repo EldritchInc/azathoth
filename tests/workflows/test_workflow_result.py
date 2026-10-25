@@ -195,6 +195,7 @@ def test_workflow_result_returns_declared_value() -> None:
     assert workflow_result(
         run,
         WorkflowValueReference(producer_step_id=STEP_ID, name="answer"),
+        steps=(),
     ) == {"label": "refund"}
 
 
@@ -208,6 +209,7 @@ def test_workflow_result_rejects_unproduced_value() -> None:
         workflow_result(
             run,
             WorkflowValueReference(producer_step_id=STEP_ID, name="answer"),
+            steps=(),
         )
 
 
@@ -220,6 +222,7 @@ def test_workflow_result_ignores_same_name_from_other_steps() -> None:
         workflow_result(
             run,
             WorkflowValueReference(producer_step_id=STEP_ID, name="answer"),
+            steps=(),
         )
 
 
@@ -242,6 +245,7 @@ def test_workflow_result_rejects_skipped_producer() -> None:
         workflow_result(
             run,
             WorkflowValueReference(producer_step_id=OTHER_STEP_ID, name="answer"),
+            steps=(),
         )
 
 
@@ -258,4 +262,5 @@ def test_workflow_result_rejects_duplicate_value() -> None:
         workflow_result(
             run,
             WorkflowValueReference(producer_step_id=STEP_ID, name="answer"),
+            steps=(),
         )

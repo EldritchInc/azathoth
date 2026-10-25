@@ -62,7 +62,9 @@ They can also be serialized and reconstructed through:
 
 `WorkflowSpecification.result` declares which value is the workflow's answer.
 
-It is a `WorkflowValueReference`: one producer step and one output name.
+It is a `WorkflowResultReference`, in one of two forms.
+
+An explicit `WorkflowValueReference` names one producer step and one output:
 
 ```json
 "result": {
@@ -71,7 +73,7 @@ It is a `WorkflowValueReference`: one producer step and one output name.
 }
 ```
 
-The reference is validated when the specification is constructed:
+The explicit reference is validated when the specification is constructed:
 
 - the producer must be a step in the same workflow
 - the name must be an output declared by that step
@@ -82,6 +84,26 @@ Violations fail with:
 Workflow result must reference a producer step in the same workflow.
 Workflow result must reference an output declared by the producer step.
 ```
+
+A name-only `WorkflowNamedValueReference` names the output alone, for workflows
+whose answer can come from redundant producers:
+
+```json
+"result": {
+  "name": "answer"
+}
+```
+
+At least one step must declare an output with that name:
+
+```text
+Workflow result must name a value declared by at least one workflow step.
+```
+
+A name-only result resolves to the first step, in workflow step order, that
+actually produced the value. Producers that were skipped, or that failed under
+a tolerant failure policy, are passed over. Step order is chosen over
+first-to-finish so the answer is reproducible.
 
 The declared result is the single value that the rest of the lifecycle treats
 as the workflow's outcome:
@@ -94,15 +116,18 @@ declared result
       └── promotion emits it as the production "result"
 ```
 
-`workflow_result(run, reference)` extracts the declared value from a
-`WorkflowRun`.
+`workflow_result(run, reference, steps=...)` extracts the declared value from a
+`WorkflowRun`. The steps are the workflow's steps in step order, which a
+name-only result needs to choose among its producers.
+`workflow_result_produced` reports whether any candidate producer produced it.
 
-It fails with `WorkflowResultError` when the referenced step did not produce
-the value exactly once:
+It fails with `WorkflowResultError` when the value was not produced, or when an
+explicitly referenced step produced it more than once:
 
 ```text
 Workflow result 'answer' from step <STEP_ID> was not produced.
 Workflow result 'answer' from step <STEP_ID> was produced more than once.
+Workflow result 'answer' was not produced by any workflow step.
 ```
 
 `WorkflowCandidate.result` carries the declared result into each executable
@@ -206,6 +231,35 @@ Execution evidence is distinct from workflow configuration.
 Running a workflow does not modify the workflow specification to reflect what
 occurred.
 
+### Concurrent Layers
+
+The runner groups steps into dependency layers. A step's layer comes after
+every step it depends on.
+
+The eligible steps of one layer execute concurrently:
+
+```text
+layer 0:  A ──┐
+          B ──┼── run together, each with the same layer context
+          C ──┘
+                 │
+                 ▼  commit A, B, C in declared order
+layer 1:  D (depends on A, B, C)
+```
+
+A layer commits only after every one of its steps has finished. Commits always
+follow declared step order, so the recorded `WorkflowRun` and its final
+context are identical whatever order the steps finish in.
+
+A `fail_workflow` failure does not cancel its siblings. They finish and are
+recorded, then the run stops before the next layer. When several steps of one
+layer fail under `fail_workflow`, the first in declared order is the failure
+the run reports. Steps that are expected to fail, such as redundant producers,
+use `continue`.
+
+There is no concurrency limit inside a layer: the width of the specification
+bounds it.
+
 ## Values and Data Flow
 
 Workflow data flow is explicit.
@@ -215,13 +269,68 @@ The workflow value model includes:
 - `WorkflowInputBinding`
 - `WorkflowValueBinding`
 - `WorkflowValueReference`
+- `WorkflowNamedValueReference`
+- `WorkflowContextReference`
 - `WorkflowValue`
 
 Bindings describe declared data flow between workflow inputs, workflow steps,
 and step outputs.
 
+A step input's source takes one of three forms:
+
+```json
+{"producer_step_id": "<STEP_ID>", "name": "address"}
+{"name": "address"}
+{"event_type": "workflow.input.received", "field_name": "input"}
+```
+
+The explicit form names exactly one upstream producer.
+
+The name-only form resolves among the steps the consumer directly depends on
+that declare an output with that name. The first of them, in workflow step
+order, that actually produced the value supplies it. This lets redundant
+producers in one layer race, with the consumer taking whichever survived:
+
+```text
+Primary  (continue) ──┐ address
+Fallback (continue) ──┘ address
+          │
+          ▼
+Consumer  input {"name": "address"}
+```
+
+At least one direct dependency must declare the name:
+
+```text
+Workflow input bindings must name a value declared by a step the consumer depends on.
+```
+
+The `workflow.input.bound` event recorded for every value input names the
+producer that actually supplied it, so evidence always shows which redundant
+producer was used.
+
 Invalid value resolution fails explicitly with
 `WorkflowValueResolutionError`.
+
+### Unresolved Inputs
+
+An input can legitimately have no value when its step becomes eligible, for
+example when every redundant producer failed under `continue`.
+
+The step is then recorded as failed under its own failure policy rather than
+aborting the run. It records one failed attempt carrying
+`WorkflowInputResolutionError`, it is not retried because resolution is
+deterministic, and its strategy is never executed:
+
+```text
+Workflow input 'x' could not resolve value 'y' from step <STEP_ID>.
+Workflow input 'x' could not resolve value 'y' from any step it depends on.
+Workflow context input 'x' could not resolve event type 'e'.
+Workflow context input 'x' could not resolve field 'f' from event type 'e'.
+```
+
+Benchmarks therefore judge such a run as a `workflow-run-failure` case instead
+of aborting.
 
 ## Conditions, Retries, and Failure Policy
 
@@ -236,6 +345,11 @@ Condition evaluation failures are represented by
 `WorkflowConditionEvaluationError`.
 
 Retry behavior is represented by `WorkflowRetryPolicy`.
+
+Before each retry, the runner waits the delay the policy assigns to that
+attempt, applying the backoff multiplier and the maximum delay. A zero delay
+retries immediately. Because layer steps run concurrently, one step's backoff
+never delays its siblings.
 
 Failure handling is represented by `WorkflowFailurePolicy`.
 
@@ -720,7 +834,9 @@ without collapsing the two concepts into one record.
 A production workflow may explicitly declare caller-visible outputs using
 `WorkflowProductionEmission`.
 
-Production emissions reference declared workflow step outputs.
+Production emissions reference declared workflow step outputs, explicitly or
+by name alone. A name-only emission resolves exactly like a name-only result,
+in the promoted specification's step order.
 
 Promotion records exactly one emission, named by
 `PRODUCTION_RESULT_EMISSION`:

@@ -19,7 +19,10 @@ from azathoth.revisions import (
     CONTENT_DIGEST_PATTERN,
     content_digest,
 )
-from azathoth.workflows.candidate import WorkflowCandidate
+from azathoth.workflows.candidate import (
+    WorkflowCandidate,
+    WorkflowCandidateStep,
+)
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.input import (
     create_workflow_input_event,
@@ -28,6 +31,7 @@ from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.result import (
     WorkflowResultError,
     workflow_result,
+    workflow_result_produced,
 )
 from azathoth.workflows.run_failure import (
     RUN_FAILURE_EVALUATOR_NAME,
@@ -40,7 +44,7 @@ from azathoth.workflows.scoring import (
     WorkflowScoringPolicy,
     aggregate_workflow_scorecards,
 )
-from azathoth.workflows.value import WorkflowValueReference
+from azathoth.workflows.value import WorkflowResultReference
 
 
 class WorkflowBenchmarkCaseResult(BaseModel):
@@ -392,6 +396,7 @@ class WorkflowBenchmarkRunner:
                 case=case,
                 run=run,
                 result=candidate.result,
+                steps=candidate.steps,
             )
 
             results.append(
@@ -414,7 +419,8 @@ class WorkflowBenchmarkRunner:
         *,
         case: BenchmarkCase,
         run: WorkflowRun,
-        result: WorkflowValueReference,
+        result: WorkflowResultReference,
+        steps: tuple[WorkflowCandidateStep, ...],
     ) -> EvaluationResult:
         """Judge one case's run on its declared result.
 
@@ -423,11 +429,10 @@ class WorkflowBenchmarkRunner:
                 result, or a run produced it more than once.
         """
 
-        produced = any(
-            value.name == result.name
-            for value in run.values_from(
-                result.producer_step_id,
-            )
+        produced = workflow_result_produced(
+            run,
+            result,
+            steps=steps,
         )
 
         if run.failed and not produced:
@@ -440,6 +445,7 @@ class WorkflowBenchmarkRunner:
             actual = workflow_result(
                 run,
                 result,
+                steps=steps,
             )
         except WorkflowResultError as exc:
             raise WorkflowResultError(f"Benchmark case {case.id}: {exc}") from exc

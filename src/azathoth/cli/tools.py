@@ -1,6 +1,7 @@
 """Durable tool inspection commands for the Azathoth CLI."""
 
 import json
+import shlex
 import sys
 from pathlib import Path
 from uuid import UUID
@@ -16,6 +17,8 @@ from azathoth.tools import (
     decode_tool_document,
     earliest_identical_tool_revision,
     encode_tool_document,
+    supported_tool_runtimes,
+    unsupported_runtime_message,
 )
 
 
@@ -265,6 +268,13 @@ def _print_tool_implementation(
     print(f"Implementation Version: {implementation.version}")
     print(f"Runtime: {implementation.runtime}")
     print(f"Entrypoint: {implementation.entrypoint}")
+
+    if implementation.command is not None:
+        print(f"Command: {shlex.join(implementation.command)}")
+
+    if implementation.timeout_seconds is not None:
+        print(f"Timeout: {implementation.timeout_seconds:g} seconds")
+
     print("Source:")
     print(implementation.source)
 
@@ -431,8 +441,9 @@ def import_tool(
     of the document's exact tool version and makes its artifacts current.
     Re-importing earlier content is reported as identical to the earliest
     revision with the same content. A document whose artifact IDs belong to
-    another tool, or whose implementation IDs belong to another version, is
-    rejected before anything is saved.
+    another tool, whose implementation IDs belong to another version, or
+    whose implementations use a runtime Azathoth cannot execute, is rejected
+    before anything is saved.
     """
 
     try:
@@ -458,6 +469,17 @@ def import_tool(
         )
 
         return 1
+
+    runtimes = supported_tool_runtimes()
+
+    for implementation in document.implementations:
+        if implementation.runtime not in runtimes:
+            print(
+                unsupported_runtime_message(implementation),
+                file=sys.stderr,
+            )
+
+            return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 

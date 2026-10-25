@@ -9,11 +9,13 @@ from azathoth.strategies import Strategy
 from azathoth.workflows.condition import WorkflowCondition
 from azathoth.workflows.failure import WorkflowFailurePolicy
 from azathoth.workflows.models import WorkflowMetadata
+from azathoth.workflows.references import declaring_step_ids
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import (
     WorkflowInputBinding,
+    WorkflowNamedValueReference,
+    WorkflowResultReference,
     WorkflowValueBinding,
-    WorkflowValueReference,
 )
 
 
@@ -67,7 +69,7 @@ class WorkflowCandidate:
 
     metadata: WorkflowMetadata
     steps: tuple[WorkflowCandidateStep, ...]
-    result: WorkflowValueReference | None = None
+    result: WorkflowResultReference | None = None
     revision: int | None = None
 
     def __post_init__(self) -> None:
@@ -120,7 +122,20 @@ class WorkflowCandidate:
         for step_id in step_ids:
             visit(step_id)
 
-        if self.result is not None:
+        if isinstance(
+            self.result,
+            WorkflowNamedValueReference,
+        ):
+            if not declaring_step_ids(
+                self.result.name,
+                self.steps,
+            ):
+                raise ValueError(
+                    "Workflow candidate result must name a value declared by at least one "
+                    "candidate step."
+                )
+
+        elif self.result is not None:
             producer = next(
                 (step for step in self.steps if step.id == self.result.producer_step_id),
                 None,

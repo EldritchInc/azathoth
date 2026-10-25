@@ -26,6 +26,7 @@ from azathoth.workflows import (
     WorkflowBenchmarkRunner,
     WorkflowCandidate,
     WorkflowSpecification,
+    WorkflowValueReference,
     create_production_invocation,
     create_workflow_input_event,
     decode_workflow_document,
@@ -154,7 +155,7 @@ def test_sentiment_workflow_example_declares_its_result() -> None:
     workflow = read_workflow()
 
     assert workflow.metadata.id == WORKFLOW_ID
-    assert workflow.result is not None
+    assert isinstance(workflow.result, WorkflowValueReference)
     assert workflow.result.producer_step_id == STEP_ID
     assert workflow.result.name == "sentiment"
 

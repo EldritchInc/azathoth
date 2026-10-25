@@ -7,6 +7,12 @@ from azathoth.tools.definition import (
     ToolInputSchema,
     ToolOutputSchema,
 )
+from azathoth.tools.dispatch import (
+    RuntimeToolExecutor,
+    default_tool_executors,
+    supported_tool_runtimes,
+    unsupported_runtime_message,
+)
 from azathoth.tools.document import (
     ToolDocument,
     ToolDocumentError,
@@ -18,8 +24,14 @@ from azathoth.tools.exceptions import (
     ToolExecutionError,
     UnsupportedToolRuntimeError,
 )
-from azathoth.tools.execution import PythonToolExecutor
-from azathoth.tools.implementation import ToolImplementation
+from azathoth.tools.execution import (
+    PYTHON_TOOL_RUNTIME,
+    PythonToolExecutor,
+)
+from azathoth.tools.implementation import (
+    PROCESS_TOOL_RUNTIME,
+    ToolImplementation,
+)
 from azathoth.tools.implementation_catalog import ToolImplementationCatalog
 from azathoth.tools.implementation_resolution import (
     ToolImplementationResolver,
@@ -28,6 +40,10 @@ from azathoth.tools.matching import ToolMatcher
 from azathoth.tools.memory_repository import (
     InMemoryToolRepository,
     require_tool_repository,
+)
+from azathoth.tools.process import (
+    PROCESS_STDERR_TAIL_CHARACTERS,
+    ProcessToolExecutor,
 )
 from azathoth.tools.protocols import ToolExecutor
 from azathoth.tools.repository import ToolRepository
@@ -49,7 +65,12 @@ from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
     "InMemoryToolRepository",
+    "PROCESS_STDERR_TAIL_CHARACTERS",
+    "PROCESS_TOOL_RUNTIME",
+    "PYTHON_TOOL_RUNTIME",
+    "ProcessToolExecutor",
     "PythonToolExecutor",
+    "RuntimeToolExecutor",
     "SQLiteToolRepository",
     "ToolCatalog",
     "ToolCatalogLoader",
@@ -78,7 +99,10 @@ __all__ = [
     "ToolVerifier",
     "UnsupportedToolRuntimeError",
     "decode_tool_document",
+    "default_tool_executors",
     "earliest_identical_tool_revision",
     "encode_tool_document",
     "require_tool_repository",
+    "supported_tool_runtimes",
+    "unsupported_runtime_message",
 ]

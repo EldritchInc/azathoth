@@ -5,8 +5,13 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from azathoth.workflows.references import declaring_step_ids
 from azathoth.workflows.steps import WorkflowStepSpecification
-from azathoth.workflows.value import WorkflowValueReference
+from azathoth.workflows.value import (
+    WorkflowNamedValueReference,
+    WorkflowResultReference,
+    WorkflowValueReference,
+)
 
 
 class WorkflowMetadata(BaseModel):
@@ -24,7 +29,9 @@ class WorkflowSpecification(BaseModel):
     """Describe an ordered workflow without runtime dependencies.
 
     The optional result identifies the one declared step output that is the
-    workflow's answer. Evaluation and production use exactly this value.
+    workflow's answer. Evaluation and production use exactly this value. A
+    name-only result resolves to the first step, in step order, that produced
+    a value with that name.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -33,7 +40,7 @@ class WorkflowSpecification(BaseModel):
     steps: tuple[WorkflowStepSpecification, ...] = Field(
         min_length=1,
     )
-    result: WorkflowValueReference | None = None
+    result: WorkflowResultReference | None = None
 
     @model_validator(mode="after")
     def validate_unique_step_ids(self) -> Self:
@@ -112,6 +119,21 @@ class WorkflowSpecification(BaseModel):
             for input_binding in step.inputs:
                 source = input_binding.source
 
+                if isinstance(
+                    source,
+                    WorkflowNamedValueReference,
+                ):
+                    if not declaring_step_ids(
+                        source.name,
+                        (steps_by_id[dependency_id] for dependency_id in step.depends_on),
+                    ):
+                        raise ValueError(
+                            "Workflow input bindings must name a value "
+                            "declared by a step the consumer depends on."
+                        )
+
+                    continue
+
                 if not isinstance(
                     source,
                     WorkflowValueReference,
@@ -170,9 +192,26 @@ class WorkflowSpecification(BaseModel):
 
     @model_validator(mode="after")
     def validate_result(self) -> Self:
-        """Ensure a declared result references a declared step output."""
+        """Ensure a declared result references a declared step output.
+
+        A name-only result needs at least one step declaring the name.
+        """
 
         if self.result is None:
+            return self
+
+        if isinstance(
+            self.result,
+            WorkflowNamedValueReference,
+        ):
+            if not declaring_step_ids(
+                self.result.name,
+                self.steps,
+            ):
+                raise ValueError(
+                    "Workflow result must name a value declared by at least one workflow step."
+                )
+
             return self
 
         producer = next(

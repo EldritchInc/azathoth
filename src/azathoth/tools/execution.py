@@ -1,7 +1,8 @@
 """Execution of trusted Python tool implementations."""
 
+import asyncio
 from collections.abc import Awaitable, Callable
-from inspect import isawaitable
+from inspect import isawaitable, iscoroutinefunction
 from typing import Any, cast
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
@@ -12,6 +13,9 @@ from azathoth.tools.exceptions import (
     UnsupportedToolRuntimeError,
 )
 from azathoth.tools.implementation import ToolImplementation
+
+PYTHON_TOOL_RUNTIME = "python"
+"""The runtime name of in-process Python tool implementations."""
 
 _OUTPUT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
@@ -35,14 +39,27 @@ _PYTHON_BUILTINS: dict[str, object] = {
 
 
 class PythonToolExecutor:
-    """Execute trusted Python tool implementations in process."""
+    """Execute trusted Python tool implementations in process.
+
+    A synchronous entrypoint runs in a worker thread, so a slow tool never
+    blocks the event loop its concurrent workflow siblings share. An async
+    entrypoint is awaited on the event loop.
+    """
 
     async def execute(
         self,
         implementation: ToolImplementation,
         inputs: dict[str, JsonValue],
     ) -> dict[str, JsonValue]:
-        """Execute a trusted Python implementation with structured inputs."""
+        """Execute a trusted Python implementation with structured inputs.
+
+        Raises:
+            UnsupportedToolRuntimeError: The implementation is not a Python
+                implementation.
+            ToolEntrypointError: The entrypoint is missing or not callable.
+            ToolExecutionError: The source could not be loaded, execution
+                failed, or the output is not a JSON object.
+        """
 
         self._validate_runtime(implementation)
 
@@ -52,8 +69,20 @@ class PythonToolExecutor:
             namespace,
         )
 
+        #
+        # A plain bool keeps mypy from narrowing the entrypoint through the
+        # iscoroutinefunction type guard, which no branch needs.
+        #
+        is_coroutine_function: bool = iscoroutinefunction(entrypoint)
+
         try:
-            result = entrypoint(**inputs)
+            if is_coroutine_function:
+                result = entrypoint(**inputs)
+            else:
+                result = await asyncio.to_thread(
+                    entrypoint,
+                    **inputs,
+                )
 
             if isawaitable(result):
                 result = await result
@@ -73,7 +102,7 @@ class PythonToolExecutor:
     ) -> None:
         """Ensure the implementation uses the Python runtime."""
 
-        if implementation.runtime != "python":
+        if implementation.runtime != PYTHON_TOOL_RUNTIME:
             raise UnsupportedToolRuntimeError(
                 "PythonToolExecutor only supports the 'python' runtime."
             )

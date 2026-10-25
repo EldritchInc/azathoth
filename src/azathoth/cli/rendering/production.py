@@ -10,6 +10,7 @@ from azathoth.prompting import (
 from azathoth.workflows import (
     WorkflowProductionRevision,
     WorkflowProductionState,
+    describe_value_reference,
 )
 
 ACTIVE_REVISION_MARKER = "active"
@@ -58,10 +59,7 @@ def render_workflow_production(
         lines.append("")
 
         lines.extend(
-            (
-                f"Emission: {emission.name} <- step {emission.source.producer_step_id} "
-                f"output {emission.source.name}"
-            )
+            (f"Emission: {emission.name} <- {describe_value_reference(emission.source)}")
             for emission in state.emissions
         )
 

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.tools import (
-    PythonToolExecutor,
+    RuntimeToolExecutor,
     SQLiteToolRepository,
     ToolExecutionError,
     ToolImplementation,
@@ -69,7 +69,7 @@ def verify_tool(
         return 1
 
     verifier = ToolVerifier(
-        PythonToolExecutor(),
+        RuntimeToolExecutor(),
     )
 
     all_passed = True
