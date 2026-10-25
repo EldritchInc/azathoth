@@ -9,7 +9,11 @@ from azathoth.tools.execution import (
     PYTHON_TOOL_RUNTIME,
     PythonToolExecutor,
 )
-from azathoth.tools.implementation import ToolImplementation
+from azathoth.tools.implementation import (
+    PROCESS_TOOL_RUNTIME,
+    ToolImplementation,
+)
+from azathoth.tools.process import ProcessToolExecutor
 from azathoth.tools.protocols import ToolExecutor
 
 
@@ -17,6 +21,7 @@ def default_tool_executors() -> dict[str, ToolExecutor]:
     """Return a fresh executor for every runtime Azathoth supports."""
 
     return {
+        PROCESS_TOOL_RUNTIME: ProcessToolExecutor(),
         PYTHON_TOOL_RUNTIME: PythonToolExecutor(),
     }
 

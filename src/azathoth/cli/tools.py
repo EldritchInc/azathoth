@@ -1,6 +1,7 @@
 """Durable tool inspection commands for the Azathoth CLI."""
 
 import json
+import shlex
 import sys
 from pathlib import Path
 from uuid import UUID
@@ -267,6 +268,13 @@ def _print_tool_implementation(
     print(f"Implementation Version: {implementation.version}")
     print(f"Runtime: {implementation.runtime}")
     print(f"Entrypoint: {implementation.entrypoint}")
+
+    if implementation.command is not None:
+        print(f"Command: {shlex.join(implementation.command)}")
+
+    if implementation.timeout_seconds is not None:
+        print(f"Timeout: {implementation.timeout_seconds:g} seconds")
+
     print("Source:")
     print(implementation.source)
 
