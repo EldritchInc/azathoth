@@ -15,7 +15,11 @@ from azathoth.cli.benchmark_checks import (
 )
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.execution import (
+    WorkflowRunInput,
+    configured_run_context,
+    execute_configured_workflow,
+)
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.output_format import (
     DEFAULT_WORKFLOW_OUTPUT_FORMAT,
@@ -69,6 +73,7 @@ from azathoth.workflows import (
 def run_workflow(
     workflow_id: UUID,
     *,
+    workflow_input: WorkflowRunInput | None = None,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Execute one configured workflow and persist its run as evidence.
@@ -77,6 +82,10 @@ def run_workflow(
     execution history is inspectable alongside production invocation history.
     Runs that never start, because no candidate could be generated, leave no
     evidence.
+
+    Supplied input starts the run with one canonical workflow input event, so
+    the run can later become a benchmark case. Without input the run starts
+    with an empty context.
 
     The output format decides what the operator sees while and after the run
     executes. The command returns 0 when the run ends in a result record, and
@@ -94,6 +103,7 @@ def run_workflow(
             execute_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
+                context=configured_run_context(workflow_input),
                 runner=WorkflowRunner(
                     observer=_step_observer(
                         output,

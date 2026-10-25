@@ -25,7 +25,12 @@ from azathoth.cli.configuration import (
     OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE,
     CliRuntimeConfiguration,
 )
-from azathoth.cli.execution import execute_configured_workflow
+from azathoth.cli.execution import (
+    CONFIGURED_RUN_PRODUCER,
+    WorkflowRunInput,
+    configured_run_context,
+    execute_configured_workflow,
+)
 from azathoth.cli.experiments import (
     list_workflow_experiments,
     show_experiment,
@@ -115,16 +120,19 @@ from azathoth.cli.workflows import (
 )
 
 __all__ = [
+    "CONFIGURED_RUN_PRODUCER",
     "DATABASE_ENVIRONMENT_VARIABLE",
     "DEFAULT_DATABASE",
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
+    "WorkflowRunInput",
     "WorkflowRunSource",
     "add_judge",
     "authorize_model",
     "build_parser",
     "compare_benchmarks",
     "compare_configured_benchmarks",
+    "configured_run_context",
     "deauthorize_model",
     "execute_configured_benchmark",
     "execute_configured_workflow",
