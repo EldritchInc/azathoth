@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     GENERATIONS_ATTRIBUTE,
     TARGET_COST_ATTRIBUTE,
@@ -28,6 +29,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_INVOKE_ACTION,
     WORKFLOW_LIST_ACTION,
     WORKFLOW_OPTIMIZE_ACTION,
+    WORKFLOW_OUTPUT_ATTRIBUTE,
     WORKFLOW_PRODUCTION_ACTION,
     WORKFLOW_PROMOTE_ACTION,
     WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
@@ -46,6 +48,7 @@ WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
 WorkflowHistoryHandler = Callable[..., int]
 WorkflowRevisionHandler = Callable[..., int]
+WorkflowRunHandler = Callable[..., int]
 
 
 def dispatch_workflow_command(
@@ -62,7 +65,7 @@ def dispatch_workflow_command(
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowIdentifierHandler,
-    run_workflow: WorkflowIdentifierHandler,
+    run_workflow: WorkflowRunHandler,
     show_workflow: WorkflowRevisionHandler,
     show_workflow_production: WorkflowIdentifierHandler,
 ) -> int | None:
@@ -145,7 +148,10 @@ def dispatch_workflow_command(
             ),
         )
 
-        return run_workflow(workflow_id)
+        return run_workflow(
+            workflow_id,
+            output=_output_format(arguments),
+        )
 
     if action == WORKFLOW_RUNS_ACTION:
         return list_workflow_runs(
@@ -250,6 +256,7 @@ def dispatch_workflow_command(
                     WORKFLOW_INPUT_ATTRIBUTE,
                 ),
             ),
+            output=_output_format(arguments),
         )
 
     if action == WORKFLOW_PROMOTE_ACTION:
@@ -319,4 +326,20 @@ def _specification_revision(
             WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
             None,
         ),
+    )
+
+
+def _output_format(
+    arguments: Namespace,
+) -> WorkflowOutputFormat:
+    """Return the requested output format of a workflow execution command."""
+
+    return WorkflowOutputFormat(
+        cast(
+            str,
+            getattr(
+                arguments,
+                WORKFLOW_OUTPUT_ATTRIBUTE,
+            ),
+        )
     )
