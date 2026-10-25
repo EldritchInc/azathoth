@@ -153,6 +153,7 @@ def test_benchmark_run_dispatches_complete_execution_request() -> None:
 
     result = dispatch_benchmark_command(
         arguments,
+        add_benchmark_case=unused_compare_benchmarks,
         compare_benchmarks=unused_compare_benchmarks,
         export_benchmark=unused_benchmark_identifier,
         import_benchmark=unused_import_benchmark,
