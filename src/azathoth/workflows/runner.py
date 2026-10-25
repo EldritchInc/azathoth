@@ -1,6 +1,7 @@
 """Workflow execution orchestration."""
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,6 +24,12 @@ from azathoth.workflows.execution import (
     WorkflowStepStatus,
 )
 from azathoth.workflows.failure import WorkflowFailurePolicy
+from azathoth.workflows.observation import (
+    WorkflowRunEvent,
+    WorkflowRunObserver,
+    WorkflowStepFinished,
+    WorkflowStepStarted,
+)
 from azathoth.workflows.references import (
     declaring_step_ids,
     resolve_named_value,
@@ -85,6 +92,10 @@ class WorkflowRunner:
     commits only after every one of its steps has finished, always in declared
     order, so the recorded run and its final context are identical whatever
     order the steps finish in.
+
+    An optional observer is told live when each step starts and finishes, in
+    the order that actually happens. It only watches: the recorded run is the
+    same with or without it.
     """
 
     def __init__(
@@ -92,9 +103,44 @@ class WorkflowRunner:
         *,
         executor: StrategyExecutor | None = None,
         sleep: RetrySleep | None = None,
+        observer: WorkflowRunObserver | None = None,
     ) -> None:
         self._executor = executor if executor is not None else StrategyExecutor()
         self._sleep: RetrySleep = sleep if sleep is not None else _sleep
+        self._observer = observer
+
+    def _notify(
+        self,
+        event: WorkflowRunEvent,
+    ) -> None:
+        """Deliver one event to the observer, discarding anything it raises.
+
+        A failing observer, such as a progress printer whose pipe closed, must
+        never turn into a step failure or cost a run its evidence.
+        """
+
+        if self._observer is None:
+            return
+
+        with contextlib.suppress(Exception):
+            self._observer.observe(event)
+
+    @staticmethod
+    def _resolve_values(
+        *,
+        step: WorkflowCandidateStep,
+        execution: ExecutionResult,
+    ) -> tuple[WorkflowValue, ...]:
+        """Return the declared values of one successful step execution."""
+
+        return tuple(
+            WorkflowValue(
+                name=binding.name,
+                value=binding.resolve(execution.output),
+                producer_step_id=step.id,
+            )
+            for binding in step.outputs
+        )
 
     @staticmethod
     def _find_workflow_value(
@@ -422,44 +468,83 @@ class WorkflowRunner:
 
         raise AssertionError("Workflow retry execution completed without producing an outcome.")
 
+    async def _execute_observed_step(
+        self,
+        *,
+        step: WorkflowCandidateStep,
+        step_context: Context,
+        layer_index: int,
+    ) -> _StepOutcome:
+        """Execute one eligible step to retry exhaustion, reporting its progress live."""
+
+        self._notify(
+            WorkflowStepStarted(
+                step=step,
+                layer_index=layer_index,
+            )
+        )
+
+        execution, attempts, error = await self._execute_with_retry(
+            strategy=step.strategy,
+            context=step_context,
+            retry_policy=step.retry_policy,
+            outputs=step.outputs,
+        )
+
+        if execution is None:
+            self._notify(
+                WorkflowStepFinished(
+                    step=step,
+                    layer_index=layer_index,
+                    status=WorkflowStepStatus.FAILED,
+                    failure=attempts[-1].failure,
+                )
+            )
+        else:
+            self._notify(
+                WorkflowStepFinished(
+                    step=step,
+                    layer_index=layer_index,
+                    status=WorkflowStepStatus.EXECUTED,
+                    values=self._resolve_values(
+                        step=step,
+                        execution=execution,
+                    ),
+                )
+            )
+
+        return _StepOutcome(
+            execution=execution,
+            attempts=attempts,
+            error=error,
+        )
+
     async def _execute_layer(
         self,
         eligible: tuple[tuple[WorkflowCandidateStep, Context], ...],
+        *,
+        layer_index: int = 0,
     ) -> tuple[_StepOutcome, ...]:
         """Execute eligible layer steps concurrently, returning outcomes in order.
 
         Every step runs to retry exhaustion. Step failures are captured as
         outcomes rather than raised, so one failing step never cancels its
-        siblings.
+        siblings. Each step reports its start and finish as they happen.
         """
 
         async with asyncio.TaskGroup() as group:
             tasks = tuple(
                 group.create_task(
-                    self._execute_with_retry(
-                        strategy=step.strategy,
-                        context=step_context,
-                        retry_policy=step.retry_policy,
-                        outputs=step.outputs,
+                    self._execute_observed_step(
+                        step=step,
+                        step_context=step_context,
+                        layer_index=layer_index,
                     )
                 )
                 for step, step_context in eligible
             )
 
-        outcomes: list[_StepOutcome] = []
-
-        for task in tasks:
-            execution, attempts, error = task.result()
-
-            outcomes.append(
-                _StepOutcome(
-                    execution=execution,
-                    attempts=attempts,
-                    error=error,
-                )
-            )
-
-        return tuple(outcomes)
+        return tuple(task.result() for task in tasks)
 
     @staticmethod
     def _merge_execution_context(
@@ -554,6 +639,14 @@ class WorkflowRunner:
                         )
                     )
 
+                    self._notify(
+                        WorkflowStepFinished(
+                            step=step,
+                            layer_index=layer_index,
+                            status=WorkflowStepStatus.SKIPPED,
+                        )
+                    )
+
                     continue
 
                 #
@@ -566,6 +659,14 @@ class WorkflowRunner:
                     layer_results.append(
                         _LayerStepResult(
                             step=step,
+                            status=WorkflowStepStatus.SKIPPED,
+                        )
+                    )
+
+                    self._notify(
+                        WorkflowStepFinished(
+                            step=step,
+                            layer_index=layer_index,
                             status=WorkflowStepStatus.SKIPPED,
                         )
                     )
@@ -584,10 +685,19 @@ class WorkflowRunner:
                         completed_steps=completed_steps,
                     )
                 except WorkflowInputResolutionError as error:
-                    layer_results.append(
-                        self._input_resolution_failure(
+                    failure = self._input_resolution_failure(
+                        step=step,
+                        error=error,
+                    )
+
+                    layer_results.append(failure)
+
+                    self._notify(
+                        WorkflowStepFinished(
                             step=step,
-                            error=error,
+                            layer_index=layer_index,
+                            status=WorkflowStepStatus.FAILED,
+                            failure=failure.attempts[-1].failure,
                         )
                     )
 
@@ -605,6 +715,7 @@ class WorkflowRunner:
             #
             outcomes = await self._execute_layer(
                 tuple(eligible),
+                layer_index=layer_index,
             )
 
             for (step, step_context), outcome in zip(
@@ -707,13 +818,9 @@ class WorkflowRunner:
                     execution=execution,
                 )
 
-                values = tuple(
-                    WorkflowValue(
-                        name=binding.name,
-                        value=binding.resolve(execution.output),
-                        producer_step_id=step.id,
-                    )
-                    for binding in step.outputs
+                values = self._resolve_values(
+                    step=step,
+                    execution=execution,
                 )
 
                 completed_steps.append(

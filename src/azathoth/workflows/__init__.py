@@ -127,6 +127,12 @@ from azathoth.workflows.models import (
     WorkflowMetadata,
     WorkflowSpecification,
 )
+from azathoth.workflows.observation import (
+    WorkflowRunEvent,
+    WorkflowRunObserver,
+    WorkflowStepFinished,
+    WorkflowStepStarted,
+)
 from azathoth.workflows.production import (
     WorkflowProductionEmission,
     WorkflowProductionModelSubstitution,
@@ -404,12 +410,14 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunEvaluation",
     "WorkflowRunEvaluationRepository",
+    "WorkflowRunEvent",
     "WorkflowRunFeedback",
     "WorkflowRunFeedbackDisposition",
     "WorkflowRunFeedbackRepository",
     "WorkflowRunModelUsage",
     "WorkflowRunToolUsage",
     "WorkflowRunner",
+    "WorkflowRunObserver",
     "WorkflowRunRepository",
     "WorkflowRunStatistics",
     "WorkflowScorecard",
@@ -419,8 +427,10 @@ __all__ = [
     "WorkflowSpecificationRevision",
     "WorkflowStepAttempt",
     "WorkflowStepFailure",
+    "WorkflowStepFinished",
     "WorkflowStepRun",
     "WorkflowStepSpecification",
+    "WorkflowStepStarted",
     "WorkflowStepStatus",
     "WorkflowToolUsageEntry",
     "WorkflowToolUsageReport",
