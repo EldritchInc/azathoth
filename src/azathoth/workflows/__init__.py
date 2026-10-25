@@ -15,6 +15,14 @@ from azathoth.workflows.benchmark import (
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
 )
+from azathoth.workflows.benchmark_case_source import (
+    SOURCE_FEEDBACK_METADATA_KEY,
+    SOURCE_RUN_METADATA_KEY,
+    BenchmarkCaseSourceError,
+    benchmark_case_from_run,
+    latest_corrected_output,
+    workflow_run_input,
+)
 from azathoth.workflows.benchmark_execution_repository import (
     WorkflowBenchmarkExecutionRepository,
 )
@@ -308,6 +316,7 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "BenchmarkCaseSourceError",
     "InMemoryProductionInvocationRepository",
     "InMemoryProductionInvocationRunRepository",
     "InMemoryWorkflowRunFeedbackRepository",
@@ -344,6 +353,8 @@ __all__ = [
     "ToolStepSpecification",
     "RUN_FAILURE_EVALUATOR_NAME",
     "RUN_FAILURE_EVALUATOR_VERSION",
+    "SOURCE_FEEDBACK_METADATA_KEY",
+    "SOURCE_RUN_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
@@ -440,6 +451,7 @@ __all__ = [
     "WorkflowValueResolutionError",
     "active_production_revision",
     "aggregate_workflow_scorecards",
+    "benchmark_case_from_run",
     "complete_production_invocation",
     "create_production_invocation",
     "create_workflow_input_event",
@@ -456,6 +468,7 @@ __all__ = [
     "generate_workflow_candidate",
     "historical_model_usages",
     "historical_tool_usages",
+    "latest_corrected_output",
     "materialize_workflow_candidate",
     "model_usage_report",
     "production_model_usages",
@@ -476,6 +489,7 @@ __all__ = [
     "tool_usage_report",
     "workflow_result",
     "workflow_result_produced",
+    "workflow_run_input",
     "workflow_uses_model",
     "workflow_uses_tool",
     "workflows_using_model",
