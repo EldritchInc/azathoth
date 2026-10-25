@@ -10,6 +10,7 @@ from pydantic import JsonValue
 import azathoth.cli.application as cli_application
 import azathoth.cli.workflows as workflow_commands
 from azathoth.cli import (
+    WorkflowRunInput,
     invoke_workflow,
     main,
     run_workflow,
@@ -561,6 +562,7 @@ def test_cli_passes_requested_output_format_to_run_and_invoke(
     def fake_run_workflow(
         workflow_id: UUID,
         *,
+        workflow_input: WorkflowRunInput | None,
         output: WorkflowOutputFormat,
     ) -> int:
         requested.append(("run", output))
