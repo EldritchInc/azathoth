@@ -61,7 +61,12 @@ async def execute_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
 ) -> WorkflowRun:
-    """Execute one production invocation against current production state."""
+    """Execute one production invocation against current production state.
+
+    A step failure never escapes as an exception: the completed run, failed or
+    not, is persisted and associated with the invocation before it is
+    returned, so every executed invocation leaves inspectable evidence.
+    """
 
     _validate_invocation_state(
         invocation=invocation,
@@ -76,9 +81,9 @@ async def execute_production_invocation(
         tool_implementation_resolver=tool_implementation_resolver,
     )
 
-    run = await runner.run(
-        workflow=candidate,
-        context=invocation.initial_context,
+    run = await runner.run_recording_failures(
+        candidate,
+        invocation.initial_context,
     )
 
     run_repository.save(

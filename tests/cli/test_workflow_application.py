@@ -10,6 +10,7 @@ from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     main,
 )
+from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.prompting import (
     PortfolioModelSelection,
     PromptStrategySpec,
@@ -317,12 +318,19 @@ def test_cli_workflow_import_help_describes_file(
 def test_cli_workflow_run_dispatches_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[UUID] = []
+    calls: list[tuple[UUID, WorkflowOutputFormat]] = []
 
     def fake_run_workflow(
         workflow_id: UUID,
+        *,
+        output: WorkflowOutputFormat,
     ) -> int:
-        calls.append(workflow_id)
+        calls.append(
+            (
+                workflow_id,
+                output,
+            )
+        )
 
         return 0
 
@@ -343,7 +351,10 @@ def test_cli_workflow_run_dispatches_command(
     assert result == 0
 
     assert calls == [
-        WORKFLOW_ID,
+        (
+            WORKFLOW_ID,
+            WorkflowOutputFormat.JSONL,
+        ),
     ]
 
 

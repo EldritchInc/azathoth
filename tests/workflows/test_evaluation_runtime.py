@@ -106,8 +106,12 @@ def test_failed_run_evaluation_preserves_failure_evidence() -> None:
 
     assert evaluation.reliability.failure_rate == 0.25
 
-    assert run.failed
-    assert not run.succeeded
+    #
+    # The failure was tolerated, so the run completed and succeeded.
+    #
+    assert run.succeeded
+    assert not run.failed
+    assert run.halted is False
 
 
 def test_skipped_branch_evaluation_preserves_skip_evidence() -> None:

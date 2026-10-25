@@ -390,7 +390,8 @@ def test_tolerated_step_failure_is_judged_on_result() -> None:
         )
     )
 
-    assert all(case.run.failed for case in result.cases)
+    assert all(case.run.succeeded for case in result.cases)
+    assert all(case.run.failed_step_count == 1 for case in result.cases)
     assert all(case.evaluation.passed for case in result.cases)
     assert all(
         case.evaluation.evaluator_name != RUN_FAILURE_EVALUATOR_NAME for case in result.cases

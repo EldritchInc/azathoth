@@ -1,6 +1,7 @@
 """Operational workflow commands for the Azathoth command-line application."""
 
 import asyncio
+import json
 import sys
 from uuid import UUID
 
@@ -16,13 +17,25 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import execute_configured_workflow
 from azathoth.cli.optimization import optimize_configured_workflow
+from azathoth.cli.output_format import (
+    DEFAULT_WORKFLOW_OUTPUT_FORMAT,
+    WorkflowOutputFormat,
+)
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import promote_configured_workflow
 from azathoth.cli.rendering import (
+    RESULT_RECORD_TYPE,
+    OutputRecord,
+    production_invocation_record,
     render_production_invocation_result,
     render_workflow_optimization_session,
     render_workflow_promotion,
     render_workflow_run,
+    workflow_run_record,
+)
+from azathoth.cli.step_output import (
+    JsonLinesOutputWriter,
+    TextStepMessageWriter,
 )
 from azathoth.cli.workflow_configuration import (
     export_workflow,
@@ -47,12 +60,16 @@ from azathoth.workflows import (
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
+    WorkflowRunner,
+    WorkflowRunObserver,
     WorkflowScoringPolicy,
 )
 
 
 def run_workflow(
     workflow_id: UUID,
+    *,
+    output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Execute one configured workflow and persist its run as evidence.
 
@@ -60,17 +77,29 @@ def run_workflow(
     execution history is inspectable alongside production invocation history.
     Runs that never start, because no candidate could be generated, leave no
     evidence.
+
+    The output format decides what the operator sees while and after the run
+    executes. The command returns 0 when the run ends in a result record, and
+    1 when it halted or did not produce its declared result.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
     runtime = load_runtime(configuration)
 
+    writer = JsonLinesOutputWriter(sys.stdout) if output is WorkflowOutputFormat.JSONL else None
+
     try:
         run = asyncio.run(
             execute_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
+                runner=WorkflowRunner(
+                    observer=_step_observer(
+                        output,
+                        writer,
+                    ),
+                ),
             )
         )
     except (
@@ -88,9 +117,25 @@ def run_workflow(
         configuration.database,
     ).save(run)
 
-    print(render_workflow_run(run))
+    if output is WorkflowOutputFormat.TEXT:
+        print(render_workflow_run(run))
 
-    return 0 if run.succeeded else 1
+        return 0 if run.succeeded else 1
+
+    specification = runtime.workflows.get(workflow_id)
+
+    assert specification is not None
+
+    record = workflow_run_record(
+        run,
+        result=specification.result,
+        steps=specification.steps,
+    )
+
+    return _write_terminal_record(
+        record,
+        writer,
+    )
 
 
 def promote_workflow(
@@ -138,12 +183,20 @@ def invoke_workflow(
     *,
     workflow_id: UUID,
     payload: JsonValue,
+    output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
-    """Invoke one active production workflow."""
+    """Invoke one active production workflow.
+
+    The output format decides what the caller sees while and after the
+    invocation executes. The command returns 0 when the invocation succeeds
+    and 1 when it fails.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
     runtime = load_runtime(configuration)
+
+    writer = JsonLinesOutputWriter(sys.stdout) if output is WorkflowOutputFormat.JSONL else None
 
     result = asyncio.run(
         invoke_active_production_workflow(
@@ -159,27 +212,91 @@ def invoke_workflow(
             invocation_run_repository=SQLiteProductionInvocationRunRepository(
                 configuration.database,
             ),
+            runner=WorkflowRunner(
+                observer=_step_observer(
+                    output,
+                    writer,
+                ),
+            ),
         )
     )
 
-    rendered = render_production_invocation_result(
-        result,
+    if output is WorkflowOutputFormat.TEXT:
+        rendered = render_production_invocation_result(
+            result,
+        )
+
+        if isinstance(
+            result,
+            ProductionInvocationFailure,
+        ):
+            print(
+                rendered,
+                file=sys.stderr,
+            )
+
+            return 1
+
+        print(rendered)
+
+        return 0
+
+    return _write_terminal_record(
+        production_invocation_record(result),
+        writer,
     )
 
-    if isinstance(
-        result,
-        ProductionInvocationFailure,
-    ):
+
+def _step_observer(
+    output: WorkflowOutputFormat,
+    writer: JsonLinesOutputWriter | None,
+) -> WorkflowRunObserver | None:
+    """Return the live step observer of one output format.
+
+    JSON Lines streams step records to stdout through the given writer, text
+    prints step messages to stderr, and result mode stays silent.
+    """
+
+    if output is WorkflowOutputFormat.JSONL:
+        return writer
+
+    if output is WorkflowOutputFormat.TEXT:
+        return TextStepMessageWriter(sys.stderr)
+
+    return None
+
+
+def _write_terminal_record(
+    record: OutputRecord,
+    writer: JsonLinesOutputWriter | None,
+) -> int:
+    """Write one terminal record in JSON Lines or result mode, returning the exit code.
+
+    With a writer the record ends the JSON Lines stream. Without one, a result
+    record prints only its value as JSON on stdout, and nothing when there is
+    no declared result; an error record prints its message on stderr.
+    """
+
+    succeeded = record["type"] == RESULT_RECORD_TYPE
+
+    if writer is not None:
+        writer.write(record)
+
+    elif not succeeded:
         print(
-            rendered,
+            record["message"],
             file=sys.stderr,
         )
 
-        return 1
+    elif "value" in record:
+        print(
+            json.dumps(
+                record["value"],
+                ensure_ascii=False,
+            )
+        )
 
-    print(rendered)
-
-    return 0
+    return 0 if succeeded else 1
 
 
 def optimize_workflow(

@@ -1,0 +1,88 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000002",
+    "name": "word count with step messages",
+    "description": "Count words with a process tool and a Python tool concurrently, announcing each step as it starts and emitting the process tool's count as soon as it succeeds.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000021",
+      "specification": {
+        "requirement": {
+          "name": "word_count_process",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "continue",
+      "message": "Counting words with the process tool",
+      "emit_values": true
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000022",
+      "specification": {
+        "requirement": {
+          "name": "word_count",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "continue",
+      "message": "Counting words with the Python tool"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}

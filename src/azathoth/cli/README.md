@@ -781,6 +781,87 @@ rendered to the operator
 
 The completed run is persisted before it is rendered.
 
+`--output` chooses what the operator sees; see
+[Workflow Output Formats](#workflow-output-formats).
+
+# Workflow Output Formats
+
+`workflow run` and `workflow invoke` both take
+`--output jsonl|text|result`. The default is `jsonl`.
+
+| Format | stdout | stderr |
+|---|---|---|
+| `jsonl` | step records live, then one terminal record | nothing once execution starts |
+| `text` | the human-readable report | step messages, one per line |
+| `result` | the result value as JSON, or nothing when no result is declared | the error message |
+
+Errors before execution starts, such as an unknown workflow or a candidate
+that cannot be generated, are written to standard error as text in every
+format.
+
+## JSON Lines Records
+
+Each line is one JSON object with a `type`:
+
+```text
+{"type": "step", "step_id": "<STEP_ID>", "message": "Counting words"}
+{"type": "output", "step_id": "<STEP_ID>", "values": {"count": 4}}
+{"type": "result", "run_id": "<RUN_ID>", "value": 4}
+{"type": "error", "run_id": "<RUN_ID>", "code": "workflow_execution_failed", ...}
+```
+
+- `step` is written when a step that declares a `message` starts.
+- `output` is written when a step that sets `emit_values` succeeds.
+- Failed and skipped steps write nothing after their `step` record.
+- The stream ends with exactly one `result` or `error` record.
+
+Lines are flushed as they are written, so a client can show progress live or
+read only the last line. Concurrent steps interleave in the order they
+actually start and finish. A `delta` record is reserved for streamed model
+output.
+
+`workflow run` terminal records carry `run_id`:
+
+```text
+{"type": "result", "run_id": "...", "value": ...}       declared result produced
+{"type": "result", "run_id": "..."}                     no declared result
+{"type": "error", "run_id": "...", "code": "workflow_execution_failed",
+ "step_id": "...", "exception_type": "...", "message": "..."}   run halted
+{"type": "error", "run_id": "...", "code": "result_not_produced", "message": "..."}
+```
+
+A run without a declared result omits `value`, so it cannot be mistaken for a
+result of `null`. A halted run names the step that halted it and its actual
+failure, because configured runs are the workflow author's tool.
+
+`workflow invoke` terminal records carry `invocation_id` and the
+caller-visible production error code and message, never a step's internal
+failure:
+
+```text
+{"type": "result", "invocation_id": "...", "value": {"result": "Paris"}}
+{"type": "error", "invocation_id": "...", "code": "workflow_not_deployed",
+ "message": "The requested workflow is not deployed to production."}
+```
+
+## Result Output for Child Workflows
+
+`--output result` prints only the result value as compact JSON, which is what
+a tool that runs a child workflow reads:
+
+```bash
+azathoth workflow invoke <WORKFLOW_ID> \
+    --input '"the old ones wait"' \
+    --output result
+```
+
+```text
+{"result": 4}
+```
+
+The child's step records never reach the parent: the parent only sees the
+child's result.
+
 # `workflow run` Is Development/Configured Execution
 
 `workflow run` does not mean:
@@ -807,10 +888,13 @@ workflow invoke
 
 # Run Exit Status
 
-A configured workflow command returns a successful process exit when the
-resulting `WorkflowRun` succeeded.
+A run that completes has succeeded, even when steps that tolerate failure
+under `continue` or `skip_dependents` failed. A run fails only when it halts on
+a `fail_workflow` step.
 
-If the run completes unsuccessfully, the CLI returns a failure exit status.
+With `--output jsonl` or `--output result`, `workflow run` exits 0 when the
+run ends in a `result` record, and 1 when it halted or did not produce its
+declared result. With `--output text`, it exits 0 when the run succeeded.
 
 Configuration or candidate-generation failures are emitted to standard error
 and also return failure.
@@ -1527,7 +1611,8 @@ azathoth workflow invoke <WORKFLOW_ID> \
     --input '<JSON>'
 ```
 
-`--input` is required and must be valid JSON.
+`--input` is required and must be valid JSON. `--output` chooses the
+[output format](#workflow-output-formats), `jsonl` by default.
 
 For example:
 
@@ -1642,7 +1727,7 @@ empirical workflow execution
 
 # Invocation Result Rendering
 
-On success, the CLI renders:
+With `--output text`, on success, the CLI renders:
 
 ```text
 Invocation ID: <INVOCATION_ID>
@@ -1674,6 +1759,11 @@ optional metadata
 
 Production failures are written to standard error and return a failure process
 exit status.
+
+A production run in which a redundant producer failed under `continue`, but
+another produced the result, succeeds. It fails with
+`Production workflow did not produce its declared result.` only when no
+producer delivered the result.
 
 # Promotion Followed by Invocation
 

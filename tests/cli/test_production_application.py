@@ -7,6 +7,7 @@ from pydantic import JsonValue
 
 import azathoth.cli.application as cli_application
 from azathoth.cli import main
+from azathoth.cli.output_format import WorkflowOutputFormat
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -25,7 +26,10 @@ def test_cli_workflow_invoke_dispatches_structured_input(
         *,
         workflow_id: UUID,
         payload: JsonValue,
+        output: WorkflowOutputFormat,
     ) -> int:
+        assert output is WorkflowOutputFormat.JSONL
+
         received.append(
             (
                 workflow_id,
@@ -104,6 +108,7 @@ def test_cli_workflow_invoke_accepts_any_json_value(
         *,
         workflow_id: UUID,
         payload: JsonValue,
+        output: WorkflowOutputFormat,
     ) -> int:
         assert workflow_id == WORKFLOW_ID
 
@@ -140,6 +145,7 @@ def test_cli_workflow_invoke_propagates_command_status(
         *,
         workflow_id: UUID,
         payload: JsonValue,
+        output: WorkflowOutputFormat,
     ) -> int:
         assert workflow_id == WORKFLOW_ID
         assert payload == {}

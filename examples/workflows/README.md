@@ -75,6 +75,49 @@ azathoth tool verify \
 The process tool needs `python3` on the `PATH`. Neither step calls a language
 model, so no provider credentials are needed.
 
+## Word Count With Step Messages
+
+`word-count-messages.json` is the redundant word count with step messages.
+Each step announces itself as it starts, and the process step also emits its
+count as soon as it succeeds:
+
+```json
+"message": "Counting words with the process tool",
+"emit_values": true
+```
+
+The Python step declares a message only, so it announces itself but emits no
+values.
+
+Import both tools as above, then import and promote the workflow:
+
+```bash
+azathoth workflow import \
+    examples/workflows/word-count-messages.json
+
+azathoth workflow promote \
+    a1000000-0000-4000-8000-000000000002
+```
+
+Invoking it streams JSON Lines by default:
+
+```bash
+azathoth workflow invoke \
+    a1000000-0000-4000-8000-000000000002 \
+    --input '"the old ones wait"'
+```
+
+```text
+{"type": "step", "step_id": "a1000000-0000-4000-8000-000000000021", "message": "Counting words with the process tool"}
+{"type": "step", "step_id": "a1000000-0000-4000-8000-000000000022", "message": "Counting words with the Python tool"}
+{"type": "output", "step_id": "a1000000-0000-4000-8000-000000000021", "values": {"count": 4}}
+{"type": "result", "invocation_id": "<INVOCATION_ID>", "value": {"result": 4}}
+```
+
+If the process tool fails, its `output` record never appears, and the
+invocation still succeeds with the Python tool's count, because the run
+completed. Add `--output result` to print only `{"result": 4}`.
+
 ## JSON Document Format
 
 Workflow JSON files use the canonical serialized representation of

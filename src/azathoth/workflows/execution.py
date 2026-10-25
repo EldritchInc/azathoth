@@ -97,6 +97,12 @@ class WorkflowRun(BaseModel):
     The workflow revision names the specification revision the executed
     candidate was generated from. It is absent for runs of unrevisioned
     candidates and for runs recorded before revisions existed.
+
+    A run that completes has succeeded, even when steps whose failure policy
+    tolerates failure failed along the way. A run fails only when it halts:
+    a `fail_workflow` step failed and the run stopped, and the halting step
+    names that step. Runs recorded before halting was recorded leave both
+    fields unset, and are judged as before: failed when any step failed.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -116,6 +122,9 @@ class WorkflowRun(BaseModel):
 
     started_at: datetime
     completed_at: datetime
+
+    halted: bool | None = None
+    halting_step_id: UUID | None = None
 
     @property
     def values(self) -> tuple[WorkflowValue, ...]:
@@ -219,13 +228,20 @@ class WorkflowRun(BaseModel):
 
     @property
     def succeeded(self) -> bool:
-        """Return whether the workflow completed without failed steps."""
+        """Return whether the workflow run completed without halting.
+
+        A run recorded before halting was recorded succeeded only when no
+        step failed.
+        """
+
+        if self.halted is not None:
+            return not self.halted
 
         return self.statistics.failed_steps == 0
 
     @property
     def failed(self) -> bool:
-        """Return whether the workflow contains failed steps."""
+        """Return whether the workflow run halted on a failed step."""
 
         return not self.succeeded
 
@@ -287,5 +303,28 @@ class WorkflowRun(BaseModel):
 
         if self.completed_at < self.started_at:
             raise ValueError("Workflow completion time cannot precede its start time.")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_halting(self) -> "WorkflowRun":
+        """Ensure a halted run names the failed step that halted it, and only then."""
+
+        if self.halted is not True:
+            if self.halting_step_id is not None:
+                raise ValueError("Only a halted workflow run can name a halting step.")
+
+            return self
+
+        if self.halting_step_id is None:
+            raise ValueError("A halted workflow run must name the failed step that halted it.")
+
+        if not any(
+            step.step_id == self.halting_step_id and step.status is WorkflowStepStatus.FAILED
+            for step in self.steps
+        ):
+            raise ValueError(
+                f"Workflow run halting step {self.halting_step_id} is not a failed step of the run."
+            )
 
         return self

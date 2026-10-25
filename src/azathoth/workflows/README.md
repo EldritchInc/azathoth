@@ -158,10 +158,39 @@ Steps can additionally describe:
 - conditions
 - retry policy
 - failure policy
+- a message
+- value emission
 
 These properties form durable workflow topology and policy.
 
 They are distinct from execution evidence.
+
+### Step Messages
+
+A step may declare a `message`, what it tells whoever is watching the
+workflow when it starts, and may set `emit_values` to also emit its declared
+values once it succeeds:
+
+```json
+"message": "Counting words with the process tool",
+"emit_values": true
+```
+
+A step without a message is silent. Only a step with a message may emit
+values, and only if it declares outputs:
+
+```text
+Workflow step <STEP_ID> emits values but declares no message.
+Workflow step <STEP_ID> emits values but declares no outputs.
+```
+
+Both fields are presentation only. They never change how the step executes,
+is evaluated, or is optimized. A step that leaves them unset serializes
+without them, so existing documents and their content digests are unchanged.
+Setting a message is a content change, so it makes a new revision.
+
+Candidate generation carries both fields onto `WorkflowCandidateStep`, for
+configured and production candidates alike.
 
 ## Candidate Generation
 
@@ -260,6 +289,49 @@ use `continue`.
 There is no concurrency limit inside a layer: the width of the specification
 bounds it.
 
+### Run Success
+
+A run that completes has succeeded, even when steps whose failure policy
+tolerates failure failed along the way. A run fails only when it halts: a
+`fail_workflow` step failed and the run stopped.
+
+```text
+failure under continue or skip_dependents   run completes   succeeded
+failure under fail_workflow                 run halts       failed
+```
+
+`WorkflowRun.halted` records whether the run halted, and
+`WorkflowRun.halting_step_id` names the first `fail_workflow` failure in
+declared order, the one the run reports. Tolerated failures still appear in
+the run's statistics and reliability metrics.
+
+Runs recorded before halting was recorded leave both fields unset and are
+judged as before: failed when any step failed.
+
+`run_recording_failures` returns the completed run, halted or not, and is what
+configured runs, production invocations, and benchmarks use, so every
+executed run is persisted as evidence. `run` additionally raises the halting
+step's failure.
+
+### Observing Progress
+
+`WorkflowRunner(observer=...)` reports step progress live to a
+`WorkflowRunObserver`:
+
+```text
+WorkflowStepStarted    a step began its first attempt (once, never on retries)
+WorkflowStepFinished   a step reached its final status, with its values or failure
+```
+
+Events arrive in the order steps actually start and finish, so concurrent
+steps of one layer interleave. Skipped steps and steps whose inputs did not
+resolve finish without starting. Each event carries the candidate step,
+including its message and value emission.
+
+Observation never changes recorded evidence. The runner discards anything an
+observer raises, so a failing progress printer can never become a step
+failure or cost a run its evidence.
+
 ## Values and Data Flow
 
 Workflow data flow is explicit.
@@ -309,8 +381,16 @@ The `workflow.input.bound` event recorded for every value input names the
 producer that actually supplied it, so evidence always shows which redundant
 producer was used.
 
-Invalid value resolution fails explicitly with
-`WorkflowValueResolutionError`.
+An output binding whose path does not resolve against a step's output fails
+that attempt with `WorkflowValueResolutionError`:
+
+```text
+Cannot resolve workflow value 'count': missing object key 'count'.
+```
+
+It is retried under the step's retry policy, because a model may produce the
+declared shape on a later attempt, and the step then fails under its own
+failure policy instead of crashing the run.
 
 ### Unresolved Inputs
 
@@ -510,9 +590,12 @@ experiment. Each run is then judged result first:
 ```text
 declared result produced?
     yes ──► judged with the case's comparison, even if some steps failed
-    no, and the run failed ──► evaluate_failed_run
-    no, and the run succeeded ──► WorkflowResultError
+    no, and a step failed ──► evaluate_failed_run
+    no, and no step failed ──► WorkflowResultError
 ```
+
+A run that tolerated a failure but never produced its result is still judged
+a run failure, even though the run itself succeeded.
 
 Steps may fail by design under the `continue` and `skip_dependents` policies,
 so a run that still produced its result is judged on it.

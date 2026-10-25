@@ -110,6 +110,8 @@ def generate_workflow_candidate(
                 conditions=workflow_step.conditions,
                 retry_policy=workflow_step.retry_policy,
                 failure_policy=workflow_step.failure_policy,
+                message=workflow_step.message,
+                emit_values=workflow_step.emit_values,
             )
         )
 

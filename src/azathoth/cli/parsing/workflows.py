@@ -6,6 +6,10 @@ from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
+from azathoth.cli.output_format import (
+    DEFAULT_WORKFLOW_OUTPUT_FORMAT,
+    WorkflowOutputFormat,
+)
 from azathoth.cli.parsing.common import (
     json_value,
     positive_integer,
@@ -37,6 +41,7 @@ WORKFLOW_HISTORY_LIMIT_ATTRIBUTE = "workflow_history_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
 WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
+WORKFLOW_OUTPUT_ATTRIBUTE = "workflow_output"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE = "workflow_specification_revision"
@@ -152,6 +157,8 @@ def add_workflow_parser(
         help="Workflow UUID to execute.",
     )
 
+    _add_output_argument(workflow_run_parser)
+
     workflow_invoke_parser = workflow_actions.add_parser(
         WORKFLOW_INVOKE_ACTION,
         help="Invoke one active production workflow.",
@@ -172,6 +179,8 @@ def add_workflow_parser(
         metavar="JSON",
         help="Production workflow input as JSON.",
     )
+
+    _add_output_argument(workflow_invoke_parser)
 
     workflow_optimize_parser = workflow_actions.add_parser(
         WORKFLOW_OPTIMIZE_ACTION,
@@ -327,4 +336,22 @@ def add_workflow_parser(
         default=None,
         metavar="COUNT",
         help="Maximum number of most recent runs to list.",
+    )
+
+
+def _add_output_argument(
+    parser: ArgumentParser,
+) -> None:
+    """Add the output format option of a workflow execution command."""
+
+    parser.add_argument(
+        "--output",
+        dest=WORKFLOW_OUTPUT_ATTRIBUTE,
+        choices=tuple(output_format.value for output_format in WorkflowOutputFormat),
+        default=DEFAULT_WORKFLOW_OUTPUT_FORMAT.value,
+        help=(
+            "Output format: jsonl streams step records and a terminal record "
+            "(default), text prints the human-readable report, result prints "
+            "only the result as JSON."
+        ),
     )
