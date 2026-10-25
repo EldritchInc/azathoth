@@ -1,0 +1,75 @@
+{
+  "definition": {
+    "id": "55555555-5555-5555-5555-555555555555",
+    "name": "word_count_process",
+    "description": "Count whitespace-delimited words in supplied text in a subprocess.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "66666666-6666-6666-6666-666666666666",
+      "tool_id": "55555555-5555-5555-5555-555555555555",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "import json\nimport sys\n\ninputs = json.load(sys.stdin)\n\njson.dump({'count': len(inputs['text'].split())}, sys.stdout)\n",
+      "command": [
+        "python3"
+      ],
+      "timeout_seconds": 30.0
+    }
+  ],
+  "test_cases": [
+    {
+      "id": "77777777-7777-7777-7777-777777777777",
+      "tool_id": "55555555-5555-5555-5555-555555555555",
+      "name": "counts two words",
+      "description": "Verify a two-word input.",
+      "inputs": {
+        "text": "hello world"
+      },
+      "expected_output": {
+        "count": 2
+      }
+    },
+    {
+      "id": "88888888-8888-8888-8888-888888888888",
+      "tool_id": "55555555-5555-5555-5555-555555555555",
+      "name": "counts empty input",
+      "description": "Verify an empty input.",
+      "inputs": {
+        "text": ""
+      },
+      "expected_output": {
+        "count": 0
+      }
+    }
+  ]
+}

@@ -622,6 +622,12 @@ Result: step <STEP_ID> output answer
 Steps: 1
 ```
 
+A name-only result renders as:
+
+```text
+Result: output answer (first producer in step order)
+```
+
 A workflow stored before declared results existed renders:
 
 ```text
@@ -2256,6 +2262,27 @@ Commands that act on one exact definition version take:
 ```bash
 --version <VERSION>
 ```
+
+`tool import` rejects a document whose implementations use a runtime Azathoth
+cannot execute, before anything is saved:
+
+```text
+Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: process, python.
+```
+
+`tool implementation-show` renders a process implementation's command and
+timeout alongside its runtime:
+
+```text
+Runtime: process
+Entrypoint: run
+Command: python3
+Timeout: 30 seconds
+```
+
+`tool verify` runs every implementation through the runtime it declares, so
+process tools are verified against their test cases exactly like Python
+tools.
 
 # Tool Revisions
 

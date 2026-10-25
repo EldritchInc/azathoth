@@ -569,7 +569,9 @@ ToolImplementation
 ├── version
 ├── runtime
 ├── entrypoint
-└── source
+├── source
+├── command            (process implementations only)
+└── timeout_seconds    (process implementations only)
 ```
 
 Several identities therefore coexist deliberately:
@@ -628,11 +630,27 @@ capability itself.
 `ToolImplementation.runtime` names the execution runtime required by the
 implementation.
 
-Example:
+V1 supports two runtimes:
 
 ```text
-python
+python     trusted source executed in process by PythonToolExecutor
+process    source executed as a script by ProcessToolExecutor
 ```
+
+`supported_tool_runtimes()` returns them. Runtimes are checked before anything
+runs:
+
+- `tool import` rejects a document whose implementation uses another runtime,
+  before the database is opened
+- candidate generation raises `WorkflowGenerationError`
+- execution raises `UnsupportedToolRuntimeError`
+
+```text
+Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: process, python.
+```
+
+Stored records are never rejected on decode, so the check lives at import and
+generation rather than in the model.
 
 Runtime is implementation metadata.
 
@@ -809,6 +827,37 @@ arbitrary first-item preference
 
 as optimization policy.
 
+# Process Implementations
+
+A `process` implementation declares the command that interprets its source,
+and optionally a timeout:
+
+```json
+{
+  "runtime": "process",
+  "entrypoint": "run",
+  "source": "import json\nimport sys\n...",
+  "command": ["python3"],
+  "timeout_seconds": 30.0
+}
+```
+
+The source is the script itself, so the implementation's content digest covers
+exactly what executes.
+
+Validation rules:
+
+```text
+Process tool implementations must declare a command.
+Process tool implementation command arguments cannot be empty.
+Only process tool implementations may declare a command or timeout.
+```
+
+An implementation that leaves `command` and `timeout_seconds` unset serializes
+without them. Existing Python tools therefore keep byte-identical documents and
+unchanged content digests, and re-importing them is still reported as
+identical to their earlier revision.
+
 # ToolExecutor
 
 `ToolExecutor` is the runtime execution protocol.
@@ -837,6 +886,21 @@ structured output
 ```
 
 The protocol does not require a specific runtime implementation.
+
+# RuntimeToolExecutor
+
+`RuntimeToolExecutor` is the executor Azathoth composes everywhere tools run:
+candidate generation, production, and `tool verify`.
+
+It dispatches each implementation to the executor registered for its runtime:
+
+```text
+ToolImplementation(runtime="python")   ──► PythonToolExecutor
+ToolImplementation(runtime="process")  ──► ProcessToolExecutor
+anything else                          ──► UnsupportedToolRuntimeError
+```
+
+`default_tool_executors()` returns a fresh executor per supported runtime.
 
 # Tool Implementation Is Not Tool Executor
 
@@ -884,6 +948,10 @@ structured output
 
 The executor supports both synchronous and awaitable entrypoint results.
 
+A synchronous entrypoint runs in a worker thread through `asyncio.to_thread`,
+so a slow tool never blocks the event loop that its concurrent workflow
+siblings share. An async entrypoint is awaited on the event loop.
+
 # Trusted In-Process Execution
 
 `PythonToolExecutor` is explicitly an executor for trusted Python
@@ -920,6 +988,47 @@ UnsupportedToolRuntimeError
 
 An executor therefore does not silently attempt to interpret implementation
 source using the wrong runtime.
+
+# ProcessToolExecutor
+
+`ProcessToolExecutor` runs a `process` implementation as a subprocess:
+
+```text
+source ──► temporary script
+command + [script path]
+        │
+        ▼
+asyncio.create_subprocess_exec
+        │
+stdin   ◄── inputs as one JSON object
+stdout  ──► one JSON object (the output)
+stderr  ──► quoted on failure
+```
+
+The script path is appended after the command's own arguments, so
+`["python3", "-u"]` runs `python3 -u <script>`. The temporary script is deleted
+once the process exits.
+
+The process inherits Azathoth's environment and working directory, so a tool
+can itself run `azathoth workflow invoke`. This is how child workflows are
+composed: as separate processes, not as a dedicated step type.
+
+Failures are explicit `ToolExecutionError`s:
+
+```text
+Tool implementation <ID> command 'x' was not found.
+Tool implementation <ID> command 'x' could not be started.
+Tool implementation <ID> timed out after <T> seconds.
+Tool implementation <ID> exited with status <N>: <last 500 characters of stderr>
+Tool implementation <ID> exited with status <N>.
+Tool implementation <ID> produced invalid output.
+```
+
+A process that times out, or whose step is cancelled, is killed, so a tool
+never outlives its step.
+
+Like Python tools, process tools are trusted. The executor does not sandbox
+the command: it runs with the operator's permissions.
 
 # Entrypoint Validation
 

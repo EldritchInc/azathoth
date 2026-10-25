@@ -1,0 +1,85 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000001",
+    "name": "redundant word count",
+    "description": "Count words with a process tool and a Python tool concurrently, answering with the first in step order that succeeded.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "specification": {
+        "requirement": {
+          "name": "word_count_process",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "continue"
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "specification": {
+        "requirement": {
+          "name": "word_count",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "continue"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}
