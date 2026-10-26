@@ -93,6 +93,7 @@ def test_prompt_strategy_spec_contains_only_durable_configuration() -> None:
         "metadata",
         "prompt",
         "model_selection",
+        "output_format",
     }
 
 
