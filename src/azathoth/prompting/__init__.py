@@ -16,6 +16,7 @@ from azathoth.prompting.exceptions import (
     PromptBindingFieldNotFoundError,
     PromptBindingInputNotFoundError,
     PromptingError,
+    PromptOutputFormatError,
 )
 from azathoth.prompting.model_selection import (
     FixedModelSelection,
@@ -29,6 +30,10 @@ from azathoth.prompting.models import (
     PromptInputBinding,
     PromptTemplate,
     render_prompt_value,
+)
+from azathoth.prompting.output_format import (
+    PromptOutputFormat,
+    parse_json_reply,
 )
 from azathoth.prompting.specifications import (
     ContextPromptStrategySpec,
@@ -51,11 +56,14 @@ __all__ = [
     "PromptBindingFieldNotFoundError",
     "PromptBindingInputNotFoundError",
     "PromptInputBinding",
+    "PromptOutputFormat",
+    "PromptOutputFormatError",
     "PromptStrategy",
     "PromptStrategySpec",
     "PromptTemplate",
     "PromptingError",
     "generate_context_prompt_candidates",
     "generate_prompt_candidates",
+    "parse_json_reply",
     "render_prompt_value",
 ]

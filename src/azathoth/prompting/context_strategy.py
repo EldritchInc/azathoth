@@ -3,6 +3,7 @@
 from azathoth.context import Context
 from azathoth.prompting.execution import execute_prompt
 from azathoth.prompting.models import ModelBinding, PromptTemplate
+from azathoth.prompting.output_format import PromptOutputFormat
 from azathoth.providers import LanguageModel, ModelRequirements
 from azathoth.strategies import (
     StrategyMetadata,
@@ -21,12 +22,14 @@ class ContextPromptStrategy:
         language_model: LanguageModel,
         model_requirements: ModelRequirements | None = None,
         model_binding: ModelBinding | None = None,
+        output_format: PromptOutputFormat = PromptOutputFormat.TEXT,
     ) -> None:
         self._metadata = metadata
         self._template = template
         self._language_model = language_model
         self._model_requirements = model_requirements
         self._model_binding = model_binding
+        self._output_format = output_format
 
     @property
     def metadata(self) -> StrategyMetadata:
@@ -52,6 +55,12 @@ class ContextPromptStrategy:
 
         return self._model_binding
 
+    @property
+    def output_format(self) -> PromptOutputFormat:
+        """Return how the model's reply becomes this strategy's output."""
+
+        return self._output_format
+
     async def run(self, context: Context) -> StrategyOutcome:
         """Render and execute the prompt against the supplied context."""
 
@@ -61,4 +70,6 @@ class ContextPromptStrategy:
             prompt=prompt,
             language_model=self._language_model,
             model_binding=self._model_binding,
+            output_format=self._output_format,
+            strategy_name=self._metadata.name,
         )

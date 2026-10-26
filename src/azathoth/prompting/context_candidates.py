@@ -110,4 +110,5 @@ def _build_candidate(
         model_binding=ModelBinding(
             identifier=model_metadata.identifier,
         ),
+        output_format=specification.output_format,
     )
