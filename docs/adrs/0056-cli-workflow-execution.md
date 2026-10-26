@@ -1,6 +1,6 @@
 # ADR 0056: Execute Configured Workflows From the CLI
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0068
 - Date: 2026-08-23
 
 ## Context

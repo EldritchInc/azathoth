@@ -88,3 +88,7 @@ requests that made it:
 - [ADR 0063: Resolve Production Models From a Fixed Primary and Ordered Substitutes](0063-resolve-production-models-from-a-fixed-primary-and-ordered-substitutes.md)
 - [ADR 0064: Keep Production Revisions as Audit History, Not Authority](0064-keep-production-revisions-as-audit-history-not-authority.md)
 - [ADR 0065: Invoke Production Through Durable Invocations and Declared Emissions](0065-invoke-production-through-durable-invocations-and-declared-emissions.md)
+- [ADR 0066: Keep Optimizing When a Candidate Fails to Execute](0066-keep-optimizing-when-a-candidate-fails-to-execute.md)
+- [ADR 0067: Deliver External Input Through One Canonical Event](0067-deliver-external-input-through-one-canonical-event.md)
+- [ADR 0068: Persist Every Configured Run, With Feedback as Separate Evidence](0068-persist-every-configured-run-with-feedback-as-separate-evidence.md)
+- [ADR 0069: Persist Optimization Evidence for Inspection](0069-persist-optimization-evidence-for-inspection.md)
