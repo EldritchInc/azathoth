@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000004",
+    "name": "countdown",
+    "description": "One loop iteration: count the remaining number down by one, and say whether it reached zero.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000041",
+      "specification": {
+        "requirement": {
+          "name": "countdown_step",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "request",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "next",
+          "path": [
+            "next"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "next"
+  }
+}
