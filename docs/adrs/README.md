@@ -14,6 +14,13 @@ Every record starts with the same header:
 - Date: <YYYY-MM-DD>
 ```
 
+Records written after the decision they describe add a line naming the pull
+requests that made it:
+
+```text
+- Decided in: #<PR>, #<PR>
+```
+
 ## Records
 
 - [ADR 0001: Represent context changes as events](0001-structured-context-events.md)
@@ -72,3 +79,12 @@ Every record starts with the same header:
 - [ADR 0054: Add Workflow Inspection Commands](0054-workflow-inspection-commands.md)
 - [ADR 0055: Support Portable Workflow JSON Import](0055-workflow-json-import.md)
 - [ADR 0056: Execute Configured Workflows From the CLI](0056-cli-workflow-execution.md)
+- [ADR 0057: Record Provider Model Observations Apart From Current State](0057-record-provider-model-observations-apart-from-current-state.md)
+- [ADR 0058: Authorize Models Through a Durable Organizational Portfolio](0058-authorize-models-through-a-durable-organizational-portfolio.md)
+- [ADR 0059: Separate Portfolio Selection From Fixed Model Selection](0059-separate-portfolio-selection-from-fixed-model-selection.md)
+- [ADR 0060: Build Runtime Model Catalogs From Current Provider State](0060-build-runtime-model-catalogs-from-current-provider-state.md)
+- [ADR 0061: Track Candidate Identity Through Optimization](0061-track-candidate-identity-through-optimization.md)
+- [ADR 0062: Promote Explicitly Into Durable Production State](0062-promote-explicitly-into-durable-production-state.md)
+- [ADR 0063: Resolve Production Models From a Fixed Primary and Ordered Substitutes](0063-resolve-production-models-from-a-fixed-primary-and-ordered-substitutes.md)
+- [ADR 0064: Keep Production Revisions as Audit History, Not Authority](0064-keep-production-revisions-as-audit-history-not-authority.md)
+- [ADR 0065: Invoke Production Through Durable Invocations and Declared Emissions](0065-invoke-production-through-durable-invocations-and-declared-emissions.md)
