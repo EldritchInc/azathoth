@@ -72,8 +72,9 @@ azathoth tool verify \
     --version 1.0.0
 ```
 
-The process tool needs `python3` on the `PATH`. Neither step calls a language
-model, so no provider credentials are needed.
+The process tool runs `python`, so it needs `python` on the `PATH`. An activated
+virtual environment provides it on macOS, Linux and Windows alike. Neither step
+calls a language model, so no provider credentials are needed.
 
 ## Word Count With Step Messages
 

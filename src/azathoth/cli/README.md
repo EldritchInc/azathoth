@@ -2438,7 +2438,7 @@ timeout alongside its runtime:
 ```text
 Runtime: process
 Entrypoint: run
-Command: python3
+Command: python
 Timeout: 30 seconds
 ```
 
