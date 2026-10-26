@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000003",
+    "name": "count words in a child workflow",
+    "description": "Count words by invoking the deployed word-count-with-step-messages workflow as a child process. The caller names the child and its input.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000031",
+      "specification": {
+        "requirement": {
+          "name": "run_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "call",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "result"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Invoking the child workflow"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}
