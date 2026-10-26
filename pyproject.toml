@@ -21,7 +21,7 @@ keywords = [
     "workflow-optimization"
 ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -34,6 +34,13 @@ dependencies = [
     "jsonschema>=4.18,<5",
     "pydantic>=2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/EldritchInc/azathoth"
+Repository = "https://github.com/EldritchInc/azathoth"
+Issues = "https://github.com/EldritchInc/azathoth/issues"
+Funding = "https://patreon.com/ErisDiscordiaM"
+
 [project.scripts]
 azathoth = "azathoth.cli:main"
 
@@ -48,6 +55,7 @@ azathoth = ["py.typed"]
 
 [project.optional-dependencies]
 dev = [
+    "build",
     "mypy",
     "pytest",
     "pytest-cov",
