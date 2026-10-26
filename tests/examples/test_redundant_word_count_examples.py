@@ -134,7 +134,7 @@ def test_process_tool_example_declares_a_process_implementation() -> None:
     implementation = read_tool(PROCESS_TOOL_DOCUMENT).implementations[0]
 
     assert implementation.runtime == PROCESS_TOOL_RUNTIME
-    assert implementation.command == ("python3",)
+    assert implementation.command == ("python",)
     assert implementation.timeout_seconds == 30.0
 
 
