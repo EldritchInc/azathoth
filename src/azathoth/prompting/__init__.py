@@ -14,6 +14,7 @@ from azathoth.prompting.exceptions import (
     PromptBindingError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
+    PromptBindingInputNotFoundError,
     PromptingError,
 )
 from azathoth.prompting.model_selection import (
@@ -22,9 +23,12 @@ from azathoth.prompting.model_selection import (
     PortfolioModelSelection,
 )
 from azathoth.prompting.models import (
+    WORKFLOW_INPUT_BOUND_EVENT_TYPE,
     ModelBinding,
     PromptBinding,
+    PromptInputBinding,
     PromptTemplate,
+    render_prompt_value,
 )
 from azathoth.prompting.specifications import (
     ContextPromptStrategySpec,
@@ -33,6 +37,7 @@ from azathoth.prompting.specifications import (
 from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
+    "WORKFLOW_INPUT_BOUND_EVENT_TYPE",
     "ContextPromptStrategy",
     "ContextPromptStrategySpec",
     "FixedModelSelection",
@@ -44,10 +49,13 @@ __all__ = [
     "PromptBindingError",
     "PromptBindingEventNotFoundError",
     "PromptBindingFieldNotFoundError",
+    "PromptBindingInputNotFoundError",
+    "PromptInputBinding",
     "PromptStrategy",
     "PromptStrategySpec",
     "PromptTemplate",
     "PromptingError",
     "generate_context_prompt_candidates",
     "generate_prompt_candidates",
+    "render_prompt_value",
 ]
