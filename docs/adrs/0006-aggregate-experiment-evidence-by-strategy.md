@@ -1,8 +1,7 @@
 # ADR 0006: Aggregate experiment evidence by strategy
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-07-31
 
 ## Context
 

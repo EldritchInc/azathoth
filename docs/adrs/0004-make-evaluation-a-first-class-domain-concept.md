@@ -1,12 +1,14 @@
-Title:
-Make Evaluation a First-Class Domain Concept
+# ADR 0004: Make Evaluation a First-Class Domain Concept
 
-Decision
+- Status: Accepted
+- Date: 2026-07-30
+
+## Decision
 
 Introduce EvaluationResult and Evaluator abstractions instead of embedding
 evaluation logic directly into optimization code.
 
-Rationale
+## Rationale
 
 Execution and evaluation are different concerns.
 
@@ -21,7 +23,7 @@ The same strategy may be evaluated using:
 Treating evaluation as a domain concept allows multiple evaluation
 implementations while preserving identical execution behavior.
 
-Consequences
+## Consequences
 
 - evaluation is pluggable
 - evaluation is reproducible

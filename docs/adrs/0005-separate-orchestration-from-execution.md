@@ -1,7 +1,9 @@
-Title:
-Separate Optimization Orchestration from Execution
+# ADR 0005: Separate Optimization Orchestration from Execution
 
-Decision
+- Status: Accepted
+- Date: 2026-07-30
+
+## Decision
 
 Introduce OptimizationRunner as an orchestration layer.
 
@@ -11,7 +13,7 @@ Evaluators score outputs.
 
 OptimizationRunner coordinates both.
 
-Rationale
+## Rationale
 
 Execution should not know how results are evaluated.
 
@@ -19,7 +21,7 @@ Evaluation should not know how strategies execute.
 
 Optimization should consume both without coupling.
 
-Consequences
+## Consequences
 
 - easier testing
 - dependency injection

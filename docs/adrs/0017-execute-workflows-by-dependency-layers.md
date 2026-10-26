@@ -1,4 +1,4 @@
-# ADR 0016: Execute Workflows by Dependency Layers
+# ADR 0017: Execute Workflows by Dependency Layers
 
 - Status: Accepted
 - Date: 2026-08-07

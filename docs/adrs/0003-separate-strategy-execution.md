@@ -1,8 +1,7 @@
 # ADR 0003: Separate strategy behavior from execution orchestration
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-07-28
 
 ## Context
 

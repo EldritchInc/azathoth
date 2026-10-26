@@ -1,8 +1,7 @@
 # ADR 0001: Represent context changes as events
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-07-28
 
 ## Context
 

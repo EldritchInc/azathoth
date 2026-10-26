@@ -1,8 +1,7 @@
 # ADR 0012: Separate Strategy Specifications from Executable Candidates
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-08-18
 
 ## Context
 
