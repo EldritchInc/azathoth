@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.cli.execution import WorkflowRunInput
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     GENERATIONS_ATTRIBUTE,
@@ -150,6 +151,7 @@ def dispatch_workflow_command(
 
         return run_workflow(
             workflow_id,
+            workflow_input=_run_input(arguments),
             output=_output_format(arguments),
         )
 
@@ -326,6 +328,32 @@ def _specification_revision(
             WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
             None,
         ),
+    )
+
+
+def _run_input(
+    arguments: Namespace,
+) -> WorkflowRunInput | None:
+    """Return the input supplied to a configured run, if any.
+
+    The option is absent from the parsed arguments unless it was given, so a
+    supplied JSON null is still input.
+    """
+
+    if not hasattr(
+        arguments,
+        WORKFLOW_INPUT_ATTRIBUTE,
+    ):
+        return None
+
+    return WorkflowRunInput(
+        payload=cast(
+            JsonValue,
+            getattr(
+                arguments,
+                WORKFLOW_INPUT_ATTRIBUTE,
+            ),
+        )
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from argparse import ArgumentParser, _SubParsersAction
+from argparse import SUPPRESS, ArgumentParser, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
@@ -155,6 +155,15 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to execute.",
+    )
+
+    workflow_run_parser.add_argument(
+        "--input",
+        dest=WORKFLOW_INPUT_ATTRIBUTE,
+        default=SUPPRESS,
+        type=json_value,
+        metavar="JSON",
+        help="Workflow input as JSON. Without it the run starts with an empty context.",
     )
 
     _add_output_argument(workflow_run_parser)

@@ -1,6 +1,10 @@
 """Evaluation domain models and interfaces."""
 
-from azathoth.evaluation.benchmark import BenchmarkCase, BenchmarkDataset
+from azathoth.evaluation.benchmark import (
+    BenchmarkCase,
+    BenchmarkCaseConflictError,
+    BenchmarkDataset,
+)
 from azathoth.evaluation.benchmark_catalog import BenchmarkCatalog
 from azathoth.evaluation.benchmark_catalog_loader import BenchmarkCatalogLoader
 from azathoth.evaluation.benchmark_document import (
@@ -80,6 +84,7 @@ __all__ = [
     "SEMANTIC_EVALUATOR_NAME",
     "SEMANTIC_EVALUATOR_VERSION",
     "BenchmarkCase",
+    "BenchmarkCaseConflictError",
     "BenchmarkCatalog",
     "BenchmarkCatalogLoader",
     "BenchmarkDataset",

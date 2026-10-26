@@ -118,6 +118,11 @@ If the process tool fails, its `output` record never appears, and the
 invocation still succeeds with the Python tool's count, because the run
 completed. Add `--output result` to print only `{"result": 4}`.
 
+The workflow can also run without promotion, with `workflow run --input`.
+`examples/benchmarks/word-count.json` holds one exact case for it, and the
+CLI README walks through turning a miscounted run into a second case with
+`benchmark add-case`.
+
 ## JSON Document Format
 
 Workflow JSON files use the canonical serialized representation of

@@ -176,6 +176,7 @@ def test_benchmark_compare_dispatches_complete_request() -> None:
 
     result = dispatch_benchmark_command(
         arguments,
+        add_benchmark_case=unused_run_benchmark,
         compare_benchmarks=compare_benchmarks,
         export_benchmark=unused_benchmark_identifier,
         import_benchmark=unused_import_benchmark,

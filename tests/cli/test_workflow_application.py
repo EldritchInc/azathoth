@@ -8,6 +8,7 @@ import pytest
 import azathoth.cli.application as cli_application
 from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
+    WorkflowRunInput,
     main,
 )
 from azathoth.cli.output_format import WorkflowOutputFormat
@@ -318,16 +319,18 @@ def test_cli_workflow_import_help_describes_file(
 def test_cli_workflow_run_dispatches_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[UUID, WorkflowOutputFormat]] = []
+    calls: list[tuple[UUID, WorkflowRunInput | None, WorkflowOutputFormat]] = []
 
     def fake_run_workflow(
         workflow_id: UUID,
         *,
+        workflow_input: WorkflowRunInput | None,
         output: WorkflowOutputFormat,
     ) -> int:
         calls.append(
             (
                 workflow_id,
+                workflow_input,
                 output,
             )
         )
@@ -353,6 +356,7 @@ def test_cli_workflow_run_dispatches_command(
     assert calls == [
         (
             WORKFLOW_ID,
+            None,
             WorkflowOutputFormat.JSONL,
         ),
     ]

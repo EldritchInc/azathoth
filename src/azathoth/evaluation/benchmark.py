@@ -4,7 +4,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from azathoth.evaluation.json_equality import json_values_equal
 from azathoth.evaluation.models import ExpectedOutcome, OutcomeComparison
+
+
+class BenchmarkCaseConflictError(ValueError):
+    """Raised when a benchmark already contains an equivalent case."""
 
 
 class BenchmarkCase(BaseModel):
@@ -39,6 +44,41 @@ class BenchmarkDataset(BaseModel):
             raise ValueError("Benchmark dataset cannot contain duplicate case identifiers.")
 
         return self
+
+    def with_case(
+        self,
+        case: BenchmarkCase,
+    ) -> "BenchmarkDataset":
+        """Return this dataset with one more case appended after every existing case.
+
+        The dataset itself is unchanged, so the result can be saved as the
+        benchmark's next revision. Cases may share an input when they expect
+        different outcomes, because a judged comparison can accept more than
+        one result for the same input.
+
+        Raises:
+            BenchmarkCaseConflictError: An existing case has a JSON-equal
+                input, the same comparison, and a JSON-equal expected value.
+            ValueError: The case reuses an existing case identifier.
+        """
+
+        for existing in self.cases:
+            if (
+                existing.expected.comparison is case.expected.comparison
+                and json_values_equal(existing.input, case.input)
+                and json_values_equal(existing.expected.value, case.expected.value)
+            ):
+                raise BenchmarkCaseConflictError(
+                    f"Benchmark dataset {self.id} already contains case {existing.id} "
+                    "with this input and expected outcome."
+                )
+
+        return BenchmarkDataset.model_validate(
+            {
+                **dict(self),
+                "cases": (*self.cases, case),
+            }
+        )
 
     def uses_comparison(
         self,

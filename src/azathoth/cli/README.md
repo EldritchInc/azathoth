@@ -68,6 +68,7 @@ azathoth
 │   ├── export <WORKFLOW_ID>
 │   │   └── --revision <NUMBER>
 │   ├── run <WORKFLOW_ID>
+│   │   └── --input <JSON>
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
@@ -150,6 +151,11 @@ azathoth
     │   └── --revision <NUMBER>
     ├── cases <BENCHMARK_ID>
     ├── case-show <BENCHMARK_ID> <CASE_ID>
+    ├── add-case <BENCHMARK_ID>
+    │   ├── --from-run <RUN_ID>
+    │   ├── --comparison exact|normalized|semantic|schema
+    │   ├── --expected <JSON>
+    │   └── --description <TEXT>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
     ├── compare <BENCHMARK_ID>
@@ -781,6 +787,21 @@ rendered to the operator
 
 The completed run is persisted before it is rendered.
 
+`--input` supplies the run's external input as JSON:
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input '"the old ones wait"'
+```
+
+The run then starts with one `workflow.input.received` event, produced by
+`azathoth.configured`, exactly as a benchmark case or a production invocation
+would start it. `--input null` is input too: the event carries a JSON null.
+Without `--input`, the run starts with an empty context, so a step bound to
+the workflow input fails to resolve it.
+
+Only a run that received input can later become a benchmark case; see
+[Add a Case From a Run](#add-a-case-from-a-run).
+
 `--output` chooses what the operator sees; see
 [Workflow Output Formats](#workflow-output-formats).
 
@@ -1121,6 +1142,14 @@ operator rather than inferred.
 Recording feedback never changes the run it judges, the workflow
 specification, or production state.
 
+Feedback never becomes a benchmark case on its own. An operator turns a
+corrected run into a case explicitly, with
+[`benchmark add-case`](#add-a-case-from-a-run).
+
+A corrected output of JSON null cannot be recorded: `--corrected-output null`
+is treated as no correction. To capture a run whose correct answer is null,
+pass `--expected null` to `benchmark add-case` instead.
+
 # Empirically Optimize a Workflow
 
 Run empirical workflow optimization against a durable benchmark with:
@@ -1286,6 +1315,36 @@ WorkflowOptimizationSession
 
 The completed session is rendered to the operator.
 
+# Optimization Judge Cost
+
+When any case is judged semantically, the session reports what judging cost.
+The totals follow the summary, and each generation reports its own, summed
+over every candidate it evaluated:
+
+```text
+Workflow: classify sentiment
+Workflow ID: <WORKFLOW_ID>
+Initial Candidates: 1
+Generations: 2
+Total Judge Calls: 9
+Total Judge Cost: $0.001350
+
+Generation 1
+Experiment ID: <EXPERIMENT_ID>
+Evaluated Candidates: 1
+Judge Calls: 3
+Judge Cost: $0.000450
+Winner:
+...
+```
+
+Without semantic cases every judge line reads zero.
+
+Judging is the cost of evaluating candidates, and judges never run in
+production, so judge calls and their cost never count against any candidate.
+They stay out of every scorecard: a candidate's cost score comes from its own
+runs only, and candidates rank exactly as they would without judging.
+
 # Optimization Evidence Is Persisted
 
 Every generation of `workflow optimize` leaves durable evidence:
@@ -1302,8 +1361,9 @@ each generation
 An experiment record names its benchmark and holds one observation per
 candidate. Each observation has its own identity, the candidate signature,
 the combined scorecard, and one case per benchmark case, in dataset order,
-recording the case ID, run ID, evaluation ID, and whether the case passed.
-The ranking lists observation IDs, best first.
+recording the case ID, run ID, evaluation ID, whether the case passed, and the
+judge calls and cost spent judging it. The ranking lists observation IDs,
+best first.
 
 The record shares the identity of the in-memory experiment result, so the
 rendered session names it directly:
@@ -1413,6 +1473,18 @@ Overall: 0.812500
 ```
 
 A scorecard rationale is rendered when one was recorded.
+
+An observation whose cases were judged by judges ends with their totals,
+after its scores and rationale:
+
+```text
+Overall: 0.812500
+Judge Calls: 2
+Judge Cost: $0.000300
+```
+
+Observations judged without judges, and records written before judge calls
+were recorded, show no judge lines.
 
 A record from an earlier version renders `Benchmark: none`,
 `Passed: unknown`, and its one case as:
@@ -2584,6 +2656,89 @@ Runs, comparisons, optimization, `cases`, and `case-show` always use the
 latest revision. A changed benchmark is a new revision, never an edit, so a
 saved execution's case IDs always mean the cases it judged.
 
+# Add a Case From a Run
+
+Turn one recorded run into a benchmark case with:
+
+```bash
+azathoth benchmark add-case <BENCHMARK_ID> \
+    --from-run <RUN_ID> \
+    --comparison exact|normalized|semantic|schema \
+    [--expected '<JSON>'] \
+    [--description <TEXT>]
+```
+
+The new case replays the run's input: the payload of its
+`workflow.input.received` event. Configured runs given `--input`, production
+invocations, and benchmark and optimization runs all have one.
+
+The expected value is `--expected` when given, and `--expected null` expects
+JSON null. Otherwise it is the corrected output of the run's latest bad
+feedback that carries one, latest by feedback time with ties going to the
+later record. Good feedback never supplies a value, and a later good
+judgment does not hide an earlier correction.
+
+The case gets a new ID. Its description defaults to `Added from run
+<RUN_ID>.`, and its metadata names the source run and, when feedback supplied
+the value, the feedback:
+
+```json
+{
+  "source_run_id": "<RUN_ID>",
+  "source_feedback_id": "<FEEDBACK_ID>"
+}
+```
+
+The case is appended after every existing case as the benchmark's next
+revision. Nothing is edited, the declared version is kept, and earlier
+revisions are untouched:
+
+```text
+Added benchmark case <CASE_ID> to benchmark dataset <BENCHMARK_ID> revision 2.
+```
+
+Any run can become a case of any benchmark. Benchmarks belong to no
+workflow, because any workflow can run against any benchmark.
+
+Cases may share an input when they expect different outcomes, because a
+judged comparison can accept more than one result for the same input. Each
+such case is still judged on its own.
+
+Checks run in this order, and nothing is written when one fails:
+
+```text
+unknown benchmark
+    Benchmark dataset <BENCHMARK_ID> is not configured.
+
+unknown run
+    Run <RUN_ID> was not found.
+
+no workflow input
+    Run <RUN_ID> did not receive workflow input.
+
+workflow input received more than once
+    Run <RUN_ID> received workflow input more than once.
+
+no --expected and no corrected output
+    Run <RUN_ID> has no corrected output; pass --expected.
+
+a schema comparison whose value is not a JSON Schema
+    Expected value cannot be used with comparison 'schema': <REASON>
+
+an existing case with the same input, comparison, and value
+    Benchmark dataset <BENCHMARK_ID> already contains case <CASE_ID> with this input and expected outcome.
+```
+
+Values compare as JSON, so `4` and `4.0` are the same value and `true` and
+`1` are not. The description plays no part.
+
+A semantic case can be added while no judges are configured, as with
+`benchmark import`. Judges are checked when the benchmark is run, compared,
+or optimized against.
+
+`benchmark add-case` reads and writes durable state only. It never loads the
+runtime and needs no provider credentials.
+
 Execute one configured workflow against a dataset with:
 
 ```bash
@@ -2841,12 +2996,16 @@ workflow invoke --input
     the caller's JSON
             │
             ▼
+workflow run --input
+    the operator's JSON
+            │
+            ▼
 workflow.input.received    payload {"input": <value>}
 ```
 
 A context prompt that binds its variable to `workflow.input.received`, field
-`input`, therefore renders the same prompt when its workflow is benchmarked,
-optimized, or invoked in production. What a workflow is optimized against is
+`input`, therefore renders the same prompt when its workflow is run,
+benchmarked, optimized, or invoked in production. What a workflow is optimized against is
 exactly what production feeds it.
 
 Production invocations also keep their own `production.invocation.received`
@@ -2921,12 +3080,62 @@ azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f22-000000000000 \
     --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
+## Capturing a Corrected Run as a Case
+
+The word-count examples need no provider models:
+
+```text
+examples/tools/word-count.json, word-count-process.json
+examples/workflows/word-count-messages.json    result 'count'
+examples/benchmarks/word-count.json            one exact case
+```
+
+```bash
+azathoth tool import examples/tools/word-count.json
+azathoth tool import examples/tools/word-count-process.json
+azathoth workflow import examples/workflows/word-count-messages.json
+azathoth benchmark import examples/benchmarks/word-count.json
+
+azathoth workflow run a1000000-0000-4000-8000-000000000002 \
+    --input '"the old ones wait — and dream"' \
+    --output result
+```
+
+The tools count whitespace-delimited words, so the dash counts and the run
+prints `7`. Record what it should have said, then capture the run:
+
+```bash
+azathoth workflow runs a1000000-0000-4000-8000-000000000002
+
+azathoth run feedback <RUN_ID> \
+    --bad \
+    --reason "A dash is not a word." \
+    --corrected-output 6
+
+azathoth benchmark add-case b1000000-0000-4000-8000-000000000001 \
+    --from-run <RUN_ID> \
+    --comparison exact \
+    --description "Dashes are not words."
+
+azathoth benchmark history b1000000-0000-4000-8000-000000000001
+
+azathoth benchmark run b1000000-0000-4000-8000-000000000001 \
+    --workflow a1000000-0000-4000-8000-000000000002
+```
+
+Revision 2 holds both cases, and the run now reports `Cases Run: 2` and
+`Cases Passed: 1`: the miscount is a regression case every later candidate is
+judged against.
+
 # CLI JSON Arguments
 
 The CLI parser accepts JSON-compatible command-line values for:
 
 ```text
+workflow run --input
 workflow invoke --input
+run feedback --corrected-output
+benchmark add-case --expected
 ```
 
 Values are parsed using JSON rather than treated as raw strings.
@@ -2953,8 +3162,9 @@ represents a structured object.
 
 Invalid JSON is rejected at the command boundary.
 
-Benchmark expectations are not command-line arguments; they live in the
-benchmark document passed to `benchmark import`.
+Benchmark documents are not command-line arguments: whole benchmarks live in
+the document passed to `benchmark import`. `benchmark add-case --expected`
+supplies the expected value of one case built from a recorded run.
 
 # CLI Exit Semantics
 
@@ -3055,10 +3265,17 @@ RuntimeEnvironment
 
 workflow ID
 
+initial context
+
 StrategyExecutor / WorkflowRunner path
 ```
 
 into a `WorkflowRun`.
+
+`configured_run_context(workflow_input)` builds the initial context: one
+workflow input event produced by `CONFIGURED_RUN_PRODUCER`
+(`azathoth.configured`) when a `WorkflowRunInput` is given, and an empty
+context otherwise.
 
 Candidate generation remains delegated to the runtime/workflow architecture.
 

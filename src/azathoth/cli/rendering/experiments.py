@@ -30,6 +30,11 @@ def render_workflow_experiment(
     case, its outcome, and the run and evaluation that judged it. Records
     written before benchmark-driven optimization have no benchmark, no case
     identifiers, and unknown outcomes, each rendered as such.
+
+    An observation whose evaluation called judges ends with its judge calls
+    and their cost, which are never part of its scores. Observations judged
+    without judges, and records written before judge evidence was recorded,
+    show no judge lines.
     """
 
     benchmark = str(experiment.benchmark_id) if experiment.benchmark_id is not None else "none"
@@ -133,6 +138,14 @@ def _append_observation(
 
     if scorecard.rationale:
         lines.append(f"Rationale: {scorecard.rationale}")
+
+    if observation.judge_calls:
+        lines.extend(
+            (
+                f"Judge Calls: {observation.judge_calls}",
+                f"Judge Cost: ${observation.judge_cost_usd:.6f}",
+            )
+        )
 
 
 def _render_case(

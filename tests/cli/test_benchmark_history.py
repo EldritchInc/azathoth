@@ -84,6 +84,7 @@ def dispatch(
 
     return dispatch_benchmark_command(
         arguments,
+        add_benchmark_case=unused,
         compare_benchmarks=unused,
         export_benchmark=export_benchmark,
         import_benchmark=unused,

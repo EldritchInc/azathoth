@@ -1,0 +1,18 @@
+{
+  "id": "b1000000-0000-4000-8000-000000000001",
+  "name": "word count",
+  "description": "Count the words in text the word-count workflows receive as input.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "b1000000-0000-4000-8000-000000000011",
+      "input": "that is not dead which can eternal lie",
+      "expected": {
+        "description": "Eight whitespace-delimited words.",
+        "value": 8,
+        "comparison": "exact"
+      },
+      "metadata": {}
+    }
+  ]
+}

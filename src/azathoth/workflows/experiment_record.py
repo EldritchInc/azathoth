@@ -29,6 +29,10 @@ class WorkflowExperimentCaseObservation(BaseModel):
     The case identifier is absent for experiments that judged a single
     expected outcome rather than a benchmark case. Whether the case passed is
     absent for records written before per-case evidence existed.
+
+    Judge calls and their cost belong to the evaluation, never to the run, so
+    they are recorded here beside the run rather than inside it. Records
+    written before judge evidence was recorded decode with none.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -37,6 +41,16 @@ class WorkflowExperimentCaseObservation(BaseModel):
     run_id: UUID
     evaluation_id: UUID
     passed: bool | None = None
+
+    judge_calls: int = Field(
+        default=0,
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+    )
 
 
 class WorkflowExperimentObservation(BaseModel):
@@ -120,6 +134,18 @@ class WorkflowExperimentObservation(BaseModel):
             )
 
         return self
+
+    @property
+    def judge_calls(self) -> int:
+        """Return how many judge calls evaluating this candidate made."""
+
+        return sum(case.judge_calls for case in self.cases)
+
+    @property
+    def judge_cost_usd(self) -> float:
+        """Return the judges' cost for this candidate, never charged to it."""
+
+        return sum(case.judge_cost_usd for case in self.cases)
 
     @property
     def cases_passed(self) -> int | None:
