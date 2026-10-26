@@ -104,3 +104,8 @@ requests that made it:
 - [ADR 0079: Run the Steps of a Dependency Layer Concurrently](0079-run-the-steps-of-a-dependency-layer-concurrently.md)
 - [ADR 0080: Resolve Redundant Producers by Name](0080-resolve-redundant-producers-by-name.md)
 - [ADR 0081: Record Unresolved Inputs and Unresolvable Outputs as Step Failures](0081-record-unresolved-inputs-and-unresolvable-outputs-as-step-failures.md)
+- [ADR 0082: A Run That Completes Has Succeeded](0082-a-run-that-completes-has-succeeded.md)
+- [ADR 0083: Announce Steps and Stream JSON Lines Records](0083-announce-steps-and-stream-json-lines-records.md)
+- [ADR 0084: Run Child Workflows as Separate Processes](0084-run-child-workflows-as-separate-processes.md)
+- [ADR 0085: Report Judge Cost Beside Scorecards, Never in Them](0085-report-judge-cost-beside-scorecards-never-in-them.md)
+- [ADR 0086: Add Benchmark Cases Only Deliberately, From Recorded Runs](0086-add-benchmark-cases-only-deliberately-from-recorded-runs.md)
