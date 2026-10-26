@@ -1,6 +1,6 @@
 # ADR 0041: Persistent Tool Repository
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0076
 - Date: 2026-08-17
 
 ## Context
