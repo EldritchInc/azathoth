@@ -477,6 +477,23 @@ Feedback is evidence associated with execution.
 
 It does not silently mutate durable workflow configuration.
 
+### Benchmark Cases From Runs
+
+A recorded run becomes a benchmark case only deliberately, through
+`workflows/benchmark_case_source.py`:
+
+- `workflow_run_input(run)` returns the payload of the run's single
+  `workflow.input.received` event, and raises `BenchmarkCaseSourceError` when
+  the run received none or more than one.
+- `latest_corrected_output(feedback)` returns the latest bad feedback that
+  carries a corrected output, latest by `created_at` with ties going to the
+  later record. Good feedback never supplies a value.
+- `benchmark_case_from_run(run, *, comparison, expected, description=None,
+  feedback=None)` builds a new case replaying the run's input. Its metadata
+  names the source run under `SOURCE_RUN_METADATA_KEY` (`source_run_id`) and,
+  when given, the feedback under `SOURCE_FEEDBACK_METADATA_KEY`
+  (`source_feedback_id`). A schema comparison requires a valid JSON Schema.
+
 ## Experiments
 
 Experiments compare executable workflow candidates using empirical execution
@@ -519,10 +536,16 @@ WorkflowExperimentRecord
 │               ├── case_id         None when no benchmark case applied
 │               ├── run_id
 │               ├── evaluation_id
-│               └── passed          None for records written before cases
+│               ├── passed          None for records written before cases
+│               └── judge_calls / judge_cost_usd    0 for records written before them
 ├── ranking                 observation IDs, best first
 └── recorded_at
 ```
+
+`WorkflowExperimentEvidence` and each observation carry `judge_calls` and
+`judge_cost_usd` beside the scorecard, and `WorkflowExperimentResult` totals
+them over every candidate. They never enter a scorecard, so judging never
+changes how candidates score or rank.
 
 Run and evaluation IDs are unique across every case of every observation, and
 the ranking covers every observation exactly once. `winner`,

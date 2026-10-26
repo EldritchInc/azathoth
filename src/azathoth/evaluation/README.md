@@ -79,6 +79,7 @@ from azathoth.evaluation import (
     SEMANTIC_EVALUATOR_NAME,
     SEMANTIC_EVALUATOR_VERSION,
     BenchmarkCase,
+    BenchmarkCaseConflictError,
     BenchmarkCatalog,
     BenchmarkCatalogLoader,
     BenchmarkDataset,
@@ -1036,7 +1037,9 @@ Judge calls are recorded only as evaluation evidence. They are never part of
 a `WorkflowRun`, so they never enter a run's cost, a benchmark's total cost,
 or any scorecard's latency or cost dimension. Benchmark results report them
 separately as `judge_calls` and `judge_cost_usd`, and saved benchmark
-executions keep both on the case each judge call judged.
+executions and experiment records keep both on the case each judge call
+judged. Experiment evidence reports them beside each candidate's scorecard,
+never in it.
 
 # Evaluation Is Not Execution
 
@@ -1345,6 +1348,23 @@ case B id = X
 ```
 
 This prevents ambiguous case identity inside a workload.
+
+# Appending a Case
+
+`BenchmarkDataset.with_case(case)` returns the dataset with one more case
+after every existing one. The dataset itself is unchanged, so the result can
+be saved as the benchmark's next revision; this is how `benchmark add-case`
+grows a benchmark.
+
+It raises `BenchmarkCaseConflictError` when an existing case has a JSON-equal
+input, the same comparison, and a JSON-equal expected value:
+
+```text
+Benchmark dataset <BENCHMARK_ID> already contains case <CASE_ID> with this input and expected outcome.
+```
+
+Cases may share an input when they expect different outcomes, because a
+judged comparison can accept more than one result for the same input.
 
 # Benchmark Order Is Preserved
 
