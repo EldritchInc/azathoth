@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 from uuid import UUID
 
@@ -10,6 +9,7 @@ from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE,
 )
+from tests.cli.test_console_script import console_script
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -22,18 +22,6 @@ IMPLEMENTATION_ID = UUID("22222222-2222-2222-2222-222222222222")
 FIRST_TEST_CASE_ID = UUID("33333333-3333-3333-3333-333333333333")
 
 SECOND_TEST_CASE_ID = UUID("44444444-4444-4444-4444-444444444444")
-
-
-def console_script() -> Path:
-    """Return the installed Azathoth console script."""
-
-    script = Path(sys.executable).with_name(
-        "azathoth",
-    )
-
-    assert script.exists()
-
-    return script
 
 
 def cli_environment(

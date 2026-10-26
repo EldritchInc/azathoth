@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 from uuid import UUID
 
@@ -22,6 +21,7 @@ from azathoth.workflows import (
     WorkflowSpecification,
     WorkflowStepSpecification,
 )
+from tests.cli.test_console_script import console_script
 
 FIRST_WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -36,16 +36,6 @@ SECOND_STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
 FIRST_STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
 
 SECOND_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
-
-
-def console_script() -> Path:
-    """Return the installed Azathoth console script."""
-
-    script = Path(sys.executable).with_name("azathoth")
-
-    assert script.exists()
-
-    return script
 
 
 def create_workflow(

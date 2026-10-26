@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 from azathoth import __version__
@@ -13,11 +14,15 @@ from azathoth.cli import (
 
 
 def console_script() -> Path:
-    """Return the console script installed beside the active Python executable."""
+    """Return the console script installed in the active Python environment.
 
-    executable = Path(sys.executable)
+    Installers put scripts in the environment's scripts directory: `bin` on
+    macOS and Linux, and `Scripts` on Windows, where the script is an `.exe`.
+    """
 
-    script = executable.with_name("azathoth")
+    name = "azathoth.exe" if os.name == "nt" else "azathoth"
+
+    script = Path(sysconfig.get_path("scripts")) / name
 
     assert script.exists()
 
@@ -194,7 +199,7 @@ def test_installed_cli_console_script_uses_current_environment(
 ) -> None:
     script = console_script()
 
-    assert script.parent == Path(sys.executable).parent
+    assert Path(sys.prefix) in script.parents
 
     result = run_cli(
         "--version",
