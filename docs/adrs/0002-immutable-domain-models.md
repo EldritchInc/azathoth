@@ -1,8 +1,7 @@
 # ADR 0002: Use immutable domain models
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-07-28
 
 ## Context
 

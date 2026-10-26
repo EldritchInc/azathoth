@@ -1,7 +1,8 @@
 # Releasing Azathoth
 
-Azathoth releases are distributed as Python packages built from the repository's
-declared project metadata.
+Azathoth releases are Python distributions built from the repository's declared
+project metadata, then published to PyPI by the release workflow,
+`.github/workflows/release.yml`.
 
 Release artifacts must be reproducible from a clean checkout and must pass the
 same deterministic validation required during normal development.
@@ -27,46 +28,89 @@ azathoth
 ```
 
 These names intentionally differ only where required by Python package naming
-conventions.
+conventions. The name `azathoth` on PyPI belongs to an unrelated project.
 
 ## Version Authority
 
-Azathoth currently records its version in:
+Azathoth records its version in:
 
 ```text
 pyproject.toml
 src/azathoth/__init__.py
 ```
 
-The installed-distribution test requires both values to agree.
+The installed-distribution tests require both values to agree, and the release
+workflow refuses a tag that does not match `pyproject.toml`.
 
-A release version must therefore be updated in both locations before release
-artifacts are built.
+A release version must therefore be updated in both locations, in a commit
+merged to `main`, before it is tagged.
 
-Do not publish artifacts when the distribution metadata and runtime version
-disagree.
+PyPI never accepts the same version twice, even after a release is deleted.
+A version that was published wrongly is fixed by publishing the next version.
 
 ## Release Prerequisites
 
-Create and activate a development environment:
+Create and activate a development environment.
+
+macOS and Linux:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-The development dependencies include the tooling required to build Azathoth
-without relying on an isolated build environment during deterministic
-validation.
+Windows (PowerShell):
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+If PowerShell refuses to run the activation script, allow local scripts once
+for your user, then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+The development dependencies include `build`, which produces the release
+artifacts.
+
+Publishing uses PyPI Trusted Publishing, so no API token is stored anywhere.
+It requires, once:
+
+- a pending publisher on PyPI for `azathoth-ai`, naming the repository
+  `EldritchInc/azathoth`, the workflow `release.yml`, and the environment
+  `pypi`;
+- the same on TestPyPI, with the environment `testpypi`;
+- recommended: a required reviewer on the `pypi` environment, under
+  Settings → Environments in GitHub, so a pushed tag waits for approval before
+  anything reaches PyPI.
 
 ## Deterministic Validation
 
-Before building a release, run the complete project gate:
+Before releasing, the complete project gate must pass.
+
+macOS and Linux:
 
 ```bash
 make check
 ```
+
+Windows has no `make`, so run the same commands directly:
+
+```powershell
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy src/azathoth tests
+python -m pytest
+```
+
+Continuous integration runs lint, formatting and type checks once, and the
+test suite on Linux, macOS and Windows with Python 3.11, 3.12 and 3.13. Every
+check must be green on the commit being released.
 
 The normal release gate must not require:
 
@@ -75,8 +119,8 @@ The normal release gate must not require:
 - paid API usage; or
 - network access for Azathoth's deterministic tests.
 
-Live OpenRouter tests remain optional release smoke tests and are not substitutes
-for deterministic validation.
+Live OpenRouter tests remain optional release smoke tests and are not
+substitutes for deterministic validation.
 
 ## Distribution Validation
 
@@ -90,6 +134,7 @@ The distribution metadata tests verify:
 - supported Python metadata;
 - runtime dependencies;
 - license metadata;
+- development status and project URLs;
 - project README metadata; and
 - the `azathoth` console entry point.
 
@@ -107,34 +152,31 @@ The wheel artifact tests verify:
 Run the focused packaging gate with:
 
 ```bash
-pytest -q tests/test_package.py tests/test_distribution_artifact.py
+python -m pytest -q tests/test_package.py tests/test_distribution_artifact.py
 ```
 
-## Build Release Artifacts
+## How the Release Workflow Validates the Artifact
 
-Remove artifacts from previous builds:
+The release artifact, not an editable checkout, is the software being
+released. The workflow's `build` job validates exactly what it publishes:
+
+1. it reads the version from `pyproject.toml`;
+2. for a tag, it requires the tag to be exactly `v` followed by that version;
+3. it builds the source distribution and wheel with `python -m build`;
+4. it installs the wheel into a clean environment, outside the checkout, and
+   requires `azathoth --version` to print `azathoth <version>` and
+   `azathoth --help` to succeed; and
+5. it passes those same files, unchanged, to the publishing job.
+
+Nothing is rebuilt between validation and publication.
+
+To build and inspect the artifacts locally:
 
 ```bash
-rm -rf build dist
+python -m build
 ```
 
-Build the distributions from the release checkout using the project's declared
-build backend.
-
-The resulting files belong under:
-
-```text
-dist/
-```
-
-Release artifacts must be built only after the intended release version is
-committed.
-
-## Inspect the Release
-
-Before publication, inspect the contents of `dist/`.
-
-At minimum, verify that the wheel contains:
+The files appear under `dist/`. The wheel must contain:
 
 ```text
 azathoth/
@@ -146,68 +188,91 @@ azathoth/py.typed
 The wheel filename uses the normalized distribution name, so `azathoth-ai`
 appears as `azathoth_ai`.
 
-## Validate the Exact Release Artifact
+## Trial Release on TestPyPI
 
-The release artifact—not an editable checkout—is the software being released.
+Before the first release, and whenever the release workflow changes, publish
+the release candidate to TestPyPI:
 
-Before publication:
+1. merge the release commit to `main`;
+2. in GitHub, open Actions → Release → Run workflow, and run it on `main`.
 
-1. run the complete deterministic project gate;
-2. build the final distributions from the release commit;
-3. install the final wheel into a clean environment;
-4. run `azathoth --version`;
-5. run `azathoth --help`;
-6. verify provider-free workflow import and inspection;
-7. confirm the runtime version matches the intended release version; and
-8. confirm the installed `azathoth` package resolves from the installed
-   distribution rather than the repository checkout.
-
-Do not rebuild artifacts after validation without validating the replacements.
-
-## Optional Live Verification
-
-OpenRouter verification is explicitly opt-in.
-
-When desired, configure:
+A manual run builds and validates exactly as a tagged run does, then publishes
+to TestPyPI instead of PyPI. Confirm the result installs:
 
 ```bash
-export OPENROUTER_API_KEY="..."
-export AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ azathoth-ai
+azathoth --version
 ```
 
-Optional model overrides may be configured with:
+TestPyPI also never accepts the same version twice. A second trial of one
+version fails at the publishing step, after validation has already passed.
+
+## Release
+
+A release is triggered by pushing a version tag from the merged, validated
+release commit on `main`:
 
 ```bash
-export OPENROUTER_TEST_MODEL="..."
-export OPENROUTER_TEST_MODELS="model-a,model-b"
-```
-
-Live verification tests provider compatibility.
-
-It does not replace deterministic release validation.
-
-## Release Commit and Tag
-
-The release commit should contain the final intended version and no unrelated
-changes.
-
-After the exact release commit and artifacts have passed validation, tag that
-commit using the release version:
-
-```bash
-git tag v<version>
+git switch main
+git pull
+git tag -a v<version> -m "Azathoth <version>"
 git push origin v<version>
 ```
 
 For example:
 
 ```bash
-git tag v1.0.0
+git tag -a v1.0.0 -m "Azathoth 1.0.0"
 git push origin v1.0.0
 ```
 
-A release tag identifies source that has already passed release validation. It
-should not be used as the mechanism that discovers whether the release works.
+The workflow then builds, validates and publishes to PyPI. When the `pypi`
+environment has a required reviewer, the publishing job waits for that
+approval.
+
+Push a release tag once. Never move or reuse a tag that has been pushed. A tag
+pushed by mistake, before anything was published, is removed with:
+
+```bash
+git tag -d v<version>
+git push origin --delete v<version>
+```
+
+After publication, create the GitHub Release from the tag with the release
+notes:
+
+```bash
+gh release create v<version> --title "Azathoth <version>" --notes-file <NOTES_FILE>
+```
+
+A tag identifies source that has already passed validation. It is not the
+mechanism that discovers whether the release works.
+
+## Optional Live Verification
+
+OpenRouter verification is explicitly opt-in, and may consume API credits.
+
+macOS and Linux:
+
+```bash
+export OPENROUTER_API_KEY="..."
+export AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
+python -m pytest
+```
+
+Windows (PowerShell):
+
+```powershell
+$env:OPENROUTER_API_KEY = "..."
+$env:AZATHOTH_RUN_LIVE_OPENROUTER_TESTS = "1"
+python -m pytest
+```
+
+Optional model overrides are `OPENROUTER_TEST_MODEL` and
+`OPENROUTER_TEST_MODELS` (a comma-separated list).
+
+Live verification tests provider compatibility. It does not replace
+deterministic release validation.
 
 ## Release Principle
 
@@ -217,22 +282,22 @@ Azathoth keeps release authority explicit:
 source
   │
   ▼
-deterministic validation
+deterministic validation on every platform
   │
   ▼
-versioned release commit
+versioned release commit on main
   │
   ▼
-distribution artifacts
-  │
-  ▼
-artifact validation
+trial release on TestPyPI
   │
   ▼
 release tag
   │
   ▼
-publication
+built and validated artifacts
+  │
+  ▼
+publication to PyPI
 ```
 
 The repository working is not sufficient.

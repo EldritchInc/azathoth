@@ -72,8 +72,9 @@ azathoth tool verify \
     --version 1.0.0
 ```
 
-The process tool needs `python3` on the `PATH`. Neither step calls a language
-model, so no provider credentials are needed.
+The process tool runs `python`, so it needs `python` on the `PATH`. An activated
+virtual environment provides it on macOS, Linux and Windows alike. Neither step
+calls a language model, so no provider credentials are needed.
 
 ## Word Count With Step Messages
 
@@ -122,6 +123,84 @@ The workflow can also run without promotion, with `workflow run --input`.
 `examples/benchmarks/word-count.json` holds one exact case for it, and the
 CLI README walks through turning a miscounted run into a second case with
 `benchmark add-case`.
+
+## Running a Child Workflow
+
+`count-words-in-child.json` counts words by invoking another workflow as a
+child. Its one step uses the `run_workflow` tool from
+`examples/tools/run-workflow.json`, a process tool that runs:
+
+```bash
+azathoth workflow invoke <CHILD_WORKFLOW_ID> --input <JSON> --output jsonl
+```
+
+as a separate process and returns the child's result. Only the child's final
+record reaches the parent: its result value on success, or its error message
+and invocation ID on failure. The child's step records stay in the child.
+
+Because the child is invoked, it runs its promoted production state, so it
+must be promoted first. The caller names the child and its input:
+
+```json
+{"workflow_id": "<CHILD_WORKFLOW_ID>", "input": <CHILD_INPUT>}
+```
+
+Import the three tools and both workflows, promote the child, then run the
+parent:
+
+```bash
+azathoth tool import examples/tools/word-count.json
+azathoth tool import examples/tools/word-count-process.json
+azathoth tool import examples/tools/run-workflow.json
+
+azathoth workflow import examples/workflows/word-count-messages.json
+azathoth workflow import examples/workflows/count-words-in-child.json
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000002
+
+azathoth workflow run a1000000-0000-4000-8000-000000000003 \
+    --input '{"workflow_id": "a1000000-0000-4000-8000-000000000002", "input": "the old ones wait — and dream"}' \
+    --output result
+```
+
+```text
+7
+```
+
+Without the promotion, the parent's step fails and the run halts:
+
+```text
+Tool implementation c1000000-0000-4000-8000-000000000011 exited with status 1: Child workflow a1000000-0000-4000-8000-000000000002 invocation <INVOCATION_ID> failed: The requested workflow is not deployed to production.
+```
+
+A production invocation reports a generic failure to its caller. To see why a
+child failed, follow its invocation to its run:
+
+```bash
+azathoth invocation show <INVOCATION_ID>
+azathoth run show <RUN_ID>
+```
+
+The tool runs the child with its own Python interpreter
+(`python -m azathoth.cli`), so it does not depend on `azathoth` being on the
+`PATH`. The child inherits the parent's environment, including
+`AZATHOTH_DATABASE`, so both use the same database.
+
+Two guards keep children bounded:
+
+- The tool passes `AZATHOTH_WORKFLOW_DEPTH`, plus one, to each child, and
+  refuses to go deeper than 8 levels:
+
+  ```text
+  Child workflow depth 9 exceeds the limit of 8.
+  ```
+
+- The tool stops a child after 55 seconds, inside its own 60-second timeout,
+  so a slow child is not left running after the tool itself is stopped.
+
+The depth guard belongs to this example tool, not to Azathoth. Recording a
+child's lineage and depth in its initial context is planned after 1.0, along
+with constant step inputs that would let a parent name its child itself.
 
 ## JSON Document Format
 

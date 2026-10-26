@@ -1,7 +1,7 @@
 # ADR 0011: Separate Strategy Specifications from Executable Strategies
 
-- **Status:** Accepted
-- **Date:** 2026-08-02
+- Status: Accepted
+- Date: 2026-08-02
 
 ## Context
 

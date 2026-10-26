@@ -1,6 +1,6 @@
 # ADR 0049: Persist Reusable Benchmark Datasets
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0076
 - Date: 2026-08-20
 
 ## Context

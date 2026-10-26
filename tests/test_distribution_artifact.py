@@ -2,9 +2,9 @@
 
 import os
 import shutil
-import site
 import subprocess
 import sys
+import sysconfig
 import venv
 import zipfile
 from pathlib import Path
@@ -19,6 +19,8 @@ CONSOLE_SCRIPT = "azathoth"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_WORKFLOW = PROJECT_ROOT / "examples" / "workflows" / "simple-prompt.json"
 WORKFLOW_ID = "11111111-1111-1111-1111-111111111111"
+
+LIBRARY_DIRECTORY_SCRIPT = "import sysconfig; print(sysconfig.get_path('purelib'))"
 
 
 def run(
@@ -113,6 +115,22 @@ def environment_bin_directory(
     return environment / "bin"
 
 
+def development_library_directories() -> tuple[Path, ...]:
+    """Return the directories holding this environment's installed dependencies.
+
+    `sysconfig` names them directly. `site.getsitepackages()` is not used,
+    because on Windows its first entry is the installation root rather than
+    `Lib\\site-packages`.
+    """
+
+    directories = (
+        Path(sysconfig.get_path("purelib")),
+        Path(sysconfig.get_path("platlib")),
+    )
+
+    return tuple(dict.fromkeys(directories))
+
+
 def create_installed_environment(
     *,
     workspace: Path,
@@ -144,26 +162,22 @@ def create_installed_environment(
 
     assert install_result.returncode == 0, install_result.stderr
 
-    site_packages_result = run(
+    library_result = run(
         str(python),
         "-c",
-        "import site; print(site.getsitepackages()[0])",
+        LIBRARY_DIRECTORY_SCRIPT,
         cwd=workspace,
     )
 
-    assert site_packages_result.returncode == 0, site_packages_result.stderr
+    assert library_result.returncode == 0, library_result.stderr
 
-    environment_site_packages = Path(
-        site_packages_result.stdout.strip(),
+    environment_library = Path(
+        library_result.stdout.strip(),
     )
 
-    development_site_packages = next(
-        Path(path) for path in site.getsitepackages() if Path(path).exists()
-    )
-
-    dependency_path = environment_site_packages / "azathoth-development-dependencies.pth"
+    dependency_path = environment_library / "azathoth-development-dependencies.pth"
     dependency_path.write_text(
-        f"{development_site_packages}\n",
+        "".join(f"{directory}\n" for directory in development_library_directories()),
         encoding="utf-8",
     )
 

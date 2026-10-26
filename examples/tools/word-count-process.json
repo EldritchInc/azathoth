@@ -41,7 +41,7 @@
       "entrypoint": "run",
       "source": "import json\nimport sys\n\ninputs = json.load(sys.stdin)\n\njson.dump({'count': len(inputs['text'].split())}, sys.stdout)\n",
       "command": [
-        "python3"
+        "python"
       ],
       "timeout_seconds": 30.0
     }

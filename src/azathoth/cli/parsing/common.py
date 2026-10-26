@@ -12,12 +12,19 @@ COMMAND_ATTRIBUTE = "command"
 def json_value(
     value: str,
 ) -> JsonValue:
-    """Parse one JSON-compatible command-line value."""
+    """Parse one JSON-compatible command-line value.
+
+    The message names no particular option, because every JSON option shares
+    this parser and argparse already prefixes the option name.
+
+    Raises:
+        ArgumentTypeError: The value is not valid JSON.
+    """
 
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise ArgumentTypeError(f"Expected value must be valid JSON: {exc.msg}") from exc
+        raise ArgumentTypeError(f"Value must be valid JSON: {exc.msg}") from exc
 
     return cast(
         JsonValue,

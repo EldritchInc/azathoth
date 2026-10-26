@@ -1,6 +1,6 @@
 # ADR 0055: Support Portable Workflow JSON Import
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0076
 - Date: 2026-08-23
 
 ## Context

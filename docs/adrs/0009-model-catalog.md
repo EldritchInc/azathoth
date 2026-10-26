@@ -1,7 +1,7 @@
 # ADR 0009: Introduce an Immutable Model Catalog
 
-- **Status:** Accepted
-- **Date:** 2026-08-01
+- Status: Accepted
+- Date: 2026-08-01
 
 ## Context
 

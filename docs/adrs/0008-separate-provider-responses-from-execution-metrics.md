@@ -1,8 +1,7 @@
 # ADR 0008: Separate provider responses from execution metrics
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-08-01
 
 ## Context
 

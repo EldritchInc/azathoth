@@ -1038,4 +1038,4 @@ def test_cli_add_case_rejects_invalid_expected_json(
     captured = capsys.readouterr()
 
     assert raised.value.code == 2
-    assert "Expected value must be valid JSON" in captured.err
+    assert "argument --expected: Value must be valid JSON" in captured.err

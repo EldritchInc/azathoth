@@ -1,5 +1,7 @@
 """Tests for importing, showing and verifying process tools through the CLI."""
 
+import shlex
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,11 @@ from tests.cli.test_tool_import import (
     write_document,
 )
 
+PROCESS_COMMAND = (
+    sys.executable,
+    "-u",
+)
+
 WORD_COUNT_SCRIPT = (
     "import json, sys\n"
     "inputs = json.load(sys.stdin)\n"
@@ -41,10 +48,7 @@ def create_process_implementation() -> ToolImplementation:
         version="1.0.0",
         runtime=PROCESS_TOOL_RUNTIME,
         source=WORD_COUNT_SCRIPT,
-        command=(
-            "python3",
-            "-u",
-        ),
+        command=PROCESS_COMMAND,
         timeout_seconds=30.0,
     )
 
@@ -116,7 +120,7 @@ def test_tool_implementation_show_renders_command_and_timeout(
     captured = capsys.readouterr()
 
     assert "Runtime: process\n" in captured.out
-    assert "Command: python3 -u\n" in captured.out
+    assert f"Command: {shlex.join(PROCESS_COMMAND)}\n" in captured.out
     assert "Timeout: 30 seconds\n" in captured.out
     assert "inputs = json.load(sys.stdin)" in captured.out
 

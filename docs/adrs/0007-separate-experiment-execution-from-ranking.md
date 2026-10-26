@@ -1,8 +1,7 @@
 # ADR 0007: Separate experiment execution from strategy ranking
 
-## Status
-
-Accepted
+- Status: Accepted
+- Date: 2026-07-31
 
 ## Context
 

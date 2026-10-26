@@ -3,7 +3,6 @@
 from uuid import UUID
 
 from azathoth.workflows import (
-    WorkflowBenchmarkRanking,
     WorkflowBenchmarkResult,
 )
 
@@ -53,35 +52,3 @@ def render_workflow_benchmark_result(
         )
 
     return "\n".join(lines)
-
-
-def render_workflow_benchmark_ranking(
-    ranking: WorkflowBenchmarkRanking,
-    *,
-    benchmark_id: UUID,
-) -> str:
-    """Render ranked configured workflow benchmark evidence."""
-
-    lines = [
-        f"Benchmark ID: {benchmark_id}",
-    ]
-
-    for entry in ranking.entries:
-        scorecard = entry.scorecard
-
-        lines.extend(
-            (
-                "",
-                f"Rank {entry.rank}",
-                f"Workflow ID: {entry.name}",
-                f"Quality: {scorecard.quality_score:.6f}",
-                f"Reliability: {scorecard.reliability_score:.6f}",
-                f"Latency: {scorecard.latency_score:.6f}",
-                f"Cost: {scorecard.cost_score:.6f}",
-                f"Overall: {scorecard.overall_score:.6f}",
-            )
-        )
-
-    return "\n".join(
-        lines,
-    )

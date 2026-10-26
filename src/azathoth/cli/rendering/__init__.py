@@ -6,7 +6,6 @@ from azathoth.cli.rendering.benchmark_executions import (
     render_workflow_benchmark_execution_summaries,
 )
 from azathoth.cli.rendering.benchmarks import (
-    render_workflow_benchmark_ranking,
     render_workflow_benchmark_result,
 )
 from azathoth.cli.rendering.evaluations import render_workflow_run_evaluations
@@ -75,7 +74,6 @@ __all__ = [
     "render_workflow_benchmark_comparison_execution",
     "render_workflow_benchmark_execution",
     "render_workflow_benchmark_execution_summaries",
-    "render_workflow_benchmark_ranking",
     "render_workflow_benchmark_result",
     "render_workflow_experiment",
     "render_workflow_experiment_summaries",

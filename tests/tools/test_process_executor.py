@@ -1,6 +1,8 @@
 """Tests for executing tool implementations as subprocesses."""
 
 import asyncio
+import shutil
+import sys
 from pathlib import Path
 from uuid import UUID
 
@@ -22,7 +24,7 @@ TOOL_ID = UUID("3d4e5f6a-7b8c-4d9e-9fa0-2b3c4d5e6f01")
 
 IMPLEMENTATION_ID = UUID("3d4e5f6a-7b8c-4d9e-9fa0-2b3c4d5e6f11")
 
-PYTHON_COMMAND = ("python3",)
+PYTHON_COMMAND = (sys.executable,)
 
 BASH_COMMAND = ("bash",)
 
@@ -79,6 +81,10 @@ def test_process_tool_reads_inputs_and_writes_outputs_as_json() -> None:
     }
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32" or shutil.which("bash") is None,
+    reason="bash is not reliably available; on Windows it may be the WSL launcher.",
+)
 def test_bash_process_tool_receives_the_inputs_object() -> None:
     result = execute(
         create_implementation(
@@ -104,7 +110,7 @@ def test_process_tool_script_path_follows_the_command_arguments() -> None:
         create_implementation(
             "unused",
             command=(
-                "python3",
+                sys.executable,
                 "-c",
                 "import json, sys; print(json.dumps({'arguments': sys.argv[1:]}))",
             ),

@@ -1,14 +1,10 @@
 """Tests for the Azathoth command-line application."""
 
-import json
-from argparse import ArgumentTypeError
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
 from uuid import UUID
 
 import pytest
-from pydantic import JsonValue
 
 import azathoth.cli.application as application
 from azathoth import __version__
@@ -32,22 +28,6 @@ BENCHMARK_ID = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 BENCHMARK_CASE_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
 GOAL_ID = UUID("abababab-abab-abab-abab-abababababab")
-
-
-def _json_value(
-    value: str,
-) -> JsonValue:
-    """Parse one JSON-compatible command-line value."""
-
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise ArgumentTypeError(f"expected value must be valid JSON: {exc.msg}") from exc
-
-    return cast(
-        JsonValue,
-        parsed,
-    )
 
 
 def test_cli_parser_uses_azathoth_program_name() -> None:
