@@ -392,6 +392,33 @@ It is retried under the step's retry policy, because a model may produce the
 declared shape on a later attempt, and the step then fails under its own
 failure policy instead of crashing the run.
 
+### Prompt Steps Read Inputs by Name
+
+A context-prompt step renders its declared inputs through
+`PromptInputBinding`, which names the input to read:
+
+```json
+"inputs": [
+  {"name": "plan", "source": {"producer_step_id": "<STEP_ID>", "name": "plan"}},
+  {"name": "notes", "source": {"name": "notes"}}
+],
+"specification": {
+  "template": {
+    "text": "Plan: {plan}\nNotes: {notes}",
+    "bindings": [
+      {"variable_name": "plan", "input_name": "plan"},
+      {"variable_name": "notes", "input_name": "notes"}
+    ]
+  }
+}
+```
+
+A template that binds an input the step does not declare is rejected when the
+step is constructed. Non-string values reach the prompt as JSON.
+
+A prompt step that declares `"output_format": "json"` outputs its parsed
+reply, so its output bindings may read fields of it by path.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for
