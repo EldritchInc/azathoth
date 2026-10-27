@@ -1,6 +1,6 @@
 # ADR 0084: Run Child Workflows as Separate Processes
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0090
 - Date: 2026-10-25
 - Decided in: #101, #103
 
