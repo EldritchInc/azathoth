@@ -1,0 +1,65 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000003",
+    "name": "prepare_revision",
+    "description": "Decide whether a drafted chapter needs the inner editing loop, and prepare that loop's settings. Holds the example revise-chapter workflow ID as a default, which the loop state's config may override.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "draft": {
+            "type": "string"
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "state",
+          "draft",
+          "requests"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "needs_revision": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "chapter": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "needs_revision",
+          "settings",
+          "chapter"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000103",
+      "tool_id": "e1000000-0000-4000-8000-000000000003",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "REVISION_WORKFLOW_ID = \"e1000000-0000-4000-8000-000000000010\"\nMAX_REVISIONS = 3\n\n\ndef run(state, draft, requests):\n    config = state.get(\"config\") or {}\n\n    return {\n        \"needs_revision\": len(requests) > 0,\n        \"settings\": {\n            \"workflow_id\": config.get(\"revision_workflow_id\", REVISION_WORKFLOW_ID),\n            \"max_iterations\": config.get(\"max_revisions\", MAX_REVISIONS),\n            \"state\": {\n                \"chapter\": draft,\n                \"requests\": requests,\n                \"context\": state.get(\"story\"),\n            },\n        },\n        \"chapter\": draft,\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

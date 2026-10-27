@@ -1,0 +1,66 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000004",
+    "name": "finalize_chapter",
+    "description": "Pack one written chapter into the loop protocol: the updated notes become the next state, the chapter becomes the loop's item, and the loop is done when the story ends or the outline runs out.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "chapter": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "story_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "number",
+          "chapter",
+          "notes",
+          "title",
+          "story_complete"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "next"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000104",
+      "tool_id": "e1000000-0000-4000-8000-000000000004",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(state, number, chapter, notes, title, story_complete):\n    outline = state.get(\"outline\") or []\n    next_state = dict(state)\n    next_state[\"notes\"] = notes\n    next_state[\"chapter_count\"] = number\n\n    return {\n        \"next\": {\n            \"state\": next_state,\n            \"done\": bool(story_complete) or number >= len(outline),\n            \"item\": {\"number\": number, \"title\": title, \"text\": chapter},\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

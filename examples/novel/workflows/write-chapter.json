@@ -1,0 +1,585 @@
+{
+  "metadata": {
+    "id": "e1000000-0000-4000-8000-000000000040",
+    "name": "write chapter",
+    "description": "One pass of the novel's chapter loop: draft the next chapter, have an editor review it, run the inner editing loop when the editor asks for changes, then update the continuity notes.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000041",
+      "specification": {
+        "requirement": {
+          "name": "echo_json",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "state",
+          "path": [
+            "value",
+            "state"
+          ]
+        },
+        {
+          "name": "story",
+          "path": [
+            "value",
+            "state",
+            "story"
+          ]
+        },
+        {
+          "name": "outline",
+          "path": [
+            "value",
+            "state",
+            "outline"
+          ]
+        },
+        {
+          "name": "notes",
+          "path": [
+            "value",
+            "state",
+            "notes"
+          ]
+        },
+        {
+          "name": "number",
+          "path": [
+            "value",
+            "iteration"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000042",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000052",
+          "name": "Draft chapter",
+          "description": "Draft the next chapter from the story, the outline and the running notes.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a novelist writing a novel one chapter at a time.\n\nThe story, as JSON:\n{story}\n\nThe chapter outline, as JSON:\n{outline}\n\nNotes from the chapters written so far:\n{notes}\n\nWrite chapter {number} so that it follows its outline entry, stays consistent with the story and the notes, and leaves room for the chapters still to come. Reply with the chapter's prose only: no title line, no chapter number, no commentary.",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "outline",
+              "input_name": "outline"
+            },
+            {
+              "variable_name": "notes",
+              "input_name": "notes"
+            },
+            {
+              "variable_name": "number",
+              "input_name": "number"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000041"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "story"
+          }
+        },
+        {
+          "name": "outline",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "outline"
+          }
+        },
+        {
+          "name": "notes",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "notes"
+          }
+        },
+        {
+          "name": "number",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "number"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting the chapter"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000043",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000053",
+          "name": "Review chapter",
+          "description": "List the changes a drafted chapter needs.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are the editor of a novel, reviewing one newly drafted chapter.\n\nThe story, as JSON:\n{story}\n\nThe chapter outline, as JSON:\n{outline}\n\nChapter {number}:\n\n{draft}\n\nList the specific changes this chapter needs: contradictions with the story or the outline, weak scenes, unclear motives, pacing or prose problems. Ask only for changes that matter. Reply with one JSON object and no other text:\n\n{{\"requests\": [\"<a specific, actionable request>\"]}}\n\nReply with {{\"requests\": []}} when the chapter needs no changes.",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "outline",
+              "input_name": "outline"
+            },
+            {
+              "variable_name": "number",
+              "input_name": "number"
+            },
+            {
+              "variable_name": "draft",
+              "input_name": "draft"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000041",
+        "e1000000-0000-4000-8000-000000000042"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "story"
+          }
+        },
+        {
+          "name": "outline",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "outline"
+          }
+        },
+        {
+          "name": "number",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "number"
+          }
+        },
+        {
+          "name": "draft",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000042",
+            "name": "draft"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "requests",
+          "path": [
+            "requests"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Reviewing the chapter"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000044",
+      "specification": {
+        "requirement": {
+          "name": "loop_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000045"
+      ],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000045",
+            "name": "settings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chapter",
+          "path": [
+            "state",
+            "chapter"
+          ]
+        },
+        {
+          "name": "revision_passes",
+          "path": [
+            "iterations"
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000045",
+            "name": "needs_revision"
+          },
+          "operator": "equal",
+          "expected": true
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Revising until the editor is satisfied"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000045",
+      "specification": {
+        "requirement": {
+          "name": "prepare_revision",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000041",
+        "e1000000-0000-4000-8000-000000000042",
+        "e1000000-0000-4000-8000-000000000043"
+      ],
+      "inputs": [
+        {
+          "name": "state",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "state"
+          }
+        },
+        {
+          "name": "draft",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000042",
+            "name": "draft"
+          }
+        },
+        {
+          "name": "requests",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000043",
+            "name": "requests"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "needs_revision",
+          "path": [
+            "needs_revision"
+          ]
+        },
+        {
+          "name": "settings",
+          "path": [
+            "settings"
+          ]
+        },
+        {
+          "name": "chapter",
+          "path": [
+            "chapter"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000046",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000054",
+          "name": "Update notes",
+          "description": "Update the continuity notes from a finished chapter, title it, and say whether the story has ended.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You keep the continuity notes for a novel being written one chapter at a time.\n\nThe story, as JSON:\n{story}\n\nThe notes so far:\n{notes}\n\nChapter {number}, as finally edited:\n\n{chapter}\n\nUpdate the notes with everything later chapters must stay consistent with: what happened, who knows what, where everyone is, and the threads still open. Keep them concise. Then give the chapter a short title, and say whether the story has reached its ending. Reply with one JSON object and no other text:\n\n{{\"notes\": \"<the updated notes>\", \"title\": \"<chapter title>\", \"story_complete\": false}}",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "notes",
+              "input_name": "notes"
+            },
+            {
+              "variable_name": "number",
+              "input_name": "number"
+            },
+            {
+              "variable_name": "chapter",
+              "input_name": "chapter"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000041",
+        "e1000000-0000-4000-8000-000000000044",
+        "e1000000-0000-4000-8000-000000000045"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "story"
+          }
+        },
+        {
+          "name": "notes",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "notes"
+          }
+        },
+        {
+          "name": "number",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "number"
+          }
+        },
+        {
+          "name": "chapter",
+          "source": {
+            "name": "chapter"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "updated_notes",
+          "path": [
+            "notes"
+          ]
+        },
+        {
+          "name": "title",
+          "path": [
+            "title"
+          ]
+        },
+        {
+          "name": "story_complete",
+          "path": [
+            "story_complete"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Updating the continuity notes"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000047",
+      "specification": {
+        "requirement": {
+          "name": "finalize_chapter",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000041",
+        "e1000000-0000-4000-8000-000000000044",
+        "e1000000-0000-4000-8000-000000000045",
+        "e1000000-0000-4000-8000-000000000046"
+      ],
+      "inputs": [
+        {
+          "name": "state",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "state"
+          }
+        },
+        {
+          "name": "number",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000041",
+            "name": "number"
+          }
+        },
+        {
+          "name": "chapter",
+          "source": {
+            "name": "chapter"
+          }
+        },
+        {
+          "name": "notes",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000046",
+            "name": "updated_notes"
+          }
+        },
+        {
+          "name": "title",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000046",
+            "name": "title"
+          }
+        },
+        {
+          "name": "story_complete",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000046",
+            "name": "story_complete"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "next",
+          "path": [
+            "next"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "next"
+  }
+}
