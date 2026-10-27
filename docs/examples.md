@@ -160,7 +160,11 @@ azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e
 azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-Optimizing records evidence. It never changes what is in production.
+The report names the winner and the model each of its steps ran on.
+Optimizing records evidence, and it never changes your workflow or
+production. To deploy the winner, pin those models in the workflow and import
+it again (see
+[Pin the Winning Models](getting-started.md#6-pin-the-winning-models)).
 Promotion is a separate, deliberate step. Promote the workflow, then invoke
 production:
 
