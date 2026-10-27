@@ -1,0 +1,55 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000002",
+    "name": "pack_revision",
+    "description": "Pack one revision pass into the loop protocol: the revised chapter and its unmet requests become the next state, and the pass is done when nothing is unmet.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "revised": {
+            "type": "string"
+          },
+          "unmet": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "context": {}
+        },
+        "required": [
+          "revised",
+          "unmet",
+          "context"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "next"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000102",
+      "tool_id": "e1000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(revised, unmet, context):\n    return {\n        \"next\": {\n            \"state\": {\"chapter\": revised, \"requests\": unmet, \"context\": context},\n            \"done\": len(unmet) == 0,\n            \"item\": len(unmet),\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}
