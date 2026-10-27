@@ -1,6 +1,9 @@
 """Generate executable candidates from durable production workflow state."""
 
-from azathoth.prompting import PromptStrategySpec
+from azathoth.prompting import (
+    ContextPromptStrategySpec,
+    PromptStrategySpec,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -83,13 +86,21 @@ def _resolve_production_step(
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
 ) -> WorkflowStepSpecification:
-    """Resolve one production prompt step while preserving all other state."""
+    """Resolve one production prompt step while preserving all other state.
+
+    Fixed and context prompts are resolved alike: each runs on its primary
+    model when that model is executable, and otherwise on its first
+    executable approved substitute.
+    """
 
     specification = step.specification
 
     if not isinstance(
         specification,
-        PromptStrategySpec,
+        (
+            PromptStrategySpec,
+            ContextPromptStrategySpec,
+        ),
     ):
         return step
 
