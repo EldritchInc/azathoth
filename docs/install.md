@@ -21,11 +21,12 @@ To work on Azathoth itself rather than use it, see
 ## What You Need
 
 - Python 3.11 or newer.
-- A terminal: Terminal on macOS, or PowerShell on Windows.
+- A terminal: Terminal on macOS, or PowerShell 7 on Windows.
 - About five minutes.
 
 You don't need an OpenRouter key to install Azathoth, or to import and
 inspect workflows. You need one only to run steps that call language models.
+[Connecting OpenRouter](openrouter.md) covers getting one.
 
 ## 1. Install Python
 
@@ -71,6 +72,21 @@ py -3.13 --version
 ```
 
 Open a new PowerShell window after installing.
+
+Use PowerShell 7 rather than the Windows PowerShell 5.1 that comes with
+Windows. Azathoth takes JSON on the command line, as in
+`--input '"hello"'`, and Windows PowerShell 5.1 strips the inner double
+quotes before Azathoth sees them. PowerShell 7 passes them through intact.
+Install it, then open **PowerShell 7** from the Start menu and check the
+version:
+
+```powershell
+winget install --id Microsoft.PowerShell --source winget
+$PSVersionTable.PSVersion
+```
+
+The version should start with 7. Use PowerShell 7 for every command in these
+guides.
 
 If typing `python` opens the Microsoft Store, turn the Store's aliases off:
 Settings → Apps → Advanced app settings → App execution aliases. Then switch
@@ -303,5 +319,12 @@ the venv being activated. Activate the venv and check step 4 again.
 older than 3.11. Delete `.venv`, then create it again (step 2) with a newer
 Python.
 
+**`Value must be valid JSON`** for an `--input` value on Windows: you are in Windows
+PowerShell 5.1, which strips the inner quotes. Use PowerShell 7 (step 1).
+
 **PowerShell won't run `Activate.ps1`**: set the execution policy (see
 [Windows: allowing the activation script](#windows-allowing-the-activation-script)).
+
+## Next
+
+- [Connecting OpenRouter](openrouter.md): a key, models and judges.

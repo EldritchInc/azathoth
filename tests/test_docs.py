@@ -13,7 +13,10 @@ TOP_LEVEL_DOCUMENTS = (
     "RELEASING.md",
 )
 
-USER_GUIDES = ("docs/install.md",)
+USER_GUIDES = (
+    "docs/install.md",
+    "docs/openrouter.md",
+)
 
 FENCE = re.compile(r"^\s*```(?P<language>\S*)\s*$")
 
