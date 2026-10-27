@@ -1,0 +1,154 @@
+{
+  "id": "d2000000-0000-4000-8000-000000000030",
+  "name": "review change",
+  "description": "Judge code reviews: that a dangerous change is blocked, a harmless one approved, and that findings name the real problem.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "d2000000-0000-4000-8000-000000000031",
+      "input": {
+        "title": "Look up orders by customer name",
+        "description": "Adds a search endpoint for support staff.",
+        "diff": "--- a/app/orders.py\n+++ b/app/orders.py\n@@ -40,3 +40,8 @@\n+def find_orders(connection, customer_name):\n+    query = f\"SELECT * FROM orders WHERE customer = '{customer_name}'\"\n+    return connection.execute(query).fetchall()\n"
+      },
+      "expected": {
+        "description": "The SQL injection blocks the change, raised by the security reviewer at high severity.",
+        "value": {
+          "type": "object",
+          "required": [
+            "verdict",
+            "findings",
+            "summary"
+          ],
+          "properties": {
+            "verdict": {
+              "const": "request_changes"
+            },
+            "findings": {
+              "type": "array",
+              "contains": {
+                "type": "object",
+                "required": [
+                  "severity",
+                  "reviewers"
+                ],
+                "properties": {
+                  "severity": {
+                    "const": "high"
+                  },
+                  "reviewers": {
+                    "contains": {
+                      "const": "security"
+                    }
+                  }
+                }
+              }
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "kind": "blocked"
+      }
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000032",
+      "input": {
+        "title": "Rename total to order_total",
+        "description": "A clearer name; no behavior changes.",
+        "diff": "--- a/app/totals.py\n+++ b/app/totals.py\n@@ -1,3 +1,3 @@\n-def total(order):\n+def order_total(order):\n     return sum(line.price * line.quantity for line in order.lines)\n"
+      },
+      "expected": {
+        "description": "A pure rename is approved with no findings.",
+        "value": {
+          "type": "object",
+          "required": [
+            "verdict",
+            "findings",
+            "summary"
+          ],
+          "properties": {
+            "verdict": {
+              "const": "approve"
+            },
+            "findings": {
+              "maxItems": 0
+            },
+            "summary": {
+              "const": "No issues found."
+            }
+          }
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "kind": "approved"
+      }
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000033",
+      "input": {
+        "title": "Look up orders by customer name",
+        "description": "Adds a search endpoint for support staff.",
+        "diff": "--- a/app/orders.py\n+++ b/app/orders.py\n@@ -40,3 +40,8 @@\n+def find_orders(connection, customer_name):\n+    query = f\"SELECT * FROM orders WHERE customer = '{customer_name}'\"\n+    return connection.execute(query).fetchall()\n"
+      },
+      "expected": {
+        "description": "A review that blocks the change because the customer name is interpolated into the SQL query, allowing SQL injection, and suggests a parameterized query.",
+        "value": {
+          "verdict": "request_changes",
+          "findings": [
+            {
+              "severity": "high",
+              "file": "app/orders.py",
+              "line": 41,
+              "summary": "customer_name is interpolated into the SQL query, allowing SQL injection.",
+              "suggestion": "Pass customer_name as a query parameter.",
+              "reviewers": [
+                "security"
+              ]
+            }
+          ]
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "kind": "faithful"
+      }
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000034",
+      "input": {
+        "title": "Paginate the order list",
+        "description": "Returns page `page` (counting from 1) of `size` orders.",
+        "diff": "--- a/app/pages.py\n+++ b/app/pages.py\n@@ -1,0 +1,4 @@\n+def page_of(items, page, size):\n+    start = page * size\n+    return items[start:start + size]\n"
+      },
+      "expected": {
+        "description": "A review that flags the off-by-one error: with pages counted from 1, page 1 skips the first page of items, so start should be (page - 1) * size.",
+        "value": {
+          "verdict": "request_changes",
+          "findings": [
+            {
+              "severity": "high",
+              "file": "app/pages.py",
+              "line": 2,
+              "summary": "Pages count from 1, so page * size skips the first page.",
+              "suggestion": "Use start = (page - 1) * size.",
+              "reviewers": [
+                "correctness"
+              ]
+            }
+          ]
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "kind": "faithful"
+      }
+    }
+  ]
+}
