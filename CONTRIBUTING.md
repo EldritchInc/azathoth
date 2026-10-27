@@ -552,6 +552,8 @@ README. When it changes something users do, update the guides that show it.
   hold commands for that platform only;
 - no document shows a `workflow optimize` command passing the removed
   `--expected` flag.
+- every concrete `workflow optimize` command passes `--generations`, because
+  cheaper candidates are first run in generation 2.
 
 A new user guide is added to `USER_GUIDES` in that test.
 

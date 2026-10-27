@@ -1179,6 +1179,13 @@ The default is:
 1
 ```
 
+Each generation runs its candidates against the benchmark, ranks them, and
+then proposes the next generation's candidates from its winner. Generation 1
+runs the configured candidate, so its winner is the baseline. The cheaper
+model substitutions it proposes are first run in generation 2. To compare
+models at all, pass `--generations 2` or more. With the default of 1, the
+command measures the baseline only.
+
 # Optimization Arguments
 
 `--benchmark` is required and must be the UUID of a benchmark imported with
