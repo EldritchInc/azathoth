@@ -182,9 +182,10 @@ the step's requirements. So authorize your everyday default first.
   for the novel: its final editorial review reads the whole book at once.
   `model show` reports the context window.
 - **One or more cheaper models** let the optimizer do something interesting.
-  `azathoth workflow optimize` tries each authorized model that is strictly
-  cheaper than the current one and still meets the step's requirements. Then
-  it reports which candidate did best on quality, latency and cost.
+  `azathoth workflow optimize` with `--generations 2` or more tries each
+  authorized model that is strictly cheaper than the current one and still
+  meets the step's requirements. Then it reports which candidate did best on
+  quality, latency and cost.
 
 ### Removing a model
 

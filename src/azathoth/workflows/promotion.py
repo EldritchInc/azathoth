@@ -1,8 +1,12 @@
 """Materialize executable workflow candidates as durable promotion specifications."""
 
 from azathoth.prompting import (
+    ContextPromptStrategy,
+    ContextPromptStrategySpec,
     FixedModelSelection,
+    ModelBinding,
     PromptStrategy,
+    PromptStrategySpec,
 )
 from azathoth.strategies import Strategy
 from azathoth.workflows.candidate import WorkflowCandidate
@@ -80,16 +84,10 @@ def _materialize_step(
     ):
         return specification
 
-    if not isinstance(
-        candidate_strategy,
-        PromptStrategy,
-    ):
-        raise ValueError("Prompt-backed workflow steps must use PromptStrategy candidates.")
-
-    model_binding = candidate_strategy.model_binding
-
-    if model_binding is None:
-        raise ValueError("Prompt-backed workflow candidates must retain model bindings.")
+    model_binding = _prompt_model_binding(
+        specification=step_specification,
+        candidate_strategy=candidate_strategy,
+    )
 
     provider, separator, model = model_binding.identifier.partition("/")
 
@@ -113,6 +111,46 @@ def _materialize_step(
             "specification": promoted_prompt,
         }
     )
+
+
+def _prompt_model_binding(
+    *,
+    specification: PromptStrategySpec | ContextPromptStrategySpec,
+    candidate_strategy: Strategy,
+) -> ModelBinding:
+    """Return the model a prompt step's candidate is bound to.
+
+    A fixed prompt must be realized by a `PromptStrategy`, and a context
+    prompt by a `ContextPromptStrategy`. Either way, the candidate must carry
+    the model binding that promotion pins the step to.
+    """
+
+    if isinstance(
+        specification,
+        PromptStrategySpec,
+    ):
+        if not isinstance(
+            candidate_strategy,
+            PromptStrategy,
+        ):
+            raise ValueError("Prompt-backed workflow steps must use PromptStrategy candidates.")
+
+        model_binding = candidate_strategy.model_binding
+    else:
+        if not isinstance(
+            candidate_strategy,
+            ContextPromptStrategy,
+        ):
+            raise ValueError(
+                "Context-prompt workflow steps must use ContextPromptStrategy candidates."
+            )
+
+        model_binding = candidate_strategy.model_binding
+
+    if model_binding is None:
+        raise ValueError("Prompt-backed workflow candidates must retain model bindings.")
+
+    return model_binding
 
 
 def promote_workflow_candidate(

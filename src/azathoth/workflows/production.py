@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from azathoth.prompting import (
+    ContextPromptStrategySpec,
     FixedModelSelection,
     PromptStrategySpec,
 )
@@ -103,7 +104,10 @@ class WorkflowProductionState(BaseModel):
 
             if not isinstance(
                 specification,
-                PromptStrategySpec,
+                (
+                    PromptStrategySpec,
+                    ContextPromptStrategySpec,
+                ),
             ):
                 continue
 

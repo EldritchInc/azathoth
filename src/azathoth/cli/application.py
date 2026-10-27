@@ -1,5 +1,6 @@
 """Command-line application for Azathoth."""
 
+import sys
 from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
@@ -74,6 +75,7 @@ from azathoth.cli.runs import (
     record_run_feedback,
     show_run,
 )
+from azathoth.cli.streams import use_utf8_streams
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
@@ -107,7 +109,15 @@ from azathoth.cli.workflows import (
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Run the Azathoth command-line application."""
+    """Run the Azathoth command-line application.
+
+    Output is always written as UTF-8, whatever the platform's code page.
+    """
+
+    use_utf8_streams(
+        sys.stdout,
+        sys.stderr,
+    )
 
     parser = build_parser()
 
