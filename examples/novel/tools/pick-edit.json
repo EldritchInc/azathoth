@@ -1,0 +1,46 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000005",
+    "name": "pick_edit",
+    "description": "Take the next chapter from the final-edits queue and prepare the inner editing loop's settings for it. Holds the example revise-chapter workflow ID as a default, which the state's config may override.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000105",
+      "tool_id": "e1000000-0000-4000-8000-000000000005",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "REVISION_WORKFLOW_ID = \"e1000000-0000-4000-8000-000000000010\"\nMAX_REVISIONS = 3\n\n\ndef run(state):\n    config = state.get(\"config\") or {}\n    entry = state[\"queue\"][0]\n    text = \"\"\n\n    for chapter in state[\"chapters\"]:\n        if chapter[\"number\"] == entry[\"chapter\"]:\n            text = chapter[\"text\"]\n\n    return {\n        \"settings\": {\n            \"workflow_id\": config.get(\"revision_workflow_id\", REVISION_WORKFLOW_ID),\n            \"max_iterations\": config.get(\"max_revisions\", MAX_REVISIONS),\n            \"state\": {\n                \"chapter\": text,\n                \"requests\": entry[\"requests\"],\n                \"context\": state.get(\"story\"),\n            },\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

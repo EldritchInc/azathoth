@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "id": "e1000000-0000-4000-8000-000000000060",
+    "name": "edit queue",
+    "description": "One pass of the novel's final-edits loop: take the next chapter the final review asked to change, run the inner editing loop on it, and put the revision back into the book.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000061",
+      "specification": {
+        "requirement": {
+          "name": "echo_json",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "state",
+          "path": [
+            "value",
+            "state"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000062",
+      "specification": {
+        "requirement": {
+          "name": "pick_edit",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000061"
+      ],
+      "inputs": [
+        {
+          "name": "state",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000061",
+            "name": "state"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "settings",
+          "path": [
+            "settings"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000063",
+      "specification": {
+        "requirement": {
+          "name": "loop_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000062"
+      ],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000062",
+            "name": "settings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "revised",
+          "path": [
+            "state",
+            "chapter"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Revising a chapter from the final review"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000064",
+      "specification": {
+        "requirement": {
+          "name": "merge_edit",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000061",
+        "e1000000-0000-4000-8000-000000000063"
+      ],
+      "inputs": [
+        {
+          "name": "state",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000061",
+            "name": "state"
+          }
+        },
+        {
+          "name": "revised",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000063",
+            "name": "revised"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "next",
+          "path": [
+            "next"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "next"
+  }
+}

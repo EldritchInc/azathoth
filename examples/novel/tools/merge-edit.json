@@ -1,0 +1,50 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000006",
+    "name": "merge_edit",
+    "description": "Put one revised chapter back into the book and remove it from the final-edits queue; the pass is done when the queue is empty.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "revised": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "revised"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "next"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000106",
+      "tool_id": "e1000000-0000-4000-8000-000000000006",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(state, revised):\n    queue = state[\"queue\"]\n    entry = queue[0]\n    chapters = []\n\n    for chapter in state[\"chapters\"]:\n        updated = dict(chapter)\n\n        if updated[\"number\"] == entry[\"chapter\"]:\n            updated[\"text\"] = revised\n\n        chapters.append(updated)\n\n    next_state = dict(state)\n    next_state[\"chapters\"] = chapters\n    next_state[\"queue\"] = queue[1:]\n\n    return {\n        \"next\": {\n            \"state\": next_state,\n            \"done\": len(queue) <= 1,\n            \"item\": entry[\"chapter\"],\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}
