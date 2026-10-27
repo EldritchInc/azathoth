@@ -406,6 +406,12 @@ def test_repository_links_resolve(
     assert broken == []
 
 
+def test_readme_links_are_absolute() -> None:
+    text = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert relative_link_targets(text) == ()
+
+
 def test_removed_optimize_flag_uses_follow_line_continuations() -> None:
     text = (
         "azathoth workflow optimize <ID> \\\n    --expected '1'\n"

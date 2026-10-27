@@ -5,17 +5,38 @@ evidence, and test-driven changes.
 
 Contributions should preserve those properties.
 
-This guide describes the development expectations for the OSS V1 codebase.
+This guide describes the development expectations for the Azathoth codebase.
 
 ## Development Environment
 
-Create a virtual environment from the repository root:
+Clone the repository, create a virtual environment in it, and install the
+project in editable mode with its development dependencies.
+
+macOS and Linux:
 
 ```bash
-python -m venv .venv
+git clone https://github.com/EldritchInc/azathoth.git
+cd azathoth
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
+
+Windows (PowerShell 7):
+
+```powershell
+git clone https://github.com/EldritchInc/azathoth.git
+Set-Location azathoth
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+[Installing Azathoth](docs/install.md) covers getting a suitable Python, the
+PowerShell execution policy, and UTF-8 output on Windows. Keep the venv
+active while you work: the process tools in the examples and tests start
+`python` from the `PATH`, and it must be the environment Azathoth is
+installed in.
 
 Confirm the installed CLI:
 
@@ -28,6 +49,9 @@ Run the complete quality gate:
 ```bash
 make check
 ```
+
+Windows has no `make`; [Releasing](RELEASING.md#deterministic-validation)
+lists the same commands for PowerShell.
 
 ## Development Philosophy
 
@@ -72,6 +96,12 @@ production revision
 
 A contribution that makes one of these boundaries less explicit should be
 treated as an architectural change, not a local implementation detail.
+
+Azathoth also keeps one product boundary: workflows are composed, and code
+belongs in tools. A behavior that can be expressed by composing existing
+steps, tools and child workflows belongs in a workflow document, not in a new
+engine feature. New code should usually be a tool, or should make tools and
+composition more capable. See [Concepts](docs/concepts.md#composition-not-code).
 
 ## Test-Driven Development
 
@@ -205,20 +235,30 @@ gate.
 
 ## Code Quality
 
-Before committing a change, run:
+While working, let ruff fix and format what it can:
 
 ```bash
-ruff format src tests
-ruff check src tests
-mypy src
-pytest
+python -m ruff check --fix .
+python -m ruff format .
 ```
 
-Before considering the change complete, run:
+Before considering a change complete, run the complete gate:
 
 ```bash
 make check
 ```
+
+which runs:
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy src/azathoth tests
+python -m pytest
+```
+
+`mypy` runs in strict mode, configured in `pyproject.toml`, over both the
+package and the tests.
 
 The repository expects:
 
@@ -373,20 +413,51 @@ Successful operator output belongs on standard output.
 Expected command failures belong on standard error and should return a nonzero
 process status.
 
-## Public Workflow Documents
+## Public Documents
 
 The JSON files accepted by:
 
 ```bash
 azathoth workflow import <FILE>
+azathoth tool import <FILE>
+azathoth benchmark import <FILE>
 ```
 
-are canonical serialized `WorkflowSpecification` documents.
+are the canonical serialized forms of Azathoth's own models:
+`WorkflowSpecification`, tool documents and benchmark datasets. They are not
+a separate tutorial format or CLI schema. Importing never overwrites: each
+import appends a revision.
 
-They are not a separate tutorial or CLI schema.
+When serialization changes, the checked-in examples and their tests must
+change with it, in the same commit.
 
-When workflow serialization changes, checked-in examples and round-trip tests
-must remain synchronized with the actual public document representation.
+## Examples
+
+Each example lives in its own folder under `examples/`, laid out the same
+way:
+
+```text
+examples/<name>/
+├── README.md        what it shows, its document IDs, and how to run it
+├── workflows/       workflow documents
+├── tools/           tool documents, where it needs its own
+└── benchmarks/      benchmark documents
+```
+
+Smaller shared documents live in `examples/workflows/`, `examples/tools/`
+and `examples/benchmarks/`.
+
+Every example must:
+
+- be covered by tests under `tests/examples/` that decode its documents and
+  run it end to end with controlled models, so the deterministic suite
+  proves it works without a provider;
+- show its commands in its README;
+- appear in [Examples Tour](docs/examples.md), in the order of the ideas it
+  builds on, with bash and PowerShell commands and its expected result.
+
+Prefer examples whose deterministic work is done by tools, and whose
+workflows are composition. That is the pattern users copy.
 
 ## Architecture Decision Records
 
@@ -421,30 +492,68 @@ Ask:
 
 If yes, an ADR is probably appropriate.
 
+Records live in `docs/adrs/`, one file per decision, named
+`NNNN-short-title.md`. `tests/test_adr_records.py` enforces their form:
+
+- records are numbered from `0001` with no gaps;
+- each file starts with `# ADR NNNN: <Title>`, carrying its own number;
+- the next two lines after the blank line are the status and the date:
+
+  ```text
+  - Status: Accepted
+  - Date: <YYYY-MM-DD>
+  ```
+
+  The status is `Accepted`, `Proposed` or `Deprecated`. A record whose
+  decision was later changed keeps its text and adds
+  `; amended by ADR NNNN` to its status;
+- `docs/adrs/README.md` lists every record, in order, with its exact title.
+
+A record written after the pull request that made the decision adds a
+`- Decided in: #<PR>` line after the date.
+
+Records are never rewritten to match later decisions. A changed decision gets
+a new record, and the old one is marked as amended.
+
 ## Documentation
 
-Documentation should describe implemented behavior.
+Documentation describes implemented behavior. Don't describe planned
+architecture as though it already exists. When the code and a document
+disagree, fix the document.
 
-Avoid describing planned architecture as though it already exists.
-
-When a feature changes a public subsystem boundary, update the corresponding
-package README:
-
-```text
-src/azathoth/<subsystem>/README.md
-```
-
-When it changes the overall user-facing system, also consider:
+The documentation set is:
 
 ```text
-README.md
-
-docs/getting-started.md
-
-CONTRIBUTING.md
-
-docs/release-validation.md
+README.md                    the front door, also the PyPI description
+docs/install.md              installing on macOS and Windows
+docs/openrouter.md           a key, models and judges
+docs/getting-started.md      one workflow from import to production
+docs/examples.md             the examples tour
+docs/concepts.md             architecture and design
+docs/release-validation.md   what a release must prove
+docs/adrs/                   architecture decisions
+RELEASING.md                 how a release is made
+CONTRIBUTING.md              this guide
+examples/**/README.md        each example
+src/azathoth/<subsystem>/README.md   each subsystem
 ```
+
+When a feature changes a public subsystem boundary, update that subsystem's
+README. When it changes something users do, update the guides that show it.
+
+`tests/test_docs.py` enforces the mechanical rules:
+
+- relative links, and their heading anchors, must resolve;
+- links in `README.md` are absolute GitHub links, because PyPI renders the
+  README without the repository, and they must resolve too;
+- in the user guides (install, OpenRouter, getting started, examples), every
+  bash block is followed by its PowerShell 7 equivalent. A section whose
+  heading names one platform, such as `### macOS` or `### Windows: …`, may
+  hold commands for that platform only;
+- no document shows a `workflow optimize` command passing the removed
+  `--expected` flag.
+
+A new user guide is added to `USER_GUIDES` in that test.
 
 The implementation and tests remain authoritative.
 
@@ -472,10 +581,8 @@ Small commits make architectural review and regression isolation easier.
 Run:
 
 ```bash
-ruff format src tests
-ruff check src tests
-mypy src
-pytest
+python -m ruff check --fix .
+python -m ruff format .
 make check
 ```
 
@@ -511,17 +618,15 @@ A useful pull request explains:
 
 For architectural work, describe the before/after responsibility boundary.
 
-For release hardening, distinguish clearly between:
+Distinguish clearly between:
 
 ```text
-new feature
+new behavior
 
 and
 
-making existing V1 behavior safer, clearer, or more verifiable
+making existing behavior safer, clearer, or more verifiable
 ```
-
-The OSS V1 release-hardening phase is intentionally conservative.
 
 ## Definition of Green
 
@@ -549,14 +654,12 @@ Live OpenRouter tests are intentionally outside this default definition.
 A failure in an explicitly requested live verification should still be
 investigated, but it is not equivalent to a deterministic repository regression.
 
-## Release Validation
+## Releasing
 
-Release-level verification has stricter expectations than an individual local
-change.
-
-Before declaring an OSS release candidate ready, follow:
-
-[Release Validation](docs/release-validation.md).
+Release-level verification has stricter expectations than an individual
+change. [Release Validation](docs/release-validation.md) defines what a
+release must prove, and [Releasing](RELEASING.md) gives the steps, including
+the pre-release examples run on macOS.
 
 ## Central Rule
 
