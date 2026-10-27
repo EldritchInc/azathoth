@@ -1,0 +1,307 @@
+# Installing Azathoth
+
+Azathoth is published on PyPI as `azathoth-ai`. Installing it gives you the
+`azathoth` command.
+
+With Azathoth, you build a workflow by composing JSON documents: steps,
+prompts, models, tools and child workflows. You write code only for tools.
+So you don't need to be a Python developer to use it. You do need a working
+Python, because that is what Azathoth runs on.
+
+This guide covers macOS and Windows. Each command is shown twice:
+
+- for the macOS Terminal (zsh or bash);
+- for Windows PowerShell.
+
+On Linux, the macOS commands work unchanged.
+
+To work on Azathoth itself rather than use it, see
+[Contributing](../CONTRIBUTING.md) instead.
+
+## What You Need
+
+- Python 3.11 or newer.
+- A terminal: Terminal on macOS, or PowerShell on Windows.
+- About five minutes.
+
+You don't need an OpenRouter key to install Azathoth, or to import and
+inspect workflows. You need one only to run steps that call language models.
+
+## 1. Install Python
+
+Check what you already have:
+
+```bash
+python3 --version
+```
+
+```powershell
+py --version
+```
+
+If the version is 3.11 or newer, skip to step 2.
+
+### macOS
+
+The `python3` that comes with Apple's Command Line Tools is too old for
+Azathoth. Install a current Python in one of two ways:
+
+- the macOS installer from [python.org](https://www.python.org/downloads/);
+- or [Homebrew](https://brew.sh).
+
+With Homebrew:
+
+```bash
+brew install python@3.13
+python3.13 --version
+```
+
+After installing from python.org, open a new Terminal window and use
+`python3.13` (or whichever version you installed) in the next step.
+
+### Windows
+
+Install Python from [python.org](https://www.python.org/downloads/). On the
+installer's first screen, select **Add python.exe to PATH**. Alternatively,
+use `winget`:
+
+```powershell
+winget install Python.Python.3.13
+py -3.13 --version
+```
+
+Open a new PowerShell window after installing.
+
+If typing `python` opens the Microsoft Store, turn the Store's aliases off:
+Settings → Apps → Advanced app settings → App execution aliases. Then switch
+off **python.exe** and **python3.exe**.
+
+## 2. Create a Virtual Environment
+
+A virtual environment ("venv") is a private copy of Python for one project.
+Azathoth must be installed in an activated venv.
+
+### Why not pipx or `uv tool`?
+
+Some of Azathoth's own tools start Python as a child process:
+
+- `run_workflow`, which calls a child workflow;
+- `loop_workflow`, which repeats a child workflow;
+- `validate_workflow`, which checks a workflow document.
+
+They run whichever `python` comes first on your `PATH`, and that Python must
+be able to import Azathoth. An activated venv puts its own `python` first.
+
+`pipx` and `uv tool install` work differently. They hide Azathoth in an
+environment of its own and expose only the `azathoth` command. The `python`
+on your `PATH` is then a different Python that can't see Azathoth. Ordinary
+workflows still run, but any workflow that uses those tools fails with
+`No module named azathoth`.
+
+### Create and activate it
+
+Make a folder for your Azathoth work, then create the venv inside it:
+
+```bash
+mkdir -p ~/azathoth-work
+cd ~/azathoth-work
+python3.13 -m venv .venv
+source .venv/bin/activate
+```
+
+```powershell
+New-Item -ItemType Directory -Force -Path ~/azathoth-work | Out-Null
+Set-Location ~/azathoth-work
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Use the Python version you installed in step 1, such as `python3.12` or
+`py -3.12`.
+
+Once the venv is active, your prompt starts with `(.venv)`, and both `python`
+and `pip` refer to the venv. You don't need `python3` or `py` again until you
+create another venv.
+
+### Windows: allowing the activation script
+
+If PowerShell refuses with "running scripts is disabled on this system",
+allow local scripts for your user account once, then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+.venv\Scripts\Activate.ps1
+```
+
+## 3. Install Azathoth
+
+With the venv active:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install azathoth-ai
+```
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install azathoth-ai
+```
+
+## 4. Check the Installation
+
+First, confirm that the command runs:
+
+```bash
+azathoth --version
+azathoth --help
+```
+
+```powershell
+azathoth --version
+azathoth --help
+```
+
+`azathoth --version` prints the installed version, for example
+`azathoth 1.0.0`.
+
+Then confirm that the `python` on your `PATH` is the venv's, and that it can
+import Azathoth. Azathoth's child-process tools depend on this:
+
+```bash
+command -v python
+python -c "import azathoth; print(azathoth.__version__)"
+```
+
+```powershell
+(Get-Command python).Source
+python -c "import azathoth; print(azathoth.__version__)"
+```
+
+The first line should print a path inside your folder that ends in
+`.venv/bin/python` (macOS) or `.venv\Scripts\python.exe` (Windows). The second
+should print the same version as `azathoth --version`.
+
+## 5. Choose a Database
+
+Azathoth keeps everything it knows in one SQLite file:
+
+- imported workflows, tools, goals and benchmarks;
+- authorized models;
+- runs, experiments, promotions and invocations.
+
+By default the file is `azathoth.db` in whatever folder you are in when you
+run a command. Set `AZATHOTH_DATABASE` so that every command uses the same
+file wherever you run it:
+
+```bash
+export AZATHOTH_DATABASE="$HOME/azathoth-work/azathoth.db"
+```
+
+```powershell
+$env:AZATHOTH_DATABASE = "$HOME\azathoth-work\azathoth.db"
+```
+
+The file is created the first time a command needs it. To start over,
+delete it.
+
+A command that reads the database works without a provider key, so it makes a
+good first check:
+
+```bash
+azathoth workflow list
+```
+
+```powershell
+azathoth workflow list
+```
+
+## 6. Get the Examples
+
+The examples aren't part of the PyPI package. They live in the repository.
+Clone it next to your venv:
+
+```bash
+cd ~/azathoth-work
+git clone https://github.com/EldritchInc/azathoth.git
+```
+
+```powershell
+Set-Location ~/azathoth-work
+git clone https://github.com/EldritchInc/azathoth.git
+```
+
+If you don't have `git`, download the repository as a ZIP from
+[GitHub](https://github.com/EldritchInc/azathoth) (**Code** → **Download
+ZIP**) and unzip it into `azathoth-work`.
+
+The example commands assume you run them from inside the repository folder:
+
+```bash
+cd ~/azathoth-work/azathoth
+```
+
+```powershell
+Set-Location ~/azathoth-work/azathoth
+```
+
+## Each New Terminal
+
+A venv and an environment variable last only as long as the terminal window.
+In each new window, run:
+
+```bash
+cd ~/azathoth-work
+source .venv/bin/activate
+export AZATHOTH_DATABASE="$HOME/azathoth-work/azathoth.db"
+```
+
+```powershell
+Set-Location ~/azathoth-work
+.venv\Scripts\Activate.ps1
+$env:AZATHOTH_DATABASE = "$HOME\azathoth-work\azathoth.db"
+```
+
+## Upgrading, Leaving and Uninstalling
+
+Upgrade to the latest release:
+
+```bash
+python -m pip install --upgrade azathoth-ai
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai
+```
+
+To leave the venv without closing the terminal, run `deactivate`.
+
+To uninstall, deactivate and then delete the venv folder. Your database
+is a separate file and stays where it is.
+
+```bash
+deactivate
+rm -rf ~/azathoth-work/.venv
+```
+
+```powershell
+deactivate
+Remove-Item -Recurse -Force ~/azathoth-work/.venv
+```
+
+## Troubleshooting
+
+**`azathoth: command not found`**, or **`The term 'azathoth' is not
+recognized`**: the venv isn't active in this terminal. Activate it again (see
+[Each New Terminal](#each-new-terminal)).
+
+**`No module named azathoth`** from a child or loop workflow: the `python` on
+your `PATH` isn't the venv's. This usually means Azathoth was installed with
+`pipx` or `uv tool`, or the `azathoth` command was run by its full path without
+the venv being activated. Activate the venv and check step 4 again.
+
+**`requires a different Python`** from `pip`: the venv was made with a Python
+older than 3.11. Delete `.venv`, then create it again (step 2) with a newer
+Python.
+
+**PowerShell won't run `Activate.ps1`**: set the execution policy (see
+[Windows: allowing the activation script](#windows-allowing-the-activation-script)).
