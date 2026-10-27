@@ -1,6 +1,7 @@
 """Human-readable workflow production promotion rendering."""
 
 from azathoth.prompting import (
+    ContextPromptStrategySpec,
     FixedModelSelection,
     PromptStrategySpec,
 )
@@ -28,7 +29,10 @@ def render_workflow_promotion(
 
         if not isinstance(
             specification,
-            PromptStrategySpec,
+            (
+                PromptStrategySpec,
+                ContextPromptStrategySpec,
+            ),
         ):
             continue
 

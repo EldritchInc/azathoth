@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from azathoth.prompting import (
+    ContextPromptStrategySpec,
     FixedModelSelection,
     PromptStrategySpec,
 )
@@ -114,7 +115,10 @@ def _primary_models(
 
         if not isinstance(
             specification,
-            PromptStrategySpec,
+            (
+                PromptStrategySpec,
+                ContextPromptStrategySpec,
+            ),
         ):
             continue
 
