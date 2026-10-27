@@ -299,3 +299,7 @@ Windows PowerShell 5.1, which strips the inner quotes. Use PowerShell 7 (see
 **Requests fail with an authentication or payment error**: the key was
 revoked, mistyped, or has reached its credit limit. Check it on the
 [Keys](https://openrouter.ai/keys) page.
+
+## Next
+
+- [Examples Tour](examples.md): every example, in order.

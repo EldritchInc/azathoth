@@ -149,6 +149,28 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 .venv\Scripts\Activate.ps1
 ```
 
+### Windows: UTF-8 output
+
+Workflows produce text in any language, and Azathoth writes it as UTF-8.
+Windows terminals don't default to UTF-8. Without these two settings, saving
+a result with `>` can garble any character outside plain English, such as an
+accented letter, a curly quote or a dash:
+
+```powershell
+$env:PYTHONUTF8 = "1"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+```
+
+They last only for this window. To apply them in every new PowerShell window,
+add them to your PowerShell profile once:
+
+```powershell
+if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+Add-Content -Path $PROFILE -Value '$env:PYTHONUTF8 = "1"', '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()'
+```
+
+macOS terminals already use UTF-8.
+
 ## 3. Install Azathoth
 
 With the venv active:
@@ -277,6 +299,10 @@ Set-Location ~/azathoth-work
 $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\azathoth.db"
 ```
 
+On Windows, also apply the UTF-8 settings, unless your PowerShell profile
+already does (see
+[Windows: UTF-8 output](#windows-utf-8-output)).
+
 ## Upgrading, Leaving and Uninstalling
 
 Upgrade to the latest release:
@@ -322,9 +348,14 @@ Python.
 **`Value must be valid JSON`** for an `--input` value on Windows: you are in Windows
 PowerShell 5.1, which strips the inner quotes. Use PowerShell 7 (step 1).
 
+**Garbled characters in a saved result on Windows**, such as `â€"` where a
+dash should be: apply the UTF-8 settings (see
+[Windows: UTF-8 output](#windows-utf-8-output)), then run the command again.
+
 **PowerShell won't run `Activate.ps1`**: set the execution policy (see
 [Windows: allowing the activation script](#windows-allowing-the-activation-script)).
 
 ## Next
 
 - [Connecting OpenRouter](openrouter.md): a key, models and judges.
+- [Examples Tour](examples.md): every example, in order.

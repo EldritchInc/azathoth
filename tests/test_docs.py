@@ -16,6 +16,7 @@ TOP_LEVEL_DOCUMENTS = (
 USER_GUIDES = (
     "docs/install.md",
     "docs/openrouter.md",
+    "docs/examples.md",
 )
 
 FENCE = re.compile(r"^\s*```(?P<language>\S*)\s*$")
@@ -164,6 +165,65 @@ def relative_link_targets(
     return tuple(targets)
 
 
+def heading_anchor(
+    title: str,
+) -> str:
+    """Return the anchor GitHub generates for one heading title."""
+
+    plain = title.replace("`", "").strip().lower()
+
+    return re.sub(r"[^\w\- ]", "", plain).replace(" ", "-")
+
+
+def heading_anchors(
+    text: str,
+) -> frozenset[str]:
+    """Return every heading anchor in a Markdown document, numbering duplicates."""
+
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    inside = False
+
+    for line in text.splitlines():
+        if FENCE.match(line) is not None:
+            inside = not inside
+            continue
+
+        match = None if inside else HEADING.match(line)
+
+        if match is None:
+            continue
+
+        anchor = heading_anchor(match.group("title"))
+        count = seen.get(anchor, 0)
+        seen[anchor] = count + 1
+        anchors.add(anchor if count == 0 else f"{anchor}-{count}")
+
+    return frozenset(anchors)
+
+
+def anchored_link_targets(
+    text: str,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return the numbered relative links that name a heading, as path and anchor."""
+
+    targets: list[tuple[int, str, str]] = []
+
+    for number, line in prose_lines(text):
+        for match in LINK.finditer(line):
+            target = match.group("target")
+
+            if target.startswith(EXTERNAL_SCHEMES) or "#" not in target:
+                continue
+
+            path, anchor = target.split("#", 1)
+
+            if path == "" or path.endswith(".md"):
+                targets.append((number, path, anchor))
+
+    return tuple(targets)
+
+
 def test_fenced_blocks_report_opening_lines_languages_and_headings() -> None:
     text = (
         "## Setup\n```bash\n# not a heading\nls\n```\n\n"
@@ -218,6 +278,47 @@ def test_relative_links_resolve(
         for number, target in relative_link_targets(path.read_text(encoding="utf-8"))
         if not (path.parent / target).exists()
     ]
+
+    assert broken == []
+
+
+def test_heading_anchors_follow_github_rules() -> None:
+    text = (
+        "# Title\n## 6. Get the Examples\n### Windows: UTF-8 output\n"
+        "### Why not pipx or `uv tool`?\n## Next\n## Next\n```text\n# not\n```\n"
+    )
+
+    assert heading_anchors(text) == {
+        "title",
+        "6-get-the-examples",
+        "windows-utf-8-output",
+        "why-not-pipx-or-uv-tool",
+        "next",
+        "next-1",
+    }
+
+
+def test_anchored_link_targets_split_path_and_anchor() -> None:
+    text = "[a](install.md#next) [b](#local) [c](https://x.org/#y) [d](tool.json#z)\n"
+
+    assert anchored_link_targets(text) == ((1, "install.md", "next"), (1, "", "local"))
+
+
+@pytest.mark.parametrize("document", linked_documents())
+def test_heading_anchors_resolve(
+    document: str,
+) -> None:
+    path = PROJECT_ROOT / document
+    broken: list[str] = []
+
+    for number, target, anchor in anchored_link_targets(path.read_text(encoding="utf-8")):
+        linked = path if target == "" else path.parent / target
+
+        if not linked.is_file():
+            continue
+
+        if anchor not in heading_anchors(linked.read_text(encoding="utf-8")):
+            broken.append(f"{document}:{number}: {target}#{anchor}")
 
     assert broken == []
 
