@@ -1,0 +1,131 @@
+{
+  "id": "f1000000-0000-4000-8000-000000000060",
+  "name": "triage ticket",
+  "description": "Judge whole triaged tickets: the record's shape exactly, and the category, routing and reply by meaning.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000061",
+      "input": {
+        "subject": "Charged twice",
+        "body": "My card was charged twice for the March invoice. Please refund one.",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "A billing ticket. The reply explains the duplicate charge will be reviewed by the billing team, does not promise a refund, and says what happens next. It is approved and does not need a person.",
+        "value": {
+          "category": "billing",
+          "approved": true,
+          "needs_human": false
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "billing"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000062",
+      "input": {
+        "subject": "Everything is down",
+        "body": "None of our team can log in to the dashboard and our launch is today.",
+        "customer_tier": "premium"
+      },
+      "expected": {
+        "description": "A high-urgency ticket. The reply acknowledges the outage, gives concrete next steps without promising a fix date, and the ticket is flagged for a person.",
+        "value": {
+          "urgency": "high",
+          "needs_human": true
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "technical"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000063",
+      "input": {
+        "subject": "Office hours",
+        "body": "Are you open on public holidays?",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "A general question, routed to the generalist. The reply answers it or says who will, and it is approved.",
+        "value": {
+          "category": "other",
+          "approved": true
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "category": "other"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000064",
+      "input": {
+        "subject": "Locked out",
+        "body": "I reset my password but still cannot sign in.",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The triage record has every field, with valid values.",
+        "value": {
+          "type": "object",
+          "required": [
+            "category",
+            "urgency",
+            "summary",
+            "reply",
+            "approved",
+            "problems",
+            "needs_human"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "category": {
+              "enum": [
+                "billing",
+                "technical",
+                "account",
+                "other"
+              ]
+            },
+            "urgency": {
+              "enum": [
+                "low",
+                "normal",
+                "high"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reply": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approved": {
+              "type": "boolean"
+            },
+            "problems": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "needs_human": {
+              "type": "boolean"
+            }
+          }
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "category": "account"
+      }
+    }
+  ]
+}

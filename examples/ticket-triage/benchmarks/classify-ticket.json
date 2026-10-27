@@ -1,0 +1,104 @@
+{
+  "id": "f1000000-0000-4000-8000-000000000050",
+  "name": "classify ticket",
+  "description": "Judge the ticket classifier exactly against known categories.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000051",
+      "input": {
+        "subject": "Charged twice",
+        "body": "My card was charged twice for the March invoice.",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The ticket is classified as billing.",
+        "value": "billing",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "billing"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000052",
+      "input": {
+        "subject": "Downgrade my plan",
+        "body": "How do I move from Pro to the Starter plan at renewal?",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The ticket is classified as billing.",
+        "value": "billing",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "billing"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000053",
+      "input": {
+        "subject": "Export fails",
+        "body": "Every CSV export ends with error 500 since this morning.",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The ticket is classified as technical.",
+        "value": "technical",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "technical"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000054",
+      "input": {
+        "subject": "Webhook never arrives",
+        "body": "Our Slack integration stopped receiving webhooks.",
+        "customer_tier": "premium"
+      },
+      "expected": {
+        "description": "The ticket is classified as technical.",
+        "value": "technical",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "technical"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000055",
+      "input": {
+        "subject": "Locked out",
+        "body": "I reset my password but still cannot sign in.",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The ticket is classified as account.",
+        "value": "account",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "account"
+      }
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000056",
+      "input": {
+        "subject": "Office hours",
+        "body": "Are you open on public holidays?",
+        "customer_tier": "standard"
+      },
+      "expected": {
+        "description": "The ticket is classified as other.",
+        "value": "other",
+        "comparison": "exact"
+      },
+      "metadata": {
+        "category": "other"
+      }
+    }
+  ]
+}

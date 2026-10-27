@@ -1,0 +1,88 @@
+{
+  "metadata": {
+    "id": "f1000000-0000-4000-8000-000000000010",
+    "name": "classify ticket",
+    "description": "Classify one support ticket into billing, technical, account or other. The same classifier the triage workflow uses, on its own so it can be benchmarked exactly and optimized for cost.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000011",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000021",
+          "name": "Classify ticket",
+          "description": "Classify a support ticket's category and urgency, and summarize it.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You triage customer support tickets.\n\nThe ticket, as JSON:\n{ticket}\n\nClassify it. The category is exactly one of: billing (charges, refunds, invoices, plans), technical (errors, bugs, outages, integrations), account (signing in, passwords, profile, access, deletion) or other. The urgency is low, normal or high: high when the customer cannot work at all, is losing money, or reports a security problem. Reply with one JSON object and no other text:\n\n{{\"category\": \"billing\", \"urgency\": \"normal\", \"summary\": \"<one sentence>\"}}",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "category",
+          "path": [
+            "category"
+          ]
+        },
+        {
+          "name": "urgency",
+          "path": [
+            "urgency"
+          ]
+        },
+        {
+          "name": "summary",
+          "path": [
+            "summary"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "category"
+  }
+}

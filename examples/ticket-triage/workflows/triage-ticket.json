@@ -1,0 +1,599 @@
+{
+  "metadata": {
+    "id": "f1000000-0000-4000-8000-000000000030",
+    "name": "triage ticket",
+    "description": "Triage one support ticket: classify it, have the matching specialist draft a reply, check the reply against support policy, and flag the ticket for a person when the reply breaks policy or the ticket is urgent.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000031",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000021",
+          "name": "Classify ticket",
+          "description": "Classify a support ticket's category and urgency, and summarize it.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You triage customer support tickets.\n\nThe ticket, as JSON:\n{ticket}\n\nClassify it. The category is exactly one of: billing (charges, refunds, invoices, plans), technical (errors, bugs, outages, integrations), account (signing in, passwords, profile, access, deletion) or other. The urgency is low, normal or high: high when the customer cannot work at all, is losing money, or reports a security problem. Reply with one JSON object and no other text:\n\n{{\"category\": \"billing\", \"urgency\": \"normal\", \"summary\": \"<one sentence>\"}}",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "category",
+          "path": [
+            "category"
+          ]
+        },
+        {
+          "name": "urgency",
+          "path": [
+            "urgency"
+          ]
+        },
+        {
+          "name": "summary",
+          "path": [
+            "summary"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Classifying the ticket"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000032",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000042",
+          "name": "Draft billing reply",
+          "description": "Draft a reply as a billing specialist.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a billing specialist on the customer support team.\n\nThe ticket, as JSON:\n{ticket}\n\nTriage summary: {summary}\n\nWrite the reply to the customer. Explain the charge or the plan in plain terms, and route any refund request to the billing team. Be warm, specific and brief, and tell the customer exactly what happens next. Reply with the text of the reply only.",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "summary",
+              "input_name": "summary"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000031"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "summary"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "equal",
+          "expected": "billing"
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting a billing reply"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000033",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000043",
+          "name": "Draft technical reply",
+          "description": "Draft a reply as a technical support engineer.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a technical support engineer on the customer support team.\n\nThe ticket, as JSON:\n{ticket}\n\nTriage summary: {summary}\n\nWrite the reply to the customer. Give concrete troubleshooting steps, and ask only for the details needed to reproduce the problem. Be warm, specific and brief, and tell the customer exactly what happens next. Reply with the text of the reply only.",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "summary",
+              "input_name": "summary"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000031"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "summary"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "equal",
+          "expected": "technical"
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting a technical reply"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000034",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000044",
+          "name": "Draft account reply",
+          "description": "Draft a reply as an account specialist.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are an account specialist on the customer support team.\n\nThe ticket, as JSON:\n{ticket}\n\nTriage summary: {summary}\n\nWrite the reply to the customer. Explain how to regain or change access through the normal self-service steps. Be warm, specific and brief, and tell the customer exactly what happens next. Reply with the text of the reply only.",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "summary",
+              "input_name": "summary"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000031"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "summary"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "equal",
+          "expected": "account"
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting an account reply"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000035",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000045",
+          "name": "Draft general reply",
+          "description": "Draft a reply as a support generalist.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a support generalist on the customer support team.\n\nThe ticket, as JSON:\n{ticket}\n\nTriage summary: {summary}\n\nWrite the reply to the customer. Answer the question directly, or say who will. Be warm, specific and brief, and tell the customer exactly what happens next. Reply with the text of the reply only.",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "summary",
+              "input_name": "summary"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000031"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "summary"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "not_equal",
+          "expected": "billing"
+        },
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "not_equal",
+          "expected": "technical"
+        },
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          },
+          "operator": "not_equal",
+          "expected": "account"
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting a general reply"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000036",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000046",
+          "name": "Check reply policy",
+          "description": "List the support-policy problems in a drafted reply.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You review customer support replies against company policy before they are sent.\n\nThe policy:\n1. Never promise a refund or a credit. Say the billing team will review the request.\n2. Never ask for a password, a full card number or a one-time code.\n3. Never promise a date for a fix.\n4. Always tell the customer what happens next.\n\nThe ticket, as JSON:\n{ticket}\n\nThe reply:\n\n{draft}\n\nReply with one JSON object and no other text, listing every policy problem in the reply:\n\n{{\"approved\": true, \"problems\": []}}",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "draft",
+              "input_name": "draft"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000032",
+        "f1000000-0000-4000-8000-000000000033",
+        "f1000000-0000-4000-8000-000000000034",
+        "f1000000-0000-4000-8000-000000000035"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "draft",
+          "source": {
+            "name": "draft"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "approved",
+          "path": [
+            "approved"
+          ]
+        },
+        {
+          "name": "problems",
+          "path": [
+            "problems"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Checking the reply against policy"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000037",
+      "specification": {
+        "requirement": {
+          "name": "finalize_triage",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000031",
+        "f1000000-0000-4000-8000-000000000032",
+        "f1000000-0000-4000-8000-000000000033",
+        "f1000000-0000-4000-8000-000000000034",
+        "f1000000-0000-4000-8000-000000000035",
+        "f1000000-0000-4000-8000-000000000036"
+      ],
+      "inputs": [
+        {
+          "name": "category",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "category"
+          }
+        },
+        {
+          "name": "urgency",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "urgency"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000031",
+            "name": "summary"
+          }
+        },
+        {
+          "name": "draft",
+          "source": {
+            "name": "draft"
+          }
+        },
+        {
+          "name": "approved",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000036",
+            "name": "approved"
+          }
+        },
+        {
+          "name": "problems",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000036",
+            "name": "problems"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "triage",
+          "path": [
+            "triage"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "triage"
+  }
+}
