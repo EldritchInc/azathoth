@@ -1,0 +1,54 @@
+{
+  "definition": {
+    "id": "a2000000-0000-4000-8000-000000000001",
+    "name": "validate_workflow",
+    "description": "Validate a workflow document with Azathoth's own decoder, returning its canonical form when it is valid and the decoder's errors when it is not.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "document": {}
+        },
+        "required": [
+          "document"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "string"
+          },
+          "checked": {}
+        },
+        "required": [
+          "valid",
+          "errors",
+          "checked"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "a2000000-0000-4000-8000-000000000101",
+      "tool_id": "a2000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Validate one workflow document with Azathoth's own workflow model.\n\nThe tool always succeeds: an invalid document is a result, so the workflow\ncan hand the validator's errors to a repair step.\n\"\"\"\n\nimport json\nimport sys\n\nfrom pydantic import ValidationError\n\nfrom azathoth.workflows import WorkflowSpecification, encode_workflow_document\n\n\ndef describe(error):\n    location = \".\".join(str(part) for part in error[\"loc\"])\n    return f\"- {location or 'document'}: {error['msg']}\"\n\n\ndocument = json.load(sys.stdin)[\"document\"]\n\ntry:\n    specification = WorkflowSpecification.model_validate_json(json.dumps(document))\nexcept ValidationError as exc:\n    errors = \"\\n\".join(describe(error) for error in exc.errors(include_url=False))\n    result = {\"valid\": False, \"errors\": errors, \"checked\": document}\nelse:\n    checked = json.loads(encode_workflow_document(specification))\n    result = {\"valid\": True, \"errors\": \"\", \"checked\": checked}\n\njson.dump(result, sys.stdout)\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

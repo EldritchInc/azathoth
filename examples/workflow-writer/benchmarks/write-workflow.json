@@ -1,0 +1,135 @@
+{
+  "id": "a2000000-0000-4000-8000-000000000030",
+  "name": "write workflow",
+  "description": "Judge written workflows: that they pass the validator, and that they do what was asked.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "a2000000-0000-4000-8000-000000000031",
+      "input": "Classify a customer review as positive or negative.",
+      "expected": {
+        "description": "The written workflow is valid.",
+        "value": {
+          "type": "object",
+          "required": [
+            "valid",
+            "errors",
+            "workflow"
+          ],
+          "properties": {
+            "valid": {
+              "const": true
+            },
+            "errors": {
+              "const": ""
+            },
+            "workflow": {
+              "type": "object",
+              "required": [
+                "metadata",
+                "steps",
+                "result"
+              ],
+              "properties": {
+                "steps": {
+                  "type": "array",
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "kind": "valid"
+      }
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000032",
+      "input": "Translate the input text into French, then summarize the translation in one sentence.",
+      "expected": {
+        "description": "The written workflow is valid.",
+        "value": {
+          "type": "object",
+          "required": [
+            "valid",
+            "errors",
+            "workflow"
+          ],
+          "properties": {
+            "valid": {
+              "const": true
+            },
+            "errors": {
+              "const": ""
+            },
+            "workflow": {
+              "type": "object",
+              "required": [
+                "metadata",
+                "steps",
+                "result"
+              ],
+              "properties": {
+                "steps": {
+                  "type": "array",
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        },
+        "comparison": "schema"
+      },
+      "metadata": {
+        "kind": "valid"
+      }
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000033",
+      "input": "Classify a customer review as positive or negative.",
+      "expected": {
+        "description": "A valid workflow whose prompt step reads the workflow input and asks a model to classify a review as positive or negative, with that classification as the workflow's result.",
+        "value": {
+          "valid": true,
+          "workflow": {
+            "steps": [
+              {
+                "specification": {
+                  "template": {
+                    "text": "Classify this review as positive or negative: {review}"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "kind": "faithful"
+      }
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000034",
+      "input": "Translate the input text into French, then summarize the translation in one sentence.",
+      "expected": {
+        "description": "A valid workflow with a translation step that reads the workflow input, followed by a summary step that depends on it and reads the translation, with the summary as the workflow's result.",
+        "value": {
+          "valid": true,
+          "workflow": {
+            "steps": [
+              "translate the input into French",
+              "summarize the translation in one sentence"
+            ]
+          }
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "kind": "faithful"
+      }
+    }
+  ]
+}

@@ -1,0 +1,332 @@
+{
+  "metadata": {
+    "id": "a2000000-0000-4000-8000-000000000010",
+    "name": "write workflow",
+    "description": "Design an Azathoth workflow from a plain-English request, validate it with Azathoth's own decoder, and repair it once from the validator's errors when it is invalid.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a2000000-0000-4000-8000-000000000011",
+      "specification": {
+        "metadata": {
+          "id": "a2000000-0000-4000-8000-000000000021",
+          "name": "Draft workflow",
+          "description": "Design a workflow document from a plain-English request.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You design Azathoth workflows. A workflow is a graph of steps, written as one JSON document.\n\nHere is a complete, valid workflow document:\n\n{{\n  \"metadata\": {{\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"name\": \"summarize and count\",\n    \"description\": \"Summarize the input text, then count the summary's words.\",\n    \"version\": \"1.0.0\"\n  }},\n  \"steps\": [\n    {{\n      \"id\": \"00000000-0000-4000-8000-000000000011\",\n      \"specification\": {{\n        \"metadata\": {{\n          \"id\": \"00000000-0000-4000-8000-000000000021\",\n          \"name\": \"Summarize\",\n          \"description\": \"Summarize the input text in one paragraph.\",\n          \"version\": \"1.0.0\"\n        }},\n        \"template\": {{\n          \"text\": \"Summarize this text in one paragraph:\\n\\n{{text}}\",\n          \"bindings\": [\n            {{\n              \"variable_name\": \"text\",\n              \"input_name\": \"text\"\n            }}\n          ]\n        }},\n        \"model_selection\": {{\n          \"requirements\": {{\n            \"required_capabilities\": [],\n            \"required_input_modalities\": [\n              \"text\"\n            ],\n            \"required_output_modalities\": [\n              \"text\"\n            ],\n            \"minimum_context_window_tokens\": null,\n            \"minimum_output_tokens\": null,\n            \"maximum_input_usd_per_million_tokens\": null,\n            \"maximum_output_usd_per_million_tokens\": null,\n            \"require_known_pricing\": false\n          }}\n        }}\n      }},\n      \"depends_on\": [],\n      \"inputs\": [\n        {{\n          \"name\": \"text\",\n          \"source\": {{\n            \"event_type\": \"workflow.input.received\",\n            \"field_name\": \"input\"\n          }}\n        }}\n      ],\n      \"outputs\": [\n        {{\n          \"name\": \"summary\",\n          \"path\": []\n        }}\n      ],\n      \"conditions\": [],\n      \"retry_policy\": {{\n        \"max_attempts\": 1,\n        \"initial_delay_seconds\": 0.0,\n        \"backoff_multiplier\": 1.0,\n        \"maximum_delay_seconds\": null\n      }},\n      \"failure_policy\": \"fail_workflow\",\n      \"message\": \"Summarizing the text\"\n    }},\n    {{\n      \"id\": \"00000000-0000-4000-8000-000000000012\",\n      \"specification\": {{\n        \"requirement\": {{\n          \"name\": \"word_count\",\n          \"version\": \"1.0.0\",\n          \"runtime\": \"python\"\n        }}\n      }},\n      \"depends_on\": [\n        \"00000000-0000-4000-8000-000000000011\"\n      ],\n      \"inputs\": [\n        {{\n          \"name\": \"text\",\n          \"source\": {{\n            \"producer_step_id\": \"00000000-0000-4000-8000-000000000011\",\n            \"name\": \"summary\"\n          }}\n        }}\n      ],\n      \"outputs\": [\n        {{\n          \"name\": \"count\",\n          \"path\": [\n            \"count\"\n          ]\n        }}\n      ],\n      \"conditions\": [],\n      \"retry_policy\": {{\n        \"max_attempts\": 1,\n        \"initial_delay_seconds\": 0.0,\n        \"backoff_multiplier\": 1.0,\n        \"maximum_delay_seconds\": null\n      }},\n      \"failure_policy\": \"fail_workflow\"\n    }}\n  ],\n  \"result\": {{\n    \"name\": \"count\"\n  }}\n}}\n\nThe rules:\n- Every id is a UUID, and every id in the document is different.\n- A step's specification is either a prompt or a tool requirement. A prompt has metadata, a template with text and bindings, and a model_selection with requirements; it may add \"output_format\": \"json\" when later steps read fields of its reply. A tool requirement names a tool: {{\"requirement\": {{\"name\": \"<tool>\", \"version\": \"1.0.0\", \"runtime\": \"python\"}}}}.\n- The workflow's input reaches a step through the input source {{\"event_type\": \"workflow.input.received\", \"field_name\": \"input\"}}.\n- A prompt's {{name}} placeholders bind the step's own inputs: {{\"variable_name\": \"name\", \"input_name\": \"name\"}}. Every bound input must be declared in the step's inputs.\n- A step that reads another step's output lists that step in depends_on and names it as the source: {{\"producer_step_id\": \"<step id>\", \"name\": \"<output>\"}}.\n- An output reads a value out of the step's result by path; an empty path is the whole result.\n- The result names the output that is the workflow's answer.\n\nDesign a workflow for this request:\n\n{request}\n\nReply with the workflow document as one JSON object and no other text.",
+          "bindings": [
+            {
+              "variable_name": "request",
+              "input_name": "request"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "request",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "document",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Drafting the workflow"
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000014",
+      "specification": {
+        "requirement": {
+          "name": "validate_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "a2000000-0000-4000-8000-000000000013"
+      ],
+      "inputs": [
+        {
+          "name": "document",
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000013",
+            "name": "document"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "path": [
+            "valid"
+          ]
+        },
+        {
+          "name": "errors",
+          "path": [
+            "errors"
+          ]
+        },
+        {
+          "name": "checked",
+          "path": [
+            "checked"
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000012",
+            "name": "valid"
+          },
+          "operator": "equal",
+          "expected": false
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Validating the repaired workflow"
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000013",
+      "specification": {
+        "metadata": {
+          "id": "a2000000-0000-4000-8000-000000000022",
+          "name": "Repair workflow",
+          "description": "Fix a drafted workflow document so that it passes the validator.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You design Azathoth workflows. A workflow is a graph of steps, written as one JSON document.\n\nHere is a complete, valid workflow document:\n\n{{\n  \"metadata\": {{\n    \"id\": \"00000000-0000-4000-8000-000000000001\",\n    \"name\": \"summarize and count\",\n    \"description\": \"Summarize the input text, then count the summary's words.\",\n    \"version\": \"1.0.0\"\n  }},\n  \"steps\": [\n    {{\n      \"id\": \"00000000-0000-4000-8000-000000000011\",\n      \"specification\": {{\n        \"metadata\": {{\n          \"id\": \"00000000-0000-4000-8000-000000000021\",\n          \"name\": \"Summarize\",\n          \"description\": \"Summarize the input text in one paragraph.\",\n          \"version\": \"1.0.0\"\n        }},\n        \"template\": {{\n          \"text\": \"Summarize this text in one paragraph:\\n\\n{{text}}\",\n          \"bindings\": [\n            {{\n              \"variable_name\": \"text\",\n              \"input_name\": \"text\"\n            }}\n          ]\n        }},\n        \"model_selection\": {{\n          \"requirements\": {{\n            \"required_capabilities\": [],\n            \"required_input_modalities\": [\n              \"text\"\n            ],\n            \"required_output_modalities\": [\n              \"text\"\n            ],\n            \"minimum_context_window_tokens\": null,\n            \"minimum_output_tokens\": null,\n            \"maximum_input_usd_per_million_tokens\": null,\n            \"maximum_output_usd_per_million_tokens\": null,\n            \"require_known_pricing\": false\n          }}\n        }}\n      }},\n      \"depends_on\": [],\n      \"inputs\": [\n        {{\n          \"name\": \"text\",\n          \"source\": {{\n            \"event_type\": \"workflow.input.received\",\n            \"field_name\": \"input\"\n          }}\n        }}\n      ],\n      \"outputs\": [\n        {{\n          \"name\": \"summary\",\n          \"path\": []\n        }}\n      ],\n      \"conditions\": [],\n      \"retry_policy\": {{\n        \"max_attempts\": 1,\n        \"initial_delay_seconds\": 0.0,\n        \"backoff_multiplier\": 1.0,\n        \"maximum_delay_seconds\": null\n      }},\n      \"failure_policy\": \"fail_workflow\",\n      \"message\": \"Summarizing the text\"\n    }},\n    {{\n      \"id\": \"00000000-0000-4000-8000-000000000012\",\n      \"specification\": {{\n        \"requirement\": {{\n          \"name\": \"word_count\",\n          \"version\": \"1.0.0\",\n          \"runtime\": \"python\"\n        }}\n      }},\n      \"depends_on\": [\n        \"00000000-0000-4000-8000-000000000011\"\n      ],\n      \"inputs\": [\n        {{\n          \"name\": \"text\",\n          \"source\": {{\n            \"producer_step_id\": \"00000000-0000-4000-8000-000000000011\",\n            \"name\": \"summary\"\n          }}\n        }}\n      ],\n      \"outputs\": [\n        {{\n          \"name\": \"count\",\n          \"path\": [\n            \"count\"\n          ]\n        }}\n      ],\n      \"conditions\": [],\n      \"retry_policy\": {{\n        \"max_attempts\": 1,\n        \"initial_delay_seconds\": 0.0,\n        \"backoff_multiplier\": 1.0,\n        \"maximum_delay_seconds\": null\n      }},\n      \"failure_policy\": \"fail_workflow\"\n    }}\n  ],\n  \"result\": {{\n    \"name\": \"count\"\n  }}\n}}\n\nThe rules:\n- Every id is a UUID, and every id in the document is different.\n- A step's specification is either a prompt or a tool requirement. A prompt has metadata, a template with text and bindings, and a model_selection with requirements; it may add \"output_format\": \"json\" when later steps read fields of its reply. A tool requirement names a tool: {{\"requirement\": {{\"name\": \"<tool>\", \"version\": \"1.0.0\", \"runtime\": \"python\"}}}}.\n- The workflow's input reaches a step through the input source {{\"event_type\": \"workflow.input.received\", \"field_name\": \"input\"}}.\n- A prompt's {{name}} placeholders bind the step's own inputs: {{\"variable_name\": \"name\", \"input_name\": \"name\"}}. Every bound input must be declared in the step's inputs.\n- A step that reads another step's output lists that step in depends_on and names it as the source: {{\"producer_step_id\": \"<step id>\", \"name\": \"<output>\"}}.\n- An output reads a value out of the step's result by path; an empty path is the whole result.\n- The result names the output that is the workflow's answer.\n\nA draft written for this request:\n\n{request}\n\nwas rejected by the workflow validator.\n\nThe draft:\n\n{document}\n\nThe validator's errors:\n\n{errors}\n\nFix every error, keeping everything else about the draft. Reply with the corrected workflow document as one JSON object and no other text.",
+          "bindings": [
+            {
+              "variable_name": "request",
+              "input_name": "request"
+            },
+            {
+              "variable_name": "document",
+              "input_name": "document"
+            },
+            {
+              "variable_name": "errors",
+              "input_name": "errors"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "a2000000-0000-4000-8000-000000000011",
+        "a2000000-0000-4000-8000-000000000012"
+      ],
+      "inputs": [
+        {
+          "name": "request",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "document",
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000011",
+            "name": "document"
+          }
+        },
+        {
+          "name": "errors",
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000012",
+            "name": "errors"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "document",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000012",
+            "name": "valid"
+          },
+          "operator": "equal",
+          "expected": false
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Repairing the workflow"
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000012",
+      "specification": {
+        "requirement": {
+          "name": "validate_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "a2000000-0000-4000-8000-000000000011"
+      ],
+      "inputs": [
+        {
+          "name": "document",
+          "source": {
+            "producer_step_id": "a2000000-0000-4000-8000-000000000011",
+            "name": "document"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "path": [
+            "valid"
+          ]
+        },
+        {
+          "name": "errors",
+          "path": [
+            "errors"
+          ]
+        },
+        {
+          "name": "checked",
+          "path": [
+            "checked"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Validating the workflow"
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000015",
+      "specification": {
+        "requirement": {
+          "name": "finalize_workflow",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "a2000000-0000-4000-8000-000000000014",
+        "a2000000-0000-4000-8000-000000000012"
+      ],
+      "inputs": [
+        {
+          "name": "valid",
+          "source": {
+            "name": "valid"
+          }
+        },
+        {
+          "name": "errors",
+          "source": {
+            "name": "errors"
+          }
+        },
+        {
+          "name": "checked",
+          "source": {
+            "name": "checked"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "path": [
+            "result"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "result"
+  }
+}

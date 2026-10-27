@@ -1,0 +1,52 @@
+{
+  "definition": {
+    "id": "a2000000-0000-4000-8000-000000000002",
+    "name": "finalize_workflow",
+    "description": "Report the written workflow: whether it is valid, the validator's errors, and the workflow document.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "string"
+          },
+          "checked": {}
+        },
+        "required": [
+          "valid",
+          "errors",
+          "checked"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "a2000000-0000-4000-8000-000000000102",
+      "tool_id": "a2000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(valid, errors, checked):\n    return {\"result\": {\"valid\": valid, \"errors\": errors, \"workflow\": checked}}\n"
+    }
+  ],
+  "test_cases": []
+}
