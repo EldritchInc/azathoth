@@ -141,9 +141,8 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.0 requires Python 3.11 or newer and uses OpenRouter as its model
-provider. The guides cover macOS and Windows; the macOS commands also work on
-Linux.
+Azathoth 1.0 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and Windows,
+all tested in CI, with OpenRouter as its model provider.
 
 ## Support the Project
 

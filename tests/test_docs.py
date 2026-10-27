@@ -38,7 +38,7 @@ REPOSITORY_LINK = re.compile(
     r"(?P<path>[^#]*)(?:#(?P<anchor>.*))?$"
 )
 
-REMOVED_OPTIMIZE_FLAG = re.compile(r"workflow optimize[^\n]*--expected")
+REMOVED_OPTIMIZE_FLAG = re.compile(r"azathoth workflow optimize[^\n]*--expected")
 
 LINE_CONTINUATION = re.compile(r"[ \t]*[\\`]\n\s*")
 
@@ -254,7 +254,11 @@ def repository_link_targets(
 def removed_optimize_flag_uses(
     text: str,
 ) -> tuple[str, ...]:
-    """Return each `workflow optimize` command that still passes `--expected`."""
+    """Return each `azathoth workflow optimize` command that still passes `--expected`.
+
+    Prose that names the removed flag, such as "optimize takes no `--expected`",
+    is not a command and is not reported.
+    """
 
     joined = LINE_CONTINUATION.sub(" ", text)
 
@@ -407,9 +411,10 @@ def test_removed_optimize_flag_uses_follow_line_continuations() -> None:
         "azathoth workflow optimize <ID> \\\n    --expected '1'\n"
         "azathoth workflow optimize <ID> `\n    --benchmark <B>\n"
         "azathoth benchmark add-case <B> --expected '1'\n"
+        "Never show `workflow optimize` with the removed `--expected` flag.\n"
     )
 
-    assert removed_optimize_flag_uses(text) == ("workflow optimize <ID> --expected",)
+    assert removed_optimize_flag_uses(text) == ("azathoth workflow optimize <ID> --expected",)
 
 
 @pytest.mark.parametrize("document", command_documents())

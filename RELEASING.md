@@ -7,6 +7,9 @@ project metadata, then published to PyPI by the release workflow,
 Release artifacts must be reproducible from a clean checkout and must pass the
 same deterministic validation required during normal development.
 
+This document gives the steps. [Release Validation](docs/release-validation.md)
+defines what those steps must prove.
+
 ## Distribution Identity
 
 The public Python distribution is:
@@ -188,6 +191,119 @@ azathoth/py.typed
 The wheel filename uses the normalized distribution name, so `azathoth-ai`
 appears as `azathoth_ai`.
 
+## Pre-Release Examples Run
+
+The deterministic suite proves the examples against controlled models. This
+run proves them the way a new user meets them: from the built wheel, in a
+fresh venv outside the checkout, against real models, by following
+[Installing Azathoth](docs/install.md) and [Examples Tour](docs/examples.md).
+
+Run it on macOS after the release commit is merged to `main`, and before the
+TestPyPI trial. Run it in PowerShell 7 on Windows too whenever a Windows
+machine is available; the guides give every command for both.
+
+### 1. Build the wheel from `main`
+
+From the checkout, with the development venv active:
+
+```bash
+git switch main
+git pull
+rm -rf dist
+python -m build
+ls dist
+deactivate
+```
+
+### 2. Install it into a fresh venv
+
+Install the wheel into a venv outside the checkout, with a database of its
+own. Stay in the checkout afterwards: the example commands use its paths.
+
+```bash
+rm -rf ~/azathoth-release-check
+mkdir ~/azathoth-release-check
+python3 -m venv ~/azathoth-release-check/.venv
+source ~/azathoth-release-check/.venv/bin/activate
+python -m pip install dist/azathoth_ai-*.whl
+export AZATHOTH_DATABASE="$HOME/azathoth-release-check/examples.db"
+```
+
+Confirm that the command, the `python` on the `PATH` and the imported package
+all come from the fresh venv, not from the checkout:
+
+```bash
+azathoth --version
+command -v python
+python -c "import azathoth; print(azathoth.__file__)"
+```
+
+All three should point inside `~/azathoth-release-check/.venv`, and the
+version should be the release version.
+
+### 3. Run the provider-free examples
+
+With `OPENROUTER_API_KEY` unset in this terminal:
+
+```bash
+unset OPENROUTER_API_KEY
+
+azathoth tool import examples/tools/word-count.json
+azathoth tool import examples/tools/word-count-process.json
+azathoth tool import examples/tools/run-workflow.json
+azathoth tool import examples/tools/countdown-step.json
+azathoth tool import examples/tools/loop-workflow.json
+
+azathoth workflow import examples/workflows/redundant-word-count.json
+azathoth workflow import examples/workflows/word-count-messages.json
+azathoth workflow import examples/workflows/count-words-in-child.json
+azathoth workflow import examples/workflows/countdown.json
+azathoth workflow import examples/workflows/loop-countdown.json
+
+azathoth tool verify 55555555-5555-5555-5555-555555555555 --version 1.0.0
+
+azathoth workflow run a1000000-0000-4000-8000-000000000001 --input '"that is not dead which can eternal lie"' --output result
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000002
+azathoth workflow run a1000000-0000-4000-8000-000000000003 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000002", "input": "the old ones wait"}' --output result
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000004
+azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' --output result
+```
+
+The three runs must print exactly `8`, `4` and `[3, 2, 1]`, and the tool's
+test cases must pass. The child and loop runs prove that the process tools
+find the installed package through the venv's `python`.
+
+### 4. Run the model-backed examples
+
+Set the key (see [Connecting OpenRouter](docs/openrouter.md)), authorize
+models and add a judge. Then work through examples 2 and 5 to 7 of the
+[Examples Tour](docs/examples.md) in order: classify sentiment, ticket triage,
+workflow writer and code review. Each must complete:
+
+- sentiment answers `positive`, its benchmark runs, `optimize` reports a
+  winner with each step's model, and `invoke` returns
+  `{"result": "positive"}` after promotion;
+- triage returns a complete triage record;
+- the workflow writer returns `valid: true` for its sample request, and the
+  extracted workflow imports;
+- code review approves the pure rename with no findings;
+- each benchmark with semantic cases runs with the judge.
+
+The novel (example 8) is optional because of its cost. When it is run, a
+three-chapter book is enough.
+
+### 5. Clean up
+
+```bash
+deactivate
+rm -rf ~/azathoth-release-check
+```
+
+A failure in this run blocks the release, just as a failing test would. Fix
+it on a branch, merge, and run it again from step 1.
+
 ## Trial Release on TestPyPI
 
 Before the first release, and whenever the release workflow changes, publish
@@ -197,12 +313,32 @@ the release candidate to TestPyPI:
 2. in GitHub, open Actions → Release → Run workflow, and run it on `main`.
 
 A manual run builds and validates exactly as a tagged run does, then publishes
-to TestPyPI instead of PyPI. Confirm the result installs:
+to TestPyPI instead of PyPI.
+
+Then confirm that the published artifact installs and works. Use a fresh venv,
+not the one from the pre-release run, from inside the checkout:
 
 ```bash
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ azathoth-ai
+rm -rf ~/azathoth-testpypi-check
+python3 -m venv ~/azathoth-testpypi-check/.venv
+source ~/azathoth-testpypi-check/.venv/bin/activate
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "azathoth-ai==<version>"
+export AZATHOTH_DATABASE="$HOME/azathoth-testpypi-check/examples.db"
 azathoth --version
 ```
+
+Repeat step 3 of the [Pre-Release Examples Run](#pre-release-examples-run):
+the provider-free examples must print `8`, `4` and `[3, 2, 1]`. Then clean
+up:
+
+```bash
+deactivate
+rm -rf ~/azathoth-testpypi-check
+```
+
+`--extra-index-url` lets `pip` take Azathoth's dependencies from PyPI, because
+TestPyPI does not carry them. Pinning `==<version>` makes sure the trial
+version is what was installed.
 
 TestPyPI also never accepts the same version twice. A second trial of one
 version fails at the publishing step, after validation has already passed.
@@ -288,7 +424,10 @@ deterministic validation on every platform
 versioned release commit on main
   │
   ▼
-trial release on TestPyPI
+pre-release examples run from the built wheel
+  │
+  ▼
+trial release on TestPyPI, installed and run
   │
   ▼
 release tag

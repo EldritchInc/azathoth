@@ -1,33 +1,27 @@
 # Release Validation
 
-This document defines the OSS V1 release-validation contract.
+This document defines what must be true before a commit on `main` may be
+released. [Releasing](../RELEASING.md) gives the steps that check it and
+publish the release. This document is the contract those steps enforce.
 
 It answers one question:
 
-> What must be true before the repository can be considered ready to ship?
+> What must be true before this commit ships?
 
-Release validation is intentionally stricter than demonstrating that one
-feature works.
+A release must be:
 
-The release must prove that the documented system is internally consistent,
-deterministic under normal test conditions, installable through its supported
-development path, and operable through its public boundaries.
+- **internally consistent**: the code, the tests, the examples and the docs
+  agree;
+- **deterministic**: it passes with no network, no provider and no
+  credentials;
+- **installable**: the built wheel installs and runs from a clean environment
+  on every supported platform;
+- **operable**: a new user can follow the guides from a bare machine to a
+  promoted, invoked workflow.
 
-## Release Philosophy
+## What Release Hardening Finds
 
-Azathoth separates:
-
-```text
-feature completeness
-
-from
-
-release readiness
-```
-
-The OSS V1 feature surface is frozen during release hardening.
-
-Release validation should therefore find and correct:
+Release validation is for finding and fixing:
 
 - broken public journeys;
 - stale documentation;
@@ -36,606 +30,290 @@ Release validation should therefore find and correct:
 - missing lifecycle coverage;
 - type or lint regressions;
 - accidental nondeterminism;
-- and contradictions between documented and implemented architecture.
+- contradictions between documented and implemented architecture.
 
-It should not become an excuse to introduce unrelated capabilities.
+It is not a reason to add unrelated capabilities.
 
-## Required Deterministic Gate
+## 1. The Deterministic Gate
 
-A release candidate must pass the complete deterministic repository gate:
+The complete repository gate must pass on the commit being released:
 
 ```bash
 make check
 ```
 
-Individual components can also be run directly:
+That runs `ruff check`, `ruff format --check`, strict `mypy` over
+`src/azathoth` and `tests`, and the full `pytest` suite. Windows has no
+`make`; [Releasing](../RELEASING.md#deterministic-validation) lists the same
+commands for PowerShell.
 
-```bash
-ruff format --check src tests
-ruff check src tests
-mypy src
-pytest
-```
+Continuous integration (`.github/workflows/ci.yml`) runs lint, formatting
+and types once. It runs the test suite on Linux, macOS and Windows, with
+Python 3.11, 3.12 and 3.13. All nine test jobs must be green.
 
-When preparing changes locally, formatting may be applied with:
+The deterministic gate must never require:
 
-```bash
-ruff format src tests
-```
+- network access;
+- OpenRouter availability;
+- provider credentials;
+- paid model execution;
+- mutable external service state.
 
-The release branch itself should already be formatted before validation.
+Provider behavior in normal tests comes from controlled implementations or
+mocked transports. A green repository then means a green Azathoth, not an
+external API that happened to cooperate.
 
-## What the Deterministic Gate Means
+## 2. The Distribution
 
-Normal release validation must not require:
+The release is the built wheel, not the checkout. The release workflow
+(`.github/workflows/release.yml`) must:
 
-```text
-network access
+- build the source distribution and the wheel once;
+- require a tag to be exactly `v` plus the version in `pyproject.toml`;
+- install the wheel into a clean environment outside the checkout;
+- require `azathoth --version` to print `azathoth <version>` and
+  `azathoth --help` to succeed;
+- publish exactly those files, without rebuilding them.
 
-OpenRouter availability
+The packaging tests (`tests/test_package.py` and
+`tests/test_distribution_artifact.py`) must also pass. They prove:
 
-provider credentials
+- the distribution name, version agreement, Python support, dependencies,
+  license, URLs, README and entry point;
+- that the wheel ships `py.typed`;
+- that the wheel installs into a separate environment and runs outside the
+  repository;
+- that provider-free inspection works from the installed artifact.
 
-paid model execution
+## 3. The Documentation
 
-mutable external service state
-```
+The docs are part of the release. The docs tests (`tests/test_docs.py`) must
+pass. They prove:
 
-Provider behavior used by normal automated tests should remain deterministic
-through controlled implementations or mocked transports.
+- every relative link, and every link into this repository on GitHub,
+  resolves, including its heading anchor;
+- every bash command in a user guide has a PowerShell equivalent, apart from
+  sections that name one platform;
+- no document shows `workflow optimize` with the removed `--expected` flag.
 
-This ensures that:
-
-```text
-green repository
-```
-
-means:
-
-```text
-green Azathoth implementation
-```
-
-rather than:
-
-```text
-an external API happened to cooperate
-```
-
-## Live OpenRouter Verification
-
-Live provider verification exists as a separate opt-in layer.
-
-It can be enabled with:
-
-```bash
-export AZATHOTH_RUN_LIVE_OPENROUTER_TESTS=1
-export OPENROUTER_API_KEY='YOUR_OPENROUTER_API_KEY'
-```
-
-Some live tests require:
-
-```bash
-export OPENROUTER_TEST_MODEL='<provider-native-model-id>'
-```
-
-and multi-model verification may require:
-
-```bash
-export OPENROUTER_TEST_MODELS='<model-a>,<model-b>'
-```
-
-These tests verify real integration behavior such as:
-
-- OpenRouter language-model execution;
-- current model discovery;
-- durable provider observation;
-- workflow execution against a live model; and
-- multi-model registry execution.
-
-They may consume API credits.
-
-They may also be affected by:
-
-- provider downtime;
-- provider model changes;
-- alias resolution;
-- rate limits;
-- external latency; and
-- provider response drift.
-
-Therefore live verification is not part of the deterministic `make check`
-contract.
-
-A release may intentionally perform it as additional confidence before
-publication.
-
-## Documentation Validation
-
-Before release, confirm the root project story matches the implementation.
-
-Review:
+The tests can't judge accuracy. Before a release, review that each of these
+describes the implemented behavior:
 
 ```text
 README.md
+docs/install.md
+docs/openrouter.md
 docs/getting-started.md
-CONTRIBUTING.md
+docs/examples.md
+docs/concepts.md
 docs/release-validation.md
+CONTRIBUTING.md
+RELEASING.md
+examples/**/README.md
+src/azathoth/*/README.md
 ```
 
-Then review subsystem documentation:
+Documentation must not describe a planned capability as implemented, or
+removed architecture as current. When the code and a document disagree, the
+code is right and the document is the bug.
 
-```text
-src/azathoth/cli/README.md
-src/azathoth/context/README.md
-src/azathoth/evaluation/README.md
-src/azathoth/execution/README.md
-src/azathoth/goals/README.md
-src/azathoth/optimization/README.md
-src/azathoth/prompting/README.md
-src/azathoth/providers/README.md
-src/azathoth/runtime/README.md
-src/azathoth/strategies/README.md
-src/azathoth/tools/README.md
-src/azathoth/workflows/README.md
-```
+## 4. The Examples
 
-Documentation must not describe a planned capability as implemented.
+Every checked-in example must:
 
-Documentation must also not describe removed intermediate architecture as
-current behavior.
+- decode into Azathoth's workflow, tool or benchmark models, exactly as
+  `import` would;
+- be covered end to end by the deterministic suite under `tests/examples/`,
+  with controlled models where it needs them. The canonical
+  `simple-prompt.json` must also match its canonical encoding exactly.
 
-## Architecture Validation
+They must also work for a real user, on a real machine, from the built wheel.
+Before the TestPyPI trial, run the pre-release examples check in
+[Releasing](../RELEASING.md#pre-release-examples-run) on macOS:
 
-The release should preserve these V1 invariants.
+- install the locally built wheel into a fresh venv outside the checkout,
+  following [Installing Azathoth](install.md);
+- run every example in [Examples Tour](examples.md) against a fresh database.
+
+The provider-free examples (word count, child workflow, loop) must print
+exactly their documented results. The model-backed examples must complete
+with the documented shape of result. A Windows run in PowerShell 7 is
+recommended whenever a Windows machine is available.
+
+After the TestPyPI trial, install from TestPyPI into another fresh venv and
+repeat the provider-free examples.
+
+## 5. Architecture Invariants
+
+The release must preserve these separations.
 
 ### Workflow identity
 
 ```text
-WorkflowSpecification
-    durable intent
-
-WorkflowCandidate
-    executable realization
-
-WorkflowRun
-    empirical evidence
+WorkflowSpecification   durable intent
+WorkflowCandidate       executable realization
+WorkflowRun             empirical evidence
 ```
 
-These identities must not be collapsed.
-
-### Model ontology
+### Models
 
 ```text
-ProviderModel
-    current provider truth
-
-ProviderModelObservation
-    historical observation
-
-ModelCatalog
-    current normalized metadata
-
-ModelPortfolio
-    organizational authorization
-
-LanguageModelRegistry
-    executable implementations
+ProviderModel              current provider truth
+ProviderModelObservation   historical observation
+ModelCatalog               current normalized metadata
+ModelPortfolio             organizational authorization
+LanguageModelRegistry      executable implementations
 ```
 
-Availability, history, authorization, metadata, and execution remain separate.
+Availability, history, authorization, metadata and execution stay separate.
 
-### Production ontology
+### Production
 
 ```text
-WorkflowProductionState
-    current execution authority
-
-WorkflowProductionRevision
-    immutable audit history
-
-ProductionInvocation
-    external call identity
-
-WorkflowRun
-    execution evidence
+WorkflowProductionState      current execution authority
+WorkflowProductionRevision   immutable audit history
+ProductionInvocation         external call identity
+WorkflowRun                  execution evidence
 ```
 
-Production invocation must execute current production state.
+Production invocation executes current production state. It never infers
+authority from the newest revision.
 
-It must not infer authority from the newest revision.
-
-### Optimization authority
+### Optimization
 
 ```text
-optimization
-    proposes and evaluates candidates
-
-promotion
-    changes production
+optimization   proposes and evaluates candidates, and reports the winner's models
+promotion      changes production
 ```
 
-Optimization must not silently deploy.
+Optimization must never deploy, and never change the configured workflow.
 
 ### Persistence
 
-Repositories should store domain state.
+Repositories store domain state. They must not become hidden orchestration or
+provider-policy layers.
 
-They must not become hidden orchestration or provider-policy layers.
+## 6. Public Boundaries
 
-## Public CLI Validation
+### The command surface
 
-Confirm the installed CLI exposes the expected V1 command families:
+The installed CLI exposes these command families: `workflow`, `run`,
+`experiment`, `invocation`, `model`, `judge`, `tool`, `goal` and `benchmark`.
+[The CLI reference](../src/azathoth/cli/README.md) documents each.
 
-```text
-azathoth
-│
-├── workflow
-│   ├── import
-│   ├── list
-│   ├── show
-│   ├── run
-│   ├── optimize
-│   ├── promote
-│   └── invoke
-│
-└── model
-    ├── list
-    ├── show
-    ├── authorize
-    ├── deauthorize
-    └── portfolio
-```
-
-Check:
-
-```bash
-azathoth --help
-azathoth workflow --help
-azathoth model --help
-```
-
-Help and version commands should not require runtime bootstrap, a database, or
+`--help` and `--version` work without a database, runtime bootstrap or
 provider credentials.
 
-## Canonical Workflow Example
+### Provider-free use
 
-The release contains:
-
-```text
-examples/workflows/simple-prompt.json
-```
-
-This file must remain valid canonical workflow serialization.
-
-The test suite should prove:
-
-```text
-decode(example)
-    =
-expected WorkflowSpecification
-```
-
-and:
-
-```text
-encode(expected WorkflowSpecification)
-    =
-example
-```
-
-A user-visible example that has drifted from the actual serialization contract
-is a release failure.
-
-## Provider-Free Fresh-User Boundary
-
-The following journey must remain provider-independent:
+Importing, listing and showing workflows, tools and benchmarks, and running
+workflows built only from tools, need no `OPENROUTER_API_KEY`:
 
 ```bash
-azathoth workflow import \
-    examples/workflows/simple-prompt.json
-
+azathoth tool import examples/tools/word-count.json
+azathoth tool import examples/tools/word-count-process.json
+azathoth workflow import examples/workflows/redundant-word-count.json
 azathoth workflow list
-
-azathoth workflow show \
-    11111111-1111-1111-1111-111111111111
+azathoth workflow run a1000000-0000-4000-8000-000000000001 --input '"that is not dead which can eternal lie"' --output result
 ```
 
-It must not require:
+The run prints `8`.
+
+### Models
+
+Authorization is durable and survives runtime reconstruction. Deauthorization
+removes authorization without pretending the provider model has stopped
+existing. A model that isn't currently available can't be newly authorized.
+Deauthorization is refused while production depends on the model, or while
+it is a judge.
+
+### Configured execution
+
+`workflow run` executes the configured specification through candidate
+generation. It never executes production state.
+
+### Optimization
+
+`workflow optimize` searches candidates empirically against a benchmark,
+whose cases carry their own expected outcomes, and against latency and cost
+targets. It takes no expected value of its own. It must not modify
+`WorkflowProductionState` or the configured specification.
+
+### Promotion
+
+`workflow promote` materializes the configured candidate into
+`WorkflowProductionState`, with each prompt step on an exact model, and
+records a `WorkflowProductionRevision` describing the same behavior.
+
+### Production invocation
+
+`workflow invoke` executes current production state and persists the
+`ProductionInvocation`, its `WorkflowRun` and the association between them.
+An undeployed workflow fails explicitly. It never falls back to the
+configured workflow.
+
+### Reconstruction
+
+Durable state survives a new process: workflows and their revisions, tools,
+benchmarks, the portfolio, judges, provider observations, production state
+and revisions, runs, experiments and invocations. A runtime is a
+process-local snapshot. Objects built from it don't change when durable state
+changes later.
+
+### Secrets
+
+Provider credentials are process-local configuration. They never appear in
+durable documents, configuration representations or serialized output.
+
+### Failure semantics
+
+A successful command exits 0 and writes its result to standard output. An
+expected command or domain failure exits nonzero and writes its message to
+standard error.
+
+## 7. The Acceptance Test
+
+`tests/test_oss_v1_release_lifecycle.py` proves, deterministically, that the
+major pieces still work together:
 
 ```text
-OPENROUTER_API_KEY
+configuration ──► availability ──► authorization ──► configured run
+      ──► optimization ──► promotion ──► production invocation ──► durable evidence
 ```
 
-This proves users can ingest and inspect durable workflow intent before
-configuring execution.
+It must not use the live OpenRouter service, and it doesn't replace the
+subsystem tests.
 
-## Model Operator Boundary
+## 8. Optional Live Verification
 
-With current provider state configured, the operator lifecycle must preserve:
-
-```text
-current model
-    │
-    ▼
-authorize
-    │
-    ▼
-durable ModelPortfolio
-    │
-    ▼
-runtime reconstruction
-    │
-    ▼
-authorization remains visible
-```
-
-Deauthorization must remove authorization without pretending the provider model
-ceased to exist.
-
-A model that is no longer currently available must not be newly authorized
-merely because it was previously known.
-
-## Configured Execution Boundary
-
-`workflow run` must continue to mean:
-
-```text
-configured WorkflowSpecification
-        │
-        ▼
-runtime candidate generation
-        │
-        ▼
-WorkflowCandidate
-        │
-        ▼
-WorkflowRun
-```
-
-It must not silently execute active production state.
-
-## Optimization Boundary
-
-`workflow optimize` must continue to perform empirical candidate search using
-explicit expected output and scoring targets.
-
-It must not modify:
-
-```text
-WorkflowProductionState
-```
-
-as a side effect.
-
-## Promotion Boundary
-
-`workflow promote` must explicitly materialize a configured candidate into:
-
-```text
-WorkflowProductionState
-```
-
-and record:
-
-```text
-WorkflowProductionRevision
-```
-
-Promotion state and revision should describe the same promoted behavior while
-retaining their different authority semantics.
-
-## Production Invocation Boundary
-
-`workflow invoke` must execute:
-
-```text
-runtime.production_state(workflow_id)
-```
-
-and persist:
-
-```text
-ProductionInvocation
-
-WorkflowRun
-
-ProductionInvocationRun association
-```
-
-An undeployed workflow must fail explicitly.
-
-It must not silently execute configured workflow behavior.
-
-## Runtime Reconstruction
-
-Release validation should continue to prove that durable configuration survives
-process/runtime reconstruction.
-
-Examples include:
-
-- workflow specifications;
-- model portfolio authorization;
-- provider observations;
-- tool definitions and implementations;
-- production state;
-- production revisions;
-- workflow runs;
-- and production invocation evidence.
-
-Runtime reconstruction should create a new process-local composition snapshot.
-
-Previously constructed runtime objects should not mutate because durable state
-changed afterward.
-
-## Secrets
-
-Provider credentials are process-local configuration.
-
-They must not become part of durable workflow documents.
-
-Tests should continue to ensure secret values are not exposed through normal
-configuration representation or serialization.
-
-## Failure Semantics
-
-The public CLI should continue to distinguish success from expected failure
-through process status.
-
-General expectations are:
-
-```text
-successful command
-    exit 0
-
-expected command/domain failure
-    nonzero exit
-```
-
-Operator-facing failures should be emitted to standard error.
-
-Successful results should be emitted to standard output.
-
-## Release Acceptance Test
-
-The repository should contain one focused deterministic acceptance test that
-proves the public V1 lifecycle across the major boundaries.
-
-That test should not attempt to duplicate every subsystem test.
-
-Its purpose is to answer:
-
-> Can the major pieces of the documented OSS V1 lifecycle still work together?
-
-The acceptance path should cover, with deterministic provider behavior:
-
-```text
-workflow configuration
-        │
-        ▼
-model availability
-        │
-        ▼
-model authorization
-        │
-        ▼
-configured execution
-        │
-        ▼
-empirical optimization
-        │
-        ▼
-explicit promotion
-        │
-        ▼
-production invocation
-        │
-        ▼
-durable evidence
-```
-
-This acceptance test remains part of the deterministic test suite.
-
-It must not use the live OpenRouter service.
+Live OpenRouter tests are an opt-in layer on top of a green deterministic
+gate, never a substitute for one. [Releasing](../RELEASING.md#optional-live-verification)
+shows how to enable them. They may consume credits, and they can be affected
+by provider downtime, model changes, rate limits and latency.
 
 ## Release Candidate Checklist
 
-A release candidate is ready for final review when all of the following are
-true:
-
 ```text
-[ ] repository formatting is clean
-
-[ ] linting passes
-
-[ ] mypy passes
-
-[ ] deterministic pytest suite passes
-
-[ ] make check passes
-
-[ ] canonical workflow example round-trips
-
-[ ] installed CLI help/version work
-
-[ ] provider-free import/list/show journey works
-
-[ ] model authorization survives reconstruction
-
-[ ] configured workflow execution works
-
-[ ] empirical optimization works
-
-[ ] optimization does not promote
-
-[ ] explicit promotion persists production state
-
-[ ] promotion records immutable revision history
-
-[ ] production invocation uses active state
-
-[ ] production invocation persists durable evidence
-
-[ ] undeployed production invocation fails explicitly
-
-[ ] root documentation matches implemented behavior
-
-[ ] subsystem documentation matches implemented behavior
-
-[ ] public examples match current serialization
-
-[ ] no provider credentials are committed
-
-[ ] optional live-provider verification is handled separately
+[ ] make check passes locally
+[ ] CI is green: quality, plus tests on 3 platforms x 3 Python versions
+[ ] packaging tests pass
+[ ] docs tests pass, and the documents above were reviewed
+[ ] pyproject.toml and src/azathoth/__init__.py declare the release version
+[ ] the pre-release examples run passed on macOS from the locally built wheel
+[ ] the TestPyPI trial published, installed and passed the provider-free examples
+[ ] no credentials are committed
+[ ] live verification, if done, was done after the deterministic gate
 ```
-
-## Optional Pre-Release Live Check
-
-When desired, perform live OpenRouter verification only after the deterministic
-release candidate is green.
-
-Conceptually:
-
-```text
-deterministic release gate
-        │
-        ▼
-green
-        │
-        ▼
-optional live provider verification
-```
-
-Never reverse those responsibilities.
-
-Live provider success cannot compensate for a failing deterministic gate.
 
 ## What Release Ready Means
 
-For OSS V1, release ready means:
-
 ```text
-the existing architecture is understandable
-
-the documented public journey works
-
-the deterministic repository is green
-
+the documented journeys work, on macOS and Windows, from the published wheel
+the deterministic repository is green on every supported platform
 durable boundaries survive reconstruction
-
-production authority remains explicit
-
-optimization remains empirical
-
+production changes only through promotion
+optimization stays empirical and reports what it found
 provider integration is independently verifiable
 ```
 
-It does not mean every future convenience feature exists.
-
-That distinction protects the V1 feature freeze.
-
-## Central Release Rule
-
-A release should make one claim confidently:
-
-> The behavior Azathoth documents is the behavior Azathoth actually ships.
+It does not mean every future convenience exists.
