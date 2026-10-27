@@ -1,915 +1,335 @@
 # Getting Started
 
-This guide walks through Azathoth's OSS V1 lifecycle from a fresh development
-checkout to an active production workflow.
-
-By the end, you will have:
+This guide takes one workflow from a JSON file to production. On the way, it
+uses every stage of Azathoth's lifecycle:
 
 ```text
-installed Azathoth
-      │
-      ▼
-imported a workflow
-      │
-      ▼
-inspected provider models
-      │
-      ▼
-authorized models
-      │
-      ▼
-executed configured behavior
-      │
-      ▼
-run empirical optimization
-      │
-      ▼
-promoted the workflow
-      │
-      ▼
-invoked active production
+import ──► run ──► benchmark ──► optimize ──► pin the winner ──► promote ──► invoke
 ```
 
-The guide uses the canonical checked-in workflow:
+The workflow is `examples/workflows/classify-sentiment.json`, one prompt step
+that labels text `positive` or `negative`. It is small and cheap to run, and
+it is complete.
 
-```text
-examples/workflows/simple-prompt.json
-```
+Notice what you won't do along the way: write code. A workflow is a document
+that composes steps, prompts, model requirements and tools. Azathoth runs it,
+measures it against a benchmark, finds cheaper or faster models that still
+pass, and deploys only what you deliberately promote. Code belongs in tools,
+and this workflow needs none.
 
-That file is not pseudocode.
+Each command is shown for the macOS Terminal and for Windows PowerShell 7.
 
-The test suite verifies that it exactly matches Azathoth's canonical
-`WorkflowSpecification` serialization.
+## Before You Start
 
-## 1. Create a Development Environment
+You need:
 
-From the repository root:
+- Azathoth installed in an active venv, with the repository cloned and your
+  terminal inside it (see [Installing Azathoth](install.md));
+- an OpenRouter key in `OPENROUTER_API_KEY` (see
+  [Connecting OpenRouter](openrouter.md)).
+
+Use a database of its own for this guide, so you can delete it afterwards:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
+export AZATHOTH_DATABASE="$HOME/azathoth-work/getting-started.db"
 ```
 
-Confirm the installed application is available:
+```powershell
+$env:AZATHOTH_DATABASE = "$HOME\azathoth-work\getting-started.db"
+```
+
+## 1. Import the Workflow
 
 ```bash
-azathoth --version
-```
-
-and inspect the command surface:
-
-```bash
-azathoth --help
-```
-
-The installed application also supports:
-
-```bash
-python -m azathoth.cli
-```
-
-## 2. Use an Isolated Database
-
-Azathoth's CLI stores durable application state in SQLite.
-
-For this walkthrough, create an isolated temporary directory:
-
-```bash
-export AZATHOTH_QUICKSTART_DIR="$(mktemp -d)"
-export AZATHOTH_DATABASE="$AZATHOTH_QUICKSTART_DIR/azathoth.db"
-```
-
-Confirm the value:
-
-```bash
-printf '%s\n' "$AZATHOTH_DATABASE"
-```
-
-This keeps the walkthrough separate from any existing Azathoth configuration.
-
-The CLI uses:
-
-```text
-AZATHOTH_DATABASE
-```
-
-to select durable application storage.
-
-If the variable is not set, Azathoth uses:
-
-```text
-azathoth.db
-```
-
-in the current working directory.
-
-## 3. Import the Canonical Workflow
-
-Import the checked-in example:
-
-```bash
-azathoth workflow import \
-    examples/workflows/simple-prompt.json
-```
-
-The expected confirmation is:
-
-```text
-Imported workflow 11111111-1111-1111-1111-111111111111.
-```
-
-At this point:
-
-```text
-JSON document
-      │
-      ▼
-domain validation
-      │
-      ▼
-WorkflowSpecification
-      │
-      ▼
-SQLite
-```
-
-No workflow has executed.
-
-No model has been selected.
-
-Nothing has been promoted to production.
-
-Import is a durable configuration operation.
-
-## 4. Inspect the Workflow
-
-List configured workflows:
-
-```bash
+azathoth workflow import examples/workflows/classify-sentiment.json
 azathoth workflow list
 ```
 
-The canonical example appears as:
-
-```text
-11111111-1111-1111-1111-111111111111  1.0.0  simple prompt
+```powershell
+azathoth workflow import examples/workflows/classify-sentiment.json
+azathoth workflow list
 ```
 
-Inspect it:
+Import saves the workflow as revision 1. Importing a changed document later
+adds revision 2, and so on. Nothing is ever overwritten, and
+`azathoth workflow history` lists every revision.
+
+Look at what you imported:
 
 ```bash
-azathoth workflow show \
-    11111111-1111-1111-1111-111111111111
+azathoth workflow show 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-The example contains one prompt-backed step.
-
-Its durable intent is approximately:
-
-```text
-Workflow
-    simple prompt
-        │
-        ▼
-Prompt Strategy
-    answer request
-        │
-        ▼
-Prompt
-    "Answer the request concisely."
-        │
-        ▼
-PortfolioModelSelection
+```powershell
+azathoth workflow show 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-The example uses default text model requirements.
+The step's prompt has a `{text}` placeholder, filled from the workflow's
+input. The step doesn't name a model. It states requirements instead: text in,
+text out. Importing and inspecting need no provider key.
 
-It does not hard-code one provider model.
+## 2. Authorize Models
 
-Import, list, and show require no provider credentials.
-
-That is deliberate:
-
-```text
-durable workflow inspection
-        ≠
-runtime model execution
-```
-
-## 5. Configure OpenRouter
-
-Prompt-backed execution requires current provider state and executable model
-implementations.
-
-Azathoth OSS V1 provides OpenRouter integration.
-
-Export an OpenRouter API key into the current shell:
+Azathoth chooses a model for each step from the models you have authorized.
+Find a few in OpenRouter's current list and authorize them. Authorize your
+everyday default first, because a step uses the first authorized model that
+meets its requirements:
 
 ```bash
-export OPENROUTER_API_KEY='YOUR_OPENROUTER_API_KEY'
-```
-
-The key is process-local runtime configuration.
-
-It is not persisted inside the workflow.
-
-```text
-WorkflowSpecification
-    durable intent
-
-OPENROUTER_API_KEY
-    process-local provider credential
-```
-
-Do not place the key in the workflow JSON document.
-
-## 6. Inspect Current Provider Models
-
-With OpenRouter configured:
-
-```bash
-azathoth model list
-```
-
-Azathoth synchronizes current provider model state and renders entries as:
-
-```text
-MODEL_IDENTIFIER  DISPLAY_NAME
-```
-
-Model identifiers are provider-qualified.
-
-For OpenRouter they have the form:
-
-```text
-openrouter/<PROVIDER_NATIVE_MODEL_IDENTIFIER>
-```
-
-For example, if OpenRouter exposes a native model identifier such as:
-
-```text
-anthropic/some-model
-```
-
-Azathoth identifies it as:
-
-```text
-openrouter/anthropic/some-model
-```
-
-Use the identifiers printed by your own `model list` output rather than copying
-an identifier from this guide.
-
-Provider catalogs change over time.
-
-## 7. Inspect a Model
-
-Choose an identifier returned by:
-
-```bash
-azathoth model list
-```
-
-Then inspect it:
-
-```bash
-azathoth model show <MODEL_IDENTIFIER>
-```
-
-The CLI renders provider-neutral metadata including information such as:
-
-```text
-ID
-Provider
-Model
-Name
-Input Modalities
-Output Modalities
-Capabilities
-Context Window
-Maximum Output
-Pricing
-```
-
-The exact metadata available depends on current provider state.
-
-## 8. Authorize a Model
-
-Current provider availability and organizational authorization are separate.
-
-Before a portfolio-selected workflow can use a model, authorize a currently
-available model:
-
-```bash
-azathoth model authorize <MODEL_IDENTIFIER>
-```
-
-On success:
-
-```text
-Authorized model <MODEL_IDENTIFIER>.
-```
-
-Inspect the durable portfolio:
-
-```bash
+azathoth model list | grep -i <vendor>
+azathoth model authorize openrouter/<vendor>/<default-model>
+azathoth model authorize openrouter/<vendor>/<cheaper-model>
 azathoth model portfolio
 ```
 
-The authorized identifier should now be listed.
-
-The distinction is:
-
-```text
-azathoth model list
-        │
-        ▼
-what providers currently expose
-
-
-azathoth model portfolio
-        │
-        ▼
-what this Azathoth installation authorizes
-```
-
-Authorization does not create provider availability.
-
-A model must currently exist before it can be newly authorized.
-
-## 9. Optionally Authorize Multiple Models
-
-Azathoth's model-substitution optimizer becomes more interesting when multiple
-compatible models are available for empirical comparison.
-
-You may authorize additional text-capable models from `model list`:
-
-```bash
-azathoth model authorize <SECOND_MODEL_IDENTIFIER>
-azathoth model authorize <THIRD_MODEL_IDENTIFIER>
-```
-
-Then inspect the portfolio:
-
-```bash
+```powershell
+azathoth model list | Select-String -Pattern <vendor>
+azathoth model authorize openrouter/<vendor>/<default-model>
+azathoth model authorize openrouter/<vendor>/<cheaper-model>
 azathoth model portfolio
 ```
 
-This is optional for basic workflow execution.
+Authorize at least two models. The optimizer in step 5 compares models, so
+it needs alternatives, ideally cheaper than your default.
 
-At least one compatible current, authorized, executable model is required for
-the canonical portfolio-selected prompt workflow.
-
-## 10. Run the Configured Workflow
-
-Execute the configured workflow:
+## 3. Run It
 
 ```bash
-azathoth workflow run \
-    11111111-1111-1111-1111-111111111111
+azathoth workflow run 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"I love this keyboard."' --output text
 ```
 
-This follows the configured execution path:
-
-```text
-WorkflowSpecification
-        │
-        ▼
-runtime candidate generation
-        │
-        ▼
-WorkflowCandidate
-        │
-        ▼
-WorkflowRunner
-        │
-        ▼
-WorkflowRun
+```powershell
+azathoth workflow run 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"I love this keyboard."' --output text
 ```
 
-The CLI renders recorded execution evidence.
+The report shows the run's ID and status. For the step, it shows the provider
+and model used, the tokens, the latency, the estimated cost and the output,
+`positive`. `--output result` prints just the answer instead.
 
-A successful prompt-backed step may include:
+`--input` takes JSON, so a string needs its own double quotes inside the
+single quotes.
 
-```text
-Strategy
-Provider
-Model
-Prompt Tokens
-Completion Tokens
-Total Tokens
-Latency
-Estimated Cost
-Output
-```
-
-The exact language-model response is not predetermined.
-
-This is a live provider-backed workflow.
-
-Record the output if you want to use it as the expected value in the next
-section.
-
-### `run` Is Not Production Invocation
-
-This command:
+Every run is saved. List them, or look at one again:
 
 ```bash
-azathoth workflow run <WORKFLOW_ID>
+azathoth workflow runs 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth run show <RUN_ID>
 ```
 
-executes the currently configured workflow.
-
-It does not require the workflow to be deployed.
-
-It does not execute `WorkflowProductionState`.
-
-```text
-workflow run
-    configured execution
+```powershell
+azathoth workflow runs 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth run show <RUN_ID>
 ```
 
-Production execution uses a different command later in this guide.
+## 4. Measure It With a Benchmark
 
-## 11. Run an Empirical Optimization Session
+One good answer proves little. A benchmark is a set of cases, each with an
+input and an expected outcome, and it says what "correct" means for this
+workflow. `examples/benchmarks/classify-sentiment.json` has five cases:
 
-Azathoth exposes empirical optimization through:
+- two **exact** cases, which demand the bare lowercase label;
+- two **normalized** cases, which accept any letter case and surrounding
+  whitespace;
+- one **schema** case, which checks the answer's form rather than its
+  judgment.
 
 ```bash
-azathoth workflow optimize <WORKFLOW_ID> \
-    --expected '<JSON>' \
-    --target-latency <SECONDS> \
-    --target-cost <USD>
+azathoth benchmark import examples/benchmarks/classify-sentiment.json
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-For example, if the output you want to treat as expected behavior is the JSON
-string:
-
-```text
-"example response"
+```powershell
+azathoth benchmark import examples/benchmarks/classify-sentiment.json
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-you could run:
+The report shows how many cases passed, with latency and cost.
+
+Benchmarks grow from real use. When a run gets something wrong, mark it bad
+and record the correct output. Then `benchmark add-case --from-run` turns it
+into a new case, and every future candidate is judged against it:
 
 ```bash
-azathoth workflow optimize \
-    11111111-1111-1111-1111-111111111111 \
-    --expected '"example response"' \
-    --target-latency 5 \
-    --target-cost 0.01
+azathoth run feedback <RUN_ID> --bad --reason "Sarcasm is negative." --corrected-output '"negative"'
+azathoth benchmark add-case 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --from-run <RUN_ID> --comparison exact
 ```
 
-The quoting matters.
+```powershell
+azathoth run feedback <RUN_ID> --bad --reason "Sarcasm is negative." --corrected-output '"negative"'
+azathoth benchmark add-case 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --from-run <RUN_ID> --comparison exact
+```
 
-`--expected` is parsed as JSON.
+`benchmark add-case` also takes `--expected '<JSON>'` to state the expected
+value directly instead of taking it from the run's corrected output.
 
-Therefore:
+## 5. Optimize It
 
 ```bash
---expected '"example response"'
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
 ```
 
-means a JSON string, while:
+```powershell
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
+```
+
+The optimizer builds candidate versions of the workflow. Each candidate tries
+an authorized model that is strictly cheaper than the current one and still
+meets the step's requirements. It runs every candidate against every
+benchmark case, then scores them:
+
+- **quality**: how many cases passed;
+- **reliability**: how many runs succeeded;
+- **latency**, against `--target-latency`, in seconds;
+- **cost**, against `--target-cost`, in US dollars per run.
+
+The benchmark defines what correct means, so `optimize` takes no expected
+value of its own.
+
+For each generation, the report names the **winner**. It lists every step of
+the winning candidate, with its step ID and the model it ran on, then the
+winner's scores. `--generations <COUNT>` searches further. The evidence is
+saved:
 
 ```bash
---expected '{"status":"success"}'
+azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth experiment show <EXPERIMENT_ID>
 ```
 
-means a JSON object.
-
-Invalid JSON is rejected.
-
-### Multiple Generations
-
-The default optimization generation count is:
-
-```text
-1
+```powershell
+azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth experiment show <EXPERIMENT_ID>
 ```
 
-To request more:
+Optimizing never changes production, and it never changes your workflow.
+What happens next is your decision.
+
+## 6. Pin the Winning Models
+
+To deploy what the optimizer found, make it the workflow's configuration:
+pin each prompt step to the model the winner used for that step. Then the
+workflow you promote is exactly the one that was measured.
+
+Export the current revision to a file:
 
 ```bash
-azathoth workflow optimize \
-    11111111-1111-1111-1111-111111111111 \
-    --expected '"example response"' \
-    --target-latency 5 \
-    --target-cost 0.01 \
-    --generations 3
+azathoth workflow export 5e2e0b6a-3c1d-4b7e-9f20-000000000001 > classify-sentiment-pinned.json
 ```
 
-### What Optimization Does
-
-The CLI constructs:
-
-```text
-ExpectedOutcome
-    exact comparison
-
-WorkflowScoringPolicy
-    target latency
-    target cost
+```powershell
+azathoth workflow export 5e2e0b6a-3c1d-4b7e-9f20-000000000001 > classify-sentiment-pinned.json
 ```
 
-and runs the configured workflow through the empirical optimization lifecycle.
+Open the file in a text editor. For each step the winner listed, find that
+step's `model_selection`, which currently holds `requirements`:
 
-Conceptually:
-
-```text
-configured workflow
-       │
-       ▼
-candidate generation
-       │
-       ▼
-execution
-       │
-       ▼
-exact evaluation
-       │
-       ▼
-workflow scoring
-       │
-       ▼
-ranking
-       │
-       ▼
-optimizer
-       │
-       ▼
-next candidate generation
-```
-
-If the portfolio contains eligible models with comparable pricing, the
-model-substitution optimizer may generate strictly cheaper legal alternatives.
-
-Those alternatives are not automatically considered better.
-
-They must be executed and evaluated.
-
-### Optimization Does Not Deploy
-
-This is a critical V1 boundary:
-
-```text
-workflow optimize
-        ≠
-workflow promote
-```
-
-Running optimization does not change active production state.
-
-Even if an empirical candidate wins, production remains unchanged until an
-explicit promotion occurs.
-
-## 12. Promote the Configured Workflow
-
-Promote the configured workflow explicitly:
-
-```bash
-azathoth workflow promote \
-    11111111-1111-1111-1111-111111111111
-```
-
-Promotion performs:
-
-```text
-configured WorkflowSpecification
-        │
-        ▼
-candidate generation
-        │
-        ▼
-WorkflowCandidate
-        │
-        ▼
-explicit promotion
-        │
-        ├── WorkflowProductionState
-        └── WorkflowProductionRevision
-```
-
-For portfolio-selected prompt steps, the generated candidate's chosen model is
-materialized into fixed production model intent.
-
-The promotion output includes the workflow ID, revision ID, and production model
-selection.
-
-### State Versus Revision
-
-Promotion creates two distinct artifacts.
-
-```text
-WorkflowProductionState
-    current production execution authority
-
-WorkflowProductionRevision
-    immutable audit history
-```
-
-A revision does not become production authority merely because it is the newest
-revision.
-
-Production executes current state.
-
-## 13. Invoke Production
-
-The workflow is now eligible for production invocation.
-
-Invoke it with:
-
-```bash
-azathoth workflow invoke \
-    11111111-1111-1111-1111-111111111111 \
-    --input '{"request":"hello from production"}'
-```
-
-The input must be valid JSON.
-
-Production invocation creates an immutable initial context event containing:
-
-```text
-{
-    "input": <caller JSON>
+```json
+"model_selection": {
+  "requirements": {
+    "required_capabilities": [],
+    "required_input_modalities": ["text"],
+    "...": "..."
+  }
 }
 ```
 
-and records a durable `ProductionInvocation`.
+Replace it with the winner's model for that step. Split the model identifier
+at its first `/`: `openrouter` is the provider, and the rest is the model:
 
-The path is:
-
-```text
-caller JSON
-    │
-    ▼
-ProductionInvocation
-    │
-    ▼
-WorkflowProductionState
-    │
-    ▼
-WorkflowRun
-    │
-    ▼
-ProductionInvocationResult
+```json
+"model_selection": {
+  "provider": "openrouter",
+  "model": "<vendor>/<model>"
+}
 ```
 
-Successful output includes:
-
-```text
-Invocation ID
-Status: succeeded
-Result
-```
-
-### A Note About the Canonical Example Input
-
-The checked-in `simple-prompt.json` example intentionally has no workflow input
-bindings.
-
-Its prompt is:
-
-```text
-Answer the request concisely.
-```
-
-Therefore the production input supplied above is still correctly recorded in
-the production invocation context, but this particular example does not bind
-that value into the prompt.
-
-That is intentional.
-
-The example exists primarily to demonstrate the smallest complete durable
-prompt-backed workflow.
-
-Real applications can define context and workflow bindings that consume runtime
-input.
-
-## 14. Understand `run` Versus `invoke`
-
-You have now exercised both execution paths.
-
-```text
-azathoth workflow run
-        │
-        ▼
-configured WorkflowSpecification
-        │
-        ▼
-generate current candidate
-        │
-        ▼
-WorkflowRun
-```
-
-versus:
-
-```text
-azathoth workflow invoke
-        │
-        ▼
-WorkflowProductionState
-        │
-        ▼
-production execution
-        │
-        ▼
-ProductionInvocation
-        +
-WorkflowRun
-```
-
-The difference is authority.
-
-`run` asks:
-
-> What does the currently configured workflow do in this runtime?
-
-`invoke` asks:
-
-> What does production currently say this workflow should do?
-
-## 15. Understand `optimize` Versus `promote`
-
-The second critical distinction is:
-
-```text
-workflow optimize
-        │
-        ▼
-empirical evidence and candidate search
-```
-
-versus:
-
-```text
-workflow promote
-        │
-        ▼
-explicit production state transition
-```
-
-Azathoth does not let optimization silently deploy itself.
-
-That separation is central to the OSS V1 architecture.
-
-## 16. Inspect the Resulting Durable Lifecycle
-
-After completing the guide, your temporary database contains durable state
-representing multiple parts of the lifecycle:
-
-```text
-WorkflowSpecification
-        │
-        ├── configured workflow
-        │
-        ▼
-ModelPortfolio
-        │
-        ├── organizational authorization
-        │
-        ▼
-WorkflowProductionState
-        │
-        ├── current production authority
-        │
-        ▼
-WorkflowProductionRevision
-        │
-        ├── deployment audit history
-        │
-        ▼
-ProductionInvocation
-        │
-        ├── external production call
-        │
-        ▼
-WorkflowRun
-        │
-        └── empirical execution evidence
-```
-
-These are not interchangeable records.
-
-Each represents a different architectural fact.
-
-## 17. Clean Up
-
-Because this walkthrough used a temporary database directory, remove it when
-finished:
+Save the file, import it as the next revision, and benchmark it again to
+confirm it performs as the winner did:
 
 ```bash
-rm -rf "$AZATHOTH_QUICKSTART_DIR"
-unset AZATHOTH_QUICKSTART_DIR
+azathoth workflow import classify-sentiment-pinned.json
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+```powershell
+azathoth workflow import classify-sentiment-pinned.json
+azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+If the winner used the same model your workflow already runs on, there is
+nothing to pin. Skip to step 7.
+
+## 7. Promote It
+
+Promotion turns the current configuration into production. It binds every
+prompt step to one exact model and records a production revision:
+
+```bash
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+```powershell
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+`workflow production` shows what is deployed now, including each prompt
+step's primary model. Production keeps running on those models until you
+promote again, even if you change the configuration or the portfolio in the
+meantime. `workflow revisions` lists every promotion.
+
+## 8. Invoke Production
+
+```bash
+azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"The checkout flow was painless."' --output result
+```
+
+```powershell
+azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"The checkout flow was painless."' --output result
+```
+
+It prints `{"result": "positive"}`.
+
+`run` and `invoke` differ in what they execute:
+
+- `workflow run` executes the configuration as it is now. Use it while you
+  build and test.
+- `workflow invoke` executes what was promoted. Callers, other workflows
+  included, use invoke.
+
+Every invocation is recorded, with a link to the run it produced:
+
+```bash
+azathoth workflow invocations 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth invocation show <INVOCATION_ID>
+```
+
+```powershell
+azathoth workflow invocations 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth invocation show <INVOCATION_ID>
+```
+
+## 9. Clean Up
+
+Everything this guide created lives in its database. Delete it, and remove
+the pinned document:
+
+```bash
+rm "$AZATHOTH_DATABASE" classify-sentiment-pinned.json
 unset AZATHOTH_DATABASE
 ```
 
-Optionally remove the OpenRouter key from the current shell:
-
-```bash
-unset OPENROUTER_API_KEY
+```powershell
+Remove-Item $env:AZATHOTH_DATABASE, classify-sentiment-pinned.json
+Remove-Item Env:AZATHOTH_DATABASE
 ```
-
-## What You Just Proved
-
-In one CLI journey, you exercised Azathoth's major OSS V1 boundaries:
-
-```text
-portable workflow definition
-        │
-        ▼
-durable configuration
-        │
-        ▼
-current provider discovery
-        │
-        ▼
-organizational model authorization
-        │
-        ▼
-runtime candidate generation
-        │
-        ▼
-configured execution
-        │
-        ▼
-empirical optimization
-        │
-        ▼
-explicit production promotion
-        │
-        ▼
-active production invocation
-        │
-        ▼
-durable execution evidence
-```
-
-More importantly, you exercised the separations that make those operations
-trustworthy:
-
-```text
-availability
-    ≠
-authorization
-
-configuration
-    ≠
-execution
-
-execution
-    ≠
-evaluation
-
-optimization
-    ≠
-promotion
-
-promotion revision
-    ≠
-production authority
-
-configured execution
-    ≠
-production invocation
-```
-
-That is the core Azathoth V1 operating model.
 
 ## Where to Go Next
 
-For the complete system architecture, return to:
-
-```text
-README.md
-```
-
-For individual subsystem details:
-
-```text
-src/azathoth/cli/README.md
-src/azathoth/context/README.md
-src/azathoth/evaluation/README.md
-src/azathoth/execution/README.md
-src/azathoth/goals/README.md
-src/azathoth/optimization/README.md
-src/azathoth/prompting/README.md
-src/azathoth/providers/README.md
-src/azathoth/runtime/README.md
-src/azathoth/strategies/README.md
-src/azathoth/tools/README.md
-src/azathoth/workflows/README.md
-```
-
-Architectural decisions are recorded under:
-
-```text
-docs/adrs/
-```
-
-Run the complete development quality gate with:
-
-```bash
-make check
-```
+- [Examples Tour](examples.md): child workflows, loops, routing, a workflow
+  that writes workflows, concurrent code review, and a novel.
+- [Concepts](concepts.md): how Azathoth is put together, and why.
+- [CLI reference](../src/azathoth/cli/README.md): every command and its
+  output.
+- [Architecture decisions](adrs/README.md): why Azathoth works the way it
+  does.
