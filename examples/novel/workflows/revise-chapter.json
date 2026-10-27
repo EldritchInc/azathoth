@@ -1,0 +1,284 @@
+{
+  "metadata": {
+    "id": "e1000000-0000-4000-8000-000000000010",
+    "name": "revise chapter",
+    "description": "One pass of the inner editing loop: apply the editor's requests to a chapter, then check which requests the revision still does not satisfy.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000011",
+      "specification": {
+        "requirement": {
+          "name": "echo_json",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chapter",
+          "path": [
+            "value",
+            "state",
+            "chapter"
+          ]
+        },
+        {
+          "name": "requests",
+          "path": [
+            "value",
+            "state",
+            "requests"
+          ]
+        },
+        {
+          "name": "context",
+          "path": [
+            "value",
+            "state",
+            "context"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000012",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000022",
+          "name": "Apply editorial requests",
+          "description": "Rewrite a chapter so that it addresses every editorial request.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a novelist revising one chapter of a novel after an editor's review.\n\nWhat the story is about, as JSON:\n{context}\n\nThe chapter:\n\n{chapter}\n\nThe editor's requests, as a JSON list:\n{requests}\n\nRewrite the chapter so that every request is fully addressed. Keep everything the requests do not ask you to change: the events, the characters' names, the point of view and the voice. Reply with the complete revised chapter and nothing else: no title line, no notes, no commentary.",
+          "bindings": [
+            {
+              "variable_name": "context",
+              "input_name": "context"
+            },
+            {
+              "variable_name": "chapter",
+              "input_name": "chapter"
+            },
+            {
+              "variable_name": "requests",
+              "input_name": "requests"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000011"
+      ],
+      "inputs": [
+        {
+          "name": "context",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000011",
+            "name": "context"
+          }
+        },
+        {
+          "name": "chapter",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000011",
+            "name": "chapter"
+          }
+        },
+        {
+          "name": "requests",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000011",
+            "name": "requests"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "revised",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Applying the editor's requests"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000013",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000023",
+          "name": "Verify editorial requests",
+          "description": "List the editorial requests a revised chapter does not yet satisfy.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a meticulous editor checking whether a revision did what you asked.\n\nYour requests, as a JSON list:\n{requests}\n\nThe revised chapter:\n\n{revised}\n\nFor each request, decide whether the revised chapter fully addresses it. Reply with one JSON object and no other text, listing every request that is not yet fully addressed, worded as a request for the next revision:\n\n{{\"unmet\": [\"<request>\"]}}\n\nReply with {{\"unmet\": []}} when every request is fully addressed.",
+          "bindings": [
+            {
+              "variable_name": "requests",
+              "input_name": "requests"
+            },
+            {
+              "variable_name": "revised",
+              "input_name": "revised"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000011",
+        "e1000000-0000-4000-8000-000000000012"
+      ],
+      "inputs": [
+        {
+          "name": "requests",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000011",
+            "name": "requests"
+          }
+        },
+        {
+          "name": "revised",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000012",
+            "name": "revised"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "unmet",
+          "path": [
+            "unmet"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Checking the revision against the requests"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000014",
+      "specification": {
+        "requirement": {
+          "name": "pack_revision",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000011",
+        "e1000000-0000-4000-8000-000000000012",
+        "e1000000-0000-4000-8000-000000000013"
+      ],
+      "inputs": [
+        {
+          "name": "revised",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000012",
+            "name": "revised"
+          }
+        },
+        {
+          "name": "unmet",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000013",
+            "name": "unmet"
+          }
+        },
+        {
+          "name": "context",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000011",
+            "name": "context"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "next",
+          "path": [
+            "next"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "next"
+  }
+}

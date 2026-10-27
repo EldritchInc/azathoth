@@ -1,0 +1,61 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000007",
+    "name": "prepare_chapters",
+    "description": "Cap the chapter outline at the requested length (at most 18) and prepare the chapter loop's settings and starting state. Holds the example write-chapter workflow ID as a default, which the request may override.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object"
+          },
+          "story": {
+            "type": "object"
+          },
+          "outline": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "request",
+          "story",
+          "outline"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object"
+          },
+          "outline": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "settings",
+          "outline"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000107",
+      "tool_id": "e1000000-0000-4000-8000-000000000007",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "CHAPTER_WORKFLOW_ID = \"e1000000-0000-4000-8000-000000000040\"\nMAXIMUM_CHAPTERS = 18\nCHAPTER_TIMEOUT = 1800\n\n\ndef run(request, story, outline):\n    limit = min(max(int(request.get(\"max_chapters\", MAXIMUM_CHAPTERS)), 1), MAXIMUM_CHAPTERS)\n    chapters = outline[:limit]\n    config = {}\n\n    for key in (\"revision_workflow_id\", \"max_revisions\"):\n        if key in request:\n            config[key] = request[key]\n\n    return {\n        \"settings\": {\n            \"workflow_id\": request.get(\"chapter_workflow_id\", CHAPTER_WORKFLOW_ID),\n            \"max_iterations\": len(chapters),\n            \"child_timeout_seconds\": request.get(\"chapter_timeout_seconds\", CHAPTER_TIMEOUT),\n            \"state\": {\n                \"config\": config,\n                \"story\": story,\n                \"outline\": chapters,\n                \"notes\": \"No chapters have been written yet.\",\n                \"chapter_count\": 0,\n            },\n        },\n        \"outline\": chapters,\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

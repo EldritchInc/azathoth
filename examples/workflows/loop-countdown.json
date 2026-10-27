@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000005",
+    "name": "loop a countdown",
+    "description": "Invoke the deployed countdown workflow repeatedly until it reaches zero. The caller names the child, the iteration limit and the starting state.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000051",
+      "specification": {
+        "requirement": {
+          "name": "loop_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "items",
+          "path": [
+            "items"
+          ]
+        },
+        {
+          "name": "iterations",
+          "path": [
+            "iterations"
+          ]
+        },
+        {
+          "name": "completed",
+          "path": [
+            "completed"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Looping the child workflow"
+    }
+  ],
+  "result": {
+    "name": "items"
+  }
+}

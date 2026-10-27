@@ -1,0 +1,50 @@
+{
+  "definition": {
+    "id": "d2000000-0000-4000-8000-000000000002",
+    "name": "finalize_review",
+    "description": "Report the code review: its verdict, merged findings, severity counts and the lead reviewer's summary.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "review": {
+            "type": "object"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review",
+          "summary"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "d2000000-0000-4000-8000-0000000000a2",
+      "tool_id": "d2000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(review, summary):\n    return {\"result\": dict(review, summary=summary)}\n"
+    }
+  ],
+  "test_cases": []
+}

@@ -3,9 +3,12 @@
 from dataclasses import replace
 
 from azathoth.prompting import (
+    ContextPromptStrategy,
+    ContextPromptStrategySpec,
     PortfolioModelSelection,
     PromptStrategy,
     PromptStrategySpec,
+    generate_context_prompt_candidates,
     generate_prompt_candidates,
 )
 from azathoth.providers import (
@@ -32,7 +35,11 @@ def generate_model_substitutions(
     portfolio: ModelPortfolio,
     registry: LanguageModelRegistry,
 ) -> tuple[WorkflowCandidate, ...]:
-    """Generate one-step substitutions using strictly cheaper eligible models."""
+    """Generate one-step substitutions using strictly cheaper eligible models.
+
+    Both fixed-prompt and context-prompt steps whose selection is a portfolio
+    selection are substituted, one step at a time, in workflow step order.
+    """
 
     if specification.metadata.id != candidate.metadata.id:
         raise ValueError("Workflow specification and candidate must share an identifier.")
@@ -46,7 +53,7 @@ def generate_model_substitutions(
 
         if not isinstance(
             prompt_specification,
-            PromptStrategySpec,
+            (PromptStrategySpec, ContextPromptStrategySpec),
         ):
             continue
 
@@ -62,11 +69,13 @@ def generate_model_substitutions(
 
         strategy = candidate_step.strategy
 
-        if not isinstance(
-            strategy,
-            PromptStrategy,
-        ):
-            raise ValueError("Prompt-backed workflow steps must use PromptStrategy candidates.")
+        if isinstance(prompt_specification, PromptStrategySpec):
+            if not isinstance(strategy, PromptStrategy):
+                raise ValueError("Prompt-backed workflow steps must use PromptStrategy candidates.")
+        elif not isinstance(strategy, ContextPromptStrategy):
+            raise ValueError(
+                "Context-prompt workflow steps must use ContextPromptStrategy candidates."
+            )
 
         model_binding = strategy.model_binding
 
@@ -117,7 +126,7 @@ def generate_model_substitutions(
 
 def _replace_prompt_step_model(
     *,
-    specification: PromptStrategySpec,
+    specification: PromptStrategySpec | ContextPromptStrategySpec,
     candidate: WorkflowCandidate,
     candidate_step: WorkflowCandidateStep,
     target_model: ModelMetadata,
@@ -128,19 +137,32 @@ def _replace_prompt_step_model(
     Every other candidate attribute, including the declared result, is kept.
     """
 
-    generated = generate_prompt_candidates(
-        specification=specification,
-        catalog=ModelCatalog(models=(target_model,)),
-        registry=registry,
-        portfolio=ModelPortfolio(
-            entries=(
-                ModelPortfolioEntry(
-                    provider=target_model.provider,
-                    model=target_model.model,
-                ),
-            )
-        ),
+    catalog = ModelCatalog(models=(target_model,))
+    portfolio = ModelPortfolio(
+        entries=(
+            ModelPortfolioEntry(
+                provider=target_model.provider,
+                model=target_model.model,
+            ),
+        )
     )
+
+    generated: tuple[PromptStrategy, ...] | tuple[ContextPromptStrategy, ...]
+
+    if isinstance(specification, PromptStrategySpec):
+        generated = generate_prompt_candidates(
+            specification=specification,
+            catalog=catalog,
+            registry=registry,
+            portfolio=portfolio,
+        )
+    else:
+        generated = generate_context_prompt_candidates(
+            specification=specification,
+            catalog=catalog,
+            registry=registry,
+            portfolio=portfolio,
+        )
 
     if len(generated) != 1:
         raise RuntimeError(

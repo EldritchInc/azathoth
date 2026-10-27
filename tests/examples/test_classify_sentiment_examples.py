@@ -13,7 +13,7 @@ from azathoth.evaluation import (
     decode_benchmark_document,
     encode_benchmark_document,
 )
-from azathoth.prompting import ContextPromptStrategySpec
+from azathoth.prompting import ContextPromptStrategySpec, PromptBinding
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -164,9 +164,13 @@ def test_sentiment_workflow_example_binds_the_workflow_input() -> None:
     bindings = read_specification().template.bindings
 
     assert len(bindings) == 1
-    assert bindings[0].variable_name == "text"
-    assert bindings[0].event_type == WORKFLOW_INPUT_EVENT_TYPE
-    assert bindings[0].field_name == "input"
+
+    binding = bindings[0]
+
+    assert isinstance(binding, PromptBinding)
+    assert binding.variable_name == "text"
+    assert binding.event_type == WORKFLOW_INPUT_EVENT_TYPE
+    assert binding.field_name == "input"
 
 
 def test_sentiment_benchmark_example_is_canonical() -> None:

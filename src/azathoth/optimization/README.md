@@ -379,7 +379,13 @@ Optimization does not collapse these concepts into a single model list.
 
 ## Eligible Model Substitutions
 
-For prompt-backed workflow steps, model substitution considers models that:
+Model substitution applies to both prompt step forms, fixed-prompt
+(`PromptStrategySpec`) and context-prompt (`ContextPromptStrategySpec`), when
+the step's selection is a `PortfolioModelSelection`. A `FixedModelSelection` is
+never substituted. A replacement keeps the step's prompt or template, inputs
+and output format.
+
+For those steps, model substitution considers models that:
 
 1. satisfy the workflow step's declared model requirements;
 2. are authorized by the `ModelPortfolio`;

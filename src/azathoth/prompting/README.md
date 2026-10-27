@@ -700,6 +700,48 @@ The provider abstraction supplies the completion.
 The prompting layer translates that completion into Azathoth's shared strategy
 contract.
 
+# Output Format
+
+Both prompt specifications declare how the reply becomes the strategy's
+output, through `output_format`:
+
+```text
+PromptOutputFormat
+├── text   the reply, unchanged (the default)
+└── json   the reply, parsed as one JSON value
+```
+
+```json
+"output_format": "json"
+```
+
+`parse_json_reply` tolerates surrounding whitespace and one surrounding
+Markdown code fence, with or without a language tag:
+
+````text
+```json
+{"category": "billing"}
+```
+````
+
+Anything else must be valid JSON. A reply that does not parse raises
+`PromptOutputFormatError`:
+
+```text
+Prompt strategy 'Triage ticket' replied with invalid JSON: Expecting value.
+```
+
+It is a failed attempt, so the workflow step's retry policy applies.
+
+With JSON output, later workflow steps read fields of the reply through output
+bindings with a path, such as `["characters", 0, "name"]`.
+
+Candidate generation carries the format onto every generated strategy, so
+configured, benchmark, optimized and production candidates parse alike.
+
+A specification with text output serializes without `output_format`, so
+existing documents and their content digests are unchanged.
+
 # Provider-Neutral Execution Outcome
 
 Provider responses are converted into provider-neutral
@@ -783,6 +825,13 @@ The template itself does not execute a model.
 
 It transforms structured `Context` into a provider-neutral `Prompt`.
 
+Template text is formatted with `str.format_map`, so literal braces, such as an
+example JSON reply shown to the model, must be doubled:
+
+```text
+Reply with one JSON object: {{"verdict": "pass", "reason": "..."}}
+```
+
 ```text
 Context
    │
@@ -839,6 +888,56 @@ payload["text"]
 This connects context-dependent prompting to the event-backed context
 architecture without requiring mutable shared state.
 
+# PromptInputBinding
+
+A `PromptInputBinding` maps one template variable to one workflow step input,
+by the input's name:
+
+```python
+PromptInputBinding(
+    variable_name="plan",
+    input_name="plan",
+)
+```
+
+```json
+{"variable_name": "plan", "input_name": "plan"}
+```
+
+The workflow runner records every value bound to a step input as a
+`workflow.input.bound` event (`WORKFLOW_INPUT_BOUND_EVENT_TYPE`) carrying the
+input's `name` and `value`. The variable takes the value of the latest such
+event with its name. A step's own inputs are bound last, so an earlier step's
+input of the same name never wins.
+
+A template may mix both binding forms. A binding that mixes their keys is
+rejected.
+
+A workflow step whose template binds an input it does not declare is rejected
+when the step is constructed:
+
+```text
+Workflow step <STEP_ID> prompt variable 'plan' binds input 'plan', which the step does not declare.
+```
+
+# Rendering Values
+
+`render_prompt_value` decides what one bound value contributes to a prompt,
+for both binding forms.
+
+Strings are inserted unchanged. Every other value is rendered as compact JSON
+with non-ASCII characters kept:
+
+```text
+"plain text"                      plain text
+{"title": "Café", "chapters": 2}  {"title":"Café","chapters":2}
+["Ada", "Grace"]                  ["Ada","Grace"]
+True / None / 18                  true / null / 18
+```
+
+Structured values therefore reach the model as JSON, never as Python
+representations.
+
 # Prompt Rendering Errors
 
 Prompt rendering fails explicitly when required context is unavailable.
@@ -851,6 +950,14 @@ PromptBindingError
 PromptBindingEventNotFoundError
 
 PromptBindingFieldNotFoundError
+
+PromptBindingInputNotFoundError
+```
+
+If an input binding names an input that was never bound:
+
+```text
+No bound workflow input named 'notes' for prompt variable 'notes'.
 ```
 
 If no matching event exists:

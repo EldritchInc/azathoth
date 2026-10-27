@@ -17,5 +17,13 @@ class PromptBindingFieldNotFoundError(PromptBindingError):
     """Raised when a required field is absent from a context event."""
 
 
+class PromptBindingInputNotFoundError(PromptBindingError):
+    """Raised when a binding's workflow step input was never bound."""
+
+
+class PromptOutputFormatError(PromptingError):
+    """Raised when a model reply does not have the prompt's declared output format."""
+
+
 class ModelBindingMismatchError(PromptingError):
     """Raised when a model response conflicts with its configured binding."""

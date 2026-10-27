@@ -1,0 +1,635 @@
+{
+  "metadata": {
+    "id": "e1000000-0000-4000-8000-000000000070",
+    "name": "write novel",
+    "description": "Write a novel from an idea: plan the story and up to 18 chapters, write each chapter through its own editing loop until the story ends, give the book one last editorial review and edit pass, check it for coherence, and assemble it.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000071",
+      "specification": {
+        "requirement": {
+          "name": "echo_json",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "request",
+          "path": [
+            "value"
+          ]
+        },
+        {
+          "name": "idea",
+          "path": [
+            "value",
+            "idea"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000072",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000081",
+          "name": "Plan story",
+          "description": "Plan the characters, arc and subplots of a novel from an idea.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a novelist planning a new novel from an idea.\n\nThe idea:\n{idea}\n\nPlan the story. Keep everything the idea specifies, and decide everything it leaves open: the setting, the tone, the main characters with their wants and flaws, one major arc from beginning to end, and the subplots that serve it. Reply with one JSON object and no other text:\n\n{{\"title\": \"<title>\", \"premise\": \"<one paragraph>\", \"setting\": \"<where and when>\", \"tone\": \"<tone>\", \"characters\": [{{\"name\": \"<name>\", \"role\": \"<role>\", \"want\": \"<want>\", \"flaw\": \"<flaw>\"}}], \"arc\": \"<the major arc>\", \"subplots\": [\"<subplot>\"]}}",
+          "bindings": [
+            {
+              "variable_name": "idea",
+              "input_name": "idea"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000071"
+      ],
+      "inputs": [
+        {
+          "name": "idea",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000071",
+            "name": "idea"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "story",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Planning the story"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000073",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000082",
+          "name": "Plan chapters",
+          "description": "Outline a novel's chapters from its story plan.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a novelist outlining a novel chapter by chapter.\n\nThe story, as JSON:\n{story}\n\nThe request, as JSON:\n{request}\n\nOutline the chapters the story needs to tell its arc and resolve its subplots, and no more. Use at most the request's max_chapters chapters, or 18 when it gives none, and never more than 18. Reply with one JSON object and no other text:\n\n{{\"chapters\": [{{\"number\": 1, \"summary\": \"<what happens in the chapter>\"}}]}}",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "request",
+              "input_name": "request"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000071",
+        "e1000000-0000-4000-8000-000000000072"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "request",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000071",
+            "name": "request"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "outline",
+          "path": [
+            "chapters"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Outlining the chapters"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000074",
+      "specification": {
+        "requirement": {
+          "name": "prepare_chapters",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000071",
+        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000073"
+      ],
+      "inputs": [
+        {
+          "name": "request",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000071",
+            "name": "request"
+          }
+        },
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "outline",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000073",
+            "name": "outline"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "settings",
+          "path": [
+            "settings"
+          ]
+        },
+        {
+          "name": "outline",
+          "path": [
+            "outline"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000075",
+      "specification": {
+        "requirement": {
+          "name": "loop_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000074"
+      ],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000074",
+            "name": "settings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chapters",
+          "path": [
+            "items"
+          ]
+        },
+        {
+          "name": "chapters_written",
+          "path": [
+            "iterations"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Writing the chapters"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000076",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000083",
+          "name": "Final review",
+          "description": "Review a finished novel and list the chapters that still need changes.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are the editor of a finished novel, doing one last editorial review before it is published.\n\nThe story, as JSON:\n{story}\n\nThe chapters, as JSON:\n{chapters}\n\nRead the whole novel. For each chapter that still needs changes, list specific, actionable requests: continuity errors, threads that are dropped, scenes that undercut the arc, prose problems. Leave out chapters that need nothing. Reply with one JSON object and no other text:\n\n{{\"edits\": [{{\"chapter\": 1, \"requests\": [\"<request>\"]}}]}}\n\nReply with {{\"edits\": []}} when the novel needs no more changes.",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "chapters",
+              "input_name": "chapters"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": 200000,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000075"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "chapters",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000075",
+            "name": "chapters"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "edits",
+          "path": [
+            "edits"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Giving the novel a final review"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000077",
+      "specification": {
+        "requirement": {
+          "name": "loop_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000078"
+      ],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000078",
+            "name": "settings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chapters",
+          "path": [
+            "state",
+            "chapters"
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000078",
+            "name": "needs_final_edits"
+          },
+          "operator": "equal",
+          "expected": true
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Applying the final edits"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000078",
+      "specification": {
+        "requirement": {
+          "name": "prepare_final_edits",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000071",
+        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000075",
+        "e1000000-0000-4000-8000-000000000076"
+      ],
+      "inputs": [
+        {
+          "name": "request",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000071",
+            "name": "request"
+          }
+        },
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "chapters",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000075",
+            "name": "chapters"
+          }
+        },
+        {
+          "name": "edits",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000076",
+            "name": "edits"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "needs_final_edits",
+          "path": [
+            "needs_final_edits"
+          ]
+        },
+        {
+          "name": "settings",
+          "path": [
+            "settings"
+          ]
+        },
+        {
+          "name": "chapters",
+          "path": [
+            "chapters"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000079",
+      "specification": {
+        "metadata": {
+          "id": "e1000000-0000-4000-8000-000000000084",
+          "name": "Check coherence",
+          "description": "Check a finished novel for plot holes and continuity errors.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are checking a finished novel for coherence before it is published.\n\nThe story, as JSON:\n{story}\n\nThe chapters, as JSON:\n{chapters}\n\nLook for plot holes, contradictions between chapters, characters who act against their established motives, and threads that are never resolved. Reply with one JSON object and no other text:\n\n{{\"coherent\": true, \"issues\": [{{\"chapters\": [1], \"issue\": \"<what is wrong>\"}}]}}",
+          "bindings": [
+            {
+              "variable_name": "story",
+              "input_name": "story"
+            },
+            {
+              "variable_name": "chapters",
+              "input_name": "chapters"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": 200000,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000077",
+        "e1000000-0000-4000-8000-000000000078"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "chapters",
+          "source": {
+            "name": "chapters"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "report",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Checking the novel for coherence"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000080",
+      "specification": {
+        "requirement": {
+          "name": "assemble_novel",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000077",
+        "e1000000-0000-4000-8000-000000000078",
+        "e1000000-0000-4000-8000-000000000079"
+      ],
+      "inputs": [
+        {
+          "name": "story",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "story"
+          }
+        },
+        {
+          "name": "chapters",
+          "source": {
+            "name": "chapters"
+          }
+        },
+        {
+          "name": "report",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000079",
+            "name": "report"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "novel",
+          "path": [
+            "novel"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Assembling the novel"
+    }
+  ],
+  "result": {
+    "name": "novel"
+  }
+}

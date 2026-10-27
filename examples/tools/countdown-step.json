@@ -1,0 +1,65 @@
+{
+  "definition": {
+    "id": "c1000000-0000-4000-8000-000000000003",
+    "name": "countdown_step",
+    "description": "Count one step down from the remaining count in a loop state.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "object",
+                "properties": {
+                  "remaining": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "remaining"
+                ]
+              },
+              "iteration": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "next"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c1000000-0000-4000-8000-000000000013",
+      "tool_id": "c1000000-0000-4000-8000-000000000003",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(request):\n    remaining = request[\"state\"][\"remaining\"]\n\n    return {\n        \"next\": {\n            \"state\": {\"remaining\": remaining - 1},\n            \"done\": remaining <= 1,\n            \"item\": remaining,\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

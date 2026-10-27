@@ -1,0 +1,55 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000009",
+    "name": "assemble_novel",
+    "description": "Assemble the finished chapters into one novel, as structured chapters and as Markdown, with the coherence report alongside.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "story": {
+            "type": "object"
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "report": {}
+        },
+        "required": [
+          "story",
+          "chapters",
+          "report"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "novel": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "novel"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000109",
+      "tool_id": "e1000000-0000-4000-8000-000000000009",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(story, chapters, report):\n    title = story.get(\"title\") or \"Untitled\"\n    parts = [\"# \" + title]\n\n    for chapter in chapters:\n        heading = \"## Chapter \" + str(chapter[\"number\"])\n\n        if chapter.get(\"title\"):\n            heading = heading + \": \" + chapter[\"title\"]\n\n        parts.append(heading + \"\\n\\n\" + chapter[\"text\"])\n\n    return {\n        \"novel\": {\n            \"title\": title,\n            \"chapters\": chapters,\n            \"markdown\": \"\\n\\n\".join(parts) + \"\\n\",\n            \"report\": report,\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

@@ -109,3 +109,7 @@ requests that made it:
 - [ADR 0084: Run Child Workflows as Separate Processes](0084-run-child-workflows-as-separate-processes.md)
 - [ADR 0085: Report Judge Cost Beside Scorecards, Never in Them](0085-report-judge-cost-beside-scorecards-never-in-them.md)
 - [ADR 0086: Add Benchmark Cases Only Deliberately, From Recorded Runs](0086-add-benchmark-cases-only-deliberately-from-recorded-runs.md)
+- [ADR 0087: Bind Prompt Variables to Step Inputs by Name](0087-bind-prompt-variables-to-step-inputs-by-name.md)
+- [ADR 0088: Parse Prompt Replies as JSON When Declared](0088-parse-prompt-replies-as-json-when-declared.md)
+- [ADR 0089: Substitute Models in Context-Prompt Steps](0089-substitute-models-in-context-prompt-steps.md)
+- [ADR 0090: Loop by Invoking Child Workflows from a Tool](0090-loop-by-invoking-child-workflows-from-a-tool.md)

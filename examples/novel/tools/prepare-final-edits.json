@@ -1,0 +1,72 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000008",
+    "name": "prepare_final_edits",
+    "description": "Turn the final editorial review into a queue of chapters to revise, and prepare the final-edits loop's settings. Holds the example edit-queue workflow ID as a default, which the request may override.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object"
+          },
+          "story": {
+            "type": "object"
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "edits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "request",
+          "story",
+          "chapters",
+          "edits"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "needs_final_edits": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "chapters": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "needs_final_edits",
+          "settings",
+          "chapters"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000108",
+      "tool_id": "e1000000-0000-4000-8000-000000000008",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "EDIT_QUEUE_WORKFLOW_ID = \"e1000000-0000-4000-8000-000000000060\"\n\n\ndef run(request, story, chapters, edits):\n    numbers = [chapter[\"number\"] for chapter in chapters]\n    queue = []\n\n    for edit in edits:\n        if edit.get(\"chapter\") in numbers and len(edit.get(\"requests\") or []) > 0:\n            queue.append({\"chapter\": edit[\"chapter\"], \"requests\": edit[\"requests\"]})\n\n    config = {}\n\n    for key in (\"revision_workflow_id\", \"max_revisions\"):\n        if key in request:\n            config[key] = request[key]\n\n    return {\n        \"needs_final_edits\": len(queue) > 0,\n        \"settings\": {\n            \"workflow_id\": request.get(\"edit_queue_workflow_id\", EDIT_QUEUE_WORKFLOW_ID),\n            \"max_iterations\": max(len(queue), 1),\n            \"state\": {\"queue\": queue, \"chapters\": chapters, \"story\": story, \"config\": config},\n        },\n        \"chapters\": chapters,\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

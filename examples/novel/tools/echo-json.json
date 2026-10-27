@@ -1,0 +1,42 @@
+{
+  "definition": {
+    "id": "e1000000-0000-4000-8000-000000000001",
+    "name": "echo_json",
+    "description": "Return a JSON value unchanged under the key 'value', so a step's output bindings can read its fields by path.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {}
+        },
+        "required": [
+          "value"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {}
+        },
+        "required": [
+          "value"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000101",
+      "tool_id": "e1000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(value):\n    return {\"value\": value}\n"
+    }
+  ],
+  "test_cases": []
+}

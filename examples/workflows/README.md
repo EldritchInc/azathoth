@@ -202,6 +202,84 @@ The depth guard belongs to this example tool, not to Azathoth. Recording a
 child's lineage and depth in its initial context is planned after 1.0, along
 with constant step inputs that would let a parent name its child itself.
 
+## Looping Over a Child Workflow
+
+A workflow is a graph, so no step runs twice in one run. To repeat work, a
+tool invokes a child workflow over and over, one invocation per iteration
+(ADR 0090). `examples/tools/loop-workflow.json` is that tool.
+
+Each iteration, the child receives the current state and its iteration
+number, and returns the next state, whether it is done, and optionally one
+item to collect:
+
+```text
+child input   {"state": <state>, "iteration": <n>}
+child result  {"state": <next state>, "done": <bool>, "item": <value>}
+```
+
+The loop's settings name the child, the iteration limit and the starting
+state:
+
+```json
+{"workflow_id": "<CHILD_WORKFLOW_ID>", "max_iterations": 10, "state": <STATE>}
+```
+
+It returns every item collected, in order, with the final state:
+
+```json
+{"items": [...], "state": <STATE>, "iterations": 3, "completed": true}
+```
+
+The loop stops when the child says it is done, or after `max_iterations`
+iterations. Reaching the limit is not a failure: `completed` is `false`.
+
+`countdown.json` is the smallest possible loop body. It counts its state's
+`remaining` number down by one, collects the number it counted, and is done
+at zero. `loop-countdown.json` loops over it.
+
+Import the tools and workflows, promote the child, then run the loop:
+
+```bash
+azathoth tool import examples/tools/countdown-step.json
+azathoth tool import examples/tools/loop-workflow.json
+
+azathoth workflow import examples/workflows/countdown.json
+azathoth workflow import examples/workflows/loop-countdown.json
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000004
+
+azathoth workflow run a1000000-0000-4000-8000-000000000005 \
+    --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' \
+    --output result
+```
+
+```text
+[3, 2, 1]
+```
+
+With `"max_iterations": 2`, the loop stops early and returns `[3, 2]`.
+
+A failing iteration fails the loop, naming the iteration and the child's
+invocation, so it can be followed with `invocation show`:
+
+```text
+Iteration 2: child workflow <CHILD_WORKFLOW_ID> invocation <INVOCATION_ID> failed: <MESSAGE>
+```
+
+The loop is bounded three ways:
+
+- `max_iterations`, which must be a positive integer;
+- time: the tool's timeout is 2 hours, and the loop keeps to a budget just
+  inside it, stopping each child after `child_timeout_seconds` (default 600)
+  or when the budget runs out, whichever comes first;
+- depth: loops can nest, and each level counts against the same 8-level
+  limit as `run_workflow`.
+
+Every iteration is a production invocation with its own run, so each one can
+be inspected, and the loop body can be benchmarked, optimized and promoted on
+its own. Like `run_workflow`, the loop runs children with its own Python
+interpreter, so Azathoth's environment must be the one that is active.
+
 ## JSON Document Format
 
 Workflow JSON files use the canonical serialized representation of

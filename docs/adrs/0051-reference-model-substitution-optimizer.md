@@ -1,6 +1,6 @@
 # ADR 0051: Provide Reference Model Substitution Optimization
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0089
 - Date: 2026-08-22
 
 ## Context

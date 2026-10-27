@@ -14,6 +14,7 @@ from pydantic import (
 
 from azathoth.prompting import (
     ContextPromptStrategySpec,
+    PromptInputBinding,
     PromptStrategySpec,
 )
 from azathoth.tools import ToolRequirement
@@ -88,6 +89,29 @@ class WorkflowStepSpecification(BaseModel):
 
         if not self.outputs:
             raise ValueError(f"Workflow step {self.id} emits values but declares no outputs.")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_prompt_input_bindings(self) -> Self:
+        """Ensure every prompt variable bound to a step input names a declared input.
+
+        Raises:
+            ValueError: A prompt variable binds an input the step does not
+                declare.
+        """
+
+        if not isinstance(self.specification, ContextPromptStrategySpec):
+            return self
+
+        declared = {binding.name for binding in self.inputs}
+
+        for binding in self.specification.template.bindings:
+            if isinstance(binding, PromptInputBinding) and binding.input_name not in declared:
+                raise ValueError(
+                    f"Workflow step {self.id} prompt variable {binding.variable_name!r} "
+                    f"binds input {binding.input_name!r}, which the step does not declare."
+                )
 
         return self
 

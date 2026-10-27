@@ -1,0 +1,70 @@
+{
+  "id": "e1000000-0000-4000-8000-000000000030",
+  "name": "revise chapter",
+  "description": "Judge whether one revision pass addresses every editorial request while keeping the chapter's events.",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000031",
+      "input": {
+        "state": {
+          "chapter": "Mara climbed the stairs. She was very afraid. At the top, the lamp had gone out, and something below the water opened its eyes.",
+          "requests": [
+            "Show Mara's fear through what she does instead of stating it.",
+            "Name the lighthouse: it is Saint Elmo's Light."
+          ],
+          "context": {
+            "title": "The Keeper of Saint Elmo's Light",
+            "premise": "A young lighthouse keeper discovers that the light she tends keeps something in the sea asleep."
+          }
+        },
+        "iteration": 1
+      },
+      "expected": {
+        "description": "The result says the revision is done. Its chapter still has Mara climbing to a dark lamp while something below the water wakes, shows her fear through her actions rather than saying she was afraid, and names the lighthouse Saint Elmo's Light.",
+        "value": {
+          "done": true,
+          "state": {
+            "requests": [],
+            "chapter": "Mara climbs Saint Elmo's Light to find the lamp out; her fear shows in what she does; something below the water opens its eyes."
+          }
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "workflow": "revise-chapter"
+      }
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000032",
+      "input": {
+        "state": {
+          "chapter": "The supply boat came on Tuesday. Captain Orrin handed Mara a crate and a letter. He left quickly.",
+          "requests": [
+            "Give Captain Orrin one line of dialogue that hints he knows what lives in the sea.",
+            "Say what is in the crate."
+          ],
+          "context": {
+            "title": "The Keeper of Saint Elmo's Light",
+            "premise": "A young lighthouse keeper discovers that the light she tends keeps something in the sea asleep."
+          }
+        },
+        "iteration": 1
+      },
+      "expected": {
+        "description": "The result says the revision is done. Its chapter still has the supply boat arrive and Captain Orrin hand Mara a crate and a letter before leaving quickly, gives Orrin a line of dialogue hinting that he knows what lives in the sea, and says what the crate holds.",
+        "value": {
+          "done": true,
+          "state": {
+            "requests": [],
+            "chapter": "The supply boat arrives; Orrin hands over a crate whose contents are named and a letter, hints at what lives in the sea, and leaves quickly."
+          }
+        },
+        "comparison": "semantic"
+      },
+      "metadata": {
+        "workflow": "revise-chapter"
+      }
+    }
+  ]
+}

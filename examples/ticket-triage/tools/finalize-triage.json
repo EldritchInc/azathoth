@@ -1,0 +1,69 @@
+{
+  "definition": {
+    "id": "f1000000-0000-4000-8000-000000000001",
+    "name": "finalize_triage",
+    "description": "Assemble one triaged ticket: its category, urgency, summary, the policy-checked reply, and whether a person must look at it before it is sent.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "draft": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "category",
+          "urgency",
+          "summary",
+          "draft",
+          "approved",
+          "problems"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "triage": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "triage"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "tool_id": "f1000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "def run(category, urgency, summary, draft, approved, problems):\n    return {\n        \"triage\": {\n            \"category\": category,\n            \"urgency\": urgency,\n            \"summary\": summary,\n            \"reply\": draft,\n            \"approved\": approved,\n            \"problems\": problems,\n            \"needs_human\": (not approved) or urgency == \"high\",\n        }\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

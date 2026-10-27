@@ -1,0 +1,399 @@
+{
+  "metadata": {
+    "id": "d2000000-0000-4000-8000-000000000010",
+    "name": "review change",
+    "description": "Review a code change with three reviewers at once, for security, correctness and readability, then merge their findings into one verdict and a lead reviewer's comment.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "d2000000-0000-4000-8000-000000000011",
+      "specification": {
+        "metadata": {
+          "id": "d2000000-0000-4000-8000-000000000021",
+          "name": "Review security",
+          "description": "Review a change for security problems.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You review code changes for security. Look for injection, unsafe deserialization, missing authentication or authorization checks, secrets in code, unsafe handling of untrusted input, and data that leaks to logs or responses.\n\nReport only security problems: other reviewers cover correctness and readability. Report each problem once, on the line where it is.\n\nThe change, as JSON, with its title, description and unified diff:\n{change}\n\nReply with one JSON object and no other text:\n\n{{\"findings\": [{{\"severity\": \"high\", \"file\": \"<path>\", \"line\": 12, \"summary\": \"<the problem, in one sentence>\", \"suggestion\": \"<how to fix it>\"}}]}}\n\nThe severity is high when the change must not merge as it is, medium when it should be fixed soon, and low for a small improvement. Use null for the line when a finding is about the whole file. Reply with an empty findings list when you find nothing in your area.",
+          "bindings": [
+            {
+              "variable_name": "change",
+              "input_name": "change"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "change",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "security",
+          "path": [
+            "findings"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Reviewing security"
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000012",
+      "specification": {
+        "metadata": {
+          "id": "d2000000-0000-4000-8000-000000000022",
+          "name": "Review correctness",
+          "description": "Review a change for bugs.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You review code changes for correctness. Look for logic errors, off-by-one errors, unhandled cases and errors, wrong types, race conditions, and behavior that contradicts the change's own description.\n\nReport only correctness problems: other reviewers cover security and readability. Report each problem once, on the line where it is.\n\nThe change, as JSON, with its title, description and unified diff:\n{change}\n\nReply with one JSON object and no other text:\n\n{{\"findings\": [{{\"severity\": \"high\", \"file\": \"<path>\", \"line\": 12, \"summary\": \"<the problem, in one sentence>\", \"suggestion\": \"<how to fix it>\"}}]}}\n\nThe severity is high when the change must not merge as it is, medium when it should be fixed soon, and low for a small improvement. Use null for the line when a finding is about the whole file. Reply with an empty findings list when you find nothing in your area.",
+          "bindings": [
+            {
+              "variable_name": "change",
+              "input_name": "change"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "change",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "correctness",
+          "path": [
+            "findings"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Reviewing correctness"
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000013",
+      "specification": {
+        "metadata": {
+          "id": "d2000000-0000-4000-8000-000000000023",
+          "name": "Review readability",
+          "description": "Review a change for readability.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You review code changes for readability. Look for unclear names, functions doing too much, duplicated code, missing or misleading comments, and code that is harder to follow than it needs to be.\n\nReport only readability problems: other reviewers cover security and correctness. Report each problem once, on the line where it is.\n\nThe change, as JSON, with its title, description and unified diff:\n{change}\n\nReply with one JSON object and no other text:\n\n{{\"findings\": [{{\"severity\": \"high\", \"file\": \"<path>\", \"line\": 12, \"summary\": \"<the problem, in one sentence>\", \"suggestion\": \"<how to fix it>\"}}]}}\n\nThe severity is high when the change must not merge as it is, medium when it should be fixed soon, and low for a small improvement. Use null for the line when a finding is about the whole file. Reply with an empty findings list when you find nothing in your area.",
+          "bindings": [
+            {
+              "variable_name": "change",
+              "input_name": "change"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "change",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "readability",
+          "path": [
+            "findings"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Reviewing readability"
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000014",
+      "specification": {
+        "metadata": {
+          "id": "d2000000-0000-4000-8000-000000000024",
+          "name": "Summarize review",
+          "description": "Write the review comment for a change from its merged findings.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are the lead reviewer on a code change. Three reviewers checked it for security, correctness and readability, and their findings are merged below.\n\nThe change, as JSON:\n{change}\n\nThe merged review, as JSON, with its verdict and findings in order of severity:\n{review}\n\nWrite the review comment for the change's author: one short paragraph saying what must change before it merges and why, then the remaining findings as a short list. Be direct and specific, and do not repeat findings. Reply with the comment only.",
+          "bindings": [
+            {
+              "variable_name": "change",
+              "input_name": "change"
+            },
+            {
+              "variable_name": "review",
+              "input_name": "review"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        }
+      },
+      "depends_on": [
+        "d2000000-0000-4000-8000-000000000015"
+      ],
+      "inputs": [
+        {
+          "name": "change",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "review",
+          "source": {
+            "producer_step_id": "d2000000-0000-4000-8000-000000000015",
+            "name": "review"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "summary",
+          "path": []
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "d2000000-0000-4000-8000-000000000015",
+            "name": "has_findings"
+          },
+          "operator": "equal",
+          "expected": true
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Writing the review comment"
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000015",
+      "specification": {
+        "requirement": {
+          "name": "merge_reviews",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "d2000000-0000-4000-8000-000000000011",
+        "d2000000-0000-4000-8000-000000000012",
+        "d2000000-0000-4000-8000-000000000013"
+      ],
+      "inputs": [
+        {
+          "name": "security",
+          "source": {
+            "producer_step_id": "d2000000-0000-4000-8000-000000000011",
+            "name": "security"
+          }
+        },
+        {
+          "name": "correctness",
+          "source": {
+            "producer_step_id": "d2000000-0000-4000-8000-000000000012",
+            "name": "correctness"
+          }
+        },
+        {
+          "name": "readability",
+          "source": {
+            "producer_step_id": "d2000000-0000-4000-8000-000000000013",
+            "name": "readability"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "review",
+          "path": [
+            "review"
+          ]
+        },
+        {
+          "name": "has_findings",
+          "path": [
+            "has_findings"
+          ]
+        },
+        {
+          "name": "summary",
+          "path": [
+            "summary"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Merging the reviews"
+    },
+    {
+      "id": "d2000000-0000-4000-8000-000000000016",
+      "specification": {
+        "requirement": {
+          "name": "finalize_review",
+          "version": "1.0.0",
+          "runtime": "python"
+        }
+      },
+      "depends_on": [
+        "d2000000-0000-4000-8000-000000000014",
+        "d2000000-0000-4000-8000-000000000015"
+      ],
+      "inputs": [
+        {
+          "name": "review",
+          "source": {
+            "name": "review"
+          }
+        },
+        {
+          "name": "summary",
+          "source": {
+            "name": "summary"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "path": [
+            "result"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "result"
+  }
+}

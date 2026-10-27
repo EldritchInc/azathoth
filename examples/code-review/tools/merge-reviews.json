@@ -1,0 +1,158 @@
+{
+  "definition": {
+    "id": "d2000000-0000-4000-8000-000000000001",
+    "name": "merge_reviews",
+    "description": "Merge the security, correctness and readability reviews: tag each finding with the reviewers who raised it, combine findings more than one reviewer raised, order them by severity, and decide the verdict.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "security": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "severity",
+                "file",
+                "summary"
+              ],
+              "properties": {
+                "severity": {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "correctness": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "severity",
+                "file",
+                "summary"
+              ],
+              "properties": {
+                "severity": {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "readability": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "severity",
+                "file",
+                "summary"
+              ],
+              "properties": {
+                "severity": {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "security",
+          "correctness",
+          "readability"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "review": {
+            "type": "object"
+          },
+          "has_findings": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review",
+          "has_findings",
+          "summary"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "d2000000-0000-4000-8000-0000000000a1",
+      "tool_id": "d2000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "python",
+      "entrypoint": "run",
+      "source": "SEVERITY_RANK = {\"high\": 0, \"medium\": 1, \"low\": 2}\n\n\ndef identity(finding):\n    summary = str(finding.get(\"summary\", \"\")).strip().lower()\n    return (finding.get(\"file\", \"\"), finding.get(\"line\") or 0, summary)\n\n\ndef order(finding):\n    rank = SEVERITY_RANK.get(finding.get(\"severity\"), len(SEVERITY_RANK))\n    return (rank, finding.get(\"file\", \"\"), finding.get(\"line\") or 0)\n\n\ndef verdict(findings):\n    if [finding for finding in findings if finding.get(\"severity\") == \"high\"]:\n        return \"request_changes\"\n    if findings:\n        return \"comment\"\n    return \"approve\"\n\n\ndef run(security, correctness, readability):\n    merged = {}\n    reports = (\n        (\"security\", security),\n        (\"correctness\", correctness),\n        (\"readability\", readability),\n    )\n\n    for reviewer, findings in reports:\n        for finding in findings:\n            key = identity(finding)\n            if key in merged:\n                merged[key][\"reviewers\"].append(reviewer)\n            else:\n                merged[key] = dict(finding, reviewers=[reviewer])\n\n    findings = sorted(merged.values(), key=order)\n    counts = {severity: 0 for severity in SEVERITY_RANK}\n    for finding in findings:\n        severity = finding.get(\"severity\")\n        if severity in counts:\n            counts[severity] = counts[severity] + 1\n\n    return {\n        \"review\": {\"verdict\": verdict(findings), \"findings\": findings, \"counts\": counts},\n        \"has_findings\": len(findings) > 0,\n        \"summary\": \"No issues found.\",\n    }\n"
+    }
+  ],
+  "test_cases": []
+}

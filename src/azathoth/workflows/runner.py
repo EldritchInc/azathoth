@@ -9,6 +9,7 @@ from uuid import UUID
 
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import ExecutionResult, StrategyExecutor
+from azathoth.prompting import WORKFLOW_INPUT_BOUND_EVENT_TYPE
 from azathoth.strategies import Strategy
 from azathoth.workflows.attempt import (
     WorkflowStepAttempt,
@@ -285,7 +286,7 @@ class WorkflowRunner:
 
                 step_context = step_context.append(
                     ContextEvent(
-                        event_type="workflow.input.bound",
+                        event_type=WORKFLOW_INPUT_BOUND_EVENT_TYPE,
                         payload={
                             "name": binding.name,
                             "value": value.value,
@@ -327,7 +328,7 @@ class WorkflowRunner:
 
             step_context = step_context.append(
                 ContextEvent(
-                    event_type="workflow.input.bound",
+                    event_type=WORKFLOW_INPUT_BOUND_EVENT_TYPE,
                     payload={
                         "name": binding.name,
                         "value": event.payload[source.field_name],
