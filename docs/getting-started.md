@@ -328,6 +328,7 @@ Remove-Item Env:AZATHOTH_DATABASE
 
 - [Examples Tour](examples.md): child workflows, loops, routing, a workflow
   that writes workflows, concurrent code review, and a novel.
+- [Concepts](concepts.md): how Azathoth is put together, and why.
 - [CLI reference](../src/azathoth/cli/README.md): every command and its
   output.
 - [Architecture decisions](adrs/README.md): why Azathoth works the way it

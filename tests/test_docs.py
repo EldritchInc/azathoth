@@ -33,6 +33,15 @@ INLINE_CODE = re.compile(r"`[^`]*`")
 
 LINK = re.compile(r"\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
+REPOSITORY_LINK = re.compile(
+    r"^https://github\.com/EldritchInc/azathoth/(?:blob|tree)/main/"
+    r"(?P<path>[^#]*)(?:#(?P<anchor>.*))?$"
+)
+
+REMOVED_OPTIMIZE_FLAG = re.compile(r"workflow optimize[^\n]*--expected")
+
+LINE_CONTINUATION = re.compile(r"[ \t]*[\\`]\n\s*")
+
 EXTERNAL_SCHEMES = (
     "http://",
     "https://",
@@ -225,6 +234,44 @@ def anchored_link_targets(
     return tuple(targets)
 
 
+def repository_link_targets(
+    text: str,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return the numbered links into this repository's main branch on GitHub."""
+
+    targets: list[tuple[int, str, str]] = []
+
+    for number, line in prose_lines(text):
+        for match in LINK.finditer(line):
+            repository = REPOSITORY_LINK.match(match.group("target"))
+
+            if repository is not None:
+                targets.append((number, repository.group("path"), repository.group("anchor") or ""))
+
+    return tuple(targets)
+
+
+def removed_optimize_flag_uses(
+    text: str,
+) -> tuple[str, ...]:
+    """Return each `workflow optimize` command that still passes `--expected`."""
+
+    joined = LINE_CONTINUATION.sub(" ", text)
+
+    return tuple(match.group(0) for match in REMOVED_OPTIMIZE_FLAG.finditer(joined))
+
+
+def command_documents() -> tuple[str, ...]:
+    """Return every document that may show CLI commands."""
+
+    package_readmes = (
+        path.relative_to(PROJECT_ROOT).as_posix()
+        for path in sorted((PROJECT_ROOT / "src").rglob("README.md"))
+    )
+
+    return (*linked_documents(), *package_readmes)
+
+
 def test_fenced_blocks_report_opening_lines_languages_and_headings() -> None:
     text = (
         "## Setup\n```bash\n# not a heading\nls\n```\n\n"
@@ -322,6 +369,56 @@ def test_heading_anchors_resolve(
             broken.append(f"{document}:{number}: {target}#{anchor}")
 
     assert broken == []
+
+
+def test_repository_link_targets_read_path_and_anchor() -> None:
+    text = (
+        "[a](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#next) "
+        "[b](https://github.com/EldritchInc/azathoth/tree/main/examples) "
+        "[c](https://github.com/other/repo/blob/main/x.md)\n"
+    )
+
+    assert repository_link_targets(text) == (
+        (1, "docs/install.md", "next"),
+        (1, "examples", ""),
+    )
+
+
+@pytest.mark.parametrize("document", linked_documents())
+def test_repository_links_resolve(
+    document: str,
+) -> None:
+    text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
+    broken: list[str] = []
+
+    for number, target, anchor in repository_link_targets(text):
+        linked = PROJECT_ROOT / target
+
+        if not linked.exists():
+            broken.append(f"{document}:{number}: {target}")
+        elif anchor and anchor not in heading_anchors(linked.read_text(encoding="utf-8")):
+            broken.append(f"{document}:{number}: {target}#{anchor}")
+
+    assert broken == []
+
+
+def test_removed_optimize_flag_uses_follow_line_continuations() -> None:
+    text = (
+        "azathoth workflow optimize <ID> \\\n    --expected '1'\n"
+        "azathoth workflow optimize <ID> `\n    --benchmark <B>\n"
+        "azathoth benchmark add-case <B> --expected '1'\n"
+    )
+
+    assert removed_optimize_flag_uses(text) == ("workflow optimize <ID> --expected",)
+
+
+@pytest.mark.parametrize("document", command_documents())
+def test_optimize_is_never_shown_with_expected(
+    document: str,
+) -> None:
+    text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
+
+    assert removed_optimize_flag_uses(text) == ()
 
 
 @pytest.mark.parametrize("guide", USER_GUIDES)
