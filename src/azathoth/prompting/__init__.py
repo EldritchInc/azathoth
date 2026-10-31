@@ -36,12 +36,15 @@ from azathoth.prompting.output_format import (
     parse_json_reply,
 )
 from azathoth.prompting.specifications import (
+    PROMPT_SPECIFICATIONS,
     ContextPromptStrategySpec,
+    PromptSpecification,
     PromptStrategySpec,
 )
 from azathoth.prompting.strategy import PromptStrategy
 
 __all__ = [
+    "PROMPT_SPECIFICATIONS",
     "WORKFLOW_INPUT_BOUND_EVENT_TYPE",
     "ContextPromptStrategy",
     "ContextPromptStrategySpec",
@@ -58,6 +61,7 @@ __all__ = [
     "PromptInputBinding",
     "PromptOutputFormat",
     "PromptOutputFormatError",
+    "PromptSpecification",
     "PromptStrategy",
     "PromptStrategySpec",
     "PromptTemplate",

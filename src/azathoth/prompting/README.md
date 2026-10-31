@@ -83,7 +83,9 @@ The V1 prompting package exports:
 
 ```python
 from azathoth.prompting import (
+    PROMPT_SPECIFICATIONS,
     ContextPromptStrategy,
+    ContextPromptStrategySpec,
     FixedModelSelection,
     ModelBinding,
     ModelBindingMismatchError,
@@ -93,6 +95,7 @@ from azathoth.prompting import (
     PromptBindingError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
+    PromptSpecification,
     PromptStrategy,
     PromptStrategySpec,
     PromptTemplate,
@@ -1144,6 +1147,30 @@ This lets workflow and execution infrastructure treat language-model-backed
 behavior consistently with other strategy implementations.
 
 The prompting package does not need its own execution orchestration framework.
+
+# Prompt Specification Kinds
+
+A workflow step is prompt-backed when its specification is a
+`PromptStrategySpec` (fixed prompt) or a `ContextPromptStrategySpec`
+(context-rendered prompt). Both kinds are defined once:
+
+```python
+from azathoth.prompting import (
+    PROMPT_SPECIFICATIONS,
+    PromptSpecification,
+)
+
+if isinstance(step.specification, PROMPT_SPECIFICATIONS):
+    selection = step.specification.model_selection
+```
+
+`PROMPT_SPECIFICATIONS` is the tuple for `isinstance` checks.
+`PromptSpecification` is the matching union for annotations. A test holds
+them equal, and holds every non-tool step kind in the tuple, so a new prompt
+kind cannot be added to workflow steps without being registered here.
+
+Code that must treat the two kinds differently checks one class and asserts
+the other in its `else` branch.
 
 # Prompting and Workflows
 
