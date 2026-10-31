@@ -27,17 +27,19 @@ inherited as before (ADR 0084).
 How long a loop may run becomes a loop setting:
 
 ```text
-settings.budget_seconds    optional; default 7140
+settings.budget_seconds    optional; default 7140, or the bound below when it is shorter
 ```
 
 The loop stops before its budget runs out, as it always has, and each child
 is still stopped at `child_timeout_seconds` or the remaining budget,
 whichever is sooner.
 
-The budget is bounded by the tool's real timeout. It must be a positive
-number no greater than the timeout less a 60-second margin, read from
-`AZATHOTH_TOOL_TIMEOUT_SECONDS`. A budget outside those bounds fails the loop
-before any child runs, and says why. When the variable is absent, as when the
+The budget is bounded by the tool's real timeout: the timeout less a
+60-second margin, read from `AZATHOTH_TOOL_TIMEOUT_SECONDS`. The default
+never exceeds that bound, so a loop tool imported with a shorter timeout
+still runs without a budget. An explicit budget must be a positive number
+within the bound. One outside it fails the loop before any child runs, and
+says why. When the variable is absent, as when the
 script is run by hand, the bound is the timeout the tool declares.
 
 The tool's declared timeout becomes a ceiling rather than the working limit:
