@@ -40,6 +40,8 @@ from tests.examples.test_classify_sentiment_examples import (
 )
 from tests.examples.test_code_review_examples import (
     CHANGE,
+    ORDER_SEARCH_CHANGE_DOCUMENT,
+    RENAME_CHANGE_DOCUMENT,
     REVIEW_WORKFLOW_DOCUMENT,
     review_model,
 )
@@ -160,8 +162,12 @@ def promote_and_invoke(
     models: ModelCatalog,
     language_model: LanguageModel,
     payloads: tuple[JsonValue, ...],
+    input_files: tuple[Path, ...] = (),
 ) -> list[JsonValue]:
-    """Import, authorize, promote and invoke one example; return each invocation's output."""
+    """Import, authorize, promote and invoke one example; return each invocation's output.
+
+    Each payload is given inline, then each input file with `--input-file`.
+    """
 
     (model,) = models.models
 
@@ -180,19 +186,23 @@ def promote_and_invoke(
 
     cli.run("workflow", "promote", identifier)
 
+    inputs = [("--input", json.dumps(payload)) for payload in payloads] + [
+        ("--input-file", str(path)) for path in input_files
+    ]
+
     return [
         json.loads(
             cli.run(
                 "workflow",
                 "invoke",
                 identifier,
-                "--input",
-                json.dumps(payload),
+                option,
+                value,
                 "--output",
                 "result",
             )
         )
-        for payload in payloads
+        for option, value in inputs
     ]
 
 
@@ -343,6 +353,32 @@ def test_review_change_promotes_and_invokes(
             }
         }
     ]
+
+
+def test_review_change_invokes_from_checked_in_change_files(
+    cli: ExampleCli,
+) -> None:
+    results = promote_and_invoke(
+        cli,
+        workflow=REVIEW_WORKFLOW_DOCUMENT,
+        tools=(REVIEW_MERGE_TOOL_DOCUMENT, REVIEW_FINALIZE_TOOL_DOCUMENT),
+        models=novelist_catalog(),
+        language_model=review_model(),
+        payloads=(CHANGE,),
+        input_files=(ORDER_SEARCH_CHANGE_DOCUMENT, RENAME_CHANGE_DOCUMENT),
+    )
+
+    inline, order_search, rename = results
+
+    assert order_search == inline
+    assert rename == {
+        "result": {
+            "verdict": "approve",
+            "findings": [],
+            "counts": {"high": 0, "medium": 0, "low": 0},
+            "summary": "No issues found.",
+        }
+    }
 
 
 def test_revise_chapter_promotes_and_invokes(

@@ -1,0 +1,5 @@
+{
+  "title": "Look up orders by customer name",
+  "description": "Adds a search endpoint for support staff.",
+  "diff": "+    query = f\"SELECT * FROM orders WHERE customer = '{customer_name}'\"\n"
+}

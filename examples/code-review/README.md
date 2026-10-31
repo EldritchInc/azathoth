@@ -17,6 +17,9 @@ readability reviewer ─┘                    └──────────
 | `tools/finalize-review.json` | `d2000000-0000-4000-8000-000000000002` |
 | `benchmarks/review-change.json` | `d2000000-0000-4000-8000-000000000030` |
 
+`changes/` holds two changes to review: `rename.json`, a pure rename, and
+`order-search.json`, which interpolates a customer name into a SQL query.
+
 ## Concurrent Reviewers
 
 The three reviewers depend on nothing but the change, so they share the first
@@ -63,12 +66,14 @@ azathoth tool import examples/code-review/tools/finalize-review.json
 azathoth workflow import examples/code-review/workflows/review-change.json
 
 azathoth workflow run d2000000-0000-4000-8000-000000000010 \
-    --input '{"title": "Rename total to order_total", "description": "A clearer name; no behavior changes.", "diff": "-def total(order):\n+def order_total(order):\n"}' \
+    --input-file examples/code-review/changes/rename.json \
     --output result
 ```
 
-The input is the change's title, description and unified diff. The result
-is the review:
+The input is the change's title, description and unified diff, read from a
+JSON file (ADR 0096). The same object can be given inline with `--input`;
+a file keeps a real diff out of shell quoting. The run records the file's
+path, size and digest beside its input. The result is the review:
 
 ```json
 {
@@ -78,6 +83,9 @@ is the review:
   "summary": "No issues found."
 }
 ```
+
+Reviewing `changes/order-search.json` the same way should request changes,
+with a high-severity security finding for the SQL injection.
 
 ## Benchmark
 
