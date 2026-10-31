@@ -166,14 +166,19 @@ from azathoth.workflows.production_inspection import (
     active_production_revision,
 )
 from azathoth.workflows.production_invocation import (
+    MAX_IDEMPOTENCY_KEY_LENGTH,
+    REQUEST_DIGEST_PATTERN,
+    InvocationIdempotency,
     ProductionInvocation,
     ProductionInvocationErrorCode,
     ProductionInvocationFailure,
     ProductionInvocationResult,
     ProductionInvocationSuccess,
     create_production_invocation,
+    validate_idempotency_key,
 )
 from azathoth.workflows.production_invocation_repository import (
+    IdempotencyKeyInUseError,
     ProductionInvocationRepository,
 )
 from azathoth.workflows.production_invocation_run import (
@@ -324,6 +329,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "BenchmarkCaseSourceError",
+    "IdempotencyKeyInUseError",
     "InMemoryProductionInvocationRepository",
     "InMemoryProductionInvocationRunRepository",
     "InMemoryWorkflowRunFeedbackRepository",
@@ -334,6 +340,7 @@ __all__ = [
     "InMemoryWorkflowProductionRevisionRepository",
     "InMemoryWorkflowProductionStateRepository",
     "InMemoryWorkflowRunRepository",
+    "InvocationIdempotency",
     "ProductionEmissionError",
     "ProductionInvocation",
     "ProductionInvocationErrorCode",
@@ -358,6 +365,8 @@ __all__ = [
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
+    "MAX_IDEMPOTENCY_KEY_LENGTH",
+    "REQUEST_DIGEST_PATTERN",
     "RUN_FAILURE_EVALUATOR_NAME",
     "RUN_FAILURE_EVALUATOR_VERSION",
     "SOURCE_FEEDBACK_METADATA_KEY",
@@ -499,6 +508,7 @@ __all__ = [
     "resolve_named_value",
     "resolve_production_model_selection",
     "tool_usage_report",
+    "validate_idempotency_key",
     "workflow_result",
     "workflow_result_produced",
     "workflow_run_input",

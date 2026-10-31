@@ -10,8 +10,16 @@ from azathoth.workflows.production_invocation import (
     ProductionInvocation,
     ProductionInvocationResult,
 )
+from azathoth.workflows.production_invocation_repository import (
+    IdempotencyKeyInUseError,
+)
 
 _RESULT_ADAPTER: TypeAdapter[ProductionInvocationResult] = TypeAdapter(ProductionInvocationResult)
+
+_IDEMPOTENCY_COLUMNS = (
+    "idempotency_key",
+    "request_digest",
+)
 
 
 class SQLiteProductionInvocationRepository:
@@ -28,7 +36,18 @@ class SQLiteProductionInvocationRepository:
         self,
         invocation: ProductionInvocation,
     ) -> None:
-        """Persist one production invocation without replacing history."""
+        """Persist one production invocation without replacing history.
+
+        The idempotency key and request digest are also written to their own
+        columns, where a unique index keeps one invocation per key.
+
+        Raises:
+            IdempotencyKeyInUseError: The invocation's idempotency key is
+                already recorded on another invocation.
+            ValueError: The invocation is already recorded.
+        """
+
+        idempotency = invocation.idempotency
 
         connection = sqlite3.connect(
             self._database,
@@ -41,19 +60,29 @@ class SQLiteProductionInvocationRepository:
                     INSERT INTO production_invocations (
                         invocation_id,
                         workflow_id,
-                        payload
+                        payload,
+                        idempotency_key,
+                        request_digest
                     )
-                    VALUES (?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         str(invocation.id),
                         str(invocation.workflow_id),
                         invocation.model_dump_json(),
+                        idempotency.key if idempotency is not None else None,
+                        idempotency.request_digest if idempotency is not None else None,
                     ),
                 )
 
                 connection.commit()
             except sqlite3.IntegrityError as exc:
+                if idempotency is not None and not self._invocation_exists(
+                    connection,
+                    invocation.id,
+                ):
+                    raise IdempotencyKeyInUseError(idempotency.key) from exc
+
                 raise ValueError(f"Production invocation {invocation.id} already exists.") from exc
         finally:
             connection.close()
@@ -76,6 +105,35 @@ class SQLiteProductionInvocationRepository:
                 WHERE invocation_id = ?
                 """,
                 (str(invocation_id),),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        if row is None:
+            return None
+
+        return self._deserialize_invocation(
+            row[0],
+        )
+
+    def invocation_for_idempotency_key(
+        self,
+        key: str,
+    ) -> ProductionInvocation | None:
+        """Return the production invocation recorded under one idempotency key."""
+
+        connection = sqlite3.connect(
+            self._database,
+        )
+
+        try:
+            row = connection.execute(
+                """
+                SELECT payload
+                FROM production_invocations
+                WHERE idempotency_key = ?
+                """,
+                (key,),
             ).fetchone()
         finally:
             connection.close()
@@ -210,6 +268,24 @@ class SQLiteProductionInvocationRepository:
         )
 
     @staticmethod
+    def _invocation_exists(
+        connection: sqlite3.Connection,
+        invocation_id: UUID,
+    ) -> bool:
+        """Return whether one invocation is already recorded."""
+
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM production_invocations
+            WHERE invocation_id = ?
+            """,
+            (str(invocation_id),),
+        ).fetchone()
+
+        return row is not None
+
+    @staticmethod
     def _deserialize_invocation(
         payload: object,
     ) -> ProductionInvocation:
@@ -244,7 +320,11 @@ class SQLiteProductionInvocationRepository:
     def _initialize(
         self,
     ) -> None:
-        """Create repository tables and migrate obsolete invocation schema."""
+        """Create repository tables and migrate earlier invocation schemas.
+
+        A table from before ADR 0097 gains the idempotency columns in place,
+        keeping every invocation and its sequence.
+        """
 
         connection = sqlite3.connect(
             self._database,
@@ -264,9 +344,15 @@ class SQLiteProductionInvocationRepository:
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     invocation_id TEXT NOT NULL UNIQUE,
                     workflow_id TEXT NOT NULL,
-                    payload TEXT NOT NULL
+                    payload TEXT NOT NULL,
+                    idempotency_key TEXT,
+                    request_digest TEXT
                 )
                 """
+            )
+
+            self._add_missing_idempotency_columns(
+                connection,
             )
 
             connection.execute(
@@ -277,6 +363,17 @@ class SQLiteProductionInvocationRepository:
                     workflow_id,
                     sequence
                 )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    production_invocations_idempotency_key
+                ON production_invocations (
+                    idempotency_key
+                )
+                WHERE idempotency_key IS NOT NULL
                 """
             )
 
@@ -294,6 +391,27 @@ class SQLiteProductionInvocationRepository:
             connection.commit()
         finally:
             connection.close()
+
+    @staticmethod
+    def _add_missing_idempotency_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add the idempotency columns an earlier invocation table lacks."""
+
+        columns = {
+            row[1]
+            for row in connection.execute(
+                """
+                PRAGMA table_info(production_invocations)
+                """
+            ).fetchall()
+        }
+
+        for column in _IDEMPOTENCY_COLUMNS:
+            if column not in columns:
+                connection.execute(
+                    f"ALTER TABLE production_invocations ADD COLUMN {column} TEXT",
+                )
 
     @staticmethod
     def _requires_revision_column_migration(

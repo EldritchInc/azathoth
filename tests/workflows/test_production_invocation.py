@@ -43,6 +43,7 @@ def test_production_invocation_contains_no_revision_identity() -> None:
         "initial_context",
         "caller_metadata",
         "created_at",
+        "idempotency",
     }
 
 

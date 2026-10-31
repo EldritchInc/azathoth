@@ -19,6 +19,7 @@ from azathoth.workflows.production_execution import (
     complete_production_invocation,
 )
 from azathoth.workflows.production_invocation import (
+    InvocationIdempotency,
     ProductionInvocationErrorCode,
     ProductionInvocationFailure,
     ProductionInvocationResult,
@@ -49,11 +50,19 @@ async def invoke_production_workflow(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     input_provenance: InputProvenance | None = None,
+    idempotency: InvocationIdempotency | None = None,
 ) -> ProductionInvocationResult:
     """Invoke one workflow against its active production state.
 
     An input resolved from a reference passes its provenance, which the
     invocation records beside the input (ADR 0096).
+
+    An invocation started through a job envelope passes its idempotency,
+    which is recorded with the invocation before anything runs (ADR 0097).
+
+    Raises:
+        IdempotencyKeyInUseError: The idempotency key is already recorded on
+            another invocation. Nothing is saved and nothing runs.
     """
 
     invocation = create_production_invocation(
@@ -61,6 +70,7 @@ async def invoke_production_workflow(
         payload=payload,
         caller_metadata=caller_metadata,
         input_provenance=input_provenance,
+        idempotency=idempotency,
     )
 
     invocation_repository.save(

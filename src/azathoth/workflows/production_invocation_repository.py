@@ -9,6 +9,22 @@ from azathoth.workflows.production_invocation import (
 )
 
 
+class IdempotencyKeyInUseError(ValueError):
+    """Raised when an invocation is saved under a key another one holds.
+
+    Nothing is saved. The key is unique across recorded invocations, so of
+    two requests racing with one key, exactly one is saved (ADR 0097).
+    """
+
+    def __init__(
+        self,
+        key: str,
+    ) -> None:
+        super().__init__(f"Idempotency key {key!r} is already recorded on a production invocation.")
+
+        self.key = key
+
+
 class ProductionInvocationRepository(Protocol):
     """Persist production invocations and their terminal results."""
 
@@ -16,7 +32,13 @@ class ProductionInvocationRepository(Protocol):
         self,
         invocation: ProductionInvocation,
     ) -> None:
-        """Persist one production invocation without replacing history."""
+        """Persist one production invocation without replacing history.
+
+        Raises:
+            IdempotencyKeyInUseError: The invocation's idempotency key is
+                already recorded on another invocation.
+            ValueError: The invocation is already recorded.
+        """
 
         ...
 
@@ -25,6 +47,14 @@ class ProductionInvocationRepository(Protocol):
         invocation_id: UUID,
     ) -> ProductionInvocation | None:
         """Return one production invocation by identifier."""
+
+        ...
+
+    def invocation_for_idempotency_key(
+        self,
+        key: str,
+    ) -> ProductionInvocation | None:
+        """Return the production invocation recorded under one idempotency key."""
 
         ...
 
