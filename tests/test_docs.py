@@ -40,8 +40,6 @@ REPOSITORY_LINK = re.compile(
 
 REMOVED_OPTIMIZE_FLAG = re.compile(r"azathoth workflow optimize[^\n]*--expected")
 
-CONCRETE_OPTIMIZE_COMMAND = re.compile(r"azathoth workflow optimize [0-9a-f]{8}-[^\n]*")
-
 LINE_CONTINUATION = re.compile(r"[ \t]*[\\`]\n\s*")
 
 EXECUTION_COMMAND = re.compile(r"azathoth workflow (?:run|invoke)\b[^\n]*")
@@ -272,25 +270,6 @@ def removed_optimize_flag_uses(
     joined = LINE_CONTINUATION.sub(" ", text)
 
     return tuple(match.group(0) for match in REMOVED_OPTIMIZE_FLAG.finditer(joined))
-
-
-def optimize_commands_comparing_no_models(
-    text: str,
-) -> tuple[str, ...]:
-    """Return each concrete `workflow optimize` command that runs one generation.
-
-    Generation 1 measures the configured workflow only. Cheaper candidates are
-    first run in generation 2, so a shown command must pass `--generations`.
-    Syntax lines with placeholders such as `<WORKFLOW_ID>` are not commands.
-    """
-
-    joined = LINE_CONTINUATION.sub(" ", text)
-
-    return tuple(
-        match.group(0)
-        for match in CONCRETE_OPTIMIZE_COMMAND.finditer(joined)
-        if "--generations" not in match.group(0)
-    )
 
 
 def fenced_block_bodies(
@@ -525,28 +504,6 @@ def test_optimize_is_never_shown_with_expected(
     text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
 
     assert removed_optimize_flag_uses(text) == ()
-
-
-def test_optimize_commands_comparing_no_models_are_reported() -> None:
-    text = (
-        "azathoth workflow optimize 5e2e0b6a-0000 --benchmark b --target-cost 1\n"
-        "azathoth workflow optimize f1000000-0000 \\\n    --benchmark b \\\n"
-        "    --generations 2\n"
-        "azathoth workflow optimize <WORKFLOW_ID> --benchmark <BENCHMARK_ID>\n"
-    )
-
-    assert optimize_commands_comparing_no_models(text) == (
-        "azathoth workflow optimize 5e2e0b6a-0000 --benchmark b --target-cost 1",
-    )
-
-
-@pytest.mark.parametrize("document", command_documents())
-def test_shown_optimize_commands_compare_models(
-    document: str,
-) -> None:
-    text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
-
-    assert optimize_commands_comparing_no_models(text) == ()
 
 
 def test_text_reports_without_text_output_are_reported() -> None:

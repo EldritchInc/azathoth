@@ -146,23 +146,24 @@ azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-
 
 Optimize it. The first generation measures the workflow as configured, and
 proposes cheaper candidates: each authorized model that is cheaper than the
-current one and meets the step's requirements. The second generation runs
-them. So `--generations 2` is the least that compares models. Candidates are
-ranked on quality, latency (seconds) and cost (US dollars), against the
-targets you give. It needs at least two authorized models to have anything
+current one and meets the step's requirements. A final evaluation then runs
+them alongside the original, so the default of one generation compares
+models. Candidates are ranked on quality, latency (seconds) and cost (US
+dollars), against the targets you give. It needs at least two authorized models to have anything
 to compare.
 
 ```bash
-azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
 azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
 ```powershell
-azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
 azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-The report names the winner and the model each of its steps ran on.
+The report names the winner and the model each of its steps ran on, and ends
+with the ID of the experiment that chose it.
 Optimizing records evidence, and it never changes your workflow or
 production. To deploy the winner, pin those models in the workflow and import
 it again (see
@@ -294,12 +295,12 @@ ticket is a good job for a cheaper model:
 
 ```bash
 azathoth benchmark import examples/ticket-triage/benchmarks/classify-ticket.json
-azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f1000000-0000-4000-8000-000000000050 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f1000000-0000-4000-8000-000000000050 --target-latency 5 --target-cost 0.001
 ```
 
 ```powershell
 azathoth benchmark import examples/ticket-triage/benchmarks/classify-ticket.json
-azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f1000000-0000-4000-8000-000000000050 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f1000000-0000-4000-8000-000000000050 --target-latency 5 --target-cost 0.001
 ```
 
 The whole-triage benchmark has semantic cases, so it needs a judge:

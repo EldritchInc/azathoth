@@ -395,8 +395,10 @@ A cheaper candidate is not automatically trusted.
 
 It must be executed and evaluated empirically.
 
-The optimization report names each generation's winner and the model each of
-its prompt steps ran on. To deploy the winner, pin those models in the
+The optimization report names the winner of each generation and of the final
+evaluation, and the model each of its prompt steps ran on. The final
+evaluation's winner, or the last generation's when no final evaluation was
+needed, is the session's winner. To deploy the winner, pin those models in the
 workflow, as fixed selections, and promote it. A fixed selection is never
 substituted, so a pinned step stays exactly as measured.
 

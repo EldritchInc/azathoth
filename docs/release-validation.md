@@ -95,8 +95,6 @@ pass. They prove:
 - every bash command in a user guide has a PowerShell equivalent, apart from
   sections that name one platform;
 - no document shows `workflow optimize` with the removed `--expected` flag.
-- every concrete `workflow optimize` command passes `--generations`, because
-  cheaper candidates are first run in generation 2.
 
 The tests can't judge accuracy. Before a release, review that each of these
 describes the implemented behavior:

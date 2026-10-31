@@ -165,11 +165,11 @@ value directly instead of taking it from the run's corrected output.
 ## 5. Optimize It
 
 ```bash
-azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
 ```
 
 ```powershell
-azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001 --generations 2
+azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --target-latency 5 --target-cost 0.001
 ```
 
 Optimization runs in generations. Each generation runs every candidate
@@ -177,15 +177,17 @@ against every benchmark case, scores them, picks a winner, and then proposes
 the next generation's candidates:
 
 1. **Generation 1** runs the workflow as configured. That establishes the
-   baseline, and its winner is the baseline itself. From it, the optimizer
-   proposes candidates that each move one prompt step to an authorized model
-   that is strictly cheaper and still meets the step's requirements.
-2. **Generation 2** runs those cheaper candidates alongside the baseline, and
-   picks the best of them.
+   baseline. From it, the optimizer proposes candidates that each move one
+   prompt step to an authorized model that is strictly cheaper and still
+   meets the step's requirements.
+2. The **final evaluation** runs those cheaper candidates alongside the
+   baseline, and picks the best of them.
 
-So `--generations 2` is the least that compares models. The default, 1, only
-measures the baseline. Each further generation tries cheaper models again
-from the latest winner.
+So the default, one generation, compares models. With `--generations 2` or
+more, each further generation tries cheaper models again from the latest
+winner, and the final evaluation measures the last round. When the last
+generation proposes nothing new, the final evaluation is skipped, and the
+report says so.
 
 Candidates are scored on:
 
@@ -197,9 +199,10 @@ Candidates are scored on:
 The benchmark defines what correct means, so `optimize` takes no expected
 value of its own.
 
-For each generation, the report names the **winner**. It lists every step of
-the winning candidate, with its step ID and the model it ran on, then the
-winner's scores. The last generation's winner is the one to deploy. The
+For each generation and for the final evaluation, the report names the
+**winner**. It lists every step of the winning candidate, with its step ID
+and the model it ran on, then the winner's scores. The report ends with the
+winning experiment's ID; that experiment's winner is the one to deploy. The
 evidence is saved:
 
 ```bash

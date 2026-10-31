@@ -544,12 +544,36 @@ optimizer
 Generation 2 candidates
         │
        ...
+        │
+        ▼
+final evaluation of the last population
 ```
 
 The accumulated result is represented by `WorkflowOptimizationSession`.
 
 A session provides the history of iterative empirical optimization rather than
 only the final candidate population.
+
+## Final Evaluation
+
+The last generation's population is measured too (ADR 0091). After the loop,
+the runner runs one more experiment over it, recorded as the session's
+`final_experiment`, unless the last experiment already evaluated every
+candidate in it.
+
+```text
+WorkflowOptimizationSession
+├── initial_candidates
+├── generations
+└── final_experiment        absent when nothing new was proposed
+```
+
+`winning_experiment` is the final evaluation when there is one, and the last
+generation's experiment otherwise. `winning_population` is the population that
+experiment measured, and `winner` resolves the winning candidate in it.
+
+So a single generation compares the configured candidate with every
+substitution it proposed, and no session ends on proposals it never measured.
 
 ## Session Meaning
 
@@ -568,11 +592,13 @@ optimizer proposal
 This history matters because optimization is not modeled as one opaque
 transformation.
 
-Each generation has evidence connecting it to the generation that follows.
+Each generation has evidence connecting it to the generation that follows,
+and the last generation's proposals are connected to the final evaluation.
 
 ## Benchmark-Driven Experiments
 
-Every generation of a session is judged against the same `BenchmarkDataset`.
+Every generation of a session, and its final evaluation, is judged against
+the same `BenchmarkDataset`.
 
 ```python
 await WorkflowOptimizationSessionRunner(
@@ -1083,6 +1109,8 @@ candidate proposals are not trusted automatically
 experiments determine observed performance
 
 every generation is judged against the same benchmark
+
+every proposal is measured before a session names its winner
 
 failed runs count against a candidate rather than disappearing
 
