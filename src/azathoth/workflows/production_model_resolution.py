@@ -3,9 +3,8 @@
 from uuid import UUID
 
 from azathoth.prompting import (
-    ContextPromptStrategySpec,
+    PROMPT_SPECIFICATIONS,
     FixedModelSelection,
-    PromptStrategySpec,
 )
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -47,10 +46,7 @@ def resolve_production_model_selection(
 
     if not isinstance(
         specification,
-        (
-            PromptStrategySpec,
-            ContextPromptStrategySpec,
-        ),
+        PROMPT_SPECIFICATIONS,
     ):
         raise ValueError(f"Workflow step {step_id} is not prompt-backed.")
 

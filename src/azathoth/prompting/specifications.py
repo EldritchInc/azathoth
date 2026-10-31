@@ -1,6 +1,6 @@
 """Model-independent specifications for prompt-backed strategies."""
 
-from typing import Any
+from typing import Any, Final, TypeAlias
 
 from pydantic import (
     BaseModel,
@@ -73,3 +73,22 @@ class ContextPromptStrategySpec(BaseModel):
         """Serialize the specification, omitting the default text output format."""
 
         return _without_text_output_format(handler(self))
+
+
+PromptSpecification: TypeAlias = PromptStrategySpec | ContextPromptStrategySpec
+"""Any prompt-backed step specification, for annotations.
+
+Keep it in step with `PROMPT_SPECIFICATIONS`; a test holds them equal.
+"""
+
+PROMPT_SPECIFICATIONS: Final = (
+    PromptStrategySpec,
+    ContextPromptStrategySpec,
+)
+"""Every prompt-backed step specification kind, for `isinstance` checks.
+
+Ask "is this step prompt-backed?" with
+`isinstance(specification, PROMPT_SPECIFICATIONS)`, never with a hand-written
+tuple, so a new prompt kind cannot be missed. mypy narrows both branches of
+the check.
+"""

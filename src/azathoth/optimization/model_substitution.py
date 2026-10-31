@@ -3,9 +3,11 @@
 from dataclasses import replace
 
 from azathoth.prompting import (
+    PROMPT_SPECIFICATIONS,
     ContextPromptStrategy,
     ContextPromptStrategySpec,
     PortfolioModelSelection,
+    PromptSpecification,
     PromptStrategy,
     PromptStrategySpec,
     generate_context_prompt_candidates,
@@ -53,7 +55,7 @@ def generate_model_substitutions(
 
         if not isinstance(
             prompt_specification,
-            (PromptStrategySpec, ContextPromptStrategySpec),
+            PROMPT_SPECIFICATIONS,
         ):
             continue
 
@@ -72,10 +74,13 @@ def generate_model_substitutions(
         if isinstance(prompt_specification, PromptStrategySpec):
             if not isinstance(strategy, PromptStrategy):
                 raise ValueError("Prompt-backed workflow steps must use PromptStrategy candidates.")
-        elif not isinstance(strategy, ContextPromptStrategy):
-            raise ValueError(
-                "Context-prompt workflow steps must use ContextPromptStrategy candidates."
-            )
+        else:
+            assert isinstance(prompt_specification, ContextPromptStrategySpec)
+
+            if not isinstance(strategy, ContextPromptStrategy):
+                raise ValueError(
+                    "Context-prompt workflow steps must use ContextPromptStrategy candidates."
+                )
 
         model_binding = strategy.model_binding
 
@@ -126,7 +131,7 @@ def generate_model_substitutions(
 
 def _replace_prompt_step_model(
     *,
-    specification: PromptStrategySpec | ContextPromptStrategySpec,
+    specification: PromptSpecification,
     candidate: WorkflowCandidate,
     candidate_step: WorkflowCandidateStep,
     target_model: ModelMetadata,
@@ -157,6 +162,8 @@ def _replace_prompt_step_model(
             portfolio=portfolio,
         )
     else:
+        assert isinstance(specification, ContextPromptStrategySpec)
+
         generated = generate_context_prompt_candidates(
             specification=specification,
             catalog=catalog,

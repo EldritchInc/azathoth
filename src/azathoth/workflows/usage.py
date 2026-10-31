@@ -7,9 +7,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from azathoth.prompting import (
-    ContextPromptStrategySpec,
+    PROMPT_SPECIFICATIONS,
     FixedModelSelection,
-    PromptStrategySpec,
 )
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.models import WorkflowSpecification
@@ -67,10 +66,7 @@ def workflow_uses_model(
 
         if not isinstance(
             step_specification,
-            (
-                PromptStrategySpec,
-                ContextPromptStrategySpec,
-            ),
+            PROMPT_SPECIFICATIONS,
         ):
             continue
 
@@ -158,10 +154,7 @@ def production_model_usages(
 
         if isinstance(
             step_specification,
-            (
-                PromptStrategySpec,
-                ContextPromptStrategySpec,
-            ),
+            PROMPT_SPECIFICATIONS,
         ):
             model_selection = step_specification.model_selection
 

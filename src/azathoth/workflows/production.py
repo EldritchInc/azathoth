@@ -11,9 +11,8 @@ from pydantic import (
 )
 
 from azathoth.prompting import (
-    ContextPromptStrategySpec,
+    PROMPT_SPECIFICATIONS,
     FixedModelSelection,
-    PromptStrategySpec,
 )
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.references import declaring_step_ids
@@ -104,10 +103,7 @@ class WorkflowProductionState(BaseModel):
 
             if not isinstance(
                 specification,
-                (
-                    PromptStrategySpec,
-                    ContextPromptStrategySpec,
-                ),
+                PROMPT_SPECIFICATIONS,
             ):
                 continue
 

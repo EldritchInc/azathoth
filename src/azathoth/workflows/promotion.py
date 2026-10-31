@@ -5,6 +5,7 @@ from azathoth.prompting import (
     ContextPromptStrategySpec,
     FixedModelSelection,
     ModelBinding,
+    PromptSpecification,
     PromptStrategy,
     PromptStrategySpec,
 )
@@ -115,7 +116,7 @@ def _materialize_step(
 
 def _prompt_model_binding(
     *,
-    specification: PromptStrategySpec | ContextPromptStrategySpec,
+    specification: PromptSpecification,
     candidate_strategy: Strategy,
 ) -> ModelBinding:
     """Return the model a prompt step's candidate is bound to.
@@ -137,6 +138,11 @@ def _prompt_model_binding(
 
         model_binding = candidate_strategy.model_binding
     else:
+        assert isinstance(
+            specification,
+            ContextPromptStrategySpec,
+        )
+
         if not isinstance(
             candidate_strategy,
             ContextPromptStrategy,

@@ -3060,10 +3060,12 @@ azathoth experiment show <EXPERIMENT_ID>
 azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 
 azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
-    --input '"The checkout flow was painless."'
+    --input '"The checkout flow was painless."' \
+    --output text
 ```
 
-Invocation returns the declared result as the production emission:
+With `--output text`, the invocation prints the declared result as the
+production emission:
 
 ```text
 Invocation ID: <INVOCATION_ID>

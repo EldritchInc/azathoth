@@ -15,7 +15,7 @@ from pydantic import (
 from azathoth.prompting import (
     ContextPromptStrategySpec,
     PromptInputBinding,
-    PromptStrategySpec,
+    PromptSpecification,
 )
 from azathoth.tools import ToolRequirement
 from azathoth.workflows.condition import WorkflowCondition
@@ -52,7 +52,7 @@ class WorkflowStepSpecification(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
 
-    specification: PromptStrategySpec | ContextPromptStrategySpec | ToolStepSpecification
+    specification: PromptSpecification | ToolStepSpecification
 
     depends_on: tuple[UUID, ...] = ()
     inputs: tuple[WorkflowInputBinding, ...] = ()
