@@ -80,6 +80,7 @@ from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
     import_tool,
+    install_standard_tools,
     list_tool_history,
     list_tool_implementations,
     list_tool_test_cases,
@@ -234,6 +235,7 @@ def _dispatch(
             arguments,
             export_tool=export_tool,
             import_tool=import_tool,
+            install_standard_tools=install_standard_tools,
             list_tool_history=list_tool_history,
             list_tool_implementations=list_tool_implementations,
             list_tool_test_cases=list_tool_test_cases,

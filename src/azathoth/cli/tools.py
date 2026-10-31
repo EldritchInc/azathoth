@@ -7,6 +7,8 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.revisions import content_digest
+from azathoth.standard import standard_tool_documents
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
@@ -509,9 +511,68 @@ def import_tool(
     return 0
 
 
+def install_standard_tools() -> int:
+    """Install the standard tool library that ships with Azathoth (ADR 0095).
+
+    Each standard document is compared with the latest revision of its exact
+    tool version. A version that is not there is imported as its first
+    revision. A version whose latest revision has the same content digest is
+    left alone, and nothing is written. A version whose latest revision
+    differs, for example an operator's modified copy, gets the standard
+    document as its next revision, which becomes current. Running the command
+    again is always safe.
+
+    The documents are installed in their fixed order. The first one that
+    cannot be saved, because one of its artifact IDs belongs to another tool
+    or version, stops the installation and is reported.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    repository = SQLiteToolRepository(
+        configuration.database,
+    )
+
+    for document in standard_tool_documents():
+        definition = document.definition
+        name = f"{definition.name}@{definition.version}"
+
+        latest = repository.latest_document_revision(
+            definition.id,
+            definition.version,
+        )
+
+        if latest is not None and latest.content_digest == content_digest(document):
+            print(f"Tool {name} is already installed (revision {latest.number}).")
+
+            continue
+
+        try:
+            revision = repository.save_document(document)
+        except ValueError as exc:
+            print(
+                str(exc),
+                file=sys.stderr,
+            )
+
+            return 1
+
+        identical = earliest_identical_tool_revision(
+            repository.document_revisions(revision.tool_id),
+            revision,
+        )
+
+        note = f" (identical to revision {identical.number})" if identical is not None else ""
+
+        print(f"Installed tool {name} revision {revision.number}{note}.")
+
+    return 0
+
+
 __all__ = [
     "export_tool",
     "import_tool",
+    "install_standard_tools",
     "list_tool_history",
     "list_tool_implementations",
     "list_tool_test_cases",

@@ -89,6 +89,7 @@ def dispatch(
         arguments,
         export_tool=export_tool,
         import_tool=unused,
+        install_standard_tools=unused,
         list_tool_history=list_tool_history,
         list_tool_implementations=unused,
         list_tool_test_cases=unused,

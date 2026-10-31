@@ -18,6 +18,7 @@ from azathoth.cli.parsing import (
     TOOL_IMPLEMENTATION_SHOW_ACTION,
     TOOL_IMPLEMENTATIONS_ACTION,
     TOOL_IMPORT_ACTION,
+    TOOL_INSTALL_STANDARD_ACTION,
     TOOL_LIST_ACTION,
     TOOL_REVISION_ATTRIBUTE,
     TOOL_SHOW_ACTION,
@@ -32,6 +33,7 @@ from azathoth.cli.parsing import (
 
 ToolIdentifierHandler = Callable[[UUID], int]
 ToolImportHandler = Callable[[Path], int]
+ToolInstallHandler = Callable[[], int]
 ToolListHandler = Callable[[], int]
 ToolVersionHandler = Callable[..., int]
 ToolHistoryHandler = Callable[..., int]
@@ -42,6 +44,7 @@ def dispatch_tool_command(
     *,
     export_tool: ToolVersionHandler,
     import_tool: ToolImportHandler,
+    install_standard_tools: ToolInstallHandler,
     list_tool_history: ToolHistoryHandler,
     list_tool_implementations: ToolVersionHandler,
     list_tool_test_cases: ToolIdentifierHandler,
@@ -77,6 +80,9 @@ def dispatch_tool_command(
                 ),
             )
         )
+
+    if action == TOOL_INSTALL_STANDARD_ACTION:
+        return install_standard_tools()
 
     if action == TOOL_SHOW_ACTION:
         return show_tool(
