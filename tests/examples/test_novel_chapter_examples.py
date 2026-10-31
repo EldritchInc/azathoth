@@ -14,8 +14,10 @@ from azathoth.tools import (
     encode_tool_document,
 )
 from azathoth.workflows import (
+    WorkflowConstantValue,
     WorkflowNamedValueReference,
     WorkflowRun,
+    WorkflowSpecification,
     WorkflowStepRun,
     WorkflowStepStatus,
     WorkflowValueReference,
@@ -128,15 +130,57 @@ def chapter_model(
     )
 
 
+def with_constant_input(
+    workflow: WorkflowSpecification,
+    step_id: UUID,
+    name: str,
+    value: JsonValue,
+) -> WorkflowSpecification:
+    """Return the workflow with one step's named input bound to another constant."""
+
+    steps = tuple(
+        step.model_copy(
+            update={
+                "inputs": tuple(
+                    binding.model_copy(update={"source": WorkflowConstantValue(value=value)})
+                    if binding.name == name
+                    else binding
+                    for binding in step.inputs
+                )
+            }
+        )
+        if step.id == step_id
+        else step
+        for step in workflow.steps
+    )
+
+    return workflow.model_copy(update={"steps": steps})
+
+
+def constant_input(
+    workflow: WorkflowSpecification,
+    step_id: UUID,
+    name: str,
+) -> object:
+    """Return the source one step binds to one named input."""
+
+    (step,) = (step for step in workflow.steps if step.id == step_id)
+    (binding,) = (binding for binding in step.inputs if binding.name == name)
+
+    return binding.source
+
+
 def write_chapter(
     model: RoutingLanguageModel,
     *,
     number: int = 1,
     config: JsonValue = None,
+    workflow: WorkflowSpecification | None = None,
 ) -> tuple[WorkflowRun, JsonValue]:
     """Run one chapter pass with a stubbed inner loop, returning the run and its result."""
 
-    workflow = read_workflow(CHAPTER_WORKFLOW_DOCUMENT)
+    if workflow is None:
+        workflow = read_workflow(CHAPTER_WORKFLOW_DOCUMENT)
 
     candidate = generate_novel_candidate(
         workflow,
@@ -318,3 +362,44 @@ def test_draft_prompt_carries_the_story_outline_notes_and_number() -> None:
     assert '"summary":"The lamp fails."' in draft_prompt
     assert "No chapters have been written yet." in draft_prompt
     assert "Write chapter 2 so that" in draft_prompt
+
+
+def test_chapter_names_its_revision_workflow_as_a_constant() -> None:
+    workflow = read_workflow(CHAPTER_WORKFLOW_DOCUMENT)
+
+    assert constant_input(workflow, PREPARE_STEP_ID, "revision_workflow_id") == (
+        WorkflowConstantValue(value=REVISION_WORKFLOW_ID)
+    )
+
+
+def test_inner_loop_follows_the_workflows_constant() -> None:
+    workflow = with_constant_input(
+        read_workflow(CHAPTER_WORKFLOW_DOCUMENT),
+        PREPARE_STEP_ID,
+        "revision_workflow_id",
+        "another-revision",
+    )
+
+    run, _ = write_chapter(
+        chapter_model('{"requests": ["Name the lighthouse keeper."]}'),
+        workflow=workflow,
+    )
+
+    settings = step_run_values(run, PREPARE_STEP_ID)["settings"]
+
+    assert isinstance(settings, dict)
+    assert settings["workflow_id"] == "another-revision"
+
+
+def test_prepare_revision_takes_its_workflow_id_as_an_input() -> None:
+    tool = read_tool(PREPARE_TOOL_DOCUMENT)
+    implementation = tool.implementations[0]
+
+    assert tool.definition.version == "1.1.0"
+    required = tool.definition.input_schema.json_schema["required"]
+
+    assert isinstance(required, list)
+    assert "revision_workflow_id" in required
+    assert (implementation.tool_version, implementation.version) == ("1.1.0", "1.1.0")
+    assert str(implementation.id) == "e1000000-0000-4000-8000-000000000203"
+    assert "e1000000-" not in implementation.source

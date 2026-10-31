@@ -16,14 +16,20 @@ from azathoth.tools import (
     encode_tool_document,
 )
 from azathoth.workflows import (
+    WorkflowConstantValue,
     WorkflowRun,
+    WorkflowSpecification,
     WorkflowStepRun,
     WorkflowStepStatus,
     decode_workflow_document,
     encode_workflow_document,
     workflow_result,
 )
-from tests.examples.test_novel_chapter_examples import LOOP_TOOL_DOCUMENT
+from tests.examples.test_novel_chapter_examples import (
+    LOOP_TOOL_DOCUMENT,
+    constant_input,
+    with_constant_input,
+)
 from tests.examples.test_novel_revision_examples import (
     ECHO_TOOL_DOCUMENT,
     NOVEL_EXAMPLES,
@@ -223,10 +229,13 @@ def step_value(
 def write_novel(
     model: RoutingLanguageModel,
     request: dict[str, JsonValue] | None = None,
+    *,
+    workflow: WorkflowSpecification | None = None,
 ) -> tuple[WorkflowRun, JsonValue]:
     """Run the novel workflow with stubbed loops, returning the run and its result."""
 
-    workflow = read_workflow(NOVEL_WORKFLOW_DOCUMENT)
+    if workflow is None:
+        workflow = read_workflow(NOVEL_WORKFLOW_DOCUMENT)
 
     candidate = generate_novel_candidate(
         workflow,
@@ -250,10 +259,13 @@ def write_novel(
 
 def edit_queue(
     queue: list[JsonValue],
+    *,
+    workflow: WorkflowSpecification | None = None,
 ) -> tuple[WorkflowRun, JsonValue]:
     """Run one final-edits pass with a stubbed inner loop, returning the run and its result."""
 
-    workflow = read_workflow(EDIT_QUEUE_WORKFLOW_DOCUMENT)
+    if workflow is None:
+        workflow = read_workflow(EDIT_QUEUE_WORKFLOW_DOCUMENT)
 
     candidate = generate_novel_candidate(
         workflow,
@@ -533,20 +545,140 @@ def test_request_overrides_the_final_edits_budget() -> None:
 
 
 @pytest.mark.parametrize(
-    "document",
+    ("document", "workflow_id_input", "implementation_id", "implementation_version"),
     [
-        pytest.param(PREPARE_CHAPTERS_TOOL_DOCUMENT, id="prepare-chapters"),
-        pytest.param(PREPARE_FINAL_TOOL_DOCUMENT, id="prepare-final-edits"),
+        pytest.param(
+            PREPARE_CHAPTERS_TOOL_DOCUMENT,
+            "chapter_workflow_id",
+            "e1000000-0000-4000-8000-000000000207",
+            "1.2.0",
+            id="prepare-chapters",
+        ),
+        pytest.param(
+            PREPARE_FINAL_TOOL_DOCUMENT,
+            "edit_queue_workflow_id",
+            "e1000000-0000-4000-8000-000000000208",
+            "1.2.0",
+            id="prepare-final-edits",
+        ),
+        pytest.param(
+            PICK_TOOL_DOCUMENT,
+            "revision_workflow_id",
+            "e1000000-0000-4000-8000-000000000205",
+            "1.1.0",
+            id="pick-edit",
+        ),
     ],
 )
-def test_loop_preparation_tools_are_new_implementations_of_the_same_tools(
+def test_loop_preparation_tools_take_their_child_workflow_as_an_input(
     document: Path,
+    workflow_id_input: str,
+    implementation_id: str,
+    implementation_version: str,
 ) -> None:
     tool = read_tool(document)
+    implementation = tool.implementations[0]
 
-    assert tool.definition.version == "1.0.0"
-    assert tool.implementations[0].tool_version == "1.0.0"
-    assert tool.implementations[0].version == "1.1.0"
+    assert tool.definition.version == "1.1.0"
+    required = tool.definition.input_schema.json_schema["required"]
+
+    assert isinstance(required, list)
+    assert workflow_id_input in required
+    assert implementation.tool_version == "1.1.0"
+    assert implementation.version == implementation_version
+    assert str(implementation.id) == implementation_id
+    assert "e1000000-" not in implementation.source
+
+
+@pytest.mark.parametrize(
+    ("document", "step_id", "name", "workflow_id"),
+    [
+        pytest.param(
+            NOVEL_WORKFLOW_DOCUMENT,
+            PREPARE_CHAPTERS_STEP_ID,
+            "chapter_workflow_id",
+            CHAPTER_WORKFLOW_ID,
+            id="chapters",
+        ),
+        pytest.param(
+            NOVEL_WORKFLOW_DOCUMENT,
+            PREPARE_FINAL_STEP_ID,
+            "edit_queue_workflow_id",
+            EDIT_QUEUE_WORKFLOW_ID,
+            id="final-edits",
+        ),
+        pytest.param(
+            EDIT_QUEUE_WORKFLOW_DOCUMENT,
+            PICK_STEP_ID,
+            "revision_workflow_id",
+            REVISION_WORKFLOW_ID,
+            id="edit-queue",
+        ),
+    ],
+)
+def test_novel_workflows_name_their_children_as_constants(
+    document: Path,
+    step_id: UUID,
+    name: str,
+    workflow_id: str,
+) -> None:
+    assert constant_input(read_workflow(document), step_id, name) == WorkflowConstantValue(
+        value=workflow_id
+    )
+
+
+def test_chapter_loop_follows_the_workflows_constant() -> None:
+    workflow = with_constant_input(
+        read_workflow(NOVEL_WORKFLOW_DOCUMENT),
+        PREPARE_CHAPTERS_STEP_ID,
+        "chapter_workflow_id",
+        "another-chapter",
+    )
+
+    run, _ = write_novel(novel_model(), workflow=workflow)
+
+    settings = step_value(run, PREPARE_CHAPTERS_STEP_ID, "settings")
+
+    assert isinstance(settings, dict)
+    assert settings["workflow_id"] == "another-chapter"
+
+
+def test_final_edits_loop_follows_the_workflows_constant() -> None:
+    workflow = with_constant_input(
+        read_workflow(NOVEL_WORKFLOW_DOCUMENT),
+        PREPARE_FINAL_STEP_ID,
+        "edit_queue_workflow_id",
+        "another-edit-queue",
+    )
+
+    run, _ = write_novel(
+        novel_model(edits=[{"chapter": 2, "requests": ["Fix the tide."]}]),
+        workflow=workflow,
+    )
+
+    settings = step_value(run, PREPARE_FINAL_STEP_ID, "settings")
+
+    assert isinstance(settings, dict)
+    assert settings["workflow_id"] == "another-edit-queue"
+
+
+def test_edit_queue_revision_loop_follows_the_workflows_constant() -> None:
+    workflow = with_constant_input(
+        read_workflow(EDIT_QUEUE_WORKFLOW_DOCUMENT),
+        PICK_STEP_ID,
+        "revision_workflow_id",
+        "another-revision",
+    )
+
+    run, _ = edit_queue(
+        [{"chapter": 2, "requests": ["Fix the tide."]}],
+        workflow=workflow,
+    )
+
+    settings = step_value(run, PICK_STEP_ID, "settings")
+
+    assert isinstance(settings, dict)
+    assert settings["workflow_id"] == "another-revision"
 
 
 def test_whole_book_steps_require_a_long_context_model() -> None:
