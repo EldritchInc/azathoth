@@ -54,6 +54,50 @@ JSON. Failures raise `InputContentError`.
 `.markdown` and `.csv` to their media types, and returns `None` for any
 other.
 
+## Resolving at the Edge
+
+References are resolved by the entry point that receives them, before the
+run starts, so steps only ever see values.
+
+```python
+from azathoth.inputs import (
+    FileInputResolver,
+    InputPolicy,
+    SQLiteContentStore,
+    decode_input_source,
+    resolve_input,
+)
+
+policy = InputPolicy(resolvers={"file": FileInputResolver()})
+
+resolved = resolve_input(
+    decode_input_source({"uri": "file:///Users/you/chapter.md", "media_type": "text/markdown"}),
+    policy=policy,
+    store=SQLiteContentStore("azathoth.db"),
+)
+```
+
+An `InputPolicy` is what one entry point accepts: a resolver per accepted
+scheme, and `max_bytes`, which defaults to `DEFAULT_MAX_INPUT_BYTES`
+(10 MiB). An `InputResolver` reads the content one URI names and refuses any
+larger than the cap. `FileInputResolver` reads `file://` URIs naming an
+absolute path on the local host, with an empty host or `localhost`, and reads
+at most one byte past the cap. `file_uri(path)` makes a path absolute and
+returns its URI.
+
+`resolve_input` returns a `ResolvedInput`: the value and its media type. An
+inline value is used as it is. A reference is read, checked against the cap,
+decoded as its media type, and saved in the content store; its
+`InputProvenance` records the URI, media type, size and digest. A scheme the
+policy does not accept is refused before anything is read, and nothing is
+stored for content that is refused. Every refusal raises
+`InputResolutionError`.
+
+`azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
+turns a resolved input into a run's initial events: the canonical
+`workflow.input.received` event with the value, followed, for a reference
+only, by a `workflow.input.resolved` event holding its provenance.
+
 ## Content Store
 
 Resolved content is kept by the digest of its bytes, so a run can always be

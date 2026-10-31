@@ -94,7 +94,9 @@ from azathoth.workflows.generation import (
 )
 from azathoth.workflows.input import (
     WORKFLOW_INPUT_EVENT_TYPE,
+    WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
     create_workflow_input_event,
+    create_workflow_input_events,
 )
 from azathoth.workflows.memory_benchmark_execution_repository import (
     InMemoryWorkflowBenchmarkExecutionRepository,
@@ -361,6 +363,7 @@ __all__ = [
     "SOURCE_FEEDBACK_METADATA_KEY",
     "SOURCE_RUN_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
+    "WORKFLOW_INPUT_RESOLVED_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
     "WorkflowBenchmarkCaseResult",
     "WorkflowBenchmarkComparator",
@@ -462,6 +465,7 @@ __all__ = [
     "complete_production_invocation",
     "create_production_invocation",
     "create_workflow_input_event",
+    "create_workflow_input_events",
     "declaring_step_ids",
     "describe_value_reference",
     "decode_workflow_document",
