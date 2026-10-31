@@ -37,6 +37,7 @@ from azathoth.workflows.references import (
 )
 from azathoth.workflows.retry import WorkflowRetryPolicy
 from azathoth.workflows.value import (
+    WorkflowConstantValue,
     WorkflowContextReference,
     WorkflowInputResolutionError,
     WorkflowNamedValueReference,
@@ -254,6 +255,24 @@ class WorkflowRunner:
 
         for binding in step.inputs:
             source = binding.source
+
+            if isinstance(
+                source,
+                WorkflowConstantValue,
+            ):
+                step_context = step_context.append(
+                    ContextEvent(
+                        event_type=WORKFLOW_INPUT_BOUND_EVENT_TYPE,
+                        payload={
+                            "name": binding.name,
+                            "value": source.value,
+                            "constant": True,
+                        },
+                        producer="workflow-runner",
+                    )
+                )
+
+                continue
 
             if isinstance(
                 source,

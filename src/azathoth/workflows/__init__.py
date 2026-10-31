@@ -308,6 +308,7 @@ from azathoth.workflows.usage_report import (
     tool_usage_report,
 )
 from azathoth.workflows.value import (
+    WorkflowConstantValue,
     WorkflowContextReference,
     WorkflowInputBinding,
     WorkflowInputResolutionError,
@@ -386,6 +387,7 @@ __all__ = [
     "WorkflowCondition",
     "WorkflowConditionEvaluationError",
     "WorkflowConditionOperator",
+    "WorkflowConstantValue",
     "WorkflowContextReference",
     "WorkflowDocumentError",
     "WorkflowEvaluation",
