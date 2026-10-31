@@ -26,7 +26,10 @@ from azathoth.cli.output_format import (
     WorkflowOutputFormat,
 )
 from azathoth.cli.production import invoke_active_production_workflow
-from azathoth.cli.promotion import promote_configured_workflow
+from azathoth.cli.promotion import (
+    WorkflowExperimentNotFoundError,
+    promote_configured_workflow,
+)
 from azathoth.cli.rendering import (
     RESULT_RECORD_TYPE,
     OutputRecord,
@@ -150,8 +153,14 @@ def run_workflow(
 
 def promote_workflow(
     workflow_id: UUID,
+    *,
+    experiment_id: UUID | None = None,
 ) -> int:
-    """Promote one configured workflow to active production."""
+    """Promote one configured workflow to active production.
+
+    With an experiment ID, the experiment's winner is promoted instead of the
+    configured candidate (ADR 0092).
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -167,9 +176,14 @@ def promote_workflow(
             revision_repository=SQLiteWorkflowProductionRevisionRepository(
                 configuration.database,
             ),
+            experiment_id=experiment_id,
+            experiment_repository=SQLiteWorkflowExperimentRepository(
+                configuration.database,
+            ),
         )
     except (
         WorkflowNotConfiguredError,
+        WorkflowExperimentNotFoundError,
         WorkflowGenerationError,
         WorkflowResultError,
     ) as exc:

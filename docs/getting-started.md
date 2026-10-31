@@ -4,7 +4,7 @@ This guide takes one workflow from a JSON file to production. On the way, it
 uses every stage of Azathoth's lifecycle:
 
 ```text
-import ──► run ──► benchmark ──► optimize ──► pin the winner ──► promote ──► invoke
+import ──► run ──► benchmark ──► optimize ──► promote ──► invoke
 ```
 
 The workflow is `examples/workflows/classify-sentiment.json`, one prompt step
@@ -218,11 +218,52 @@ azathoth experiment show <EXPERIMENT_ID>
 Optimizing never changes production, and it never changes your workflow.
 What happens next is your decision.
 
-## 6. Pin the Winning Models
+## 6. Promote It
 
-To deploy what the optimizer found, make it the workflow's configuration:
-pin each prompt step to the model the winner used for that step. Then the
-workflow you promote is exactly the one that was measured.
+Promotion turns a workflow into production. It binds every prompt step to one
+exact model and records a production revision.
+
+To deploy the optimizer's winner, pass the winning experiment's ID from the
+end of the optimize report:
+
+```bash
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --experiment <EXPERIMENT_ID>
+azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+```powershell
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --experiment <EXPERIMENT_ID>
+azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+The winner is rebuilt from the workflow's current revision and checked against
+what the experiment measured, so production runs on exactly the models that
+won. Promotion refuses the experiment if it measured a different revision, for
+example because you imported a new revision after optimizing, or if a winning
+model is no longer authorized.
+
+Optimizing is never required. Without `--experiment`, promotion deploys the
+workflow as configured, with each prompt step on the first authorized model
+that meets its requirements:
+
+```bash
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+```powershell
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+```
+
+`workflow production` shows what is deployed now, including each prompt
+step's primary model. Production keeps running on those models until you
+promote again, even if you change the configuration or the portfolio in the
+meantime. `workflow revisions` lists every promotion.
+
+### Pin the Winner's Models in the Workflow
+
+To make the winner's models part of the workflow itself, so that a plain
+`workflow promote` uses them from now on, pin each prompt step to the model
+the winner used for that step, in a new revision.
 
 Export the current revision to a file:
 
@@ -270,30 +311,12 @@ azathoth workflow import classify-sentiment-pinned.json
 azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f21-000000000000 --workflow 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 ```
 
-If the winner used the same model your workflow already runs on, there is
-nothing to pin. Skip to step 7.
+Then promote the new revision without `--experiment`. The experiment measured
+the earlier revision, so `--experiment` refuses it now; the benchmark you just
+ran is the evidence for the new one. If the winner used the same model your
+workflow already runs on, there is nothing to pin.
 
-## 7. Promote It
-
-Promotion turns the current configuration into production. It binds every
-prompt step to one exact model and records a production revision:
-
-```bash
-azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
-azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
-```
-
-```powershell
-azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
-azathoth workflow production 5e2e0b6a-3c1d-4b7e-9f20-000000000001
-```
-
-`workflow production` shows what is deployed now, including each prompt
-step's primary model. Production keeps running on those models until you
-promote again, even if you change the configuration or the portfolio in the
-meantime. `workflow revisions` lists every promotion.
-
-## 8. Invoke Production
+## 7. Invoke Production
 
 ```bash
 azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"The checkout flow was painless."' --output result
@@ -324,18 +347,18 @@ azathoth workflow invocations 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 azathoth invocation show <INVOCATION_ID>
 ```
 
-## 9. Clean Up
+## 8. Clean Up
 
 Everything this guide created lives in its database. Delete it, and remove
-the pinned document:
+the pinned document if you made one:
 
 ```bash
-rm "$AZATHOTH_DATABASE" classify-sentiment-pinned.json
+rm -f "$AZATHOTH_DATABASE" classify-sentiment-pinned.json
 unset AZATHOTH_DATABASE
 ```
 
 ```powershell
-Remove-Item $env:AZATHOTH_DATABASE, classify-sentiment-pinned.json
+Remove-Item $env:AZATHOTH_DATABASE, classify-sentiment-pinned.json -ErrorAction SilentlyContinue
 Remove-Item Env:AZATHOTH_DATABASE
 ```
 

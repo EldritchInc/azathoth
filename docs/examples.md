@@ -165,23 +165,22 @@ azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 The report names the winner and the model each of its steps ran on, and ends
 with the ID of the experiment that chose it.
 Optimizing records evidence, and it never changes your workflow or
-production. To deploy the winner, pin those models in the workflow and import
-it again (see
-[Pin the Winning Models](getting-started.md#6-pin-the-winning-models)).
-Promotion is a separate, deliberate step. Promote the workflow, then invoke
-production:
+production. Promotion is a separate, deliberate step. Promote the winner by
+its experiment ID, then invoke production:
 
 ```bash
-azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --experiment <EXPERIMENT_ID>
 azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"The checkout flow was painless."' --output result
 ```
 
 ```powershell
-azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --experiment <EXPERIMENT_ID>
 azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 --input '"The checkout flow was painless."' --output result
 ```
 
-It prints `{"result": "positive"}`.
+It prints `{"result": "positive"}`. Without `--experiment`, promotion deploys
+the workflow as configured; see
+[Promote It](getting-started.md#6-promote-it).
 
 `examples/benchmarks/classify-sentiment-semantic.json` judges the same
 workflow by meaning rather than by exact label. With a judge added (see

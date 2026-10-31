@@ -65,7 +65,10 @@ from azathoth.cli.production_inspection import (
     show_invocation,
     show_workflow_production,
 )
-from azathoth.cli.promotion import promote_configured_workflow
+from azathoth.cli.promotion import (
+    WorkflowExperimentNotFoundError,
+    promote_configured_workflow,
+)
 from azathoth.cli.rendering import (
     WorkflowRunSource,
     render_model_usage_report,
@@ -129,6 +132,7 @@ __all__ = [
     "OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE",
     "CliRuntimeConfiguration",
     "SuppliedExpectedValue",
+    "WorkflowExperimentNotFoundError",
     "WorkflowRunInput",
     "WorkflowRunSource",
     "add_benchmark_case",

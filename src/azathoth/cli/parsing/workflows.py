@@ -37,6 +37,7 @@ WORKFLOW_SHOW_ACTION = "show"
 WORKFLOW_BENCHMARK_ID_ATTRIBUTE = "workflow_benchmark_id"
 WORKFLOW_DOCUMENT_ATTRIBUTE = "workflow_document"
 WORKFLOW_EXPERIMENT_LIMIT_ATTRIBUTE = "workflow_experiment_limit"
+WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE = "workflow_promote_experiment"
 WORKFLOW_HISTORY_LIMIT_ATTRIBUTE = "workflow_history_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
@@ -249,6 +250,15 @@ def add_workflow_parser(
         type=UUID,
         metavar="WORKFLOW_ID",
         help="Workflow UUID to promote.",
+    )
+
+    workflow_promote_parser.add_argument(
+        "--experiment",
+        dest=WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE,
+        type=UUID,
+        default=None,
+        metavar="EXPERIMENT_ID",
+        help="Promote this optimization experiment's winner instead of the configured candidate.",
     )
 
     workflow_production_parser = workflow_actions.add_parser(
