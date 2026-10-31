@@ -119,3 +119,4 @@ requests that made it:
 - [ADR 0094: Constant Step Inputs](0094-constant-step-inputs.md)
 - [ADR 0095: Ship a Standard Tool Library](0095-ship-a-standard-tool-library.md)
 - [ADR 0096: Accept Inputs as Values or References](0096-accept-inputs-as-values-or-references.md)
+- [ADR 0097: Carry Invocations in a Versioned Job Envelope](0097-carry-invocations-in-a-versioned-job-envelope.md)
