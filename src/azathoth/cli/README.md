@@ -884,7 +884,8 @@ azathoth workflow invoke <WORKFLOW_ID> \
 The child's step records never reach the parent: the parent only sees the
 child's result.
 
-`examples/tools/run-workflow.json` is a ready-made tool that does this, and
+`run_workflow`, from the standard tool library that `tool install-standard`
+imports, is a ready-made tool that does this, and
 `examples/workflows/count-words-in-child.json` uses it. The examples README
 walks through running a child workflow. The tool reads `--output jsonl` and
 keeps only the final record, so a failure also reports the child's invocation

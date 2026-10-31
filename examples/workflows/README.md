@@ -127,8 +127,8 @@ CLI README walks through turning a miscounted run into a second case with
 ## Running a Child Workflow
 
 `count-words-in-child.json` counts words by invoking another workflow as a
-child. Its one step uses the `run_workflow` tool from
-`examples/tools/run-workflow.json`, a process tool that runs:
+child. Its one step uses the `run_workflow` tool, a process tool from
+Azathoth's standard tool library (ADR 0095) that runs:
 
 ```bash
 azathoth workflow invoke <CHILD_WORKFLOW_ID> --input <JSON> --output jsonl
@@ -145,13 +145,13 @@ must be promoted first. The caller names the child and its input:
 {"workflow_id": "<CHILD_WORKFLOW_ID>", "input": <CHILD_INPUT>}
 ```
 
-Import the three tools and both workflows, promote the child, then run the
-parent:
+Import the two word-count tools, install the standard tools, import both
+workflows, promote the child, then run the parent:
 
 ```bash
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
-azathoth tool import examples/tools/run-workflow.json
+azathoth tool install-standard
 
 azathoth workflow import examples/workflows/word-count-messages.json
 azathoth workflow import examples/workflows/count-words-in-child.json
@@ -207,7 +207,7 @@ input (ADR 0094), as the novel example does.
 
 A workflow is a graph, so no step runs twice in one run. To repeat work, a
 tool invokes a child workflow over and over, one invocation per iteration
-(ADR 0090). `examples/tools/loop-workflow.json` is that tool.
+(ADR 0090). `loop_workflow`, from the standard tool library, is that tool.
 
 Each iteration, the child receives the current state and its iteration
 number, and returns the next state, whether it is done, and optionally one
@@ -239,13 +239,22 @@ iterations. Reaching the limit is not a failure: `completed` is `false`.
 
 `countdown.json` is the smallest possible loop body. It counts its state's
 `remaining` number down by one, collects the number it counted, and is done
-at zero. `loop-countdown.json` loops over it.
+at zero. `loop-countdown.json` loops over it. Its settings are a constant
+step input (ADR 0094), written in the document:
 
-Import the tools and workflows, promote the child, then run the loop:
+```json
+{"name": "settings", "source": {"value": {"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10}}}
+```
+
+Its workflow input is bound to the loop's `state` input, which takes the
+place of `settings.state`, so the caller supplies only the starting state.
+
+Import the countdown tool, install the standard tools, import the workflows,
+promote the child, then run the loop:
 
 ```bash
 azathoth tool import examples/tools/countdown-step.json
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 
 azathoth workflow import examples/workflows/countdown.json
 azathoth workflow import examples/workflows/loop-countdown.json
@@ -253,7 +262,7 @@ azathoth workflow import examples/workflows/loop-countdown.json
 azathoth workflow promote a1000000-0000-4000-8000-000000000004
 
 azathoth workflow run a1000000-0000-4000-8000-000000000005 \
-    --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' \
+    --input '{"remaining": 3}' \
     --output result
 ```
 
@@ -261,7 +270,9 @@ azathoth workflow run a1000000-0000-4000-8000-000000000005 \
 [3, 2, 1]
 ```
 
-With `"max_iterations": 2`, the loop stops early and returns `[3, 2]`.
+With `"max_iterations": 2` in a copy of the document's settings, the loop
+stops early and returns `[3, 2]`. Changing a constant changes the workflow
+document, so the copy is a new revision when it is imported.
 
 A failing iteration fails the loop, naming the iteration and the child's
 invocation, so it can be followed with `invocation show`:

@@ -120,7 +120,7 @@ def configure_child_walkthrough(
 
     run_cli(capsys, "tool", "import", str(PYTHON_TOOL_DOCUMENT))
     run_cli(capsys, "tool", "import", str(PROCESS_TOOL_DOCUMENT))
-    run_cli(capsys, "tool", "import", str(RUN_WORKFLOW_TOOL_DOCUMENT))
+    run_cli(capsys, "tool", "install-standard")
     run_cli(capsys, "workflow", "import", str(CHILD_WORKFLOW_DOCUMENT))
     run_cli(capsys, "workflow", "import", str(PARENT_WORKFLOW_DOCUMENT))
 
