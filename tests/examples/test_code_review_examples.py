@@ -49,6 +49,15 @@ REVIEW_WORKFLOW_DOCUMENT = REVIEW_EXAMPLES / "workflows" / "review-change.json"
 
 REVIEW_BENCHMARK_DOCUMENT = REVIEW_EXAMPLES / "benchmarks" / "review-change.json"
 
+ORDER_SEARCH_CHANGE_DOCUMENT = REVIEW_EXAMPLES / "changes" / "order-search.json"
+
+RENAME_CHANGE_DOCUMENT = REVIEW_EXAMPLES / "changes" / "rename.json"
+
+CHANGE_DOCUMENTS = (
+    ORDER_SEARCH_CHANGE_DOCUMENT,
+    RENAME_CHANGE_DOCUMENT,
+)
+
 REVIEWER_STEP_IDS = {
     "security": UUID("d2000000-0000-4000-8000-000000000011"),
     "correctness": UUID("d2000000-0000-4000-8000-000000000012"),
@@ -73,6 +82,12 @@ CHANGE: JsonValue = {
     "title": "Look up orders by customer name",
     "description": "Adds a search endpoint for support staff.",
     "diff": "+    query = f\"SELECT * FROM orders WHERE customer = '{customer_name}'\"\n",
+}
+
+RENAME: JsonValue = {
+    "title": "Rename total to order_total",
+    "description": "A clearer name; no behavior changes.",
+    "diff": "-def total(order):\n+def order_total(order):\n",
 }
 
 INJECTION: dict[str, JsonValue] = {
@@ -234,6 +249,37 @@ def test_code_review_documents_are_canonical(
 
     assert callable(encode) and callable(decode)
     assert encode(decode(encoded)) == encoded.rstrip("\n")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [pytest.param(path, id=path.name) for path in CHANGE_DOCUMENTS],
+)
+def test_change_examples_are_canonical_json(
+    path: Path,
+) -> None:
+    encoded = path.read_text(encoding="utf-8")
+
+    assert json.dumps(json.loads(encoded), indent=2, ensure_ascii=False) + "\n" == encoded
+
+
+@pytest.mark.parametrize(
+    "path",
+    [pytest.param(path, id=path.name) for path in CHANGE_DOCUMENTS],
+)
+def test_change_examples_hold_a_title_description_and_diff(
+    path: Path,
+) -> None:
+    change = json.loads(path.read_text(encoding="utf-8"))
+
+    assert isinstance(change, dict)
+    assert set(change) == {"title", "description", "diff"}
+    assert all(isinstance(value, str) and value for value in change.values())
+
+
+def test_change_examples_are_the_changes_the_tests_review() -> None:
+    assert json.loads(ORDER_SEARCH_CHANGE_DOCUMENT.read_text(encoding="utf-8")) == CHANGE
+    assert json.loads(RENAME_CHANGE_DOCUMENT.read_text(encoding="utf-8")) == RENAME
 
 
 def test_three_reviewers_run_together_before_the_merge() -> None:

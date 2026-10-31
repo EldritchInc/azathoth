@@ -6,11 +6,16 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.context import Context
+from azathoth.inputs import (
+    JSON_MEDIA_TYPE,
+    InputProvenance,
+    ResolvedInput,
+)
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowRun,
     WorkflowRunner,
-    create_workflow_input_event,
+    create_workflow_input_events,
 )
 
 CONFIGURED_RUN_PRODUCER = "azathoth.configured"
@@ -21,10 +26,24 @@ class WorkflowRunInput:
     """The external input an operator supplied to one configured run.
 
     Wrapping the payload keeps a supplied JSON null distinct from no input at
-    all: a run given null still receives a workflow input event.
+    all: a run given null still receives a workflow input event. An input
+    resolved from a reference keeps its provenance (ADR 0096).
     """
 
     payload: JsonValue
+    provenance: InputProvenance | None = None
+
+    @classmethod
+    def from_resolved(
+        cls,
+        resolved: ResolvedInput,
+    ) -> "WorkflowRunInput":
+        """Return the run input of one resolved input."""
+
+        return cls(
+            payload=resolved.value,
+            provenance=resolved.provenance,
+        )
 
 
 def configured_run_context(
@@ -33,19 +52,24 @@ def configured_run_context(
     """Return the initial context of one configured run.
 
     A run given input starts with one canonical workflow input event, exactly
-    as benchmark cases and production invocations do. A run given no input
+    as benchmark cases and production invocations do, followed by its
+    provenance when it was resolved from a reference. A run given no input
     starts with an empty context.
     """
 
     if workflow_input is None:
         return Context()
 
+    provenance = workflow_input.provenance
+
     return Context(
-        events=(
-            create_workflow_input_event(
-                workflow_input.payload,
-                producer=CONFIGURED_RUN_PRODUCER,
+        events=create_workflow_input_events(
+            ResolvedInput(
+                value=workflow_input.payload,
+                media_type=provenance.media_type if provenance is not None else JSON_MEDIA_TYPE,
+                provenance=provenance,
             ),
+            producer=CONFIGURED_RUN_PRODUCER,
         )
     )
 

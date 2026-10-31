@@ -1,0 +1,5 @@
+{
+  "title": "Rename total to order_total",
+  "description": "A clearer name; no behavior changes.",
+  "diff": "-def total(order):\n+def order_total(order):\n"
+}

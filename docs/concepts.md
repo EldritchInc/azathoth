@@ -769,6 +769,33 @@ order, that actually produced it supplies it. That is how a primary and a
 fallback, or one of several conditional branches, feed the same consumer
 (ADR 0080).
 
+## Workflow Inputs
+
+A workflow's external input is either a value or a reference to content,
+and always has a media type (ADR 0096):
+
+```json
+{"value": {"text": "the old ones wait"}, "media_type": "application/json"}
+{"uri": "file:///Users/you/chapter.md", "media_type": "text/markdown"}
+```
+
+References are resolved at the edge, by the command that received them,
+before the run starts, so steps only ever see values. JSON content is parsed
+and text content becomes a string. Each entry point decides which URI
+schemes it accepts, and resolved content is capped at 10 MiB.
+
+The resolved content is kept in a content-addressed store, by the SHA-256
+digest of its bytes, and the run records a `workflow.input.resolved` event
+with the reference's URI, media type, size and digest. An inline input
+records exactly the `workflow.input.received` event it always has. The CLI
+accepts local files:
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input-file chapter.md
+```
+
+See [`azathoth.inputs`](../src/azathoth/inputs/README.md).
+
 ## Child Workflows and Loops
 
 A workflow is a directed acyclic graph: each step runs at most once per run.
@@ -1015,6 +1042,7 @@ Detailed architecture lives with each major package.
 | --- | --- |
 | [`azathoth.cli`](../src/azathoth/cli/README.md) | Installed operator surface and runtime bootstrap |
 | [`azathoth.context`](../src/azathoth/context/README.md) | Immutable event-backed working context |
+| [`azathoth.inputs`](../src/azathoth/inputs/README.md) | External inputs as values or references, media types, resolution and the content store |
 | [`azathoth.goals`](../src/azathoth/goals/README.md) | Durable objective intent |
 | [`azathoth.strategies`](../src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
 | [`azathoth.execution`](../src/azathoth/execution/README.md) | Strategy execution evidence |

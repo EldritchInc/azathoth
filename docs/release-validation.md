@@ -219,10 +219,14 @@ azathoth tool import examples/tools/word-count-process.json
 azathoth workflow import examples/workflows/redundant-word-count.json
 azathoth workflow list
 azathoth workflow run a1000000-0000-4000-8000-000000000001 --input '"that is not dead which can eternal lie"' --output result
+printf 'that is not dead which can eternal lie' > words.txt
+azathoth workflow run a1000000-0000-4000-8000-000000000001 --input-file words.txt --output result
 ```
 
 `init` installs `run_workflow@1.0.0` and `loop_workflow@1.1.0` as revision
-1, and running it again writes nothing. The run prints `8`.
+1, and running it again writes nothing. Both runs print `8`: the second reads
+its input from a file (ADR 0096), and its run records the file's URI, media
+type, size and digest in a `workflow.input.resolved` event.
 
 ### Models
 

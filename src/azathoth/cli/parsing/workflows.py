@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from argparse import SUPPRESS, ArgumentParser, _SubParsersAction
+from argparse import SUPPRESS, ArgumentParser, _MutuallyExclusiveGroup, _SubParsersAction
 from pathlib import Path
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from azathoth.cli.output_format import (
 )
 from azathoth.cli.parsing.common import (
     json_value,
+    media_type,
     positive_integer,
 )
 
@@ -41,6 +42,8 @@ WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE = "workflow_promote_experiment"
 WORKFLOW_HISTORY_LIMIT_ATTRIBUTE = "workflow_history_limit"
 WORKFLOW_ID_ATTRIBUTE = "workflow_id"
 WORKFLOW_INPUT_ATTRIBUTE = "workflow_input"
+WORKFLOW_INPUT_FILE_ATTRIBUTE = "workflow_input_file"
+WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE = "workflow_input_media_type"
 WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
 WORKFLOW_OUTPUT_ATTRIBUTE = "workflow_output"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
@@ -158,14 +161,18 @@ def add_workflow_parser(
         help="Workflow UUID to execute.",
     )
 
-    workflow_run_parser.add_argument(
+    workflow_run_input = workflow_run_parser.add_mutually_exclusive_group()
+
+    workflow_run_input.add_argument(
         "--input",
         dest=WORKFLOW_INPUT_ATTRIBUTE,
         default=SUPPRESS,
         type=json_value,
         metavar="JSON",
-        help="Workflow input as JSON. Without it the run starts with an empty context.",
+        help="Workflow input as JSON. Without any input the run starts with an empty context.",
     )
+
+    _add_input_file_arguments(workflow_run_parser, workflow_run_input)
 
     _add_output_argument(workflow_run_parser)
 
@@ -181,14 +188,20 @@ def add_workflow_parser(
         help="Production workflow UUID to invoke.",
     )
 
-    workflow_invoke_parser.add_argument(
+    workflow_invoke_input = workflow_invoke_parser.add_mutually_exclusive_group(
+        required=True,
+    )
+
+    workflow_invoke_input.add_argument(
         "--input",
         dest=WORKFLOW_INPUT_ATTRIBUTE,
-        required=True,
+        default=SUPPRESS,
         type=json_value,
         metavar="JSON",
         help="Production workflow input as JSON.",
     )
+
+    _add_input_file_arguments(workflow_invoke_parser, workflow_invoke_input)
 
     _add_output_argument(workflow_invoke_parser)
 
@@ -355,6 +368,37 @@ def add_workflow_parser(
         default=None,
         metavar="COUNT",
         help="Maximum number of most recent runs to list.",
+    )
+
+
+def _add_input_file_arguments(
+    parser: ArgumentParser,
+    inputs: _MutuallyExclusiveGroup,
+) -> None:
+    """Add the file input options of a workflow execution command (ADR 0096).
+
+    `--input-file` is one of the command's mutually exclusive inputs.
+    """
+
+    inputs.add_argument(
+        "--input-file",
+        dest=WORKFLOW_INPUT_FILE_ATTRIBUTE,
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Workflow input read from a JSON or text file. Its media type comes "
+            "from its extension unless --media-type gives it."
+        ),
+    )
+
+    parser.add_argument(
+        "--media-type",
+        dest=WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+        type=media_type,
+        default=None,
+        metavar="TYPE",
+        help="Media type of --input-file: application/json or a text/* type.",
     )
 
 

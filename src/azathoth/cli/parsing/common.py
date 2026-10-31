@@ -6,6 +6,8 @@ from typing import cast
 
 from pydantic import JsonValue
 
+from azathoth.inputs import validate_media_type
+
 COMMAND_ATTRIBUTE = "command"
 
 
@@ -30,6 +32,21 @@ def json_value(
         JsonValue,
         parsed,
     )
+
+
+def media_type(
+    value: str,
+) -> str:
+    """Parse one supported media type command-line value (ADR 0096).
+
+    Raises:
+        ArgumentTypeError: The media type is malformed or not supported.
+    """
+
+    try:
+        return validate_media_type(value)
+    except ValueError as exc:
+        raise ArgumentTypeError(str(exc)) from exc
 
 
 def positive_integer(

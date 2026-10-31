@@ -11,7 +11,12 @@ from azathoth.context import (
     Context,
     ContextEvent,
 )
-from azathoth.workflows.input import create_workflow_input_event
+from azathoth.inputs import (
+    JSON_MEDIA_TYPE,
+    InputProvenance,
+    ResolvedInput,
+)
+from azathoth.workflows.input import create_workflow_input_events
 
 PRODUCTION_INVOCATION_EVENT_TYPE = "production.invocation.received"
 PRODUCTION_INVOCATION_PRODUCER = "azathoth.production"
@@ -79,14 +84,18 @@ def create_production_invocation(
     workflow_id: UUID,
     payload: JsonValue,
     caller_metadata: Mapping[str, JsonValue] | None = None,
+    input_provenance: InputProvenance | None = None,
 ) -> ProductionInvocation:
-    """Create one production invocation from caller-supplied JSON input.
+    """Create one production invocation from caller-supplied input.
 
     The input is recorded twice at the invocation's creation time: once as
     the production invocation event, and once as the canonical workflow input
     event that benchmark cases also emit. A workflow whose prompt binds the
     workflow input therefore renders identically when optimized against a
     benchmark and when invoked in production.
+
+    When the input was resolved from a reference, its provenance follows as
+    a `workflow.input.resolved` event (ADR 0096).
     """
 
     invocation_id = uuid4()
@@ -102,8 +111,16 @@ def create_production_invocation(
                 producer=PRODUCTION_INVOCATION_PRODUCER,
                 occurred_at=created_at,
             ),
-            create_workflow_input_event(
-                payload,
+            *create_workflow_input_events(
+                ResolvedInput(
+                    value=payload,
+                    media_type=(
+                        input_provenance.media_type
+                        if input_provenance is not None
+                        else JSON_MEDIA_TYPE
+                    ),
+                    provenance=input_provenance,
+                ),
                 producer=PRODUCTION_INVOCATION_PRODUCER,
                 occurred_at=created_at,
             ),

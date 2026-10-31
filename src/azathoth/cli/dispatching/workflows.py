@@ -1,5 +1,6 @@
 """Workflow command dispatch for the Azathoth CLI."""
 
+import sys
 from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
@@ -9,6 +10,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.execution import WorkflowRunInput
+from azathoth.cli.inputs import WorkflowInputFile
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     GENERATIONS_ATTRIBUTE,
@@ -25,6 +27,8 @@ from azathoth.cli.parsing import (
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
+    WORKFLOW_INPUT_FILE_ATTRIBUTE,
+    WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
     WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
     WORKFLOW_INVOCATIONS_ACTION,
     WORKFLOW_INVOKE_ACTION,
@@ -142,6 +146,16 @@ def dispatch_workflow_command(
 
         return import_workflow(workflow_document)
 
+    if action in (WORKFLOW_RUN_ACTION, WORKFLOW_INVOKE_ACTION) and _media_type_without_file(
+        arguments,
+    ):
+        print(
+            "--media-type requires --input-file.",
+            file=sys.stderr,
+        )
+
+        return 1
+
     if action == WORKFLOW_RUN_ACTION:
         workflow_id = cast(
             UUID,
@@ -245,6 +259,8 @@ def dispatch_workflow_command(
         )
 
     if action == WORKFLOW_INVOKE_ACTION:
+        input_file = _input_file(arguments)
+
         return invoke_workflow(
             workflow_id=cast(
                 UUID,
@@ -253,12 +269,16 @@ def dispatch_workflow_command(
                     WORKFLOW_ID_ATTRIBUTE,
                 ),
             ),
-            payload=cast(
-                JsonValue,
-                getattr(
-                    arguments,
-                    WORKFLOW_INPUT_ATTRIBUTE,
-                ),
+            payload=(
+                input_file
+                if input_file is not None
+                else cast(
+                    JsonValue,
+                    getattr(
+                        arguments,
+                        WORKFLOW_INPUT_ATTRIBUTE,
+                    ),
+                )
             ),
             output=_output_format(arguments),
         )
@@ -341,14 +361,61 @@ def _specification_revision(
     )
 
 
+def _input_file(
+    arguments: Namespace,
+) -> WorkflowInputFile | None:
+    """Return the input file given to a workflow execution command, if any."""
+
+    path = cast(
+        Path | None,
+        getattr(
+            arguments,
+            WORKFLOW_INPUT_FILE_ATTRIBUTE,
+            None,
+        ),
+    )
+
+    if path is None:
+        return None
+
+    return WorkflowInputFile(
+        path=path,
+        media_type=cast(
+            str | None,
+            getattr(
+                arguments,
+                WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+                None,
+            ),
+        ),
+    )
+
+
+def _media_type_without_file(
+    arguments: Namespace,
+) -> bool:
+    """Return whether a media type was given without an input file."""
+
+    return (
+        getattr(arguments, WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE, None) is not None
+        and getattr(arguments, WORKFLOW_INPUT_FILE_ATTRIBUTE, None) is None
+    )
+
+
 def _run_input(
     arguments: Namespace,
-) -> WorkflowRunInput | None:
+) -> WorkflowRunInput | WorkflowInputFile | None:
     """Return the input supplied to a configured run, if any.
 
-    The option is absent from the parsed arguments unless it was given, so a
+    An input file is returned as it is, to be resolved by the command. The
+    JSON option is absent from the parsed arguments unless it was given, so a
     supplied JSON null is still input.
     """
+
+    input_file = _input_file(arguments)
+
+    if input_file is not None:
+        return input_file
 
     if not hasattr(
         arguments,
