@@ -199,8 +199,9 @@ Two guards keep children bounded:
   so a slow child is not left running after the tool itself is stopped.
 
 The depth guard belongs to this example tool, not to Azathoth. Recording a
-child's lineage and depth in its initial context is planned after 1.0, along
-with constant step inputs that would let a parent name its child itself.
+child's lineage and depth in its initial context is planned. A parent can
+already name its child itself, by binding the child's ID as a constant step
+input (ADR 0094), as the novel example does.
 
 ## Looping Over a Child Workflow
 
