@@ -40,6 +40,21 @@ export AZATHOTH_DATABASE="$HOME/azathoth-work/examples.db"
 $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\examples.db"
 ```
 
+Then create it and install the standard tools:
+
+```bash
+azathoth init
+```
+
+```powershell
+azathoth init
+```
+
+Examples 3, 4 and 8 compose workflows with `run_workflow` and
+`loop_workflow`, which ship with Azathoth. Each of them runs
+`azathoth tool install-standard` too, which is safe to repeat: a tool that is
+already installed is left alone.
+
 Importing a document twice is harmless. Azathoth keeps both as revisions, and
 an identical import is marked as such. So each example below imports
 everything it needs, even when an earlier example already did.
@@ -201,11 +216,13 @@ azathoth benchmark run 5e2e0b6a-3c1d-4b7e-9f22-000000000000 --workflow 5e2e0b6a-
 `count-words-in-child.json` has a single step: the `run_workflow` tool, which
 invokes another workflow and returns its result. Here the child is the word
 count with messages. The child is invoked, so it must be promoted first.
+`run_workflow` ships with Azathoth in its standard tool library, which
+`tool install-standard` imports.
 
 ```bash
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
-azathoth tool import examples/tools/run-workflow.json
+azathoth tool install-standard
 azathoth workflow import examples/workflows/word-count-messages.json
 azathoth workflow import examples/workflows/count-words-in-child.json
 azathoth workflow promote a1000000-0000-4000-8000-000000000002
@@ -215,7 +232,7 @@ azathoth workflow run a1000000-0000-4000-8000-000000000003 --input '{"workflow_i
 ```powershell
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
-azathoth tool import examples/tools/run-workflow.json
+azathoth tool install-standard
 azathoth workflow import examples/workflows/word-count-messages.json
 azathoth workflow import examples/workflows/count-words-in-child.json
 azathoth workflow promote a1000000-0000-4000-8000-000000000002
@@ -234,27 +251,30 @@ A workflow is a graph, so no step runs twice in one run. To repeat work, the
 `loop_workflow` tool invokes a child workflow once per iteration and passes
 each iteration's state to the next. `countdown.json` is the smallest
 possible loop body: it counts its state down by one and is done at zero.
+`loop-countdown.json` binds the loop's settings, the child and an iteration
+limit of 10, as a constant in the document, so the caller supplies only the
+starting state.
 
 ```bash
 azathoth tool import examples/tools/countdown-step.json
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 azathoth workflow import examples/workflows/countdown.json
 azathoth workflow import examples/workflows/loop-countdown.json
 azathoth workflow promote a1000000-0000-4000-8000-000000000004
-azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' --output result
+azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"remaining": 3}' --output result
 ```
 
 ```powershell
 azathoth tool import examples/tools/countdown-step.json
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 azathoth workflow import examples/workflows/countdown.json
 azathoth workflow import examples/workflows/loop-countdown.json
 azathoth workflow promote a1000000-0000-4000-8000-000000000004
-azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' --output result
+azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"remaining": 3}' --output result
 ```
 
-It prints `[3, 2, 1]`. With `"max_iterations": 2`, the loop stops early with
-`[3, 2]`.
+It prints `[3, 2, 1]`. With `"max_iterations": 2` in the document's settings,
+the loop stops early with `[3, 2]`.
 
 A loop is bounded three ways:
 
@@ -415,16 +435,17 @@ set a credit limit on your key. It needs an authorized model with a context
 window of at least 200,000 tokens, because the final review reads the whole
 book at once.
 
-Import the loop tool and the novel's tools and workflows:
+Install the standard tools, which include the loop tool, and import the
+novel's tools and workflows:
 
 ```bash
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 for file in examples/novel/tools/*.json; do azathoth tool import "$file"; done
 for file in examples/novel/workflows/*.json; do azathoth workflow import "$file"; done
 ```
 
 ```powershell
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 Get-ChildItem examples/novel/tools/*.json | ForEach-Object { azathoth tool import $_.FullName }
 Get-ChildItem examples/novel/workflows/*.json | ForEach-Object { azathoth workflow import $_.FullName }
 ```

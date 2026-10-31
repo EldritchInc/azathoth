@@ -676,6 +676,12 @@ The subsystem also supports durable tool test cases and deterministic verificati
 
 See [`azathoth.tools`](../src/azathoth/tools/README.md).
 
+Azathoth ships a standard tool library in the package: `run_workflow` and
+`loop_workflow`, which compose workflows from other workflows. Standard tools
+reach a database the same way as every other tool, by a recorded import, which
+`azathoth init` and `azathoth tool install-standard` perform. See
+[`azathoth.standard`](../src/azathoth/standard/README.md).
+
 ## Tool-Backed Workflows
 
 Durable tools can execute as ordinary workflow steps.
@@ -1016,6 +1022,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.prompting`](../src/azathoth/prompting/README.md) | Prompt specifications, bindings, model selection, and executable prompt strategies |
 | [`azathoth.providers`](../src/azathoth/providers/README.md) | Provider truth, model metadata, authorization, discovery, and executable registries |
 | [`azathoth.tools`](../src/azathoth/tools/README.md) | Durable tool capabilities, implementations, execution, and verification |
+| [`azathoth.standard`](../src/azathoth/standard/README.md) | The standard tool library that ships in the package |
 | [`azathoth.workflows`](../src/azathoth/workflows/README.md) | Workflow definition, execution, evidence, experiments, and production |
 | [`azathoth.optimization`](../src/azathoth/optimization/README.md) | Empirical candidate generation and optimization |
 | [`azathoth.runtime`](../src/azathoth/runtime/README.md) | Process-local executable composition |

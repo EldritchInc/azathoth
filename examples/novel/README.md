@@ -42,11 +42,11 @@ ending are never written.
 ## Running It
 
 The book needs language models. With a provider configured and models
-authorized (see the CLI README), import the loop tool and the novel's own
-tools and workflows:
+authorized (see the CLI README), install the standard tools, which include
+the loop tool, and import the novel's own tools and workflows:
 
 ```bash
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 
 for file in examples/novel/tools/*.json; do azathoth tool import "$file"; done
 for file in examples/novel/workflows/*.json; do azathoth workflow import "$file"; done
@@ -55,7 +55,7 @@ for file in examples/novel/workflows/*.json; do azathoth workflow import "$file"
 In PowerShell:
 
 ```powershell
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 
 Get-ChildItem examples/novel/tools/*.json | ForEach-Object { azathoth tool import $_.FullName }
 Get-ChildItem examples/novel/workflows/*.json | ForEach-Object { azathoth workflow import $_.FullName }

@@ -2,7 +2,7 @@
   "metadata": {
     "id": "a1000000-0000-4000-8000-000000000005",
     "name": "loop a countdown",
-    "description": "Invoke the deployed countdown workflow repeatedly until it reaches zero. The caller names the child, the iteration limit and the starting state.",
+    "description": "Invoke the deployed countdown workflow repeatedly until it reaches zero. The child and the iteration limit are constant settings; the caller supplies the starting state.",
     "version": "1.0.0"
   },
   "steps": [
@@ -19,6 +19,15 @@
       "inputs": [
         {
           "name": "settings",
+          "source": {
+            "value": {
+              "workflow_id": "a1000000-0000-4000-8000-000000000004",
+              "max_iterations": 10
+            }
+          }
+        },
+        {
+          "name": "state",
           "source": {
             "event_type": "workflow.input.received",
             "field_name": "input"

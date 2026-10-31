@@ -250,9 +250,8 @@ unset OPENROUTER_API_KEY
 
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
-azathoth tool import examples/tools/run-workflow.json
 azathoth tool import examples/tools/countdown-step.json
-azathoth tool import examples/tools/loop-workflow.json
+azathoth tool install-standard
 
 azathoth workflow import examples/workflows/redundant-word-count.json
 azathoth workflow import examples/workflows/word-count-messages.json
@@ -268,12 +267,13 @@ azathoth workflow promote a1000000-0000-4000-8000-000000000002
 azathoth workflow run a1000000-0000-4000-8000-000000000003 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000002", "input": "the old ones wait"}' --output result
 
 azathoth workflow promote a1000000-0000-4000-8000-000000000004
-azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"workflow_id": "a1000000-0000-4000-8000-000000000004", "max_iterations": 10, "state": {"remaining": 3}}' --output result
+azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"remaining": 3}' --output result
 ```
 
 The three runs must print exactly `8`, `4` and `[3, 2, 1]`, and the tool's
-test cases must pass. The child and loop runs prove that the process tools
-find the installed package through the venv's `python`.
+test cases must pass. `tool install-standard` proves that the standard tools
+ship in the installed package, and the child and loop runs prove that the
+process tools find that package through the venv's `python`.
 
 ### 4. Run the model-backed examples
 

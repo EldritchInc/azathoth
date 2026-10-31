@@ -80,7 +80,8 @@ The packaging tests (`tests/test_package.py` and
 
 - the distribution name, version agreement, Python support, dependencies,
   license, URLs, README and entry point;
-- that the wheel ships `py.typed`;
+- that the wheel ships `py.typed` and the standard tool library;
+- that an installed wheel loads the standard tools outside the repository;
 - that the wheel installs into a separate environment and runs outside the
   repository;
 - that provider-free inspection works from the installed artifact.
@@ -197,19 +198,22 @@ provider-policy layers.
 
 ### The command surface
 
-The installed CLI exposes these command families: `workflow`, `run`,
-`experiment`, `invocation`, `model`, `judge`, `tool`, `goal` and `benchmark`.
-[The CLI reference](../src/azathoth/cli/README.md) documents each.
+The installed CLI exposes `init` and these command families: `workflow`,
+`run`, `experiment`, `invocation`, `model`, `judge`, `tool`, `goal` and
+`benchmark`. [The CLI reference](../src/azathoth/cli/README.md) documents
+each.
 
 `--help` and `--version` work without a database, runtime bootstrap or
 provider credentials.
 
 ### Provider-free use
 
-Importing, listing and showing workflows, tools and benchmarks, and running
-workflows built only from tools, need no `OPENROUTER_API_KEY`:
+Initializing a database, importing, listing and showing workflows, tools and
+benchmarks, and running workflows built only from tools, need no
+`OPENROUTER_API_KEY`:
 
 ```bash
+azathoth init
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
 azathoth workflow import examples/workflows/redundant-word-count.json
@@ -217,7 +221,8 @@ azathoth workflow list
 azathoth workflow run a1000000-0000-4000-8000-000000000001 --input '"that is not dead which can eternal lie"' --output result
 ```
 
-The run prints `8`.
+`init` installs `run_workflow@1.0.0` and `loop_workflow@1.1.0` as revision
+1, and running it again writes nothing. The run prints `8`.
 
 ### Models
 

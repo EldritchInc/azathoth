@@ -17,6 +17,7 @@ TOOL_HISTORY_ACTION = "history"
 TOOL_IMPLEMENTATIONS_ACTION = "implementations"
 TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
 TOOL_IMPORT_ACTION = "import"
+TOOL_INSTALL_STANDARD_ACTION = "install-standard"
 TOOL_LIST_ACTION = "list"
 TOOL_SHOW_ACTION = "show"
 TOOL_TEST_CASES_ACTION = "test-cases"
@@ -64,6 +65,11 @@ def add_tool_parser(
         type=Path,
         metavar="FILE",
         help="Portable tool JSON document to import.",
+    )
+
+    tool_actions.add_parser(
+        TOOL_INSTALL_STANDARD_ACTION,
+        help="Install the standard tool library that ships with Azathoth.",
     )
 
     tool_show_parser = tool_actions.add_parser(

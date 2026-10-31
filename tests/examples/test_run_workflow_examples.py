@@ -38,7 +38,9 @@ from tests.examples.test_word_count_messages_examples import (
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
-RUN_WORKFLOW_TOOL_DOCUMENT = PROJECT_ROOT / "examples" / "tools" / "run-workflow.json"
+STANDARD_TOOLS = PROJECT_ROOT / "src" / "azathoth" / "standard" / "tools"
+
+RUN_WORKFLOW_TOOL_DOCUMENT = STANDARD_TOOLS / "run-workflow.json"
 
 PARENT_WORKFLOW_DOCUMENT = PROJECT_ROOT / "examples" / "workflows" / "count-words-in-child.json"
 
@@ -118,7 +120,7 @@ def configure_child_walkthrough(
 
     run_cli(capsys, "tool", "import", str(PYTHON_TOOL_DOCUMENT))
     run_cli(capsys, "tool", "import", str(PROCESS_TOOL_DOCUMENT))
-    run_cli(capsys, "tool", "import", str(RUN_WORKFLOW_TOOL_DOCUMENT))
+    run_cli(capsys, "tool", "install-standard")
     run_cli(capsys, "workflow", "import", str(CHILD_WORKFLOW_DOCUMENT))
     run_cli(capsys, "workflow", "import", str(PARENT_WORKFLOW_DOCUMENT))
 

@@ -44,6 +44,7 @@ from azathoth.cli.goals import (
     list_goals,
     show_goal,
 )
+from azathoth.cli.initialization import initialize_database
 from azathoth.cli.judges import (
     add_judge,
     list_judges,
@@ -100,6 +101,7 @@ from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
     import_tool,
+    install_standard_tools,
     list_tool_history,
     list_tool_implementations,
     list_tool_test_cases,
@@ -150,6 +152,8 @@ __all__ = [
     "import_goal",
     "export_tool",
     "import_tool",
+    "initialize_database",
+    "install_standard_tools",
     "export_workflow",
     "import_workflow",
     "invoke_active_production_workflow",

@@ -35,7 +35,9 @@ from tests.examples.test_novel_revision_examples import (
     run_with_input,
 )
 
-LOOP_TOOL_DOCUMENT = Path(__file__).parents[2] / "examples" / "tools" / "loop-workflow.json"
+LOOP_TOOL_DOCUMENT = (
+    Path(__file__).parents[2] / "src" / "azathoth" / "standard" / "tools" / "loop-workflow.json"
+)
 
 PREPARE_TOOL_DOCUMENT = NOVEL_EXAMPLES / "tools" / "prepare-revision.json"
 

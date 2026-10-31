@@ -51,7 +51,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-azathoth = ["py.typed"]
+azathoth = ["py.typed", "standard/tools/*.json"]
 
 [project.optional-dependencies]
 dev = [

@@ -239,24 +239,40 @@ export AZATHOTH_DATABASE="$HOME/azathoth-work/azathoth.db"
 $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\azathoth.db"
 ```
 
-The file is created the first time a command needs it. To start over,
-delete it.
-
-A command that reads the database works without a provider key, so it makes a
-good first check:
+Then create the database and install Azathoth's standard tools into it:
 
 ```bash
-azathoth workflow list
+azathoth init
 ```
 
 ```powershell
-azathoth workflow list
+azathoth init
 ```
+
+```text
+Database: /Users/you/azathoth-work/azathoth.db (created)
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+The standard tools ship inside the package, so composing workflows needs no
+copy of the repository:
+
+- `run_workflow` runs a child workflow once;
+- `loop_workflow` runs a child workflow repeatedly.
+
+Like every tool, they reach the database only by a recorded import, which is
+what `init` does. It needs no provider key, and running it again is safe: it
+reports each tool as already installed and writes nothing. It stops at the
+database and its tools. Authorizing models needs a provider key, so it is a
+separate step (see [Connecting OpenRouter](openrouter.md)).
+
+To start over, delete the file and run `azathoth init` again.
 
 ## 6. Get the Examples
 
-The examples aren't part of the PyPI package. They live in the repository.
-Clone it next to your venv:
+The standard tools are part of the PyPI package, but the examples aren't.
+They live in the repository. Clone it next to your venv:
 
 ```bash
 cd ~/azathoth-work
@@ -305,15 +321,22 @@ already does (see
 
 ## Upgrading, Leaving and Uninstalling
 
-Upgrade to the latest release:
+Upgrade to the latest release, then install any new versions of the
+standard tools into your database:
 
 ```bash
 python -m pip install --upgrade azathoth-ai
+azathoth init
 ```
 
 ```powershell
 python -m pip install --upgrade azathoth-ai
+azathoth init
 ```
+
+A release that changes a standard tool ships it as a new version, which is
+added beside the old one. Your workflows keep the exact tool versions they
+name, so upgrading never changes what an existing workflow runs.
 
 To leave the venv without closing the terminal, run `deactivate`.
 

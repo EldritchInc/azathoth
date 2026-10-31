@@ -16,6 +16,8 @@ from azathoth.tools import (
 from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
     ToolStepSpecification,
+    WorkflowConstantValue,
+    WorkflowContextReference,
     WorkflowNamedValueReference,
     decode_workflow_document,
     encode_workflow_document,
@@ -31,7 +33,9 @@ TOOL_EXAMPLES = PROJECT_ROOT / "examples" / "tools"
 
 WORKFLOW_EXAMPLES = PROJECT_ROOT / "examples" / "workflows"
 
-LOOP_TOOL_DOCUMENT = TOOL_EXAMPLES / "loop-workflow.json"
+STANDARD_TOOLS = PROJECT_ROOT / "src" / "azathoth" / "standard" / "tools"
+
+LOOP_TOOL_DOCUMENT = STANDARD_TOOLS / "loop-workflow.json"
 
 COUNTDOWN_TOOL_DOCUMENT = TOOL_EXAMPLES / "countdown-step.json"
 
@@ -61,14 +65,21 @@ DOCUMENTS = (
 )
 
 
+EXAMPLE_SETTINGS: JsonValue = {
+    "workflow_id": str(COUNTDOWN_WORKFLOW_ID),
+    "max_iterations": 10,
+}
+
+STARTING_STATE = '{"remaining": 3}'
+
+
 def loop_settings(
     workflow_id: UUID = COUNTDOWN_WORKFLOW_ID,
     *,
     max_iterations: int = 10,
-    remaining: int = 3,
     budget_seconds: JsonValue = None,
-) -> str:
-    """Return the parent's JSON input naming the child, the limit and the starting state.
+) -> dict[str, JsonValue]:
+    """Return loop settings naming the child and the limit.
 
     A budget is included only when one is given.
     """
@@ -76,13 +87,32 @@ def loop_settings(
     settings: dict[str, JsonValue] = {
         "workflow_id": str(workflow_id),
         "max_iterations": max_iterations,
-        "state": {"remaining": remaining},
     }
 
     if budget_seconds is not None:
         settings["budget_seconds"] = budget_seconds
 
-    return json.dumps(settings)
+    return settings
+
+
+def import_loop_with_settings(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    settings: dict[str, JsonValue],
+) -> None:
+    """Import a revision of the loop example whose constant settings are replaced."""
+
+    document = json.loads(LOOP_WORKFLOW_DOCUMENT.read_text(encoding="utf-8"))
+
+    (binding,) = (
+        binding for binding in document["steps"][0]["inputs"] if binding["name"] == "settings"
+    )
+    binding["source"] = {"value": settings}
+
+    variant = tmp_path / "loop-countdown-variant.json"
+    variant.write_text(json.dumps(document), encoding="utf-8")
+
+    run_cli(capsys, "workflow", "import", str(variant))
 
 
 def import_loop_tool_with_timeout(
@@ -124,7 +154,7 @@ def configure_loop_walkthrough(
     monkeypatch.delenv(DEPTH_VARIABLE, raising=False)
 
     run_cli(capsys, "tool", "import", str(COUNTDOWN_TOOL_DOCUMENT))
-    run_cli(capsys, "tool", "import", str(LOOP_TOOL_DOCUMENT))
+    run_cli(capsys, "tool", "install-standard")
     run_cli(capsys, "workflow", "import", str(COUNTDOWN_WORKFLOW_DOCUMENT))
     run_cli(capsys, "workflow", "import", str(LOOP_WORKFLOW_DOCUMENT))
 
@@ -136,9 +166,9 @@ def configure_loop_walkthrough(
 
 def run_loop(
     capsys: pytest.CaptureFixture[str],
-    settings: str,
+    state: str = STARTING_STATE,
 ) -> tuple[int, str, str]:
-    """Run the loop workflow for its result, returning status, stdout and stderr."""
+    """Run the loop workflow from one starting state, returning status, stdout and stderr."""
 
     status = main(
         (
@@ -146,7 +176,7 @@ def run_loop(
             "run",
             str(LOOP_WORKFLOW_ID),
             "--input",
-            settings,
+            state,
             "--output",
             "result",
         )
@@ -260,7 +290,7 @@ def test_loop_example_documents_are_canonical(
 ) -> None:
     encoded = document.read_text(encoding="utf-8")
 
-    if document.parent == TOOL_EXAMPLES:
+    if document.parent in {STANDARD_TOOLS, TOOL_EXAMPLES}:
         assert encode_tool_document(decode_tool_document(encoded)) == encoded.rstrip("\n")
     else:
         assert encode_workflow_document(decode_workflow_document(encoded)) == encoded.rstrip("\n")
@@ -342,6 +372,18 @@ def test_loop_workflow_example_returns_the_collected_items() -> None:
     assert workflow.result.name == "items"
 
 
+def test_loop_workflow_example_binds_its_settings_as_a_constant() -> None:
+    workflow = decode_workflow_document(LOOP_WORKFLOW_DOCUMENT.read_text(encoding="utf-8"))
+
+    sources = {binding.name: binding.source for binding in workflow.steps[0].inputs}
+
+    assert sources["settings"] == WorkflowConstantValue(value=EXAMPLE_SETTINGS)
+    assert sources["state"] == WorkflowContextReference(
+        event_type="workflow.input.received",
+        field_name="input",
+    )
+
+
 def test_loop_runs_the_child_until_it_is_done(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -349,7 +391,7 @@ def test_loop_runs_the_child_until_it_is_done(
 ) -> None:
     database = configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    status, output, errors = run_loop(capsys, loop_settings())
+    status, output, errors = run_loop(capsys)
 
     assert (status, output, errors) == (0, "[3, 2, 1]\n", "")
     assert loop_values(database) == {
@@ -359,14 +401,27 @@ def test_loop_runs_the_child_until_it_is_done(
     }
 
 
+def test_loop_starts_from_the_state_the_caller_supplies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+
+    status, output, errors = run_loop(capsys, '{"remaining": 5}')
+
+    assert (status, output, errors) == (0, "[5, 4, 3, 2, 1]\n", "")
+
+
 def test_loop_stops_at_its_iteration_limit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     database = configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+    import_loop_with_settings(tmp_path, capsys, loop_settings(max_iterations=2))
 
-    status, output, errors = run_loop(capsys, loop_settings(max_iterations=2))
+    status, output, errors = run_loop(capsys)
 
     assert (status, output, errors) == (0, "[3, 2]\n", "")
     assert loop_values(database) == {
@@ -383,7 +438,7 @@ def test_loop_reports_the_failing_iteration_and_invocation(
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys, promote_child=False)
 
-    status, output, errors = run_loop(capsys, loop_settings())
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -399,8 +454,9 @@ def test_loop_rejects_a_child_that_ignores_the_loop_protocol(
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
     import_seven_child(tmp_path, capsys)
+    import_loop_with_settings(tmp_path, capsys, loop_settings(SEVEN_WORKFLOW_ID))
 
-    status, output, errors = run_loop(capsys, loop_settings(SEVEN_WORKFLOW_ID))
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -416,7 +472,9 @@ def test_loop_rejects_settings_without_a_positive_iteration_limit(
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    status, output, errors = run_loop(capsys, loop_settings(max_iterations=0))
+    import_loop_with_settings(tmp_path, capsys, loop_settings(max_iterations=0))
+
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -433,7 +491,7 @@ def test_loop_refuses_beyond_the_depth_limit(
 
     monkeypatch.setenv(DEPTH_VARIABLE, "8")
 
-    status, output, errors = run_loop(capsys, loop_settings())
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert f"{TOOL_FAILURE_PREFIX} 2: Child workflow depth 9 exceeds the limit of 8." in errors
@@ -446,7 +504,9 @@ def test_loop_runs_within_an_explicit_budget(
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=600))
+    import_loop_with_settings(tmp_path, capsys, loop_settings(budget_seconds=600))
+
+    status, output, errors = run_loop(capsys)
 
     assert (status, output, errors) == (0, "[3, 2, 1]\n", "")
 
@@ -468,7 +528,9 @@ def test_loop_rejects_a_budget_that_is_not_a_positive_number(
 ) -> None:
     database = configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=budget))
+    import_loop_with_settings(tmp_path, capsys, loop_settings(budget_seconds=budget))
+
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -484,7 +546,9 @@ def test_loop_rejects_a_budget_beyond_its_timeout(
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=86341))
+    import_loop_with_settings(tmp_path, capsys, loop_settings(budget_seconds=86341))
+
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -501,7 +565,9 @@ def test_loop_budget_is_bounded_by_the_timeout_it_is_given(
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
     import_loop_tool_with_timeout(tmp_path, capsys, 120)
 
-    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=61))
+    import_loop_with_settings(tmp_path, capsys, loop_settings(budget_seconds=61))
+
+    status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
     assert (
@@ -518,6 +584,6 @@ def test_loop_default_budget_fits_a_shorter_timeout(
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
     import_loop_tool_with_timeout(tmp_path, capsys, 120)
 
-    status, output, errors = run_loop(capsys, loop_settings())
+    status, output, errors = run_loop(capsys)
 
     assert (status, output, errors) == (0, "[3, 2, 1]\n", "")
