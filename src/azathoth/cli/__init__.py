@@ -45,6 +45,10 @@ from azathoth.cli.goals import (
     show_goal,
 )
 from azathoth.cli.initialization import initialize_database
+from azathoth.cli.inputs import (
+    CLI_INPUT_POLICY,
+    WorkflowInputFile,
+)
 from azathoth.cli.judges import (
     add_judge,
     list_judges,
@@ -128,6 +132,7 @@ from azathoth.cli.workflows import (
 )
 
 __all__ = [
+    "CLI_INPUT_POLICY",
     "CONFIGURED_RUN_PRODUCER",
     "DATABASE_ENVIRONMENT_VARIABLE",
     "DEFAULT_DATABASE",
@@ -135,6 +140,7 @@ __all__ = [
     "CliRuntimeConfiguration",
     "SuppliedExpectedValue",
     "WorkflowExperimentNotFoundError",
+    "WorkflowInputFile",
     "WorkflowRunInput",
     "WorkflowRunSource",
     "add_benchmark_case",

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.inputs import InputProvenance
 from azathoth.runtime import AzathothRuntime
 from azathoth.workflows import (
     ProductionInvocationRepository,
@@ -26,6 +27,7 @@ async def invoke_active_production_workflow(
     invocation_run_repository: ProductionInvocationRunRepository,
     caller_metadata: Mapping[str, JsonValue] | None = None,
     runner: WorkflowRunner | None = None,
+    input_provenance: InputProvenance | None = None,
 ) -> ProductionInvocationResult:
     """Invoke the active production state for one workflow."""
 
@@ -44,4 +46,5 @@ async def invoke_active_production_workflow(
         runner=runner,
         tool_resolver=runtime.tool_resolver,
         tool_implementation_resolver=runtime.tool_implementation_resolver,
+        input_provenance=input_provenance,
     )

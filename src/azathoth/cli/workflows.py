@@ -20,6 +20,10 @@ from azathoth.cli.execution import (
     configured_run_context,
     execute_configured_workflow,
 )
+from azathoth.cli.inputs import (
+    WorkflowInputFile,
+    resolve_input_file,
+)
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.output_format import (
     DEFAULT_WORKFLOW_OUTPUT_FORMAT,
@@ -51,6 +55,11 @@ from azathoth.cli.workflow_configuration import (
     list_workflows,
     show_workflow,
 )
+from azathoth.inputs import (
+    InputProvenance,
+    InputResolutionError,
+    InputSourceError,
+)
 from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
@@ -76,7 +85,7 @@ from azathoth.workflows import (
 def run_workflow(
     workflow_id: UUID,
     *,
-    workflow_input: WorkflowRunInput | None = None,
+    workflow_input: WorkflowRunInput | WorkflowInputFile | None = None,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Execute one configured workflow and persist its run as evidence.
@@ -90,12 +99,29 @@ def run_workflow(
     the run can later become a benchmark case. Without input the run starts
     with an empty context.
 
+    An input file is resolved before anything else happens (ADR 0096): its
+    content is stored, and its provenance is recorded in the run's initial
+    context. A file that cannot be resolved starts no run.
+
     The output format decides what the operator sees while and after the run
     executes. The command returns 0 when the run ends in a result record, and
     1 when it halted or did not produce its declared result.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
+
+    run_input: WorkflowRunInput | None
+
+    if isinstance(workflow_input, WorkflowInputFile):
+        run_input = _resolve_input_file(
+            workflow_input,
+            configuration,
+        )
+
+        if run_input is None:
+            return 1
+    else:
+        run_input = workflow_input
 
     runtime = load_runtime(configuration)
 
@@ -106,7 +132,7 @@ def run_workflow(
             execute_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
-                context=configured_run_context(workflow_input),
+                context=configured_run_context(run_input),
                 runner=WorkflowRunner(
                     observer=_step_observer(
                         output,
@@ -149,6 +175,34 @@ def run_workflow(
         record,
         writer,
     )
+
+
+def _resolve_input_file(
+    input_file: WorkflowInputFile,
+    configuration: CliRuntimeConfiguration,
+) -> WorkflowRunInput | None:
+    """Resolve one input file into a run input, or report why it cannot be.
+
+    The file's content is stored in the configured database.
+    """
+
+    try:
+        resolved = resolve_input_file(
+            input_file,
+            database=configuration.database,
+        )
+    except (
+        InputSourceError,
+        InputResolutionError,
+    ) as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return None
+
+    return WorkflowRunInput.from_resolved(resolved)
 
 
 def promote_workflow(
@@ -206,10 +260,14 @@ def promote_workflow(
 def invoke_workflow(
     *,
     workflow_id: UUID,
-    payload: JsonValue,
+    payload: JsonValue | WorkflowInputFile,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Invoke one active production workflow.
+
+    The payload is the JSON input, or an input file. A file is resolved before
+    anything else happens (ADR 0096), and its provenance is recorded with the
+    invocation; a file that cannot be resolved records no invocation.
 
     The output format decides what the caller sees while and after the
     invocation executes. The command returns 0 when the invocation succeeds
@@ -217,6 +275,23 @@ def invoke_workflow(
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
+
+    invocation_input: JsonValue
+    input_provenance: InputProvenance | None = None
+
+    if isinstance(payload, WorkflowInputFile):
+        resolved = _resolve_input_file(
+            payload,
+            configuration,
+        )
+
+        if resolved is None:
+            return 1
+
+        invocation_input = resolved.payload
+        input_provenance = resolved.provenance
+    else:
+        invocation_input = payload
 
     runtime = load_runtime(configuration)
 
@@ -226,7 +301,7 @@ def invoke_workflow(
         invoke_active_production_workflow(
             runtime=runtime,
             workflow_id=workflow_id,
-            payload=payload,
+            payload=invocation_input,
             invocation_repository=SQLiteProductionInvocationRepository(
                 configuration.database,
             ),
@@ -236,6 +311,7 @@ def invoke_workflow(
             invocation_run_repository=SQLiteProductionInvocationRunRepository(
                 configuration.database,
             ),
+            input_provenance=input_provenance,
             runner=WorkflowRunner(
                 observer=_step_observer(
                     output,

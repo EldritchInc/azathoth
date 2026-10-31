@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.inputs import InputProvenance
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -47,13 +48,19 @@ async def invoke_production_workflow(
     runner: WorkflowRunner | None = None,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    input_provenance: InputProvenance | None = None,
 ) -> ProductionInvocationResult:
-    """Invoke one workflow against its active production state."""
+    """Invoke one workflow against its active production state.
+
+    An input resolved from a reference passes its provenance, which the
+    invocation records beside the input (ADR 0096).
+    """
 
     invocation = create_production_invocation(
         workflow_id=workflow_id,
         payload=payload,
         caller_metadata=caller_metadata,
+        input_provenance=input_provenance,
     )
 
     invocation_repository.save(
