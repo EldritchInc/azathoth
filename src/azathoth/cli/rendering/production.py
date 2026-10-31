@@ -4,9 +4,8 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from azathoth.prompting import (
-    ContextPromptStrategySpec,
+    PROMPT_SPECIFICATIONS,
     FixedModelSelection,
-    PromptStrategySpec,
 )
 from azathoth.workflows import (
     WorkflowProductionRevision,
@@ -115,10 +114,7 @@ def _primary_models(
 
         if not isinstance(
             specification,
-            (
-                PromptStrategySpec,
-                ContextPromptStrategySpec,
-            ),
+            PROMPT_SPECIFICATIONS,
         ):
             continue
 

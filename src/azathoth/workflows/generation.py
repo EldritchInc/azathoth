@@ -2,6 +2,7 @@
 
 from azathoth.prompting import (
     ContextPromptStrategySpec,
+    PromptStrategySpec,
     generate_context_prompt_candidates,
     generate_prompt_candidates,
 )
@@ -85,6 +86,11 @@ def generate_workflow_candidate(
 
             strategy = context_prompt_candidates[0]
         else:
+            assert isinstance(
+                step_specification,
+                PromptStrategySpec,
+            )
+
             prompt_candidates = generate_prompt_candidates(
                 specification=step_specification,
                 catalog=catalog,

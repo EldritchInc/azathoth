@@ -1,8 +1,7 @@
 """Generate executable candidates from durable production workflow state."""
 
 from azathoth.prompting import (
-    ContextPromptStrategySpec,
-    PromptStrategySpec,
+    PROMPT_SPECIFICATIONS,
 )
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -97,10 +96,7 @@ def _resolve_production_step(
 
     if not isinstance(
         specification,
-        (
-            PromptStrategySpec,
-            ContextPromptStrategySpec,
-        ),
+        PROMPT_SPECIFICATIONS,
     ):
         return step
 
