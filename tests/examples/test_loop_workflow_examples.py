@@ -39,7 +39,9 @@ COUNTDOWN_WORKFLOW_DOCUMENT = WORKFLOW_EXAMPLES / "countdown.json"
 
 LOOP_WORKFLOW_DOCUMENT = WORKFLOW_EXAMPLES / "loop-countdown.json"
 
-LOOP_IMPLEMENTATION_ID = UUID("c1000000-0000-4000-8000-000000000012")
+LOOP_IMPLEMENTATION_ID = UUID("c1000000-0000-4000-8000-000000000022")
+
+LOOP_1_0_IMPLEMENTATION_ID = UUID("c1000000-0000-4000-8000-000000000012")
 
 COUNTDOWN_WORKFLOW_ID = UUID("a1000000-0000-4000-8000-000000000004")
 
@@ -275,6 +277,43 @@ def test_loop_tool_example_runs_python_as_a_long_lived_process() -> None:
     assert implementation.runtime == PROCESS_TOOL_RUNTIME
     assert implementation.command == ("python",)
     assert implementation.timeout_seconds == 86400.0
+
+
+def loop_tool_1_0() -> str:
+    """Return the loop tool document as version 1.0.0 shipped, with its own implementation ID."""
+
+    document = json.loads(LOOP_TOOL_DOCUMENT.read_text(encoding="utf-8"))
+
+    document["definition"]["version"] = "1.0.0"
+    document["implementations"][0]["id"] = str(LOOP_1_0_IMPLEMENTATION_ID)
+    document["implementations"][0]["tool_version"] = "1.0.0"
+    document["implementations"][0]["version"] = "1.0.0"
+
+    return json.dumps(document)
+
+
+def test_loop_tool_1_1_has_its_own_implementation_id() -> None:
+    document = decode_tool_document(LOOP_TOOL_DOCUMENT.read_text(encoding="utf-8"))
+
+    assert document.implementations[0].id != LOOP_1_0_IMPLEMENTATION_ID
+
+
+def test_loop_tool_1_1_imports_beside_version_1_0(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_walkthrough(monkeypatch, tmp_path)
+
+    earlier = tmp_path / "loop-workflow-1.0.json"
+    earlier.write_text(loop_tool_1_0(), encoding="utf-8")
+
+    run_cli(capsys, "tool", "import", str(earlier))
+
+    status = main(("tool", "import", str(LOOP_TOOL_DOCUMENT)))
+    captured = capsys.readouterr()
+
+    assert status == 0, captured.err
 
 
 def test_loop_tool_example_is_version_1_1() -> None:

@@ -102,11 +102,23 @@ Only `idea` is required:
 | `revision_workflow_id` | `e1…0010` | The revision loop's body |
 | `edit_queue_workflow_id` | `e1…0060` | The final-edits loop's body |
 
-A workflow cannot yet hold a constant input, so each loop's child ID is a
-default inside the tool that prepares that loop's settings:
-`prepare-chapters`, `prepare-revision` and `prepare-final-edits`. The request
-can override any of them, for example to try a different chapter workflow
-without changing the novel.
+Each loop's child ID is a constant input in the workflow that runs the loop
+(ADR 0094), passed to the tool that prepares the loop's settings:
+
+```json
+{"name": "chapter_workflow_id", "source": {"value": "e1000000-0000-4000-8000-000000000040"}}
+```
+
+| Workflow | Tool | Constant input |
+| --- | --- | --- |
+| `write-novel` | `prepare-chapters` | `chapter_workflow_id` |
+| `write-novel` | `prepare-final-edits` | `edit_queue_workflow_id` |
+| `write-chapter` | `prepare-revision` | `revision_workflow_id` |
+| `edit-queue` | `pick-edit` | `revision_workflow_id` |
+
+The request can override any of them for one run, for example to try a
+different chapter workflow. To change the default, change the constant and
+import the workflow again; no tool changes.
 
 ## Steps That Run Only Sometimes
 
@@ -137,7 +149,7 @@ budgets are capped just under the loop tool's 24-hour timeout.
 A loop that runs out of time fails, and so does the novel:
 
 ```text
-Tool implementation c1000000-0000-4000-8000-000000000012 exited with status 1: Loop over child workflow e1000000-0000-4000-8000-000000000040 ran out of time after 4 iterations.
+Tool implementation c1000000-0000-4000-8000-000000000022 exited with status 1: Loop over child workflow e1000000-0000-4000-8000-000000000040 ran out of time after 4 iterations.
 ```
 
 To give chapters or edits more time, set `chapter_timeout_seconds` or

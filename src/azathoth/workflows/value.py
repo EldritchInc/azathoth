@@ -1,8 +1,9 @@
 """Structured values produced by workflow execution."""
 
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 
 class WorkflowValue(BaseModel):
@@ -53,6 +54,21 @@ class WorkflowContextReference(BaseModel):
 
     event_type: str = Field(min_length=1)
     field_name: str = Field(min_length=1)
+
+
+class WorkflowConstantValue(BaseModel):
+    """A constant JSON value bound to a step input (ADR 0094).
+
+    Written `{"value": <JSON>}` in a workflow document. Any JSON value may be
+    the constant, including objects, lists and null.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    value: JsonValue
 
 
 class WorkflowInputResolutionError(RuntimeError):
@@ -110,9 +126,37 @@ class WorkflowValueBinding(BaseModel):
 
 
 class WorkflowInputBinding(BaseModel):
-    """Bind a workflow or context value to a named step input."""
+    """Bind a workflow value, a context value or a constant to a named step input."""
 
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(min_length=1)
-    source: WorkflowValueReference | WorkflowNamedValueReference | WorkflowContextReference
+    source: (
+        WorkflowValueReference
+        | WorkflowNamedValueReference
+        | WorkflowContextReference
+        | WorkflowConstantValue
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_constant_with_other_keys(
+        cls,
+        data: Any,
+    ) -> Any:
+        """Reject a source that carries a constant value beside other keys.
+
+        A reference that ignores unknown keys would otherwise accept such a
+        source and silently drop its value.
+
+        Raises:
+            ValueError: The source has a `value` key and any other key.
+        """
+
+        if isinstance(data, dict):
+            source = data.get("source")
+
+            if isinstance(source, dict) and "value" in source and len(source) > 1:
+                raise ValueError("A constant input source holds only 'value'.")
+
+        return data

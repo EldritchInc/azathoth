@@ -343,17 +343,19 @@ The workflow value model includes:
 - `WorkflowValueReference`
 - `WorkflowNamedValueReference`
 - `WorkflowContextReference`
+- `WorkflowConstantValue`
 - `WorkflowValue`
 
 Bindings describe declared data flow between workflow inputs, workflow steps,
 and step outputs.
 
-A step input's source takes one of three forms:
+A step input's source takes one of four forms:
 
 ```json
 {"producer_step_id": "<STEP_ID>", "name": "address"}
 {"name": "address"}
 {"event_type": "workflow.input.received", "field_name": "input"}
+{"value": <JSON>}
 ```
 
 The explicit form names exactly one upstream producer.
@@ -380,6 +382,33 @@ Workflow input bindings must name a value declared by a step the consumer depend
 The `workflow.input.bound` event recorded for every value input names the
 producer that actually supplied it, so evidence always shows which redundant
 producer was used.
+
+### Constant Inputs
+
+The fourth form binds a constant written in the workflow document (ADR 0094):
+
+```json
+{"name": "chapter_workflow_id", "source": {"value": "e1000000-0000-4000-8000-000000000040"}}
+```
+
+Any JSON value may be the constant, including objects, lists and `null`. A
+constant has no producer, so it needs no dependency. The step receives it as
+an ordinary bound input, recorded as:
+
+```json
+{"name": "chapter_workflow_id", "value": "e1000000-0000-4000-8000-000000000040", "constant": true}
+```
+
+Tools receive it as an input, and prompt variables bound to the input render
+it. The source holds only `value`; a reference that also carries `value` is
+rejected:
+
+```text
+A constant input source holds only 'value'.
+```
+
+Changing a constant changes the workflow document, so it is a new revision
+and is promoted like any other change.
 
 An output binding whose path does not resolve against a step's output fails
 that attempt with `WorkflowValueResolutionError`:

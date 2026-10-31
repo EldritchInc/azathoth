@@ -734,7 +734,14 @@ See [`azathoth.workflows`](../src/azathoth/workflows/README.md).
 ## Values, Prompts and Replies
 
 Steps pass values by name. A step declares the outputs it produces, and later
-steps bind them as inputs. Prompt templates can use those inputs directly:
+steps bind them as inputs. An input can also be a constant written in the
+workflow document, such as a child workflow's ID (ADR 0094):
+
+```json
+{"name": "chapter_workflow_id", "source": {"value": "<CHILD_WORKFLOW_ID>"}}
+```
+
+Prompt templates can use inputs directly:
 
 ```json
 {"variable_name": "plan", "input_name": "plan"}

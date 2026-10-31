@@ -48,7 +48,7 @@
       "specification": {
         "requirement": {
           "name": "pick_edit",
-          "version": "1.0.0",
+          "version": "1.1.0",
           "runtime": "python"
         }
       },
@@ -61,6 +61,12 @@
           "source": {
             "producer_step_id": "e1000000-0000-4000-8000-000000000061",
             "name": "state"
+          }
+        },
+        {
+          "name": "revision_workflow_id",
+          "source": {
+            "value": "e1000000-0000-4000-8000-000000000010"
           }
         }
       ],

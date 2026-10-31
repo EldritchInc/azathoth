@@ -1,6 +1,6 @@
 # ADR 0090: Loop by Invoking Child Workflows from a Tool
 
-- Status: Accepted; amended by ADR 0093
+- Status: Accepted; amended by ADR 0093, ADR 0094
 - Date: 2026-10-26
 - Decided in: #104
 
@@ -90,8 +90,8 @@ that prepares it, and that step can produce the fallback.
 - Every iteration records its own invocation and run in the shared database,
   so long loops produce many records.
 - The loop body must be promoted before the loop can use it.
-- Until constant step inputs exist (ADR 0084), a parent names its child
-  through a preparation tool that holds the child's ID as a default.
+- A parent names its child as a constant step input (ADR 0094). Before
+  constants existed, a preparation tool held the child's ID as a default.
 
 ## Alternatives Considered
 
