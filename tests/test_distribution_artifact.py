@@ -22,6 +22,18 @@ WORKFLOW_ID = "11111111-1111-1111-1111-111111111111"
 
 LIBRARY_DIRECTORY_SCRIPT = "import sysconfig; print(sysconfig.get_path('purelib'))"
 
+STANDARD_TOOL_FILES = (
+    "run-workflow.json",
+    "loop-workflow.json",
+)
+
+STANDARD_TOOLS_SCRIPT = (
+    "from azathoth.standard import standard_tool_documents; "
+    "print(' '.join("
+    "f'{document.definition.name}@{document.definition.version}' "
+    "for document in standard_tool_documents()))"
+)
+
 
 def run(
     *arguments: str,
@@ -200,6 +212,26 @@ def test_wheel_contains_package_and_typed_marker(
 
     assert f"{PACKAGE_NAME}/__init__.py" in files
     assert f"{PACKAGE_NAME}/py.typed" in files
+
+
+def test_wheel_contains_the_standard_tool_library(
+    tmp_path: Path,
+) -> None:
+    wheel = build_wheel(
+        workspace=tmp_path,
+    )
+
+    with zipfile.ZipFile(
+        wheel,
+    ) as archive:
+        files = set(
+            archive.namelist(),
+        )
+
+    assert f"{PACKAGE_NAME}/standard/__init__.py" in files
+
+    for name in STANDARD_TOOL_FILES:
+        assert f"{PACKAGE_NAME}/standard/tools/{name}" in files
 
 
 def test_wheel_contains_distribution_metadata(
@@ -387,3 +419,31 @@ def test_wheel_runs_provider_free_workflow_inspection_outside_repository(
 
     assert show_result.returncode == 0, show_result.stderr
     assert WORKFLOW_ID in show_result.stdout
+
+
+def test_wheel_loads_the_standard_tool_library_outside_repository(
+    tmp_path: Path,
+) -> None:
+    wheel = build_wheel(
+        workspace=tmp_path,
+    )
+    environment = create_installed_environment(
+        workspace=tmp_path,
+        wheel=wheel,
+    )
+
+    python = environment_bin_directory(environment) / (
+        "python.exe" if os.name == "nt" else "python"
+    )
+    working_directory = tmp_path / "consumer"
+    working_directory.mkdir()
+
+    result = run(
+        str(python),
+        "-c",
+        STANDARD_TOOLS_SCRIPT,
+        cwd=working_directory,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "run_workflow@1.0.0 loop_workflow@1.1.0\n"

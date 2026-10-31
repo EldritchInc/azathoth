@@ -31,7 +31,9 @@ TOOL_EXAMPLES = PROJECT_ROOT / "examples" / "tools"
 
 WORKFLOW_EXAMPLES = PROJECT_ROOT / "examples" / "workflows"
 
-LOOP_TOOL_DOCUMENT = TOOL_EXAMPLES / "loop-workflow.json"
+STANDARD_TOOLS = PROJECT_ROOT / "src" / "azathoth" / "standard" / "tools"
+
+LOOP_TOOL_DOCUMENT = STANDARD_TOOLS / "loop-workflow.json"
 
 COUNTDOWN_TOOL_DOCUMENT = TOOL_EXAMPLES / "countdown-step.json"
 
@@ -260,7 +262,7 @@ def test_loop_example_documents_are_canonical(
 ) -> None:
     encoded = document.read_text(encoding="utf-8")
 
-    if document.parent == TOOL_EXAMPLES:
+    if document.parent in {STANDARD_TOOLS, TOOL_EXAMPLES}:
         assert encode_tool_document(decode_tool_document(encoded)) == encoded.rstrip("\n")
     else:
         assert encode_workflow_document(decode_workflow_document(encoded)) == encoded.rstrip("\n")

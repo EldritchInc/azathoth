@@ -38,7 +38,9 @@ from tests.examples.test_word_count_messages_examples import (
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
-RUN_WORKFLOW_TOOL_DOCUMENT = PROJECT_ROOT / "examples" / "tools" / "run-workflow.json"
+STANDARD_TOOLS = PROJECT_ROOT / "src" / "azathoth" / "standard" / "tools"
+
+RUN_WORKFLOW_TOOL_DOCUMENT = STANDARD_TOOLS / "run-workflow.json"
 
 PARENT_WORKFLOW_DOCUMENT = PROJECT_ROOT / "examples" / "workflows" / "count-words-in-child.json"
 
