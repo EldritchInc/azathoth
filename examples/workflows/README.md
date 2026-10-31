@@ -224,6 +224,9 @@ state:
 {"workflow_id": "<CHILD_WORKFLOW_ID>", "max_iterations": 10, "state": <STATE>}
 ```
 
+Two optional settings bound its time: `budget_seconds` for the whole loop and
+`child_timeout_seconds` for each iteration.
+
 It returns every item collected, in order, with the final state:
 
 ```json
@@ -269,9 +272,18 @@ Iteration 2: child workflow <CHILD_WORKFLOW_ID> invocation <INVOCATION_ID> faile
 The loop is bounded three ways:
 
 - `max_iterations`, which must be a positive integer;
-- time: the tool's timeout is 2 hours, and the loop keeps to a budget just
-  inside it, stopping each child after `child_timeout_seconds` (default 600)
-  or when the budget runs out, whichever comes first;
+- time: the loop keeps to `budget_seconds`, stopping each child after
+  `child_timeout_seconds` (default 600) or when the budget runs out,
+  whichever comes first. The budget defaults to 7140 seconds, just under 2
+  hours. A longer one may be set, up to the tool's 24-hour timeout less a
+  minute; the loop reads that timeout from `AZATHOTH_TOOL_TIMEOUT_SECONDS`,
+  which Azathoth sets for every process tool (ADR 0093). A budget it cannot
+  honor fails the loop before any child runs:
+
+  ```text
+  Loop budget of 90000 seconds exceeds the tool's timeout of 86400 seconds less a 60-second margin.
+  ```
+
 - depth: loops can nest, and each level counts against the same 8-level
   limit as `run_workflow`.
 
