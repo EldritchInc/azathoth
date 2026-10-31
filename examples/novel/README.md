@@ -137,7 +137,7 @@ budgets are capped just under the loop tool's 24-hour timeout.
 A loop that runs out of time fails, and so does the novel:
 
 ```text
-Tool implementation c1000000-0000-4000-8000-000000000012 exited with status 1: Loop over child workflow e1000000-0000-4000-8000-000000000040 ran out of time after 4 iterations.
+Tool implementation c1000000-0000-4000-8000-000000000022 exited with status 1: Loop over child workflow e1000000-0000-4000-8000-000000000040 ran out of time after 4 iterations.
 ```
 
 To give chapters or edits more time, set `chapter_timeout_seconds` or
