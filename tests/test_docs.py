@@ -44,6 +44,13 @@ CONCRETE_OPTIMIZE_COMMAND = re.compile(r"azathoth workflow optimize [0-9a-f]{8}-
 
 LINE_CONTINUATION = re.compile(r"[ \t]*[\\`]\n\s*")
 
+EXECUTION_COMMAND = re.compile(r"azathoth workflow (?:run|invoke)\b[^\n]*")
+
+TEXT_REPORT_HEADERS = (
+    "Invocation ID:",
+    "Workflow:",
+)
+
 EXTERNAL_SCHEMES = (
     "http://",
     "https://",
@@ -286,6 +293,73 @@ def optimize_commands_comparing_no_models(
     )
 
 
+def fenced_block_bodies(
+    text: str,
+) -> tuple[tuple[int, str, str], ...]:
+    """Return the opening line, language and body of each fenced block."""
+
+    blocks: list[tuple[int, str, str]] = []
+    inside = False
+    opening = 0
+    language = ""
+    body: list[str] = []
+
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = FENCE.match(line)
+
+        if match is None:
+            if inside:
+                body.append(line)
+
+            continue
+
+        if inside:
+            inside = False
+            blocks.append((opening, language, "\n".join(body)))
+        else:
+            inside = True
+            opening = number
+            language = match.group("language")
+            body = []
+
+    return tuple(blocks)
+
+
+def text_reports_without_text_output(
+    text: str,
+) -> tuple[int, ...]:
+    """Return the lines of text reports shown after a run or invoke without `--output text`.
+
+    `workflow run` and `workflow invoke` write `jsonl` by default. A `text` block
+    that shows the human-readable report (starting `Invocation ID:` or
+    `Workflow:`) must follow a command that asked for it. The command is the
+    last `workflow run` or `workflow invoke` in the shell block before the
+    report; a PowerShell twin between them is skipped.
+    """
+
+    blocks = fenced_block_bodies(text)
+    reported: list[int] = []
+
+    for index, (number, language, body) in enumerate(blocks):
+        if language != "text" or not body.lstrip().startswith(TEXT_REPORT_HEADERS):
+            continue
+
+        shell = index - 1
+
+        if shell > 0 and blocks[shell][1] == "powershell" and blocks[shell - 1][1] == "bash":
+            shell -= 1
+
+        if shell < 0 or blocks[shell][1] not in {"bash", "powershell"}:
+            continue
+
+        commands = EXECUTION_COMMAND.findall(LINE_CONTINUATION.sub(" ", blocks[shell][2]))
+
+        if commands and "--output text" not in commands[-1]:
+            reported.append(number)
+
+    return tuple(reported)
+
+
 def command_documents() -> tuple[str, ...]:
     """Return every document that may show CLI commands."""
 
@@ -473,6 +547,52 @@ def test_shown_optimize_commands_compare_models(
     text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
 
     assert optimize_commands_comparing_no_models(text) == ()
+
+
+def test_text_reports_without_text_output_are_reported() -> None:
+    text = (
+        "```bash\n"
+        "azathoth workflow invoke 5e2e0b6a-0000 \\\n"
+        "    --input '\"hello\"'\n"
+        "```\n"
+        "\n"
+        "```powershell\n"
+        "azathoth workflow invoke 5e2e0b6a-0000 --input '\"hello\"'\n"
+        "```\n"
+        "\n"
+        "```text\n"
+        "Invocation ID: <INVOCATION_ID>\n"
+        "```\n"
+        "\n"
+        "```bash\n"
+        "azathoth workflow run a1000000-0000 \\\n"
+        "    --input '\"hello\"' \\\n"
+        "    --output text\n"
+        "```\n"
+        "\n"
+        "```text\n"
+        "Workflow: word-count\n"
+        "```\n"
+        "\n"
+        "```bash\n"
+        "azathoth workflow show a1000000-0000\n"
+        "```\n"
+        "\n"
+        "```text\n"
+        "Workflow: word-count\n"
+        "```\n"
+    )
+
+    assert text_reports_without_text_output(text) == (10,)
+
+
+@pytest.mark.parametrize("document", command_documents())
+def test_text_reports_follow_text_output(
+    document: str,
+) -> None:
+    text = (PROJECT_ROOT / document).read_text(encoding="utf-8")
+
+    assert text_reports_without_text_output(text) == ()
 
 
 @pytest.mark.parametrize("guide", USER_GUIDES)
