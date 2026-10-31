@@ -13,6 +13,7 @@ from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
     WorkflowCandidateStep,
+    WorkflowExperimentResult,
     WorkflowScorecard,
 )
 
@@ -22,8 +23,14 @@ def render_workflow_optimization_session(
 ) -> str:
     """Render one empirical workflow optimization session.
 
+    Each generation reports the experiment that measured its population, its
+    winner, and the size of the population it proposed. The final evaluation
+    (ADR 0091) follows in the same form, or a line saying why it did not run.
+    The report ends with the winning experiment's ID, the experiment whose
+    winner is the session's winner.
+
     Judge calls and their cost are reported for the whole session and for
-    each generation, summed over every candidate the generation evaluated.
+    each experiment, summed over every candidate the experiment evaluated.
     They are the cost of evaluating candidates, never charged to any
     candidate, so they appear beside the scores rather than in them.
     """
@@ -31,6 +38,9 @@ def render_workflow_optimization_session(
     initial_workflow = session.initial_candidates[0].metadata
 
     experiments = tuple(result.previous_experiment for result in session.generations)
+
+    if session.final_experiment is not None:
+        experiments = (*experiments, session.final_experiment)
 
     lines = [
         f"Workflow: {initial_workflow.name}",
@@ -44,38 +54,17 @@ def render_workflow_optimization_session(
     evaluated_candidates = tuple(session.initial_candidates)
 
     for result in session.generations:
-        experiment = result.previous_experiment
-        winner_evidence = experiment.winner_evidence
-        winner = resolve_workflow_experiment_winner(
-            experiment=experiment,
-            candidates=evaluated_candidates,
-        )
-
         lines.extend(
             (
                 "",
                 f"Generation {result.generation}",
-                f"Experiment ID: {experiment.id}",
-                f"Evaluated Candidates: {len(experiment.evidence)}",
-                f"Judge Calls: {experiment.judge_calls}",
-                f"Judge Cost: ${experiment.judge_cost_usd:.6f}",
-                "Winner:",
             )
         )
 
-        _append_candidate_signature(
+        _append_experiment(
             lines,
-            winner_evidence.candidate_signature,
-        )
-
-        _append_candidate_steps(
-            lines,
-            winner,
-        )
-
-        _append_scorecard(
-            lines,
-            winner_evidence.scorecard,
+            result.previous_experiment,
+            evaluated_candidates,
         )
 
         lines.append(
@@ -84,7 +73,78 @@ def render_workflow_optimization_session(
 
         evaluated_candidates = tuple(result.candidates)
 
+    if not session.generations:
+        return "\n".join(lines)
+
+    lines.append("")
+
+    if session.final_experiment is None:
+        last = session.generations[-1].generation
+
+        lines.append(
+            f"Final Evaluation: not run. Generation {last} proposed no new candidates, "
+            "so its winner is the session's winner."
+        )
+    else:
+        lines.append("Final Evaluation")
+
+        _append_experiment(
+            lines,
+            session.final_experiment,
+            session.final_population,
+        )
+
+    winning_experiment = session.winning_experiment
+
+    assert winning_experiment is not None
+
+    lines.extend(
+        (
+            "",
+            f"Winning Experiment ID: {winning_experiment.id}",
+        )
+    )
+
     return "\n".join(lines)
+
+
+def _append_experiment(
+    lines: list[str],
+    experiment: WorkflowExperimentResult,
+    candidates: tuple[WorkflowCandidate, ...],
+) -> None:
+    """Append one experiment's identity, judging, and winner."""
+
+    winner_evidence = experiment.winner_evidence
+    winner = resolve_workflow_experiment_winner(
+        experiment=experiment,
+        candidates=candidates,
+    )
+
+    lines.extend(
+        (
+            f"Experiment ID: {experiment.id}",
+            f"Evaluated Candidates: {len(experiment.evidence)}",
+            f"Judge Calls: {experiment.judge_calls}",
+            f"Judge Cost: ${experiment.judge_cost_usd:.6f}",
+            "Winner:",
+        )
+    )
+
+    _append_candidate_signature(
+        lines,
+        winner_evidence.candidate_signature,
+    )
+
+    _append_candidate_steps(
+        lines,
+        winner,
+    )
+
+    _append_scorecard(
+        lines,
+        winner_evidence.scorecard,
+    )
 
 
 def _append_candidate_signature(

@@ -20,6 +20,7 @@ from azathoth.workflows import (
 )
 from tests.cli.test_optimization_lifecycle import (
     BENCHMARK_ID,
+    CHEAP_IDENTIFIER,
     WORKFLOW_ID,
     create_benchmark,
     create_runtime,
@@ -153,6 +154,35 @@ def test_optimize_persists_the_final_evaluation(
     )
 
     assert len(runs) == evaluated_candidates * len(create_benchmark().cases)
+
+
+def test_optimize_reports_the_final_evaluation_it_persisted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    session = optimize_with_database(
+        database=database,
+        monkeypatch=monkeypatch,
+        generations=1,
+    )
+
+    output = capsys.readouterr().out
+
+    assert session.final_experiment is not None
+
+    final_evaluation = output[output.index("\nFinal Evaluation\n") :]
+
+    assert f"Experiment ID: {session.final_experiment.id}\n" in final_evaluation
+    assert "Evaluated Candidates: 2\n" in final_evaluation
+    assert f"  Model: {CHEAP_IDENTIFIER}\n" in final_evaluation
+    assert output.endswith(f"Winning Experiment ID: {session.final_experiment.id}\n")
+
+    records = SQLiteWorkflowExperimentRepository(database).experiments()
+
+    assert session.final_experiment.id in {record.id for record in records}
 
 
 def test_optimize_persists_every_candidate_run_and_evaluation(
