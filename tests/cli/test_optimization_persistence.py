@@ -32,6 +32,7 @@ def optimize_with_database(
     *,
     database: Path,
     monkeypatch: pytest.MonkeyPatch,
+    generations: int = 2,
 ) -> WorkflowOptimizationSession:
     """Optimize one configured workflow against an isolated database."""
 
@@ -80,7 +81,7 @@ def optimize_with_database(
         benchmark_id=BENCHMARK_ID,
         target_latency_seconds=60.0,
         target_cost_usd=0.01,
-        generations=2,
+        generations=generations,
     )
 
     assert result == 0
@@ -122,6 +123,36 @@ def test_optimize_persists_one_experiment_record_per_generation(
 
     for experiment_id in experiment_ids:
         assert f"Experiment ID: {experiment_id}\n" in captured.out
+
+
+def test_optimize_persists_the_final_evaluation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    session = optimize_with_database(
+        database=database,
+        monkeypatch=monkeypatch,
+        generations=1,
+    )
+
+    assert session.final_experiment is not None
+
+    records = SQLiteWorkflowExperimentRepository(database).experiments()
+
+    assert tuple(record.id for record in records) == (
+        session.generations[0].previous_experiment.id,
+        session.final_experiment.id,
+    )
+
+    runs = SQLiteWorkflowRunRepository(database).runs()
+
+    evaluated_candidates = len(session.generations[0].previous_experiment.evidence) + len(
+        session.final_experiment.evidence
+    )
+
+    assert len(runs) == evaluated_candidates * len(create_benchmark().cases)
 
 
 def test_optimize_persists_every_candidate_run_and_evaluation(

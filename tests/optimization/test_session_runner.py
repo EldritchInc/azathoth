@@ -39,6 +39,7 @@ SECOND_STEP_ID = UUID("44444444-4444-4444-4444-444444444444")
 STRATEGY_ID = UUID("55555555-5555-5555-5555-555555555555")
 SECOND_STRATEGY_ID = UUID("66666666-6666-6666-6666-666666666666")
 DATASET_ID = UUID("77777777-7777-7777-7777-777777777777")
+PROPOSED_STEP_ID = UUID("88888888-8888-8888-8888-888888888888")
 
 
 class StaticStrategy:
@@ -149,6 +150,87 @@ class RecordingOptimizer:
             previous_experiment=experiment,
             candidates=tuple(reversed(candidates)),
         )
+
+
+class PopulationExperimentRunner:
+    """Score whatever population it receives, the last candidate highest."""
+
+    def __init__(self) -> None:
+        self.candidate_populations: list[tuple[WorkflowCandidate, ...]] = []
+        self.datasets: list[BenchmarkDataset] = []
+
+    async def run(
+        self,
+        *,
+        workflows: tuple[WorkflowCandidate, ...],
+        dataset: BenchmarkDataset,
+    ) -> WorkflowExperimentResult:
+        """Record a population and rank its last candidate first."""
+
+        self.candidate_populations.append(workflows)
+        self.datasets.append(dataset)
+
+        scorecards = tuple(
+            create_scorecard(
+                overall_score=(index + 1) / (len(workflows) + 1),
+            )
+            for index in range(len(workflows))
+        )
+
+        return WorkflowExperimentResult(
+            evidence=tuple(
+                WorkflowExperimentEvidence(
+                    candidate_signature=candidate.signature,
+                    scorecard=scorecard,
+                )
+                for candidate, scorecard in zip(workflows, scorecards, strict=True)
+            ),
+            ranking=WorkflowRanking(
+                entries=tuple(
+                    RankedWorkflow(
+                        rank=rank,
+                        scorecard=scorecard,
+                    )
+                    for rank, scorecard in enumerate(reversed(scorecards), start=1)
+                ),
+            ),
+        )
+
+
+class ProposingOptimizer:
+    """Propose one new candidate per generation, keeping the population."""
+
+    def __init__(self) -> None:
+        self.generations: list[int] = []
+
+    def optimize(
+        self,
+        *,
+        experiment: WorkflowExperimentResult,
+        candidates: tuple[WorkflowCandidate, ...],
+        generation: int,
+    ) -> WorkflowOptimizationResult:
+        """Return the population with one new candidate appended."""
+
+        self.generations.append(generation)
+
+        return WorkflowOptimizationResult(
+            generation=generation,
+            previous_experiment=experiment,
+            candidates=(*candidates, create_proposed_candidate(generation)),
+        )
+
+
+def create_proposed_candidate(
+    generation: int,
+) -> WorkflowCandidate:
+    """Create the distinct candidate a generation proposes."""
+
+    return create_candidate(
+        workflow_id=UUID(int=generation),
+        step_id=PROPOSED_STEP_ID,
+        strategy_id=UUID(int=1000 + generation),
+    )
 
 
 def create_candidate(
@@ -532,6 +614,145 @@ def test_session_runner_judges_every_generation_on_the_same_benchmark() -> None:
 
     assert experiment_runner.datasets == [
         dataset,
+        dataset,
+        dataset,
+    ]
+
+
+def test_session_runner_evaluates_the_final_proposals() -> None:
+    """One generation measures the population it proposed."""
+
+    candidates = create_candidates()
+    experiment_runner = PopulationExperimentRunner()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=ProposingOptimizer(),
+        ).run(
+            initial_candidates=candidates,
+            dataset=create_dataset(),
+            max_generations=1,
+        )
+    )
+
+    assert experiment_runner.candidate_populations == [
+        candidates,
+        session.generations[0].candidates,
+    ]
+
+    assert session.final_experiment is not None
+    assert len(session.final_experiment.evidence) == 3
+
+
+def test_session_runner_final_proposal_can_win() -> None:
+    """The session's winner may be a candidate only the final evaluation measured."""
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=PopulationExperimentRunner(),
+            optimizer=ProposingOptimizer(),
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=create_dataset(),
+            max_generations=1,
+        )
+    )
+
+    assert session.winning_experiment == session.final_experiment
+    assert session.winner is not None
+    assert session.winner.metadata.id == UUID(int=1)
+
+
+def test_session_runner_evaluates_only_the_last_generations_proposals() -> None:
+    """Earlier proposals are measured by the next generation, not again at the end."""
+
+    experiment_runner = PopulationExperimentRunner()
+    optimizer = ProposingOptimizer()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=optimizer,
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=create_dataset(),
+            max_generations=2,
+        )
+    )
+
+    assert len(experiment_runner.candidate_populations) == 3
+    assert experiment_runner.candidate_populations[-1] == session.generations[-1].candidates
+    assert optimizer.generations == [
+        1,
+        2,
+    ]
+
+    assert session.final_experiment is not None
+    assert session.final_experiment.id not in {
+        generation.previous_experiment.id for generation in session.generations
+    }
+
+
+def test_session_runner_skips_the_final_evaluation_when_nothing_is_new() -> None:
+    """A population the last experiment already measured is not run again."""
+
+    experiment_runner = RecordingExperimentRunner()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=ReplayWorkflowOptimizer(),
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=create_dataset(),
+            max_generations=2,
+        )
+    )
+
+    assert session.final_experiment is None
+    assert len(experiment_runner.candidate_populations) == 2
+    assert session.winning_experiment == session.generations[-1].previous_experiment
+
+
+def test_session_runner_skips_the_final_evaluation_for_a_reordered_population() -> None:
+    """Reordering evaluated candidates proposes nothing new."""
+
+    experiment_runner = RecordingExperimentRunner()
+
+    session = asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=RecordingOptimizer(),
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=create_dataset(),
+            max_generations=1,
+        )
+    )
+
+    assert session.final_experiment is None
+    assert len(experiment_runner.candidate_populations) == 1
+
+
+def test_session_runner_judges_the_final_evaluation_on_the_same_benchmark() -> None:
+    """The final evaluation receives the session's benchmark dataset."""
+
+    dataset = create_dataset()
+    experiment_runner = PopulationExperimentRunner()
+
+    asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=experiment_runner,
+            optimizer=ProposingOptimizer(),
+        ).run(
+            initial_candidates=create_candidates(),
+            dataset=dataset,
+            max_generations=1,
+        )
+    )
+
+    assert experiment_runner.datasets == [
         dataset,
         dataset,
     ]

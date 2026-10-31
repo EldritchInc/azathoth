@@ -11,6 +11,7 @@ from azathoth.evaluation import (
 )
 from azathoth.optimization import (
     ModelSubstitutionWorkflowOptimizer,
+    WorkflowOptimizationSession,
     WorkflowOptimizationSessionRunner,
 )
 from azathoth.prompting import (
@@ -477,3 +478,62 @@ def test_model_substitution_session_retains_empirical_baseline() -> None:
         CHEAPER_IDENTIFIER,
         CHEAPEST_IDENTIFIER,
     )
+
+
+def run_model_substitution_session(
+    *,
+    max_generations: int,
+) -> WorkflowOptimizationSession:
+    """Optimize the deterministic three-model workflow."""
+
+    workflow = create_workflow()
+    catalog = create_model_catalog()
+    registry = create_registry()
+
+    initial = create_initial_candidate(
+        workflow=workflow,
+        catalog=catalog,
+        registry=registry,
+    )
+
+    return asyncio.run(
+        WorkflowOptimizationSessionRunner(
+            experiment_runner=create_experiment_runner(),
+            optimizer=ModelSubstitutionWorkflowOptimizer(
+                workflows=WorkflowCatalog(specifications=(workflow,)),
+                models=catalog,
+                portfolio=portfolio_for_catalog(catalog),
+                registry=registry,
+            ),
+        ).run(
+            initial_candidates=(initial,),
+            dataset=create_success_benchmark("Return success."),
+            max_generations=max_generations,
+        )
+    )
+
+
+def test_one_generation_compares_cheaper_models() -> None:
+    session = run_model_substitution_session(max_generations=1)
+
+    assert session.final_experiment is not None
+    assert tuple(scorecard.cost_score for scorecard in session.final_experiment.scorecards) == (
+        0.1,
+        0.2,
+        1.0,
+    )
+
+
+def test_one_generation_wins_with_the_cheapest_passing_model() -> None:
+    session = run_model_substitution_session(max_generations=1)
+
+    assert session.winner is not None
+    assert model_identifier(session.winner) == CHEAPEST_IDENTIFIER
+
+
+def test_no_final_evaluation_once_no_cheaper_model_remains() -> None:
+    session = run_model_substitution_session(max_generations=2)
+
+    assert session.final_experiment is None
+    assert session.winner is not None
+    assert model_identifier(session.winner) == CHEAPEST_IDENTIFIER
