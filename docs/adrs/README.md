@@ -114,3 +114,4 @@ requests that made it:
 - [ADR 0089: Substitute Models in Context-Prompt Steps](0089-substitute-models-in-context-prompt-steps.md)
 - [ADR 0090: Loop by Invoking Child Workflows from a Tool](0090-loop-by-invoking-child-workflows-from-a-tool.md)
 - [ADR 0091: Evaluate the Final Generation's Proposals](0091-evaluate-the-final-generations-proposals.md)
+- [ADR 0092: Promote an Optimization Experiment's Winner](0092-promote-an-optimization-experiments-winner.md)
