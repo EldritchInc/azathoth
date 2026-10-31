@@ -117,3 +117,4 @@ requests that made it:
 - [ADR 0092: Promote an Optimization Experiment's Winner](0092-promote-an-optimization-experiments-winner.md)
 - [ADR 0093: Budget Loops From Their Settings](0093-budget-loops-from-their-settings.md)
 - [ADR 0094: Constant Step Inputs](0094-constant-step-inputs.md)
+- [ADR 0095: Ship a Standard Tool Library](0095-ship-a-standard-tool-library.md)
