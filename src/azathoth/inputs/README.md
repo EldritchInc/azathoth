@@ -53,3 +53,34 @@ JSON. Failures raise `InputContentError`.
 `infer_media_type(name)` maps the extensions `.json`, `.txt`, `.md`,
 `.markdown` and `.csv` to their media types, and returns `None` for any
 other.
+
+## Content Store
+
+Resolved content is kept by the digest of its bytes, so a run can always be
+traced to, and re-read from, exactly the content it was given.
+
+```python
+from azathoth.inputs import (
+    ContentStore,
+    InMemoryContentStore,
+    SQLiteContentStore,
+    content_bytes_digest,
+)
+```
+
+`content_bytes_digest(content)` is the lowercase hex SHA-256 of the bytes,
+the same form as a revisioned document's content digest.
+
+A `ContentStore` has three operations:
+
+- `put(content)` stores content and returns its digest. Storing the same
+  content again changes nothing;
+- `get(digest)` returns the content, or `None` when it is not stored;
+- `contains(digest)` says whether it is stored.
+
+`SQLiteContentStore` keeps content in the `content_blobs` table of the
+configured database, with its size and when it was first stored. It creates
+the table on first use. `InMemoryContentStore` keeps content in process
+memory, for tests and embedding.
+
+Nothing removes stored content yet.
