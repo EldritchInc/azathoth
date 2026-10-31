@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import JsonValue
 
 from azathoth.cli import main
 from azathoth.tools import (
@@ -14,6 +15,7 @@ from azathoth.tools import (
 )
 from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
+    ToolStepSpecification,
     WorkflowNamedValueReference,
     decode_workflow_document,
     encode_workflow_document,
@@ -62,16 +64,39 @@ def loop_settings(
     *,
     max_iterations: int = 10,
     remaining: int = 3,
+    budget_seconds: JsonValue = None,
 ) -> str:
-    """Return the parent's JSON input naming the child, the limit and the starting state."""
+    """Return the parent's JSON input naming the child, the limit and the starting state.
 
-    return json.dumps(
-        {
-            "workflow_id": str(workflow_id),
-            "max_iterations": max_iterations,
-            "state": {"remaining": remaining},
-        }
-    )
+    A budget is included only when one is given.
+    """
+
+    settings: dict[str, JsonValue] = {
+        "workflow_id": str(workflow_id),
+        "max_iterations": max_iterations,
+        "state": {"remaining": remaining},
+    }
+
+    if budget_seconds is not None:
+        settings["budget_seconds"] = budget_seconds
+
+    return json.dumps(settings)
+
+
+def import_loop_tool_with_timeout(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    timeout_seconds: float,
+) -> None:
+    """Import a revision of the loop tool that declares a shorter timeout."""
+
+    document = json.loads(LOOP_TOOL_DOCUMENT.read_text(encoding="utf-8"))
+    document["implementations"][0]["timeout_seconds"] = timeout_seconds
+
+    revision = tmp_path / "loop-workflow-short.json"
+    revision.write_text(json.dumps(document), encoding="utf-8")
+
+    run_cli(capsys, "tool", "import", str(revision))
 
 
 def configure_loop_walkthrough(
@@ -249,7 +274,25 @@ def test_loop_tool_example_runs_python_as_a_long_lived_process() -> None:
     assert implementation.id == LOOP_IMPLEMENTATION_ID
     assert implementation.runtime == PROCESS_TOOL_RUNTIME
     assert implementation.command == ("python",)
-    assert implementation.timeout_seconds == 7200.0
+    assert implementation.timeout_seconds == 86400.0
+
+
+def test_loop_tool_example_is_version_1_1() -> None:
+    document = decode_tool_document(LOOP_TOOL_DOCUMENT.read_text(encoding="utf-8"))
+
+    assert document.definition.version == "1.1.0"
+    assert document.implementations[0].tool_version == "1.1.0"
+    assert document.implementations[0].version == "1.1.0"
+
+
+def test_loop_workflow_example_requires_loop_tool_1_1() -> None:
+    workflow = decode_workflow_document(LOOP_WORKFLOW_DOCUMENT.read_text(encoding="utf-8"))
+
+    requirement = workflow.steps[0].specification
+
+    assert isinstance(requirement, ToolStepSpecification)
+    assert requirement.requirement.name == "loop_workflow"
+    assert requirement.requirement.version == "1.1.0"
 
 
 def test_loop_workflow_example_returns_the_collected_items() -> None:
@@ -355,3 +398,87 @@ def test_loop_refuses_beyond_the_depth_limit(
 
     assert (status, output) == (1, "")
     assert f"{TOOL_FAILURE_PREFIX} 2: Child workflow depth 9 exceeds the limit of 8." in errors
+
+
+def test_loop_runs_within_an_explicit_budget(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+
+    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=600))
+
+    assert (status, output, errors) == (0, "[3, 2, 1]\n", "")
+
+
+@pytest.mark.parametrize(
+    "budget",
+    [
+        pytest.param(0, id="zero"),
+        pytest.param(-5, id="negative"),
+        pytest.param(True, id="boolean"),
+        pytest.param("600", id="string"),
+    ],
+)
+def test_loop_rejects_a_budget_that_is_not_a_positive_number(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    budget: JsonValue,
+) -> None:
+    database = configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+
+    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=budget))
+
+    assert (status, output) == (1, "")
+    assert (
+        f"{TOOL_FAILURE_PREFIX} 1: Loop settings must set budget_seconds to a positive number."
+    ) in errors
+    assert SQLiteWorkflowRunRepository(database).runs_for_workflow(COUNTDOWN_WORKFLOW_ID) == ()
+
+
+def test_loop_rejects_a_budget_beyond_its_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+
+    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=86341))
+
+    assert (status, output) == (1, "")
+    assert (
+        f"{TOOL_FAILURE_PREFIX} 1: Loop budget of 86341 seconds exceeds the tool's timeout "
+        "of 86400 seconds less a 60-second margin."
+    ) in errors
+
+
+def test_loop_budget_is_bounded_by_the_timeout_it_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+    import_loop_tool_with_timeout(tmp_path, capsys, 120)
+
+    status, output, errors = run_loop(capsys, loop_settings(budget_seconds=61))
+
+    assert (status, output) == (1, "")
+    assert (
+        f"{TOOL_FAILURE_PREFIX} 1: Loop budget of 61 seconds exceeds the tool's timeout "
+        "of 120 seconds less a 60-second margin."
+    ) in errors
+
+
+def test_loop_default_budget_fits_a_shorter_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+    import_loop_tool_with_timeout(tmp_path, capsys, 120)
+
+    status, output, errors = run_loop(capsys, loop_settings())
+
+    assert (status, output, errors) == (0, "[3, 2, 1]\n", "")

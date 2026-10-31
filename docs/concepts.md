@@ -770,6 +770,8 @@ Larger behavior is built by composing workflows, not by adding control flow:
 Every child invocation is a production invocation with its own run, so each
 piece can be inspected, benchmarked, optimized and promoted on its own. Loops
 are bounded by an iteration limit, a time budget and an 8-level depth limit.
+The budget is a loop setting, bounded by the loop tool's own timeout, which
+Azathoth tells every process tool (ADR 0093).
 
 There is no loop construct in the engine. Keeping the graph acyclic keeps
 run records, conditions, benchmarks and optimization simple, and repetition

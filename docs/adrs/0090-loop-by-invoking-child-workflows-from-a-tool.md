@@ -1,6 +1,6 @@
 # ADR 0090: Loop by Invoking Child Workflows from a Tool
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0093
 - Date: 2026-10-26
 - Decided in: #104
 
@@ -85,8 +85,8 @@ that prepares it, and that step can produce the fallback.
 ### Negative
 
 - Each iteration costs a process start and a production invocation.
-- The whole loop must fit within one tool timeout. Long loops need a longer
-  timeout and budget.
+- The whole loop must fit within one tool timeout. Long loops set a longer
+  budget in their settings, within the tool's timeout (ADR 0093).
 - Every iteration records its own invocation and run in the shared database,
   so long loops produce many records.
 - The loop body must be promoted before the loop can use it.

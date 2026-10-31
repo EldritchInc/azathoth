@@ -259,7 +259,9 @@ It prints `[3, 2, 1]`. With `"max_iterations": 2`, the loop stops early with
 A loop is bounded three ways:
 
 - its `max_iterations`;
-- its 2-hour timeout, with each child stopped after 600 seconds by default;
+- its time budget, `budget_seconds`: about 2 hours by default, and up to just
+  under the tool's 24-hour timeout when the settings ask for more. Each child
+  is stopped after `child_timeout_seconds`, 600 by default;
 - the same 8-level nesting limit as `run_workflow`.
 
 Every iteration is its own production invocation, so it can be inspected on
@@ -455,10 +457,10 @@ python -c "import json; print(json.load(open('novel.json'))['markdown'])" > nove
 python -c "import json; print(json.load(open('novel.json'))['markdown'])" > novel.md
 ```
 
-All of a book's chapters share the chapter loop's 2-hour limit, so longer
-books need a longer loop timeout. The novel's README explains that, the
-request's options, and the inner revision loop's benchmark:
-[Novel Example](../examples/novel/README.md).
+The chapter loop's budget grows with the book: up to 30 minutes for each
+chapter, so a full 18-chapter novel needs no changes to any tool. The novel's
+README explains that, the request's options, and the inner revision loop's
+benchmark: [Novel Example](../examples/novel/README.md).
 
 ## Also in `examples/`
 

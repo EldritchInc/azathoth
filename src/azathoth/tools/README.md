@@ -1013,6 +1013,18 @@ The process inherits Azathoth's environment and working directory, so a tool
 can itself run `azathoth workflow invoke`. This is how child workflows are
 composed: as separate processes, not as a dedicated step type.
 
+When the implementation declares `timeout_seconds`, the process also sees it
+(ADR 0093):
+
+```text
+AZATHOTH_TOOL_TIMEOUT_SECONDS=<timeout_seconds>
+```
+
+A tool that runs for a long time, such as a loop over child workflows, reads
+it to stop cleanly before it is killed. A process without a declared timeout
+never sees the variable, even when Azathoth itself runs inside a tool that
+has one.
+
 Failures are explicit `ToolExecutionError`s:
 
 ```text

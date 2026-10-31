@@ -64,6 +64,14 @@ PREPARE_CHAPTERS_STEP_ID = UUID("e1000000-0000-4000-8000-000000000074")
 
 FINAL_EDITS_STEP_ID = UUID("e1000000-0000-4000-8000-000000000077")
 
+PREPARE_FINAL_STEP_ID = UUID("e1000000-0000-4000-8000-000000000078")
+
+CHAPTER_TIMEOUT_SECONDS = 1800
+
+EDIT_TIMEOUT_SECONDS = 1800
+
+LOOP_BUDGET_LIMIT_SECONDS = 86340
+
 LONG_CONTEXT_TOKENS = 200_000
 
 STORY_MARKER = "You are a novelist planning a new novel from an idea"
@@ -393,6 +401,7 @@ def test_chapter_loop_covers_the_capped_outline(
 
     assert isinstance(settings, dict)
     assert settings["max_iterations"] == written
+    assert settings["budget_seconds"] == written * CHAPTER_TIMEOUT_SECONDS
     assert isinstance(result, dict)
     assert isinstance(result["chapters"], list)
     assert len(result["chapters"]) == written
@@ -405,7 +414,8 @@ def test_chapter_loop_runs_the_example_chapter_workflow_by_default() -> None:
 
     assert isinstance(settings, dict)
     assert settings["workflow_id"] == CHAPTER_WORKFLOW_ID
-    assert settings["child_timeout_seconds"] == 1800
+    assert settings["child_timeout_seconds"] == CHAPTER_TIMEOUT_SECONDS
+    assert settings["budget_seconds"] == 3 * CHAPTER_TIMEOUT_SECONDS
     assert settings["state"] == {
         "config": {},
         "story": STORY,
@@ -435,6 +445,108 @@ def test_request_overrides_the_child_workflows_and_revision_settings() -> None:
         "revision_workflow_id": "custom-revision",
         "max_revisions": 5,
     }
+
+
+def chapter_settings(
+    request: dict[str, JsonValue],
+    *,
+    chapters: int = 3,
+) -> dict[str, JsonValue]:
+    """Return the chapter loop settings the novel prepares for one request."""
+
+    run, _ = write_novel(novel_model(chapters=chapters), {"idea": "A lighthouse.", **request})
+
+    settings = step_value(run, PREPARE_CHAPTERS_STEP_ID, "settings")
+
+    assert isinstance(settings, dict)
+
+    return settings
+
+
+def final_edit_settings(
+    request: dict[str, JsonValue] | None = None,
+    *,
+    edits: JsonValue = None,
+) -> dict[str, JsonValue]:
+    """Return the final-edits loop settings the novel prepares."""
+
+    run, _ = write_novel(
+        novel_model(
+            edits=edits if edits is not None else [{"chapter": 2, "requests": ["Fix the tide."]}]
+        ),
+        {"idea": "A lighthouse.", **(request or {})},
+    )
+
+    settings = step_value(run, PREPARE_FINAL_STEP_ID, "settings")
+
+    assert isinstance(settings, dict)
+
+    return settings
+
+
+def test_chapter_budget_follows_a_requested_chapter_timeout() -> None:
+    settings = chapter_settings({"chapter_timeout_seconds": 600})
+
+    assert settings["child_timeout_seconds"] == 600
+    assert settings["budget_seconds"] == 3 * 600
+
+
+def test_chapter_budget_never_exceeds_what_the_loop_accepts() -> None:
+    settings = chapter_settings({"chapter_timeout_seconds": 6000}, chapters=20)
+
+    assert settings["max_iterations"] == 18
+    assert settings["budget_seconds"] == LOOP_BUDGET_LIMIT_SECONDS
+
+
+def test_request_overrides_the_chapter_budget() -> None:
+    settings = chapter_settings({"chapter_budget_seconds": 999})
+
+    assert settings["budget_seconds"] == 999
+
+
+def test_final_edits_give_each_edit_a_chapters_time() -> None:
+    settings = final_edit_settings()
+
+    assert settings["max_iterations"] == 1
+    assert settings["child_timeout_seconds"] == EDIT_TIMEOUT_SECONDS
+    assert settings["budget_seconds"] == EDIT_TIMEOUT_SECONDS
+
+
+def test_final_edits_budget_every_queued_edit() -> None:
+    settings = final_edit_settings(
+        {"edit_timeout_seconds": 900},
+        edits=[
+            {"chapter": 1, "requests": ["Open on the light."]},
+            {"chapter": 3, "requests": ["End at dawn."]},
+        ],
+    )
+
+    assert settings["max_iterations"] == 2
+    assert settings["child_timeout_seconds"] == 900
+    assert settings["budget_seconds"] == 2 * 900
+
+
+def test_request_overrides_the_final_edits_budget() -> None:
+    settings = final_edit_settings({"edit_budget_seconds": 42})
+
+    assert settings["budget_seconds"] == 42
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        pytest.param(PREPARE_CHAPTERS_TOOL_DOCUMENT, id="prepare-chapters"),
+        pytest.param(PREPARE_FINAL_TOOL_DOCUMENT, id="prepare-final-edits"),
+    ],
+)
+def test_loop_preparation_tools_are_new_implementations_of_the_same_tools(
+    document: Path,
+) -> None:
+    tool = read_tool(document)
+
+    assert tool.definition.version == "1.0.0"
+    assert tool.implementations[0].tool_version == "1.0.0"
+    assert tool.implementations[0].version == "1.1.0"
 
 
 def test_whole_book_steps_require_a_long_context_model() -> None:

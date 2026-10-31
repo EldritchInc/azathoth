@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -19,6 +20,9 @@ from azathoth.tools.implementation import (
 PROCESS_STDERR_TAIL_CHARACTERS = 500
 """The most trailing stderr characters quoted when a process tool fails."""
 
+PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE = "AZATHOTH_TOOL_TIMEOUT_SECONDS"
+"""The variable that tells a process tool its own timeout, in seconds (ADR 0093)."""
+
 _OUTPUT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
 
@@ -30,6 +34,11 @@ class ProcessToolExecutor:
     process's stdin as one JSON object, and its stdout must be one JSON
     object. The process inherits Azathoth's environment and working
     directory, so a tool can itself invoke `azathoth`.
+
+    When the implementation declares a timeout, the process sees it in
+    `AZATHOTH_TOOL_TIMEOUT_SECONDS`, so it can pace itself. A process
+    without a timeout never sees one, even when Azathoth itself runs inside
+    a tool that has one.
     """
 
     async def execute(
@@ -116,7 +125,27 @@ class ProcessToolExecutor:
         return implementation.command
 
     @staticmethod
+    def _environment(
+        implementation: ToolImplementation,
+    ) -> dict[str, str]:
+        """Return Azathoth's environment with the implementation's own timeout."""
+
+        environment = {
+            name: value
+            for name, value in os.environ.items()
+            if name != PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE
+        }
+
+        if implementation.timeout_seconds is not None:
+            environment[PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE] = repr(
+                implementation.timeout_seconds
+            )
+
+        return environment
+
+    @classmethod
     async def _start(
+        cls,
         implementation: ToolImplementation,
         arguments: tuple[str, ...],
     ) -> asyncio.subprocess.Process:
@@ -128,6 +157,7 @@ class ProcessToolExecutor:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=cls._environment(implementation),
             )
         except FileNotFoundError as exc:
             raise ToolExecutionError(
@@ -175,5 +205,6 @@ class ProcessToolExecutor:
 
 __all__ = [
     "PROCESS_STDERR_TAIL_CHARACTERS",
+    "PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE",
     "ProcessToolExecutor",
 ]

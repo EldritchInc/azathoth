@@ -95,6 +95,9 @@ Only `idea` is required:
 | `max_chapters` | 18 | The most chapters to plan, never more than 18 |
 | `max_revisions` | 3 | The most revision passes per chapter or final edit |
 | `chapter_timeout_seconds` | 1800 | How long one chapter may take |
+| `chapter_budget_seconds` | chapters × chapter timeout | How long the whole chapter loop may take |
+| `edit_timeout_seconds` | 1800 | How long one final edit may take |
+| `edit_budget_seconds` | edits × edit timeout | How long the whole final-edits loop may take |
 | `chapter_workflow_id` | `e1…0040` | The chapter loop's body |
 | `revision_workflow_id` | `e1…0010` | The revision loop's body |
 | `edit_queue_workflow_id` | `e1…0060` | The final-edits loop's body |
@@ -124,20 +127,23 @@ it was skipped, the unrevised draft is used.
 
 ## Time
 
-A loop must finish inside its tool's 2-hour timeout. The chapter loop is one
-tool call, so all of the book's chapters share those 2 hours, at up to 30
-minutes each. A loop that runs out of time fails, and so does the novel:
+Each loop runs inside one tool call, and its settings say how long it may
+take (ADR 0093). The chapter loop's budget is the number of chapters times
+the chapter timeout, 30 minutes each, so a full 18-chapter book may take up
+to 9 hours. Each final edit, including its revision loop, gets its own 30
+minutes, and the final-edits loop's budget covers every queued edit. Both
+budgets are capped just under the loop tool's 24-hour timeout.
+
+A loop that runs out of time fails, and so does the novel:
 
 ```text
 Tool implementation c1000000-0000-4000-8000-000000000012 exited with status 1: Loop over child workflow e1000000-0000-4000-8000-000000000040 ran out of time after 4 iterations.
 ```
 
-Each final edit, including its revision loop, is stopped after 10 minutes,
-the loop's default child timeout.
-
-To write longer books, raise the loop tool's `timeout_seconds` and, inside its
-source, `BUDGET_SECONDS`, keeping the budget about a minute under the
-timeout. Then import the tool again.
+To give chapters or edits more time, set `chapter_timeout_seconds` or
+`edit_timeout_seconds` in the request; the budgets follow. To bound a whole
+loop directly, set `chapter_budget_seconds` or `edit_budget_seconds`. No tool
+document needs to change.
 
 ## Models
 
