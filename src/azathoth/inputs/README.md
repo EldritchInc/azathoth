@@ -93,6 +93,10 @@ policy does not accept is refused before anything is read, and nothing is
 stored for content that is refused. Every refusal raises
 `InputResolutionError`.
 
+The CLI resolves `workflow run --input-file` and `workflow invoke
+--input-file` under `azathoth.cli.CLI_INPUT_POLICY`, which accepts `file://`
+only.
+
 `azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
 turns a resolved input into a run's initial events: the canonical
 `workflow.input.received` event with the value, followed, for a reference

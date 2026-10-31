@@ -70,7 +70,8 @@ azathoth
 │   ├── export <WORKFLOW_ID>
 │   │   └── --revision <NUMBER>
 │   ├── run <WORKFLOW_ID>
-│   │   └── --input <JSON>
+│   │   ├── --input <JSON> | --input-file <FILE>
+│   │   └── --media-type <TYPE>     (only with --input-file)
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
@@ -79,7 +80,8 @@ azathoth
 │   ├── promote <WORKFLOW_ID>
 │   │   └── --experiment <EXPERIMENT_ID>
 │   ├── invoke <WORKFLOW_ID>
-│   │   └── --input <JSON>
+│   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
+│   │   └── --media-type <TYPE>     (only with --input-file)
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
 │   │   └── --limit <COUNT>
@@ -841,6 +843,9 @@ The run then starts with one `workflow.input.received` event, produced by
 would start it. `--input null` is input too: the event carries a JSON null.
 Without `--input`, the run starts with an empty context, so a step bound to
 the workflow input fails to resolve it.
+
+`--input-file` supplies the input from a file instead; see
+[Input Files](#input-files).
 
 Only a run that received input can later become a benchmark case; see
 [Add a Case From a Run](#add-a-case-from-a-run).
@@ -1824,7 +1829,8 @@ azathoth workflow invoke <WORKFLOW_ID> \
     --input '<JSON>'
 ```
 
-`--input` is required and must be valid JSON. `--output` chooses the
+Exactly one of `--input`, which must be valid JSON, and `--input-file` is
+required; see [Input Files](#input-files). `--output` chooses the
 [output format](#workflow-output-formats), `jsonl` by default.
 
 For example:
@@ -3204,6 +3210,67 @@ event, which invocation history reads.
 
 A workflow whose prompt is fixed text, such as
 `examples/workflows/simple-prompt.json`, ignores its input.
+
+# Input Files
+
+`workflow run` and `workflow invoke` can read their input from a file
+(ADR 0096):
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input-file chapter.md
+azathoth workflow invoke <WORKFLOW_ID> --input-file request.json
+azathoth workflow run <WORKFLOW_ID> --input-file notes.log --media-type text/plain
+```
+
+`--input-file` and `--input` are mutually exclusive. The file becomes a
+`file://` reference to its absolute path, with a media type:
+
+```text
+.json               application/json   parsed as JSON
+.txt                text/plain         decoded into a string
+.md, .markdown      text/markdown      decoded into a string
+.csv                text/csv           decoded into a string
+```
+
+`--media-type` gives any other file its media type, or overrides the one its
+extension implies. It accepts `application/json` and any `text/*` type, as a
+lowercase `type/subtype` with no parameters; any other value is a usage
+error. Content is UTF-8, and a leading byte order mark is dropped.
+
+The file is resolved before anything else happens:
+
+1. its content is read, up to 10 MiB;
+2. it is decoded as its media type;
+3. its bytes are saved in the configured database's content store, keyed by
+   their SHA-256 digest, once however many runs read them;
+4. the run, or production invocation, starts.
+
+The workflow receives the decoded value in its `workflow.input.received`
+event, exactly as if it had been given with `--input`, so steps and prompts
+cannot tell the difference. A `workflow.input.resolved` event follows it, at
+the same time and from the same producer, recording where the content came
+from:
+
+```json
+{"uri": "file:///Users/you/chapter.md", "media_type": "text/markdown", "size_bytes": 18234, "digest": "<SHA-256>"}
+```
+
+A run or invocation given `--input` records no such event.
+
+A file that cannot be resolved starts no run and records no invocation. The
+command prints why and exits with status 1:
+
+```text
+Input file:///Users/you/missing.md does not exist.
+Input file:///Users/you/huge.txt is larger than the limit of 10485760 bytes.
+Input file:///Users/you/request.json: Content is not valid JSON: Expecting value.
+Cannot tell the media type of notes.log from its extension; give it with --media-type.
+--media-type requires --input-file.
+```
+
+The CLI accepts only local files. Other schemes are for other entry points:
+the queue worker planned for 1.1 will accept `s3://` references from
+allow-listed buckets, and no `file://` references.
 
 # End-to-End From Checked-In Examples
 

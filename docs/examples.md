@@ -398,17 +398,22 @@ writes the comment only when there is something to say.
 azathoth tool import examples/code-review/tools/merge-reviews.json
 azathoth tool import examples/code-review/tools/finalize-review.json
 azathoth workflow import examples/code-review/workflows/review-change.json
-azathoth workflow run d2000000-0000-4000-8000-000000000010 --input '{"title": "Rename total to order_total", "description": "A clearer name; no behavior changes.", "diff": "-def total(order):\n+def order_total(order):\n"}' --output result
+azathoth workflow run d2000000-0000-4000-8000-000000000010 --input-file examples/code-review/changes/rename.json --output result
 ```
 
 ```powershell
 azathoth tool import examples/code-review/tools/merge-reviews.json
 azathoth tool import examples/code-review/tools/finalize-review.json
 azathoth workflow import examples/code-review/workflows/review-change.json
-azathoth workflow run d2000000-0000-4000-8000-000000000010 --input '{"title": "Rename total to order_total", "description": "A clearer name; no behavior changes.", "diff": "-def total(order):\n+def order_total(order):\n"}' --output result
+azathoth workflow run d2000000-0000-4000-8000-000000000010 --input-file examples/code-review/changes/rename.json --output result
 ```
 
-A pure rename should come back `approve`, with no findings.
+The change is read from a JSON file, `examples/code-review/changes/rename.json`,
+because a real diff is awkward to quote on a command line. `--input-file`
+takes the place of `--input` for any workflow: a `.json` file is parsed, and
+a `.txt`, `.md` or `.csv` file becomes a string (ADR 0096). A pure rename
+should come back `approve`, with no findings. Review
+`changes/order-search.json` the same way to see a change blocked.
 
 Its benchmark has schema cases and semantic cases, so it needs a judge:
 
