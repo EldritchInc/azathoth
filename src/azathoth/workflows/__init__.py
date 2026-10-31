@@ -40,6 +40,10 @@ from azathoth.workflows.candidate import (
     WorkflowCandidateSignature,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.candidate_rebuild import (
+    WorkflowCandidateRebuildError,
+    rebuild_workflow_candidate,
+)
 from azathoth.workflows.catalog import WorkflowCatalog
 from azathoth.workflows.catalog_loader import WorkflowCatalogLoader
 from azathoth.workflows.condition import (
@@ -374,6 +378,7 @@ __all__ = [
     "WorkflowBenchmarkRunner",
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
+    "WorkflowCandidateRebuildError",
     "WorkflowCandidateSignature",
     "WorkflowCandidateStep",
     "WorkflowCatalog",
@@ -474,6 +479,7 @@ __all__ = [
     "production_model_usages",
     "production_uses_tool",
     "promote_workflow_candidate",
+    "rebuild_workflow_candidate",
     "reference_producer_step_ids",
     "require_production_invocation_repository",
     "require_workflow_benchmark_execution_repository",
