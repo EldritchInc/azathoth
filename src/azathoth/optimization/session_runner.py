@@ -45,7 +45,9 @@ class WorkflowOptimizationSessionRunner:
         """Run workflow experiments and optimization for multiple generations.
 
         Every generation's candidates are judged against every case of the
-        same benchmark dataset.
+        same benchmark dataset. After the last generation, its proposed
+        population is evaluated too, unless it holds no candidate the last
+        experiment did not already evaluate (ADR 0091).
 
         Raises:
             ValueError: Fewer than one generation was requested.
@@ -73,7 +75,31 @@ class WorkflowOptimizationSessionRunner:
 
             current_candidates = tuple(result.candidates)
 
+        final_experiment: WorkflowExperimentResult | None = None
+
+        if _has_unevaluated_candidates(
+            candidates=current_candidates,
+            experiment=generations[-1].previous_experiment,
+        ):
+            final_experiment = await self._experiment_runner.run(
+                workflows=current_candidates,
+                dataset=dataset,
+            )
+
         return WorkflowOptimizationSession(
             initial_candidates=initial_candidates,
             generations=tuple(generations),
+            final_experiment=final_experiment,
         )
+
+
+def _has_unevaluated_candidates(
+    *,
+    candidates: tuple[WorkflowCandidate, ...],
+    experiment: WorkflowExperimentResult,
+) -> bool:
+    """Return whether a population holds a candidate the experiment did not evaluate."""
+
+    evaluated = {evidence.candidate_signature for evidence in experiment.evidence}
+
+    return any(candidate.signature not in evaluated for candidate in candidates)

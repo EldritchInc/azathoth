@@ -9,7 +9,10 @@ from azathoth.workflows import (
     WorkflowExperimentEvidence,
     WorkflowExperimentResult,
 )
-from tests.cli.test_optimization_rendering import create_session
+from tests.cli.test_optimization_rendering import (
+    create_session,
+    create_session_with_final_evaluation,
+)
 
 
 def with_judging(
@@ -58,6 +61,56 @@ def with_judging(
     return WorkflowOptimizationSession(
         initial_candidates=session.initial_candidates,
         generations=tuple(generations),
+    )
+
+
+def with_judged_experiment(
+    experiment: WorkflowExperimentResult,
+    judging: tuple[tuple[int, float], ...],
+) -> WorkflowExperimentResult:
+    """Return the experiment with one call count and cost per evaluated candidate."""
+
+    return WorkflowExperimentResult(
+        id=experiment.id,
+        evidence=tuple(
+            WorkflowExperimentEvidence(
+                candidate_signature=observation.candidate_signature,
+                scorecard=observation.scorecard,
+                judge_calls=calls,
+                judge_cost_usd=cost,
+            )
+            for observation, (calls, cost) in zip(
+                experiment.evidence,
+                judging,
+                strict=True,
+            )
+        ),
+        ranking=experiment.ranking,
+    )
+
+
+def judged_final_session() -> WorkflowOptimizationSession:
+    """Return the one-generation session with judging in its final evaluation too."""
+
+    session = with_judging(
+        create_session_with_final_evaluation(),
+        (((2, 0.25),),),
+    )
+
+    final_experiment = create_session_with_final_evaluation().final_experiment
+
+    assert final_experiment is not None
+
+    return WorkflowOptimizationSession(
+        initial_candidates=session.initial_candidates,
+        generations=session.generations,
+        final_experiment=with_judged_experiment(
+            final_experiment,
+            (
+                (3, 0.5),
+                (1, 0.125),
+            ),
+        ),
     )
 
 
@@ -157,4 +210,25 @@ def test_render_without_generations_totals_zero_judging() -> None:
     assert rendered.splitlines()[-2:] == [
         "Total Judge Calls: 0",
         "Total Judge Cost: $0.000000",
+    ]
+
+
+def test_render_totals_include_the_final_evaluations_judging() -> None:
+    lines = render_workflow_optimization_session(judged_final_session()).splitlines()
+
+    generations = lines.index("Generations: 1")
+
+    assert lines[generations + 1] == "Total Judge Calls: 6"
+    assert lines[generations + 2] == "Total Judge Cost: $0.875000"
+
+
+def test_render_reports_the_final_evaluations_judging() -> None:
+    lines = render_workflow_optimization_session(judged_final_session()).splitlines()
+
+    start = lines.index("Final Evaluation")
+
+    assert lines[start + 2 : start + 5] == [
+        "Evaluated Candidates: 2",
+        "Judge Calls: 4",
+        "Judge Cost: $0.625000",
     ]

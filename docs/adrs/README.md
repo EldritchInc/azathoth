@@ -113,3 +113,4 @@ requests that made it:
 - [ADR 0088: Parse Prompt Replies as JSON When Declared](0088-parse-prompt-replies-as-json-when-declared.md)
 - [ADR 0089: Substitute Models in Context-Prompt Steps](0089-substitute-models-in-context-prompt-steps.md)
 - [ADR 0090: Loop by Invoking Child Workflows from a Tool](0090-loop-by-invoking-child-workflows-from-a-tool.md)
+- [ADR 0091: Evaluate the Final Generation's Proposals](0091-evaluate-the-final-generations-proposals.md)

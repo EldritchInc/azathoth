@@ -14,6 +14,7 @@ from azathoth.evaluation import (
 )
 from azathoth.prompting import (
     PortfolioModelSelection,
+    PromptStrategy,
     PromptStrategySpec,
 )
 from azathoth.providers import (
@@ -30,6 +31,7 @@ from azathoth.providers import (
 from azathoth.runtime import AzathothRuntime
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
+    WorkflowCandidate,
     WorkflowCatalog,
     WorkflowMetadata,
     WorkflowScoringPolicy,
@@ -401,3 +403,42 @@ def test_optimize_configured_workflow_rejects_empty_benchmark_before_generating(
                 max_generations=1,
             )
         )
+
+
+def model_identifier(
+    candidate: WorkflowCandidate,
+) -> str:
+    """Return the model bound to the candidate's prompt step."""
+
+    strategy = candidate.steps[0].strategy
+
+    assert isinstance(strategy, PromptStrategy)
+    assert strategy.model_binding is not None
+
+    return strategy.model_binding.identifier
+
+
+def test_optimize_configured_workflow_compares_models_in_one_generation() -> None:
+    session = asyncio.run(
+        optimize_configured_workflow(
+            runtime=create_runtime(),
+            workflow_id=WORKFLOW_ID,
+            dataset=create_benchmark(
+                ExpectedOutcome(
+                    description="Workflow returns success.",
+                    value="success",
+                    comparison=OutcomeComparison.EXACT,
+                ),
+            ),
+            scoring_policy=WorkflowScoringPolicy(
+                target_latency_seconds=60.0,
+                target_cost_usd=0.01,
+            ),
+            max_generations=1,
+        )
+    )
+
+    assert session.final_experiment is not None
+    assert len(session.final_experiment.evidence) == 2
+    assert session.winner is not None
+    assert model_identifier(session.winner) == CHEAP_IDENTIFIER

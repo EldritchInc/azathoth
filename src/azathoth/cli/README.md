@@ -1181,10 +1181,11 @@ The default is:
 
 Each generation runs its candidates against the benchmark, ranks them, and
 then proposes the next generation's candidates from its winner. Generation 1
-runs the configured candidate, so its winner is the baseline. The cheaper
-model substitutions it proposes are first run in generation 2. To compare
-models at all, pass `--generations 2` or more. With the default of 1, the
-command measures the baseline only.
+runs the configured candidate and proposes cheaper model substitutions.
+After the last generation, a final evaluation runs the population it
+proposed (ADR 0091), so the default of 1 compares the configured models with
+their cheaper substitutes. The final evaluation is skipped when the last
+generation proposed no new candidate.
 
 # Optimization Arguments
 
@@ -1195,8 +1196,8 @@ command measures the baseline only.
 
 `--target-cost` is required and is interpreted as USD.
 
-`--generations` controls the maximum number of empirical optimization
-generations.
+`--generations` sets how many generations propose candidates. Every
+proposal is measured, by the next generation or by the final evaluation.
 
 There is no `--expected` option. What counts as a correct answer belongs to
 the benchmark's cases, each of which declares its own expected outcome and
@@ -1323,16 +1324,53 @@ rank empirical evidence
 optimizer proposes next generation
         │
         ▼
+final evaluation of the last proposals, when any are new
+        │
+        ▼
 WorkflowOptimizationSession
 ```
 
 The completed session is rendered to the operator.
 
+# Optimization Final Evaluation
+
+After the generations, the report shows the final evaluation in the same form
+as a generation, then names the winning experiment:
+
+```text
+Generation 1
+Experiment ID: <EXPERIMENT_ID>
+Evaluated Candidates: 1
+...
+Next Population: 2
+
+Final Evaluation
+Experiment ID: <FINAL_EXPERIMENT_ID>
+Evaluated Candidates: 2
+Judge Calls: 0
+Judge Cost: $0.000000
+Winner:
+...
+
+Winning Experiment ID: <FINAL_EXPERIMENT_ID>
+```
+
+When the last generation proposed no new candidate, the final evaluation does
+not run, and the report says so:
+
+```text
+Final Evaluation: not run. Generation 2 proposed no new candidates, so its winner is the session's winner.
+
+Winning Experiment ID: <EXPERIMENT_ID>
+```
+
+The winning experiment's winner is the session's winner.
+
 # Optimization Judge Cost
 
 When any case is judged semantically, the session reports what judging cost.
-The totals follow the summary, and each generation reports its own, summed
-over every candidate it evaluated:
+The totals follow the summary, and each generation and the final evaluation
+report their own, summed over every candidate they evaluated:
 
 ```text
 Workflow: classify sentiment
@@ -1360,14 +1398,15 @@ runs only, and candidates rank exactly as they would without judging.
 
 # Optimization Evidence Is Persisted
 
-Every generation of `workflow optimize` leaves durable evidence:
+Every generation of `workflow optimize`, and its final evaluation, leaves
+durable evidence:
 
 ```text
 each candidate execution of each case
     WorkflowRun                 persisted, succeeded or failed
     WorkflowRunEvaluation       persisted, including run-failure evaluations
 
-each generation
+each generation, and the final evaluation
     WorkflowExperimentRecord    persisted
 ```
 
@@ -3051,8 +3090,7 @@ azathoth benchmark execution-show <EXECUTION_ID>
 azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
     --benchmark 5e2e0b6a-3c1d-4b7e-9f21-000000000000 \
     --target-latency 5 \
-    --target-cost 0.001 \
-    --generations 2
+    --target-cost 0.001
 
 azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 azathoth experiment show <EXPERIMENT_ID>

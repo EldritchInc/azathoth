@@ -244,6 +244,75 @@ def create_session() -> WorkflowOptimizationSession:
     )
 
 
+def create_session_with_final_evaluation() -> WorkflowOptimizationSession:
+    """Create a one-generation session whose proposal won the final evaluation."""
+
+    initial = create_candidate(
+        strategy_id=INITIAL_STRATEGY_ID,
+    )
+
+    optimized = create_candidate(
+        strategy_id=OPTIMIZED_STRATEGY_ID,
+    )
+
+    initial_scorecard = create_scorecard(
+        quality=1.0,
+        reliability=1.0,
+        latency=0.8,
+        cost=0.1,
+        overall=0.725,
+    )
+
+    optimized_scorecard = create_scorecard(
+        quality=1.0,
+        reliability=1.0,
+        latency=0.9,
+        cost=1.0,
+        overall=0.975,
+    )
+
+    return WorkflowOptimizationSession(
+        initial_candidates=(initial,),
+        generations=(
+            WorkflowOptimizationResult(
+                generation=1,
+                previous_experiment=create_experiment(
+                    candidates=(initial,),
+                    scorecards=(initial_scorecard,),
+                    winner_index=0,
+                ),
+                candidates=(
+                    initial,
+                    optimized,
+                ),
+            ),
+        ),
+        final_experiment=create_experiment(
+            candidates=(
+                initial,
+                optimized,
+            ),
+            scorecards=(
+                initial_scorecard,
+                optimized_scorecard,
+            ),
+            winner_index=1,
+        ),
+    )
+
+
+def final_evaluation_lines(
+    rendered: str,
+) -> list[str]:
+    """Return the rendered lines from the final evaluation to the end."""
+
+    lines = rendered.splitlines()
+
+    start = next(index for index, line in enumerate(lines) if line.startswith("Final Evaluation"))
+
+    return lines[start:]
+
+
 def create_heterogeneous_candidate() -> WorkflowCandidate:
     """Create one winner containing model-backed and non-model steps."""
 
@@ -411,3 +480,76 @@ def test_render_workflow_optimization_session_only_renders_actual_model_bindings
     )
 
     assert rendered.count("  Model:") == 1
+
+
+def test_render_reports_the_final_evaluation() -> None:
+    session = create_session_with_final_evaluation()
+
+    assert session.final_experiment is not None
+
+    lines = final_evaluation_lines(render_workflow_optimization_session(session))
+
+    assert lines[:6] == [
+        "Final Evaluation",
+        f"Experiment ID: {session.final_experiment.id}",
+        "Evaluated Candidates: 2",
+        "Judge Calls: 0",
+        "Judge Cost: $0.000000",
+        "Winner:",
+    ]
+    assert f"  Strategy IDs: {OPTIMIZED_STRATEGY_ID}" in lines
+    assert "  Overall: 0.975000" in lines
+
+
+def test_render_puts_the_final_evaluation_after_the_generations() -> None:
+    rendered = render_workflow_optimization_session(
+        create_session_with_final_evaluation(),
+    )
+
+    assert rendered.index("Generation 1") < rendered.index("Final Evaluation")
+    assert "Next Population: 2\n\nFinal Evaluation\n" in rendered
+
+
+def test_render_explains_a_skipped_final_evaluation() -> None:
+    rendered = render_workflow_optimization_session(
+        create_session(),
+    )
+
+    assert (
+        "Final Evaluation: not run. Generation 2 proposed no new candidates, "
+        "so its winner is the session's winner.\n"
+    ) in rendered
+    assert "\nFinal Evaluation\n" not in rendered
+
+
+def test_render_ends_with_the_final_winning_experiment() -> None:
+    session = create_session_with_final_evaluation()
+
+    assert session.final_experiment is not None
+
+    lines = render_workflow_optimization_session(session).splitlines()
+
+    assert lines[-2:] == [
+        "",
+        f"Winning Experiment ID: {session.final_experiment.id}",
+    ]
+
+
+def test_render_ends_with_the_last_generations_experiment() -> None:
+    session = create_session()
+    last_experiment = session.generations[-1].previous_experiment
+
+    lines = render_workflow_optimization_session(session).splitlines()
+
+    assert lines[-1] == f"Winning Experiment ID: {last_experiment.id}"
+
+
+def test_render_without_generations_has_no_final_evaluation() -> None:
+    session = WorkflowOptimizationSession(
+        initial_candidates=create_session().initial_candidates,
+    )
+
+    rendered = render_workflow_optimization_session(session)
+
+    assert "Final Evaluation" not in rendered
+    assert "Winning Experiment ID" not in rendered

@@ -81,15 +81,14 @@ azathoth benchmark import examples/ticket-triage/benchmarks/classify-ticket.json
 azathoth workflow optimize f1000000-0000-4000-8000-000000000010 \
     --benchmark f1000000-0000-4000-8000-000000000050 \
     --target-latency 5 \
-    --target-cost 0.001 \
-    --generations 2
+    --target-cost 0.001
 ```
 
-The first generation measures the classifier as configured. The second runs
-the candidates the first proposed: the optimizer offers the classifier each
-strictly cheaper authorized model that meets its requirements (ADR 0089),
-runs every candidate against the benchmark, and reports the winner on
-quality, latency and cost. It does not promote the winner: deploying it is a
+The first generation measures the classifier as configured, and the
+optimizer offers it each strictly cheaper authorized model that meets its
+requirements (ADR 0089). The final evaluation runs every candidate against
+the benchmark (ADR 0091), and the report names the winner on quality,
+latency and cost. It does not promote the winner: deploying it is a
 separate, deliberate step.
 
 The triage benchmark has three semantic cases, judged on the reply and the

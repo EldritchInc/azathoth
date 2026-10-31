@@ -282,9 +282,9 @@ models and add a judge. Then work through examples 2 and 5 to 7 of the
 [Examples Tour](docs/examples.md) in order: classify sentiment, ticket triage,
 workflow writer and code review. Each must complete:
 
-- sentiment answers `positive`, its benchmark runs, `optimize --generations 2`
-  evaluates the cheaper candidates and reports a winner with each step's
-  model, and `invoke` returns `{"result": "positive"}` after promotion;
+- sentiment answers `positive`, its benchmark runs, `optimize` evaluates the
+  cheaper candidates in its final evaluation and reports a winner with each
+  step's model, and `invoke` returns `{"result": "positive"}` after promotion;
 - triage returns a complete triage record;
 - the workflow writer returns `valid: true` for its sample request, and the
   extracted workflow imports;
