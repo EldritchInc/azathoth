@@ -39,6 +39,7 @@ from azathoth.cli.goals import (
     list_goals,
     show_goal,
 )
+from azathoth.cli.initialization import initialize_database
 from azathoth.cli.judges import (
     add_judge,
     list_judges,
@@ -56,6 +57,7 @@ from azathoth.cli.parsing import (
     COMMAND_ATTRIBUTE,
     EXPERIMENT_COMMAND,
     GOAL_COMMAND,
+    INIT_COMMAND,
     INVOCATION_COMMAND,
     JUDGE_COMMAND,
     MODEL_COMMAND,
@@ -147,6 +149,9 @@ def _dispatch(
             None,
         ),
     )
+
+    if command == INIT_COMMAND:
+        return initialize_database()
 
     if command == BENCHMARK_COMMAND:
         return dispatch_benchmark_command(

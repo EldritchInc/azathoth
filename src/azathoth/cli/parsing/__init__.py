@@ -50,6 +50,10 @@ from azathoth.cli.parsing.goals import (
     GOAL_SHOW_ACTION,
     add_goal_parser,
 )
+from azathoth.cli.parsing.initialization import (
+    INIT_COMMAND,
+    add_init_parser,
+)
 from azathoth.cli.parsing.invocations import (
     INVOCATION_ACTION_ATTRIBUTE,
     INVOCATION_COMMAND,
@@ -188,6 +192,8 @@ def build_parser() -> ArgumentParser:
 
     add_goal_parser(commands)
 
+    add_init_parser(commands)
+
     return parser
 
 
@@ -231,6 +237,7 @@ __all__ = [
     "GOAL_IMPORT_ACTION",
     "GOAL_LIST_ACTION",
     "GOAL_SHOW_ACTION",
+    "INIT_COMMAND",
     "INVOCATION_ACTION_ATTRIBUTE",
     "INVOCATION_COMMAND",
     "INVOCATION_ID_ATTRIBUTE",
@@ -313,6 +320,7 @@ __all__ = [
     "WORKFLOW_SHOW_ACTION",
     "WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE",
     "add_benchmark_parser",
+    "add_init_parser",
     "add_invocation_parser",
     "add_judge_parser",
     "build_parser",
