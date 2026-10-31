@@ -29,6 +29,8 @@ BENCHMARK_CASE_ID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
 GOAL_ID = UUID("abababab-abab-abab-abab-abababababab")
 
+EXPERIMENT_ID = UUID("acacacac-acac-acac-acac-acacacacacac")
+
 
 def test_cli_parser_uses_azathoth_program_name() -> None:
     parser = build_parser()
@@ -620,16 +622,70 @@ def test_workflow_promote_parser_accepts_workflow_id() -> None:
     assert arguments.workflow_id == WORKFLOW_ID
 
 
-def test_workflow_promote_dispatches_command(
-    monkeypatch: pytest.MonkeyPatch,
+def test_workflow_promote_parser_accepts_an_experiment() -> None:
+    parser = build_parser()
+
+    arguments = parser.parse_args(
+        (
+            "workflow",
+            "promote",
+            str(WORKFLOW_ID),
+            "--experiment",
+            str(EXPERIMENT_ID),
+        )
+    )
+
+    assert arguments.workflow_id == WORKFLOW_ID
+    assert arguments.workflow_promote_experiment == EXPERIMENT_ID
+
+
+def test_workflow_promote_parser_defaults_to_no_experiment() -> None:
+    arguments = build_parser().parse_args(
+        (
+            "workflow",
+            "promote",
+            str(WORKFLOW_ID),
+        )
+    )
+
+    assert arguments.workflow_promote_experiment is None
+
+
+def test_workflow_promote_parser_rejects_a_malformed_experiment(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    promoted: list[UUID] = []
+    with pytest.raises(SystemExit) as raised:
+        build_parser().parse_args(
+            (
+                "workflow",
+                "promote",
+                str(WORKFLOW_ID),
+                "--experiment",
+                "not-a-uuid",
+            )
+        )
+
+    assert raised.value.code == 2
+    assert "--experiment" in capsys.readouterr().err
+
+
+def capture_promotions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[UUID, UUID | None]]:
+    """Replace promotion with a fake that records what it was asked to promote."""
+
+    promoted: list[tuple[UUID, UUID | None]] = []
 
     def fake_promote_workflow(
         workflow_id: UUID,
+        *,
+        experiment_id: UUID | None = None,
     ) -> int:
         promoted.append(
-            workflow_id,
+            (
+                workflow_id,
+                experiment_id,
+            )
         )
 
         return 0
@@ -639,6 +695,14 @@ def test_workflow_promote_dispatches_command(
         "promote_workflow",
         fake_promote_workflow,
     )
+
+    return promoted
+
+
+def test_workflow_promote_dispatches_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    promoted = capture_promotions(monkeypatch)
 
     result = main(
         (
@@ -650,7 +714,28 @@ def test_workflow_promote_dispatches_command(
 
     assert result == 0
     assert promoted == [
-        WORKFLOW_ID,
+        (WORKFLOW_ID, None),
+    ]
+
+
+def test_workflow_promote_dispatches_the_experiment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    promoted = capture_promotions(monkeypatch)
+
+    result = main(
+        (
+            "workflow",
+            "promote",
+            str(WORKFLOW_ID),
+            "--experiment",
+            str(EXPERIMENT_ID),
+        )
+    )
+
+    assert result == 0
+    assert promoted == [
+        (WORKFLOW_ID, EXPERIMENT_ID),
     ]
 
 

@@ -33,6 +33,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_OUTPUT_ATTRIBUTE,
     WORKFLOW_PRODUCTION_ACTION,
     WORKFLOW_PROMOTE_ACTION,
+    WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE,
     WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
     WORKFLOW_REVISIONS_ACTION,
     WORKFLOW_RUN_ACTION,
@@ -47,6 +48,7 @@ WorkflowImportHandler = Callable[[Path], int]
 WorkflowListHandler = Callable[[], int]
 WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
+WorkflowPromoteHandler = Callable[..., int]
 WorkflowHistoryHandler = Callable[..., int]
 WorkflowRevisionHandler = Callable[..., int]
 WorkflowRunHandler = Callable[..., int]
@@ -65,7 +67,7 @@ def dispatch_workflow_command(
     list_workflow_runs: WorkflowHistoryHandler,
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
-    promote_workflow: WorkflowIdentifierHandler,
+    promote_workflow: WorkflowPromoteHandler,
     run_workflow: WorkflowRunHandler,
     show_workflow: WorkflowRevisionHandler,
     show_workflow_production: WorkflowIdentifierHandler,
@@ -272,6 +274,14 @@ def dispatch_workflow_command(
 
         return promote_workflow(
             workflow_id,
+            experiment_id=cast(
+                UUID | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE,
+                    None,
+                ),
+            ),
         )
 
     if action == WORKFLOW_OPTIMIZE_ACTION:
