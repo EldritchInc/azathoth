@@ -12,6 +12,7 @@ from pydantic import JsonValue
 from azathoth.tools import (
     PROCESS_STDERR_TAIL_CHARACTERS,
     PROCESS_TOOL_RUNTIME,
+    PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
     ProcessToolExecutor,
     RuntimeToolExecutor,
     ToolExecutionError,
@@ -35,6 +36,12 @@ WORD_COUNT_SCRIPT = (
 )
 
 ENVIRONMENT_VARIABLE = "AZATHOTH_PROCESS_TOOL_TEST"
+
+TIMEOUT_SCRIPT = (
+    "import json, os\n"
+    "print(json.dumps({'timeout': "
+    f"os.environ.get('{PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE}')}}))\n"
+)
 
 
 def create_implementation(
@@ -307,4 +314,91 @@ def test_process_tool_output_is_decoded_as_json() -> None:
                 True,
             ],
         },
+    }
+
+
+def test_process_tool_timeout_variable_is_named_for_azathoth() -> None:
+    assert PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE == "AZATHOTH_TOOL_TIMEOUT_SECONDS"
+
+
+def test_process_tool_sees_its_own_timeout() -> None:
+    result = execute(
+        create_implementation(
+            TIMEOUT_SCRIPT,
+            timeout_seconds=30,
+        ),
+    )
+
+    timeout = result["timeout"]
+
+    assert isinstance(timeout, str)
+    assert float(timeout) == 30
+
+
+def test_process_tool_sees_a_fractional_timeout_exactly() -> None:
+    result = execute(
+        create_implementation(
+            TIMEOUT_SCRIPT,
+            timeout_seconds=12.5,
+        ),
+    )
+
+    timeout = result["timeout"]
+
+    assert isinstance(timeout, str)
+    assert float(timeout) == 12.5
+
+
+def test_process_tool_timeout_replaces_an_inherited_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
+        "7200",
+    )
+
+    result = execute(
+        create_implementation(
+            TIMEOUT_SCRIPT,
+            timeout_seconds=30,
+        ),
+    )
+
+    timeout = result["timeout"]
+
+    assert isinstance(timeout, str)
+    assert float(timeout) == 30
+
+
+def test_process_tool_without_a_timeout_sees_none_even_when_inherited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
+        "7200",
+    )
+
+    assert execute(create_implementation(TIMEOUT_SCRIPT)) == {
+        "timeout": None,
+    }
+
+
+def test_process_tool_with_a_timeout_still_inherits_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        ENVIRONMENT_VARIABLE,
+        "eldritch",
+    )
+
+    result = execute(
+        create_implementation(
+            "import json, os\n"
+            f"print(json.dumps({{'value': os.environ['{ENVIRONMENT_VARIABLE}']}}))\n",
+            timeout_seconds=30,
+        ),
+    )
+
+    assert result == {
+        "value": "eldritch",
     }

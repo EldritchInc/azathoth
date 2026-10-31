@@ -43,6 +43,7 @@ from azathoth.tools.memory_repository import (
 )
 from azathoth.tools.process import (
     PROCESS_STDERR_TAIL_CHARACTERS,
+    PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
     ProcessToolExecutor,
 )
 from azathoth.tools.protocols import ToolExecutor
@@ -67,6 +68,7 @@ __all__ = [
     "InMemoryToolRepository",
     "PROCESS_STDERR_TAIL_CHARACTERS",
     "PROCESS_TOOL_RUNTIME",
+    "PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE",
     "PYTHON_TOOL_RUNTIME",
     "ProcessToolExecutor",
     "PythonToolExecutor",
