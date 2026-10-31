@@ -245,6 +245,12 @@ targets. It takes no expected value of its own. It must not modify
 `WorkflowProductionState`, with each prompt step on an exact model, and
 records a `WorkflowProductionRevision` describing the same behavior.
 
+`workflow promote --experiment` promotes the experiment's top-ranked
+candidate instead, rebuilt from the workflow's current revision. Its
+signature must match the experiment's exactly. A winner measured on another
+revision, or one whose models are no longer authorized, is refused and
+nothing is promoted.
+
 ### Production invocation
 
 `workflow invoke` executes current production state and persists the

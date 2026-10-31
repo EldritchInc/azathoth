@@ -75,6 +75,7 @@ azathoth
 │   │   ├── --target-cost <USD>
 │   │   └── --generations <COUNT>
 │   ├── promote <WORKFLOW_ID>
+│   │   └── --experiment <EXPERIMENT_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   └── --input <JSON>
 │   ├── production <WORKFLOW_ID>
@@ -1623,6 +1624,51 @@ declared result. `workflow production` shows it:
 Emission: result <- step <STEP_ID> output answer
 ```
 
+# Promote an Experiment's Winner
+
+Promote the winner of an optimization experiment with:
+
+```bash
+azathoth workflow promote <WORKFLOW_ID> --experiment <EXPERIMENT_ID>
+```
+
+`<EXPERIMENT_ID>` is the `Winning Experiment ID` the optimize report ends
+with. The experiment's top-ranked candidate is rebuilt, not trusted (ADR
+0092):
+
+```text
+configured candidate of the current revision
+        │
+        ▼
+each step whose strategy ID matches the winner's: kept
+each other prompt step: matched among its candidates over authorized models
+        │
+        ▼
+signature equals the winner's
+        │
+        ▼
+explicit promotion
+```
+
+Promotion then pins every prompt step to the model it was measured on, exactly
+as it does for the configured candidate.
+
+Nothing is promoted, and the command exits with status 1, when:
+
+```text
+Experiment <EXPERIMENT_ID> was not found.
+
+The candidate was measured on workflow <ID>, not workflow <WORKFLOW_ID>.
+
+The candidate was measured on revision <N> of workflow <WORKFLOW_ID>, but its current revision is <M>.
+
+Workflow step <STEP_ID> cannot be rebuilt: the model it was measured on is not currently available and authorized for it.
+```
+
+After importing a new revision, pin the winner's models in it deliberately,
+or optimize it again. Either way, the new revision can be promoted without
+`--experiment`. Deploying a workflow never requires optimizing it.
+
 # Promotion Is Explicit
 
 Nothing about:
@@ -3095,7 +3141,8 @@ azathoth workflow optimize 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
 azathoth workflow experiments 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 azathoth experiment show <EXPERIMENT_ID>
 
-azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001
+azathoth workflow promote 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
+    --experiment <EXPERIMENT_ID>
 
 azathoth workflow invoke 5e2e0b6a-3c1d-4b7e-9f20-000000000001 \
     --input '"The checkout flow was painless."' \
@@ -3404,6 +3451,8 @@ then:
 ```text
 runtime.generate_workflow_candidate()
         │
+        ├── with --experiment: experiment repository
+        │       └── rebuild_workflow_candidate(winner signature)
         ▼
 promote_workflow_candidate()
 ```

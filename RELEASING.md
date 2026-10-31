@@ -284,7 +284,8 @@ workflow writer and code review. Each must complete:
 
 - sentiment answers `positive`, its benchmark runs, `optimize` evaluates the
   cheaper candidates in its final evaluation and reports a winner with each
-  step's model, and `invoke` returns `{"result": "positive"}` after promotion;
+  step's model, `promote --experiment` with the winning experiment ID pins
+  the winner's model, and `invoke` then returns `{"result": "positive"}`;
 - triage returns a complete triage record;
 - the workflow writer returns `valid: true` for its sample request, and the
   extracted workflow imports;

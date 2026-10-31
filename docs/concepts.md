@@ -398,9 +398,12 @@ It must be executed and evaluated empirically.
 The optimization report names the winner of each generation and of the final
 evaluation, and the model each of its prompt steps ran on. The final
 evaluation's winner, or the last generation's when no final evaluation was
-needed, is the session's winner. To deploy the winner, pin those models in the
-workflow, as fixed selections, and promote it. A fixed selection is never
-substituted, so a pinned step stays exactly as measured.
+needed, is the session's winner. To deploy the winner, promote it by its experiment
+ID: promotion rebuilds it from the workflow's current revision and pins each
+prompt step to the model it was measured on (ADR 0092). To make those models
+part of the workflow itself, pin them as fixed selections in a new revision.
+A fixed selection is never substituted, so a pinned step stays exactly as
+measured.
 
 ### 7. Promote
 
