@@ -40,6 +40,21 @@ export AZATHOTH_DATABASE="$HOME/azathoth-work/examples.db"
 $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\examples.db"
 ```
 
+Then create it and install the standard tools:
+
+```bash
+azathoth init
+```
+
+```powershell
+azathoth init
+```
+
+Examples 3, 4 and 8 compose workflows with `run_workflow` and
+`loop_workflow`, which ship with Azathoth. Each of them runs
+`azathoth tool install-standard` too, which is safe to repeat: a tool that is
+already installed is left alone.
+
 Importing a document twice is harmless. Azathoth keeps both as revisions, and
 an identical import is marked as such. So each example below imports
 everything it needs, even when an earlier example already did.

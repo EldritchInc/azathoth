@@ -21,6 +21,22 @@ for document in standard_tool_documents():
     print(document.definition.name, document.definition.version)
 ```
 
+## Installing
+
+The library reaches a database through the CLI:
+
+```bash
+azathoth init
+azathoth tool install-standard
+```
+
+`init` creates the database if needed and then installs the library;
+`tool install-standard` installs it into an existing one. Each document is
+compared by content digest with the latest revision of its exact tool
+version: a missing version is imported, an identical one is left alone, and
+a differing one gets the standard document as its next revision. The CLI
+reference describes the output.
+
 ## Changing a standard tool
 
 A standard tool is never changed in place. A change ships as a new tool

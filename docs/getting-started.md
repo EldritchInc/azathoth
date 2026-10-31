@@ -38,6 +38,20 @@ export AZATHOTH_DATABASE="$HOME/azathoth-work/getting-started.db"
 $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\getting-started.db"
 ```
 
+Then create it:
+
+```bash
+azathoth init
+```
+
+```powershell
+azathoth init
+```
+
+`init` creates the database and installs the standard tools, `run_workflow`
+and `loop_workflow`. This guide's workflow uses neither, but every database
+starts the same way.
+
 ## 1. Import the Workflow
 
 ```bash

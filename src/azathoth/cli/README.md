@@ -58,6 +58,8 @@ azathoth
 ├── --help
 ├── --version
 │
+├── init
+│
 ├── workflow
 │   ├── import <FILE>
 │   ├── list
@@ -117,6 +119,7 @@ azathoth
 │
 ├── tool
 │   ├── import <FILE>
+│   ├── install-standard
 │   ├── list
 │   ├── show <TOOL_ID>
 │   │   └── --version <VERSION>
@@ -248,6 +251,45 @@ azathoth.db
 ```
 
 relative to the current working directory.
+
+# Initialize a Database
+
+Start a database with:
+
+```bash
+azathoth init
+```
+
+```text
+Database: /path/to/azathoth.db (created)
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+`init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
+in the working directory, creating it and any missing parent directories.
+It shows the database as an absolute path, marked `created` or `existing`.
+It then installs the standard tool library exactly as `tool install-standard`
+does, and exits with that command's status.
+
+Running it again is safe:
+
+```text
+Database: /path/to/azathoth.db (existing)
+Tool run_workflow@1.0.0 is already installed (revision 1).
+Tool loop_workflow@1.1.0 is already installed (revision 1).
+```
+
+A database that cannot be opened, for example because the path is a
+directory, is reported and nothing is installed:
+
+```text
+Unable to open database <PATH>: <ERROR>
+```
+
+`init` stops at the database and its tools. It needs no provider key.
+Authorizing models needs provider credentials and the models they make
+available, so `model authorize` stays a separate step.
 
 # OPENROUTER_API_KEY
 
@@ -2503,6 +2545,7 @@ implementations, and their verification cases.
 ```text
 azathoth tool
 ├── import
+├── install-standard
 ├── list
 ├── show
 ├── history
@@ -2594,6 +2637,55 @@ azathoth tool export <TOOL_ID> --version <VERSION> --revision <NUMBER>
 Tool versions saved before revisions existed become revision 1 of their
 version, without an import time. Test cases belong to a tool rather than to
 one version, so each such revision holds every test case of its tool.
+
+# Install the Standard Tools
+
+Azathoth ships a standard tool library inside the package (ADR 0095):
+
+```text
+run_workflow   1.0.0   run a child workflow once
+loop_workflow  1.1.0   run a child workflow repeatedly
+```
+
+Install it into the configured database with:
+
+```bash
+azathoth tool install-standard
+```
+
+```text
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+For each standard document, in that order, the command compares its content
+digest with the latest revision of the same exact tool version:
+
+- a version that is not in the database is imported as revision 1;
+- a version whose latest revision has the same digest is left alone, and
+  nothing is written:
+
+  ```text
+  Tool loop_workflow@1.1.0 is already installed (revision 1).
+  ```
+
+- a version whose latest revision differs, for example an operator's modified
+  copy, gets the standard document as its next revision, which becomes
+  current. When that content matches an earlier revision, it says so, as
+  `tool import` does:
+
+  ```text
+  Installed tool loop_workflow@1.1.0 revision 3 (identical to revision 1).
+  ```
+
+Nothing is edited in place, so the command is always safe to run again. The
+first document that cannot be saved, because an implementation ID in it
+belongs to another tool or version, stops the installation with the same
+message as `tool import`, and the command exits with status 1.
+
+A new Azathoth release may ship new versions of standard tools. Running the
+command after upgrading adds them beside the old ones, and workflows keep
+the exact versions they require. `azathoth init` runs the same installation.
 
 # Trace Tool Usage
 
