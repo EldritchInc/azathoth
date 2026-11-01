@@ -104,7 +104,8 @@ The directory answers what the external provider currently exposes.
 Provider-specific implementations translate external provider APIs into
 `ProviderModel` values.
 
-V1 includes `OpenRouterModelDirectory` for OpenRouter discovery.
+V1 includes `OpenRouterModelDirectory` for OpenRouter discovery. Azathoth
+1.1 adds `BedrockModelDirectory` for Amazon Bedrock (ADR 0103).
 
 Provider discovery can fail explicitly with `ModelDiscoveryError`.
 
@@ -418,6 +419,8 @@ V1 includes:
 - `OpenRouterLanguageModel`
 - `DeterministicLanguageModel`
 
+Azathoth 1.1 adds `BedrockLanguageModel`.
+
 `DeterministicLanguageModel` provides predictable execution for tests and local
 composition.
 
@@ -458,10 +461,15 @@ and executable registry presence before a model can actually execute.
 - completion token count
 - total token count
 - latency
-- estimated cost
+- estimated cost, or `None` when it is unknown
 
 These values allow higher-level Azathoth systems to reason about model
 execution without depending on provider-specific response formats.
+
+An unknown cost is never free. A provider that cannot price a call, such as
+Bedrock for a model its operator has not priced, reports `None`, and
+whatever weighs cost treats the model as unpriced: scoring a run that used
+it fails naming the model, and it is never substituted as a cheaper model.
 
 ## Model Executor
 
@@ -500,6 +508,62 @@ implementations for OpenRouter models represented in a `ModelCatalog`.
 
 Provider-specific translation remains behind the provider-neutral domain
 interfaces.
+
+## Amazon Bedrock
+
+Azathoth 1.1 runs models on Amazon Bedrock too (ADR 0103), with the `bedrock`
+extra, which installs boto3. [Connecting Amazon Bedrock](../../../docs/bedrock.md)
+covers turning it on.
+
+Bedrock models are named `bedrock/<model id>`, by Bedrock's own ID or, for an
+inference profile, its profile ID:
+
+```text
+bedrock/amazon.nova-pro-v1:0
+bedrock/us.anthropic.claude-sonnet-4-20250514-v1:0
+```
+
+The integration has five parts:
+
+- `configure_bedrock` reads `AZATHOTH_BEDROCK`, the region (`AWS_REGION`,
+  then `AWS_DEFAULT_REGION`, then the AWS profile's) and the pricing document
+  `AZATHOTH_BEDROCK_PRICING` names, into a `BedrockConfiguration`. It returns
+  `None` when Bedrock is off, raises `BedrockUnavailableError` without the
+  extra, and `BedrockConfigurationError` without a region or with a pricing
+  document that cannot be used.
+- `BedrockClient` is the protocol for the three calls Azathoth makes:
+  `converse`, `list_foundation_models` and `list_inference_profiles`.
+  `Boto3BedrockClient` implements it with boto3, AWS's credential chain,
+  botocore's standard retries and a 30-second timeout, and raises
+  `BedrockClientError`, carrying AWS's error code, for any failure. Nothing
+  else in Azathoth imports boto3, and it is imported only when Bedrock is on.
+- `BedrockModelDirectory` lists every active foundation model that outputs
+  text and can be called on demand, and every active system-defined inference
+  profile that routes to one. Context windows are unknown; prices come from
+  the pricing document. A failed listing is a `ModelDiscoveryError`.
+- `BedrockLanguageModel` sends a prompt through Converse as one user message,
+  and returns the reply's text blocks, joined, with its tokens, Bedrock's
+  latency and its cost at the model's price, or `None` unpriced. A reply
+  that a guardrail or content filter stopped (`BLOCKED_STOP_REASONS`) is a
+  `ModelExecutionError`, never an answer.
+- `BedrockModelRegistryLoader` builds one for each Bedrock model of a
+  catalog, at its catalog price.
+
+The pricing document keys each model by its Bedrock ID:
+
+```json
+{
+  "version": 1,
+  "models": {
+    "amazon.nova-pro-v1:0": {
+      "input_usd_per_million_tokens": 0.8,
+      "output_usd_per_million_tokens": 3.2
+    }
+  }
+}
+```
+
+Every test reaches Bedrock through a fake `BedrockClient`, so none needs AWS.
 
 ## Persistence Boundaries
 

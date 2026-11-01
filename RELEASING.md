@@ -470,6 +470,24 @@ python -m pytest
 Optional model overrides are `OPENROUTER_TEST_MODEL` and
 `OPENROUTER_TEST_MODELS` (a comma-separated list).
 
+Bedrock verification is opt-in the same way, needs AWS credentials allowed
+to call Bedrock, and may incur AWS charges. `BEDROCK_TEST_MODEL` names a
+Bedrock model ID or inference profile ID the region offers:
+
+```bash
+export AWS_REGION="us-east-1"
+export AZATHOTH_RUN_LIVE_BEDROCK_TESTS=1
+export BEDROCK_TEST_MODEL="amazon.nova-lite-v1:0"
+python -m pytest tests/providers/test_bedrock_live.py -ra
+```
+
+```powershell
+$env:AWS_REGION = "us-east-1"
+$env:AZATHOTH_RUN_LIVE_BEDROCK_TESTS = "1"
+$env:BEDROCK_TEST_MODEL = "amazon.nova-lite-v1:0"
+python -m pytest tests/providers/test_bedrock_live.py -ra
+```
+
 Live verification tests provider compatibility. It does not replace
 deterministic release validation.
 

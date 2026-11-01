@@ -79,7 +79,12 @@ class ModelRequest(BaseModel):
 
 
 class ModelResponse(BaseModel):
-    """The response returned by a language model."""
+    """The response returned by a language model.
+
+    `estimated_cost_usd` is None when the cost is unknown, such as for a
+    Bedrock model its operator has not priced (ADR 0103). Unknown is never
+    free.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -95,4 +100,4 @@ class ModelResponse(BaseModel):
 
     latency_ms: int
 
-    estimated_cost_usd: float
+    estimated_cost_usd: float | None

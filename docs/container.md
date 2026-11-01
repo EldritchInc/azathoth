@@ -169,6 +169,31 @@ docker run --rm -e OPENROUTER_API_KEY -v azathoth-data:/var/lib/azathoth $IMAGE 
 [Connecting OpenRouter](openrouter.md) covers getting a key and authorizing
 models; add `-e OPENROUTER_API_KEY` to each of its commands.
 
+### Bedrock
+
+The image includes Bedrock support (see
+[Connecting Amazon Bedrock](bedrock.md)). On Fargate, the task's role supplies
+the credentials and ECS sets `AWS_REGION`, so a task passes only
+`AZATHOTH_BEDROCK` and, if you price your models, `AZATHOTH_BEDROCK_PRICING`.
+
+On your own machine, the container can't see your AWS profile. Export your
+profile's current credentials into the terminal, pass them with `-e`, and
+mount your pricing document read-only:
+
+```bash
+eval "$(aws configure export-credentials --format env)"
+docker run --rm -e AZATHOTH_BEDROCK=1 -e AWS_REGION=us-east-1 -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_BEDROCK_PRICING=/etc/azathoth/bedrock-pricing.json -v "$HOME/azathoth-work/bedrock-pricing.json:/etc/azathoth/bedrock-pricing.json:ro" -v azathoth-data:/var/lib/azathoth $IMAGE model list
+```
+
+```powershell
+aws configure export-credentials --format powershell | Invoke-Expression
+docker run --rm -e AZATHOTH_BEDROCK=1 -e AWS_REGION=us-east-1 -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_BEDROCK_PRICING=/etc/azathoth/bedrock-pricing.json -v "$HOME\azathoth-work\bedrock-pricing.json:/etc/azathoth/bedrock-pricing.json:ro" -v azathoth-data:/var/lib/azathoth $IMAGE model list
+```
+
+The exported credentials expire with your session; export them again when
+they do. Child workflows in the container receive them too, through the
+standard tools' `AWS_*` grant.
+
 ## 5. Run Jobs
 
 `job run` reads a job request on standard input when its source is `-`, so a

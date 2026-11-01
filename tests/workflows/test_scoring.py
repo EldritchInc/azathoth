@@ -68,6 +68,8 @@ def create_execution(
     duration_seconds: float = 5.0,
     estimated_cost_usd: float | None = 0.05,
     include_metrics: bool = True,
+    provider: str | None = "test-provider",
+    model: str | None = "test-model",
 ) -> ExecutionResult:
     """Create a deterministic successful strategy execution."""
 
@@ -79,8 +81,8 @@ def create_execution(
 
     metrics = (
         StrategyExecutionMetrics(
-            provider="test-provider",
-            model="test-model",
+            provider=provider,
+            model=model,
             prompt_tokens=10,
             completion_tokens=5,
             total_tokens=15,
@@ -147,6 +149,8 @@ def create_executed_step(
     estimated_cost_usd: float | None = 0.05,
     include_metrics: bool = True,
     attempts: tuple[WorkflowStepAttempt, ...] | None = None,
+    provider: str | None = "test-provider",
+    model: str | None = "test-model",
 ) -> WorkflowStepRun:
     """Create a deterministic executed workflow step."""
 
@@ -155,6 +159,8 @@ def create_executed_step(
         duration_seconds=duration_seconds,
         estimated_cost_usd=estimated_cost_usd,
         include_metrics=include_metrics,
+        provider=provider,
+        model=model,
     )
 
     resolved_attempts = (
@@ -507,16 +513,63 @@ def test_scoring_rejects_missing_estimated_cost() -> None:
         ),
     )
 
-    with pytest.raises(
-        ValueError,
-        match=("Executed workflow steps must provide estimated cost metrics for scoring."),
-    ):
+    with pytest.raises(ValueError) as raised:
         WorkflowScorer(
             policy=create_policy(),
         ).score(
             run=run,
             evaluation=create_evaluation(),
         )
+
+    assert str(raised.value) == (
+        f"Workflow step {STEP_ID} ran model test-provider/test-model, whose cost is unknown; "
+        "price the model to score its run."
+    )
+
+
+def test_scoring_an_unpriced_bedrock_model_says_where_to_price_it() -> None:
+    """An unpriced Bedrock model is priced in the operator's pricing document (ADR 0103)."""
+
+    run = create_run(
+        steps=(
+            create_executed_step(
+                estimated_cost_usd=None,
+                provider="bedrock",
+                model="amazon.nova-pro-v1:0",
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError) as raised:
+        WorkflowScorer(
+            policy=create_policy(),
+        ).score(
+            run=run,
+            evaluation=create_evaluation(),
+        )
+
+    assert str(raised.value) == (
+        f"Workflow step {STEP_ID} ran model bedrock/amazon.nova-pro-v1:0, whose cost is "
+        "unknown; price the model in AZATHOTH_BEDROCK_PRICING to score its run."
+    )
+
+
+def test_scoring_a_step_with_no_model_and_no_cost_is_refused() -> None:
+    run = create_run(
+        steps=(create_executed_step(estimated_cost_usd=None, provider=None, model=None),),
+    )
+
+    with pytest.raises(ValueError) as raised:
+        WorkflowScorer(
+            policy=create_policy(),
+        ).score(
+            run=run,
+            evaluation=create_evaluation(),
+        )
+
+    assert str(raised.value) == (
+        f"Workflow step {STEP_ID} has no estimated cost, so its run cannot be scored."
+    )
 
 
 def test_scoring_policy_rejects_zero_latency_target() -> None:

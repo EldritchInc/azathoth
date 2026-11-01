@@ -1,4 +1,8 @@
-"""Tests for upgrading a database's standard tools to their environment grants (ADR 0099)."""
+"""Tests for upgrading a database's standard tools to their environment grants.
+
+The grants arrived with ADR 0099, and grew for tracing (ADR 0100) and for
+Bedrock (ADR 0103).
+"""
 
 import re
 from pathlib import Path
@@ -25,6 +29,9 @@ CHILD_GRANTS = (
     "AZATHOTH_WORKFLOW_DEPTH",
     "AZATHOTH_OTEL",
     "OTEL_*",
+    "AZATHOTH_BEDROCK",
+    "AZATHOTH_BEDROCK_PRICING",
+    "AWS_*",
 )
 
 PRE_GRANT_VERSIONS = {"run_workflow": "1.0.0", "loop_workflow": "1.1.0"}
@@ -36,6 +43,25 @@ PRE_GRANT_VERSIONS = {"run_workflow": "1.0.0", "loop_workflow": "1.1.0"}
 PRE_GRANT_IMPLEMENTATION_DIGESTS = {
     "run_workflow": "7c82bce9a41bbeade40a1cf273da55fe892f045513334c9b89fbf9dac472acf8",
     "loop_workflow": "b49e81e8ba46abe65010fef664faba9c2ff45059e37450081912828d11906678",
+}
+
+TRACING_ERA_VERSIONS = {"run_workflow": "1.0.2", "loop_workflow": "1.1.2"}
+
+TRACING_ERA_GRANTS = (
+    "AZATHOTH_DATABASE",
+    "OPENROUTER_API_KEY",
+    "AZATHOTH_WORKFLOW_DEPTH",
+    "AZATHOTH_OTEL",
+    "OTEL_*",
+)
+
+#
+# Implementation digests of the standard tools as they shipped with tracing
+# (ADR 0100), before Bedrock. The reconstructed documents must match them.
+#
+TRACING_ERA_IMPLEMENTATION_DIGESTS = {
+    "run_workflow": "1a736358877583da30b6c010982dd16de150262ab37d3f8198a72f074723a6e3",
+    "loop_workflow": "019aec70d48c0da29d46587d3ab7bf8da60dbab3cd57d5b278332165c9a70ea8",
 }
 
 UPGRADED = (
@@ -56,6 +82,26 @@ def pre_grant_document(
                     update={
                         "version": PRE_GRANT_VERSIONS[document.definition.name],
                         "environment": (),
+                    }
+                )
+                for implementation in document.implementations
+            ),
+        }
+    )
+
+
+def tracing_era_document(
+    document: ToolDocument,
+) -> ToolDocument:
+    """Return one standard document as it shipped with tracing, before Bedrock."""
+
+    return document.model_copy(
+        update={
+            "implementations": tuple(
+                implementation.model_copy(
+                    update={
+                        "version": TRACING_ERA_VERSIONS[document.definition.name],
+                        "environment": TRACING_ERA_GRANTS,
                     }
                 )
                 for implementation in document.implementations
@@ -85,6 +131,48 @@ def database(
     capsys.readouterr()
 
     return path
+
+
+def test_the_tracing_era_documents_are_the_ones_that_shipped_with_tracing() -> None:
+    for document in standard_tool_documents():
+        (implementation,) = tracing_era_document(document).implementations
+
+        assert (
+            content_digest(implementation)
+            == TRACING_ERA_IMPLEMENTATION_DIGESTS[document.definition.name]
+        )
+
+
+def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "azathoth.db"
+
+    configure_database(database=path, monkeypatch=monkeypatch)
+
+    for document in standard_tool_documents():
+        source = tmp_path / f"{document.definition.name}.json"
+        source.write_text(encode_tool_document(tracing_era_document(document)), encoding="utf-8")
+
+        assert import_tool(source) == 0
+
+    capsys.readouterr()
+
+    assert install_standard_tools() == 0
+    assert capsys.readouterr().out == UPGRADED
+
+    repository = SQLiteToolRepository(path)
+
+    for document in standard_tool_documents():
+        (implementation,) = document.implementations
+
+        current = repository.get_implementation(implementation.id)
+
+        assert current is not None
+        assert current.environment == CHILD_GRANTS
+        assert current.version == implementation.version
 
 
 def test_the_reconstructed_documents_are_the_ones_azathoth_1_0_shipped() -> None:

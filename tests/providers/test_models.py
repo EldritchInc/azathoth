@@ -140,3 +140,36 @@ def test_model_response_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         response.text = "Changed"
+
+
+def test_model_response_records_an_unknown_cost_as_none() -> None:
+    response = ModelResponse(
+        text="Hello",
+        provider="bedrock",
+        model="amazon.nova-pro-v1:0",
+        prompt_tokens=10,
+        completion_tokens=2,
+        total_tokens=12,
+        latency_ms=15,
+        estimated_cost_usd=None,
+    )
+
+    restored = ModelResponse.model_validate_json(response.model_dump_json())
+
+    assert restored == response
+    assert restored.estimated_cost_usd is None
+
+
+def test_model_response_requires_its_cost_to_be_stated_even_when_unknown() -> None:
+    with pytest.raises(ValidationError):
+        ModelResponse.model_validate(
+            {
+                "text": "Hello",
+                "provider": "test",
+                "model": "stub",
+                "prompt_tokens": 10,
+                "completion_tokens": 2,
+                "total_tokens": 12,
+                "latency_ms": 15,
+            }
+        )

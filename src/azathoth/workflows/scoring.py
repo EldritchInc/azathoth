@@ -1,10 +1,13 @@
 """Deterministic workflow scorecard calculation."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.evaluation import EvaluationResult
+from azathoth.providers import BEDROCK_PRICING_VARIABLE, BEDROCK_PROVIDER
+from azathoth.strategies import StrategyExecutionMetrics
 from azathoth.workflows.execution import (
     WorkflowRun,
 )
@@ -124,14 +127,34 @@ class WorkflowScorer:
 
             metrics = step.execution.metrics
 
-            if metrics is None or metrics.estimated_cost_usd is None:
+            if metrics is None:
                 raise ValueError(
                     "Executed workflow steps must provide estimated cost metrics for scoring."
                 )
 
+            if metrics.estimated_cost_usd is None:
+                raise ValueError(_unknown_cost(step.step_id, metrics))
+
             total_cost_usd += metrics.estimated_cost_usd
 
         return total_cost_usd
+
+
+def _unknown_cost(
+    step_id: UUID,
+    metrics: StrategyExecutionMetrics,
+) -> str:
+    """Return why a step's unknown cost keeps its run from being scored (ADR 0103)."""
+
+    if metrics.provider is None or metrics.model is None:
+        return f"Workflow step {step_id} has no estimated cost, so its run cannot be scored."
+
+    where = f" in {BEDROCK_PRICING_VARIABLE}" if metrics.provider == BEDROCK_PROVIDER else ""
+
+    return (
+        f"Workflow step {step_id} ran model {metrics.provider}/{metrics.model}, whose cost "
+        f"is unknown; price the model{where} to score its run."
+    )
 
 
 def aggregate_workflow_scorecards(

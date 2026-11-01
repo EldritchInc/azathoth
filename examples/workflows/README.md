@@ -188,7 +188,8 @@ The tool runs the child with its own Python interpreter
 `AZATHOTH_WORKFLOW_DEPTH`, so the child uses the same database and provider
 as its parent. It also grants `AZATHOTH_OTEL` and `OTEL_*`, so with tracing
 on, the child continues the parent's trace under the step that started it
-(ADR 0100).
+(ADR 0100), and `AZATHOTH_BEDROCK`, `AZATHOTH_BEDROCK_PRICING` and `AWS_*`,
+so the child runs Bedrock models as its parent does (ADR 0103).
 
 Two guards keep children bounded:
 

@@ -64,4 +64,5 @@ def test_openrouter_language_model_completes_live_request() -> None:
     assert response.completion_tokens > 0
     assert response.total_tokens > 0
     assert response.latency_ms >= 0
+    assert response.estimated_cost_usd is not None
     assert response.estimated_cost_usd >= 0.0

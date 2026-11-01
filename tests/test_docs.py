@@ -16,6 +16,7 @@ TOP_LEVEL_DOCUMENTS = (
 USER_GUIDES = (
     "docs/install.md",
     "docs/openrouter.md",
+    "docs/bedrock.md",
     "docs/examples.md",
     "docs/getting-started.md",
     "docs/container.md",

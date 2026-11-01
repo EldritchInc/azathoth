@@ -99,8 +99,10 @@ The container tests (`tests/container`) must pass, in CI's `container` job
 and with `make container-test`. They prove:
 
 - the image runs Azathoth under `tini`, as uid 10001, with the venv's
-  `python` first on `PATH` and the `otel` and `postgres` extras installed,
-  over libpq 15 or later;
+  `python` first on `PATH` and the `otel`, `postgres` and `bedrock` extras
+  installed, over libpq 15 or later and a botocore that knows Converse and
+  inference profiles;
+- that Bedrock turned on without a region is refused in one line;
 - that `init` and the child-workflow example work against a fresh volume;
 - that `job run` over standard input prints exactly one result;
 - that a read-only root filesystem with a writable `/tmp` is enough;
@@ -335,10 +337,14 @@ subsystem tests.
 
 ## 8. Optional Live Verification
 
-Live OpenRouter tests are an opt-in layer on top of a green deterministic
-gate, never a substitute for one. [Releasing](../RELEASING.md#optional-live-verification)
+Live OpenRouter and Bedrock tests are an opt-in layer on top of a green
+deterministic gate, never a substitute for one. [Releasing](../RELEASING.md#optional-live-verification)
 shows how to enable them. They may consume credits, and they can be affected
 by provider downtime, model changes, rate limits and latency.
+
+Every Bedrock test outside them runs against a fake client, so a release
+that changes how Azathoth calls Bedrock is worth one live run against a real
+region (ADR 0103).
 
 ## Release Candidate Checklist
 

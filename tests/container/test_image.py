@@ -271,6 +271,52 @@ def test_the_postgres_extra_is_installed(
     assert completed.stdout == "True\n"
 
 
+def test_the_bedrock_extra_is_installed(
+    image: str,
+) -> None:
+    completed = succeeded(
+        docker(
+            "run",
+            "--rm",
+            "--entrypoint",
+            "python",
+            image,
+            "-c",
+            "import boto3, botocore.session; "
+            "session = botocore.session.get_session(); "
+            "runtime = session.get_service_model('bedrock-runtime').operation_names; "
+            "control = session.get_service_model('bedrock').operation_names; "
+            "print('Converse' in runtime, 'ListInferenceProfiles' in control)",
+        )
+    )
+
+    assert completed.stdout == "True True\n"
+
+
+def test_bedrock_on_without_a_region_says_so_in_one_line(
+    image: str,
+) -> None:
+    completed = docker(
+        "run",
+        "--rm",
+        "--env",
+        "AZATHOTH_BEDROCK=1",
+        "--env",
+        "AWS_REGION=",
+        "--env",
+        "AWS_DEFAULT_REGION=",
+        image,
+        "model",
+        "list",
+    )
+
+    assert completed.returncode == 1
+    assert completed.stdout == ""
+    assert completed.stderr == (
+        "AZATHOTH_BEDROCK is set, but no AWS region is configured; set AWS_REGION.\n"
+    )
+
+
 # Running workflows
 
 

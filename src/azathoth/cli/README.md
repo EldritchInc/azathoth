@@ -239,7 +239,8 @@ OPENROUTER_API_KEY
 ```
 
 Azathoth 1.1 adds `AZATHOTH_OTEL`, which turns tracing on (see
-[Tracing](#tracing)).
+[Tracing](#tracing)), and `AZATHOTH_BEDROCK` and `AZATHOTH_BEDROCK_PRICING`,
+which run models on Amazon Bedrock (see [AZATHOTH_BEDROCK](#azathoth_bedrock)).
 
 # AZATHOTH_DATABASE
 
@@ -354,6 +355,41 @@ The credential is used when CLI runtime composition requires current OpenRouter
 model state and executable OpenRouter model implementations.
 
 It is not persisted as workflow configuration.
+
+# AZATHOTH_BEDROCK
+
+`AZATHOTH_BEDROCK` turns Amazon Bedrock on as a second provider (ADR 0103),
+with the same values as `AZATHOTH_OTEL`: `1`, `true`, `yes` or `on`. It
+needs the `bedrock` extra:
+
+```bash
+python -m pip install "azathoth-ai[bedrock]"
+export AZATHOTH_BEDROCK=1
+export AWS_REGION=us-east-1
+export AZATHOTH_BEDROCK_PRICING=/path/to/bedrock-pricing.json
+```
+
+Azathoth reads no AWS credentials itself; boto3 finds them the way the AWS
+CLI does. The region is `AWS_REGION`, then `AWS_DEFAULT_REGION`, then the
+AWS profile's. `AZATHOTH_BEDROCK_PRICING` names the operator's pricing
+document, since Bedrock reports no prices; a model it does not price has an
+unknown cost. [Connecting Amazon Bedrock](../../../docs/bedrock.md) covers
+credentials, the IAM policy and the pricing document.
+
+`CliRuntimeConfiguration.bedrock_environment` keeps those four variables
+when Bedrock is on, and is empty otherwise. They are read only when a
+command composes the runtime, so a command that does not, such as
+`tool list`, never imports boto3.
+
+A command that composes the runtime with Bedrock on prints one line to
+stderr, and exits with status 1, when the extra is missing, no region is
+configured, or the pricing document cannot be used:
+
+```text
+AZATHOTH_BEDROCK is set, but boto3 is not installed; install azathoth-ai[bedrock].
+AZATHOTH_BEDROCK is set, but no AWS region is configured; set AWS_REGION.
+AZATHOTH_BEDROCK_PRICING <PATH> is not a valid Bedrock pricing document: <REASON>.
+```
 
 # Tracing
 
@@ -489,44 +525,57 @@ state.
 
 # Current Provider Models
 
-When `OPENROUTER_API_KEY` is configured, runtime bootstrap reconstructs current
-provider model truth through:
+Runtime bootstrap reconstructs current provider model truth from every
+provider that is on: OpenRouter when `OPENROUTER_API_KEY` is configured, and
+Bedrock when `AZATHOTH_BEDROCK` is, in that order:
 
 ```text
-OpenRouterModelDirectory
-        │
-        ▼
-ProviderModelObserver
-        │
-        ▼
-ProviderModelCatalogSynchronizer
-        │
-        ▼
-ModelCatalog
+OpenRouterModelDirectory    BedrockModelDirectory
+        │                           │
+        ▼                           ▼
+ProviderModelObserver       ProviderModelObserver
+        │                           │
+        └─────────────┬─────────────┘
+                      ▼
+       ProviderModelCatalogSynchronizer
+                      │
+                      ▼
+                 ModelCatalog
 ```
 
 Provider observations are persisted separately from the current catalog.
 
-If no OpenRouter API key is configured, the current model catalog is empty.
+With neither provider on, the current model catalog is empty.
+
+A provider that is on but whose models cannot be discovered fails the
+command, with one line on stderr and exit status 1. The catalog is never
+composed without it:
+
+```text
+OpenRouter model discovery request failed.
+Bedrock model discovery request failed: <AWS_ERROR_CODE>: <AWS_MESSAGE>.
+```
 
 # Executable Language Models
 
-When OpenRouter credentials are configured, the CLI also builds executable
-language-model implementations for the current model catalog.
+For each provider that is on, the CLI also builds executable language-model
+implementations for its models in the current catalog, and composes them
+into one registry.
 
 ```text
 ModelCatalog
       +
-OpenRouterConfiguration
-      │
-      ▼
-OpenRouterModelRegistryLoader
-      │
-      ▼
-LanguageModelRegistry
+OpenRouterConfiguration           BedrockClient
+      │                                 │
+      ▼                                 ▼
+OpenRouterModelRegistryLoader     BedrockModelRegistryLoader
+      │                                 │
+      └────────────────┬────────────────┘
+                       ▼
+               LanguageModelRegistry
 ```
 
-Without an API key, the executable language-model registry is empty.
+With neither provider on, the executable language-model registry is empty.
 
 # Model Portfolio
 
@@ -2388,8 +2437,8 @@ No other key is accepted.
 ## Job Results
 
 `job run` prints exactly one result, as one line of JSON on stdout, and
-nothing else, whatever the request. There are two exceptions, both
-configuration that is wrong for every request alike, and in both the command
+nothing else, whatever the request. There are three exceptions, all
+configuration that is wrong for every request alike, and in each the command
 prints no result, only its error on stderr, and exits with status 1:
 
 - tracing that cannot be configured (see [Tracing](#tracing)), found before
@@ -2398,7 +2447,12 @@ prints no result, only its error on stderr, and exits with status 1:
   missing or its schema is not this Azathoth's (see
   [AZATHOTH_DATABASE](#azathoth_database)), found once a valid request is
   read. A request that cannot be read or decoded is still rejected with a
-  result, since it never reaches the database.
+  result, since it never reaches the database;
+- a provider that cannot be used: Bedrock without its extra, its region or a
+  usable pricing document, or any provider whose models cannot be discovered
+  (see [Current Provider Models](#current-provider-models)), found when the
+  job first needs the runtime. A job that is replayed, conflicts or is
+  rejected never composes it, so it still gets its result.
 
 ```json
 {"kind": "invoke", "version": 1, "idempotency_key": "order-4711-review", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve"}}, "error": null}

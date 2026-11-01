@@ -388,12 +388,15 @@ CHILD_GRANTS = (
     "AZATHOTH_WORKFLOW_DEPTH",
     "AZATHOTH_OTEL",
     "OTEL_*",
+    "AZATHOTH_BEDROCK",
+    "AZATHOTH_BEDROCK_PRICING",
+    "AWS_*",
 )
 
 
 @pytest.mark.parametrize(
     ("name", "version"),
-    [("run_workflow", "1.0.2"), ("loop_workflow", "1.1.2")],
+    [("run_workflow", "1.0.3"), ("loop_workflow", "1.1.3")],
 )
 def test_the_standard_tools_grant_what_their_child_process_needs(
     name: str,
@@ -409,8 +412,15 @@ def test_the_standard_tools_grant_what_their_child_process_needs(
     assert implementation.version == version
 
 
-def test_the_standard_tools_see_the_database_key_and_tracing_but_no_other_secret() -> None:
-    environ = {**POSIX_ENVIRONMENT, "AZATHOTH_OTEL": "1", "OTEL_SERVICE_NAME": "support"}
+def test_the_standard_tools_see_the_database_providers_and_tracing_but_no_other_secret() -> None:
+    environ = {
+        **POSIX_ENVIRONMENT,
+        "AZATHOTH_OTEL": "1",
+        "OTEL_SERVICE_NAME": "support",
+        "AZATHOTH_BEDROCK": "1",
+        "AZATHOTH_BEDROCK_PRICING": "/etc/azathoth/bedrock-pricing.json",
+        "AWS_REGION": "us-east-1",
+    }
 
     for document in standard_tool_documents():
         (implementation,) = document.implementations
@@ -422,5 +432,9 @@ def test_the_standard_tools_see_the_database_key_and_tracing_but_no_other_secret
         assert environment["AZATHOTH_OTEL"] == "1"
         assert environment["OTEL_SERVICE_NAME"] == "support"
         assert environment["OTEL_EXPORTER_OTLP_HEADERS"] == "authorization=Bearer otel-secret"
-        assert "AWS_SECRET_ACCESS_KEY" not in environment
+        assert environment["AZATHOTH_BEDROCK"] == "1"
+        assert environment["AZATHOTH_BEDROCK_PRICING"] == "/etc/azathoth/bedrock-pricing.json"
+        assert environment["AWS_REGION"] == "us-east-1"
+        assert environment["AWS_SECRET_ACCESS_KEY"] == "aws-secret"
+        assert environment["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"] == "/v2/credentials/abc"
         assert "DATABASE_URL" not in environment

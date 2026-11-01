@@ -1,5 +1,34 @@
 """Language model provider abstractions."""
 
+from azathoth.providers.bedrock import (
+    BLOCKED_STOP_REASONS,
+    BedrockLanguageModel,
+    BedrockModelRegistryLoader,
+)
+from azathoth.providers.bedrock_client import (
+    AWS_DEFAULT_REGION_VARIABLE,
+    AWS_REGION_VARIABLE,
+    BedrockClient,
+    BedrockClientError,
+    BedrockDriver,
+    Boto3BedrockClient,
+    boto3_driver,
+    configure_bedrock,
+)
+from azathoth.providers.bedrock_configuration import (
+    BEDROCK_ENABLED_VARIABLE,
+    BEDROCK_PRICING_VARIABLE,
+    BEDROCK_PROVIDER,
+    MISSING_BEDROCK_EXTRA_MESSAGE,
+    MISSING_REGION_MESSAGE,
+    BedrockConfiguration,
+    BedrockConfigurationError,
+    BedrockPricing,
+    BedrockUnavailableError,
+    bedrock_enabled,
+    load_bedrock_pricing,
+)
+from azathoth.providers.bedrock_directory import BedrockModelDirectory
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
 from azathoth.providers.deterministic import DeterministicLanguageModel
@@ -94,6 +123,29 @@ from azathoth.providers.sqlite_provider_observation_repository import (
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
+    "AWS_DEFAULT_REGION_VARIABLE",
+    "AWS_REGION_VARIABLE",
+    "BLOCKED_STOP_REASONS",
+    "BedrockLanguageModel",
+    "BedrockModelRegistryLoader",
+    "BEDROCK_ENABLED_VARIABLE",
+    "BEDROCK_PRICING_VARIABLE",
+    "BEDROCK_PROVIDER",
+    "MISSING_BEDROCK_EXTRA_MESSAGE",
+    "MISSING_REGION_MESSAGE",
+    "BedrockClient",
+    "BedrockClientError",
+    "BedrockConfiguration",
+    "BedrockConfigurationError",
+    "BedrockDriver",
+    "BedrockModelDirectory",
+    "BedrockPricing",
+    "BedrockUnavailableError",
+    "Boto3BedrockClient",
+    "bedrock_enabled",
+    "boto3_driver",
+    "configure_bedrock",
+    "load_bedrock_pricing",
     "MODEL_PORTFOLIO_TABLES",
     "MODEL_TABLES",
     "PROVIDER_MODEL_OBSERVATION_TABLES",

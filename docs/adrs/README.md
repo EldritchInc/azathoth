@@ -125,3 +125,4 @@ requests that made it:
 - [ADR 0100: Trace Workflows With OpenTelemetry](0100-trace-workflows-with-opentelemetry.md)
 - [ADR 0101: Ship Azathoth as a Container Image](0101-ship-azathoth-as-a-container-image.md)
 - [ADR 0102: Keep Durable State in PostgreSQL](0102-keep-durable-state-in-postgresql.md)
+- [ADR 0103: Run Models on Amazon Bedrock](0103-run-models-on-amazon-bedrock.md)
