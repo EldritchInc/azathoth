@@ -304,6 +304,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 `init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
@@ -321,6 +322,7 @@ Tool loop_workflow@1.1.0 is already installed (revision 1).
 Tool json_select@1.0.0 is already installed (revision 1).
 Tool json_object@1.0.0 is already installed (revision 1).
 Tool json_merge@1.0.0 is already installed (revision 1).
+Tool validate_json@1.0.0 is already installed (revision 1).
 ```
 
 A database that cannot be opened, for example because the path is a
@@ -340,6 +342,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 It is the only command that creates a PostgreSQL schema. Several processes
@@ -2952,6 +2955,7 @@ loop_workflow  1.1.0   run a child workflow repeatedly
 json_select    1.0.0   select one value from JSON by path
 json_object    1.0.0   build one object from a step's inputs
 json_merge     1.0.0   deep-merge one object into another
+validate_json  1.0.0   check a value against a JSON Schema
 ```
 
 The [standard tool library](../standard/README.md) describes each tool's inputs, outputs
@@ -2969,6 +2973,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 For each standard document, in that order, the command compares its content
@@ -3013,6 +3018,7 @@ Installed tool loop_workflow@1.1.0 revision 2.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 # Trace Tool Usage

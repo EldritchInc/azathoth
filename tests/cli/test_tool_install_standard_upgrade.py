@@ -70,6 +70,7 @@ UPGRADED = (
     "Installed tool json_select@1.0.0 revision 1.\n"
     "Installed tool json_object@1.0.0 revision 1.\n"
     "Installed tool json_merge@1.0.0 revision 1.\n"
+    "Installed tool validate_json@1.0.0 revision 1.\n"
 )
 
 
@@ -232,6 +233,7 @@ def test_installing_again_after_the_upgrade_writes_nothing(
         "Tool json_select@1.0.0 is already installed (revision 1).\n"
         "Tool json_object@1.0.0 is already installed (revision 1).\n"
         "Tool json_merge@1.0.0 is already installed (revision 1).\n"
+        "Tool validate_json@1.0.0 is already installed (revision 1).\n"
     )
 
 

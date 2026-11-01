@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from tests.cli.test_tool_install_standard import ALREADY_INSTALLED, INSTALLED
 from tests.standard.harness import run_standard_tool, standard_tool_failure
+from tests.standard.test_validate_json import IMPORT_MESSAGE, STORY_SCHEMA
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -56,6 +57,39 @@ DOCUMENTED_FAILURES: tuple[tuple[str, dict[str, JsonValue], int, str], ...] = (
         2,
         "json_merge can only merge objects; patch is an array.",
     ),
+    (
+        "validate_json",
+        {"value": {"title": "x", "characters": [{}]}, "schema": STORY_SCHEMA},
+        1,
+        "validate_json rejected the value at $.characters[0]: 'name' is a required property.",
+    ),
+    (
+        "validate_json",
+        {"value": {"characters": [{}, {}]}, "schema": STORY_SCHEMA},
+        1,
+        "validate_json rejected the value at $: 'title' is a required property "
+        "(and 2 more errors).",
+    ),
+    (
+        "validate_json",
+        {"value": {}, "schema": []},
+        2,
+        "validate_json needs 'schema' to be a JSON Schema: an object or a boolean.",
+    ),
+    (
+        "validate_json",
+        {"value": {}, "schema": {"type": "nope"}},
+        2,
+        "validate_json was given an invalid schema: 'nope' is not valid under any of the "
+        "given schemas.",
+    ),
+    (
+        "validate_json",
+        {"value": {}, "schema": {"$ref": "https://example.com/story.json"}},
+        2,
+        "validate_json could not resolve a reference in the schema: "
+        "Unresolvable: https://example.com/story.json.",
+    ),
 )
 
 
@@ -82,13 +116,13 @@ def test_each_documented_failure_is_the_tools_real_message(
 
 
 def test_every_message_the_readme_documents_is_pinned() -> None:
-    pinned = {failure[3] for failure in DOCUMENTED_FAILURES}
+    pinned = {failure[3] for failure in DOCUMENTED_FAILURES} | {IMPORT_MESSAGE}
 
     documented = {
         line
         for block in text_blocks(STANDARD_README)
         for line in block.splitlines()
-        if line.startswith(("json_select ", "json_object ", "json_merge "))
+        if line.startswith(("json_select ", "json_object ", "json_merge ", "validate_json "))
     }
 
     assert documented == pinned
@@ -141,3 +175,7 @@ def test_the_documented_second_init_reports_the_whole_library_installed() -> Non
     ]
 
     assert blocks == [f"Database: /path/to/azathoth.db (existing)\n{ALREADY_INSTALLED}"]
+
+
+def test_the_readme_documents_the_real_missing_jsonschema_message() -> None:
+    assert f"{IMPORT_MESSAGE}\n" in STANDARD_README.read_text(encoding="utf-8")

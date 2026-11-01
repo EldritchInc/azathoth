@@ -257,6 +257,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 The standard tools ship inside the package, so composing workflows needs no
@@ -265,7 +266,7 @@ copy of the repository:
 - `run_workflow` runs a child workflow once;
 - `loop_workflow` runs a child workflow repeatedly;
 - `json_select`, `json_object` and `json_merge` reshape the JSON that passes
-  between steps.
+  between steps, and `validate_json` checks it against a JSON Schema.
 
 Like every tool, they reach the database only by a recorded import, which is
 what `init` does. It needs no provider key, and running it again is safe: it
@@ -357,6 +358,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 Azathoth never shows the password: every message names the database without

@@ -16,6 +16,7 @@ steps:
 | `json_select`   | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
 | `json_object`   | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
 | `json_merge`    | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
+| `validate_json` | 1.0.0   | 1.0.0          | Check a value against a JSON Schema.        |
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -55,13 +56,15 @@ to the child.
 
 The data-shaping tools turn one step's output into the next step's input:
 they pick a field out of a model's reply, gather values from several steps
-into one object, or lay defaults under a request. Each one is a process
+into one object, lay defaults under a request, or check that a reply has
+the shape the next step needs. Each one is a process
 tool that runs its source with `python`, like the composition tools, but:
 
 - it grants itself no variables, so it sees only the base environment;
-- its source uses only the Python standard library and never imports
-  Azathoth, so what it does is fixed by its recorded document, not by the
-  Azathoth version that happens to be installed;
+- its source never imports Azathoth, so what it does is fixed by its
+  recorded document, not by the Azathoth version that happens to be
+  installed. It uses only the Python standard library, except that
+  `validate_json` also uses `jsonschema`, which Azathoth itself requires;
 - it has a 60-second timeout;
 - its result is one JSON object, which the step's output bindings read by
   path, like any tool's.
@@ -174,6 +177,67 @@ Both inputs must be objects. Anything else fails with status 2:
 json_merge can only merge objects; patch is an array.
 ```
 
+### validate_json
+
+`validate_json` checks `value` against the JSON Schema `schema` and returns
+the value unchanged, as `value`:
+
+| Input    | Required | Meaning                               |
+| -------- | -------- | ------------------------------------- |
+| `value`  | yes      | Any JSON value                        |
+| `schema` | yes      | A JSON Schema: an object or a boolean |
+
+A model's JSON reply is parsed, not checked: a reply that leaves out a field
+reaches the next step without it. Placed after the model's step, with the
+schema as a constant, `validate_json` stops the run there instead, and the
+steps after it read the checked value from its output:
+
+```json
+{
+  "specification": {"requirement": {"name": "validate_json", "version": "1.0.0", "runtime": "process"}},
+  "inputs": [
+    {"name": "value", "source": {"producer_step_id": "<PLAN STEP ID>", "name": "story"}},
+    {"name": "schema", "source": {"value": {"type": "object", "required": ["title", "characters"]}}}
+  ],
+  "outputs": [{"name": "story", "path": ["value"]}]
+}
+```
+
+The schema's dialect follows its `$schema` keyword and defaults to Draft
+2020-12, as for benchmark schemas. `format` is an annotation, as Draft
+2020-12 defines it, and is not checked. A schema refers only to itself:
+`$ref` reaches its own `$defs`, and nothing is fetched from the network.
+
+A value that does not match fails with status 1. The message names the
+first violation, ordered by JSON path and then by message, and counts the
+others:
+
+```text
+validate_json rejected the value at $.characters[0]: 'name' is a required property.
+validate_json rejected the value at $: 'title' is a required property (and 2 more errors).
+```
+
+A violation's message is cut at 300 characters, because it can quote the
+value, and a long chapter would push the start of the message out of what
+the engine quotes.
+
+A schema that is not one fails with status 2 before any value is checked, as
+does a reference the schema cannot resolve:
+
+```text
+validate_json needs 'schema' to be a JSON Schema: an object or a boolean.
+validate_json was given an invalid schema: 'nope' is not valid under any of the given schemas.
+validate_json could not resolve a reference in the schema: Unresolvable: https://example.com/story.json.
+```
+
+`validate_json` runs `jsonschema` from the `python` that runs it. That is
+Azathoth's own Python when Azathoth's environment is active, as in the
+container. Any other Python fails with status 2:
+
+```text
+validate_json needs the jsonschema package, which Azathoth installs; run it with the Python that runs Azathoth.
+```
+
 ## Installing
 
 The library reaches a database through the CLI:
@@ -219,6 +283,7 @@ Installed tool loop_workflow@1.1.0 revision 2.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 A database that already holds implementations 1.0.1 and 1.1.1 gets 1.0.3 and

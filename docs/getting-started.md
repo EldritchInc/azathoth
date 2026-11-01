@@ -50,7 +50,8 @@ azathoth init
 
 `init` creates the database and installs the standard tools: `run_workflow`
 and `loop_workflow`, which compose workflows, and `json_select`,
-`json_object` and `json_merge`, which reshape JSON between steps. This
+`json_object`, `json_merge` and `validate_json`, which reshape and check JSON
+between steps. This
 guide's workflow uses none of them, but every database starts the same way.
 
 ## 1. Import the Workflow

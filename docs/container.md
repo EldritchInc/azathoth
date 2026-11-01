@@ -74,6 +74,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 The image never initializes a database by itself, so run `init` once per
@@ -108,6 +109,7 @@ Installed tool loop_workflow@1.1.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
 ```
 
 Then pass the same `-e AZATHOTH_DATABASE=…` wherever this guide passes

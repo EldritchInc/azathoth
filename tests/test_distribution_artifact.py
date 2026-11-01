@@ -28,6 +28,7 @@ STANDARD_TOOL_FILES = (
     "json-select.json",
     "json-object.json",
     "json-merge.json",
+    "validate-json.json",
 )
 
 STANDARD_TOOLS_SCRIPT = (
@@ -451,5 +452,5 @@ def test_wheel_loads_the_standard_tool_library_outside_repository(
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
         "run_workflow@1.0.0 loop_workflow@1.1.0 json_select@1.0.0 json_object@1.0.0 "
-        "json_merge@1.0.0\n"
+        "json_merge@1.0.0 validate_json@1.0.0\n"
     )

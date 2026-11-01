@@ -27,6 +27,7 @@ INSTALLED = (
     "Installed tool json_select@1.0.0 revision 1.\n"
     "Installed tool json_object@1.0.0 revision 1.\n"
     "Installed tool json_merge@1.0.0 revision 1.\n"
+    "Installed tool validate_json@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
@@ -35,6 +36,7 @@ ALREADY_INSTALLED = (
     "Tool json_select@1.0.0 is already installed (revision 1).\n"
     "Tool json_object@1.0.0 is already installed (revision 1).\n"
     "Tool json_merge@1.0.0 is already installed (revision 1).\n"
+    "Tool validate_json@1.0.0 is already installed (revision 1).\n"
 )
 
 
@@ -178,6 +180,7 @@ def test_installing_again_writes_nothing(
         ("json_select", 1),
         ("json_object", 1),
         ("json_merge", 1),
+        ("validate_json", 1),
     ]
 
 
@@ -200,6 +203,7 @@ def test_install_skips_a_tool_already_imported_from_the_same_document(
         "Installed tool json_select@1.0.0 revision 1.\n"
         "Installed tool json_object@1.0.0 revision 1.\n"
         "Installed tool json_merge@1.0.0 revision 1.\n"
+        "Installed tool validate_json@1.0.0 revision 1.\n"
     )
 
 
@@ -222,6 +226,7 @@ def test_install_appends_a_revision_over_a_modified_copy(
         "Installed tool json_select@1.0.0 revision 1.\n"
         "Installed tool json_object@1.0.0 revision 1.\n"
         "Installed tool json_merge@1.0.0 revision 1.\n"
+        "Installed tool validate_json@1.0.0 revision 1.\n"
     )
 
     loop = standard_document("loop_workflow")
@@ -257,6 +262,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
         "Tool json_select@1.0.0 is already installed (revision 1).\n"
         "Tool json_object@1.0.0 is already installed (revision 1).\n"
         "Tool json_merge@1.0.0 is already installed (revision 1).\n"
+        "Tool validate_json@1.0.0 is already installed (revision 1).\n"
     )
     assert revision_numbers(database) == [
         ("run_workflow", 1),
@@ -266,6 +272,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
         ("json_select", 1),
         ("json_object", 1),
         ("json_merge", 1),
+        ("validate_json", 1),
     ]
 
 

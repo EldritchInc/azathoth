@@ -678,8 +678,8 @@ See [`azathoth.tools`](../src/azathoth/tools/README.md).
 
 Azathoth ships a standard tool library in the package: `run_workflow` and
 `loop_workflow`, which compose workflows from other workflows, and
-`json_select`, `json_object` and `json_merge`, which reshape the JSON that
-passes between steps. Standard tools
+`json_select`, `json_object`, `json_merge` and `validate_json`, which reshape
+and check the JSON that passes between steps. Standard tools
 reach a database the same way as every other tool, by a recorded import, which
 `azathoth init` and `azathoth tool install-standard` perform. See
 [`azathoth.standard`](../src/azathoth/standard/README.md).

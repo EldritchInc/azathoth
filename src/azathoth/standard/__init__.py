@@ -13,6 +13,7 @@ STANDARD_TOOL_FILES = (
     "json-select.json",
     "json-object.json",
     "json-merge.json",
+    "validate-json.json",
 )
 """The packaged tool documents, in the order they are installed."""
 
