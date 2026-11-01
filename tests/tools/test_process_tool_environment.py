@@ -382,6 +382,8 @@ def test_a_real_process_sees_exactly_the_built_environment(
 # The standard tools
 
 
+COMPOSITION_TOOLS = ("run_workflow", "loop_workflow")
+
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
     "OPENROUTER_API_KEY",
@@ -423,6 +425,9 @@ def test_the_standard_tools_see_the_database_providers_and_tracing_but_no_other_
     }
 
     for document in standard_tool_documents():
+        if document.definition.name not in COMPOSITION_TOOLS:
+            continue
+
         (implementation,) = document.implementations
 
         environment = posix(implementation, environ)
@@ -438,3 +443,23 @@ def test_the_standard_tools_see_the_database_providers_and_tracing_but_no_other_
         assert environment["AWS_SECRET_ACCESS_KEY"] == "aws-secret"
         assert environment["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"] == "/v2/credentials/abc"
         assert "DATABASE_URL" not in environment
+
+
+def test_the_data_shaping_tools_see_only_the_base_environment() -> None:
+    environ = {
+        **POSIX_ENVIRONMENT,
+        "AZATHOTH_OTEL": "1",
+        "AZATHOTH_BEDROCK": "1",
+        "AWS_REGION": "us-east-1",
+    }
+
+    for document in standard_tool_documents():
+        if document.definition.name in COMPOSITION_TOOLS:
+            continue
+
+        (implementation,) = document.implementations
+
+        environment = posix(implementation, environ)
+
+        assert environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE) == "60.0"
+        assert environment == POSIX_BASE, document.definition.name

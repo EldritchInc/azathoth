@@ -67,7 +67,20 @@ TRACING_ERA_IMPLEMENTATION_DIGESTS = {
 UPGRADED = (
     "Installed tool run_workflow@1.0.0 revision 2.\n"
     "Installed tool loop_workflow@1.1.0 revision 2.\n"
+    "Installed tool json_select@1.0.0 revision 1.\n"
+    "Installed tool json_object@1.0.0 revision 1.\n"
+    "Installed tool json_merge@1.0.0 revision 1.\n"
 )
+
+
+def composition_documents() -> tuple[ToolDocument, ...]:
+    """Return the standard composition tools, the only ones that grant themselves variables."""
+
+    return tuple(
+        document
+        for document in standard_tool_documents()
+        if document.definition.name in PRE_GRANT_VERSIONS
+    )
 
 
 def pre_grant_document(
@@ -122,7 +135,7 @@ def database(
 
     configure_database(database=path, monkeypatch=monkeypatch)
 
-    for document in standard_tool_documents():
+    for document in composition_documents():
         source = tmp_path / f"{document.definition.name}.json"
         source.write_text(encode_tool_document(pre_grant_document(document)), encoding="utf-8")
 
@@ -134,7 +147,7 @@ def database(
 
 
 def test_the_tracing_era_documents_are_the_ones_that_shipped_with_tracing() -> None:
-    for document in standard_tool_documents():
+    for document in composition_documents():
         (implementation,) = tracing_era_document(document).implementations
 
         assert (
@@ -152,7 +165,7 @@ def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
 
     configure_database(database=path, monkeypatch=monkeypatch)
 
-    for document in standard_tool_documents():
+    for document in composition_documents():
         source = tmp_path / f"{document.definition.name}.json"
         source.write_text(encode_tool_document(tracing_era_document(document)), encoding="utf-8")
 
@@ -165,7 +178,7 @@ def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
 
     repository = SQLiteToolRepository(path)
 
-    for document in standard_tool_documents():
+    for document in composition_documents():
         (implementation,) = document.implementations
 
         current = repository.get_implementation(implementation.id)
@@ -176,7 +189,7 @@ def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
 
 
 def test_the_reconstructed_documents_are_the_ones_azathoth_1_0_shipped() -> None:
-    for document in standard_tool_documents():
+    for document in composition_documents():
         (implementation,) = pre_grant_document(document).implementations
 
         assert (
@@ -195,7 +208,7 @@ def test_installing_over_pre_grant_tools_appends_the_granted_revisions(
 
     repository = SQLiteToolRepository(database)
 
-    for document in standard_tool_documents():
+    for document in composition_documents():
         (implementation,) = document.implementations
 
         current = repository.get_implementation(implementation.id)
@@ -216,6 +229,9 @@ def test_installing_again_after_the_upgrade_writes_nothing(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 2).\n"
         "Tool loop_workflow@1.1.0 is already installed (revision 2).\n"
+        "Tool json_select@1.0.0 is already installed (revision 1).\n"
+        "Tool json_object@1.0.0 is already installed (revision 1).\n"
+        "Tool json_merge@1.0.0 is already installed (revision 1).\n"
     )
 
 

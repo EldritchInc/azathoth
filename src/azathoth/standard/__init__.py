@@ -10,6 +10,9 @@ from azathoth.tools import (
 STANDARD_TOOL_FILES = (
     "run-workflow.json",
     "loop-workflow.json",
+    "json-select.json",
+    "json-object.json",
+    "json-merge.json",
 )
 """The packaged tool documents, in the order they are installed."""
 

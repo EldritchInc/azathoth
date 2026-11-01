@@ -1,0 +1,42 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000002",
+    "name": "json_object",
+    "description": "Build one JSON object whose fields are the step's named inputs.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object"
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "value"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000022",
+      "tool_id": "c2000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Build one JSON object from the step's named inputs.\n\nEach input becomes a field of the same name, so a step can gather values\nfrom several earlier steps, constants and the workflow input into one\nobject. A step with no inputs builds an empty object.\n\"\"\"\n\nimport json\nimport sys\n\ninputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\nsys.stdout.buffer.write(json.dumps({\"value\": inputs}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

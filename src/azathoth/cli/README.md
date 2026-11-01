@@ -301,6 +301,9 @@ azathoth init
 Database: /path/to/azathoth.db (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
 ```
 
 `init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
@@ -315,6 +318,9 @@ Running it again is safe:
 Database: /path/to/azathoth.db (existing)
 Tool run_workflow@1.0.0 is already installed (revision 1).
 Tool loop_workflow@1.1.0 is already installed (revision 1).
+Tool json_select@1.0.0 is already installed (revision 1).
+Tool json_object@1.0.0 is already installed (revision 1).
+Tool json_merge@1.0.0 is already installed (revision 1).
 ```
 
 A database that cannot be opened, for example because the path is a
@@ -331,6 +337,9 @@ before it installs the tools, and names the database without its password:
 Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
 ```
 
 It is the only command that creates a PostgreSQL schema. Several processes
@@ -2935,7 +2944,13 @@ Azathoth ships a standard tool library inside the package (ADR 0095):
 ```text
 run_workflow   1.0.0   run a child workflow once
 loop_workflow  1.1.0   run a child workflow repeatedly
+json_select    1.0.0   select one value from JSON by path
+json_object    1.0.0   build one object from a step's inputs
+json_merge     1.0.0   deep-merge one object into another
 ```
+
+The [standard tool library](../standard/README.md) describes each tool's inputs, outputs
+and failures.
 
 Install it into the configured database with:
 
@@ -2946,6 +2961,9 @@ azathoth tool install-standard
 ```text
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
 ```
 
 For each standard document, in that order, the command compares its content
@@ -2981,11 +2999,14 @@ Azathoth 1.1 also ships new revisions of `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` that grant the environment their child process needs
 (ADR 0099), including the tracing configuration (ADR 0100). A database that
 installed them before 1.1 runs child workflows only after the command runs
-again:
+again, which also installs the tools that are new in 1.1:
 
 ```text
 Installed tool run_workflow@1.0.0 revision 2.
 Installed tool loop_workflow@1.1.0 revision 2.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
 ```
 
 # Trace Tool Usage

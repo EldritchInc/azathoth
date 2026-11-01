@@ -1,0 +1,58 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000001",
+    "name": "json_select",
+    "description": "Select one value from a JSON value by a path of object keys and list indexes, with an optional default for a path that holds nothing.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "path": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            }
+          },
+          "default": {}
+        },
+        "required": [
+          "value",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {}
+        },
+        "required": [
+          "value"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000011",
+      "tool_id": "c2000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Select one value from a JSON value by path.\n\nA path is a list of segments, read exactly like a step's output binding: a\nstring is an object key, and an integer is a list index, counting from the\nend when negative. When nothing is at the path, the tool fails, unless the\nstep gives it a `default`, which is then the result. A `null` found at the\npath is a value, so `default` never replaces it.\n\"\"\"\n\nimport json\nimport sys\n\nTOOL = \"json_select\"\nINPUTS = (\"value\", \"path\", \"default\")\nREQUIRED = (\"value\", \"path\")\n\n\ndef fail(status, message):\n    sys.stderr.write(message)\n    sys.exit(status)\n\n\ndef read_inputs():\n    inputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\n    for name in inputs:\n        if name not in INPUTS:\n            fail(2, f\"{TOOL} does not take the input {name!r}.\")\n\n    for name in REQUIRED:\n        if name not in inputs:\n            fail(2, f\"{TOOL} needs the input {name!r}.\")\n\n    return inputs\n\n\ndef is_segment(segment):\n    return isinstance(segment, str) or (isinstance(segment, int) and not isinstance(segment, bool))\n\n\ndef select(value, path):\n    for segment in path:\n        if isinstance(segment, str):\n            if not isinstance(value, dict) or segment not in value:\n                return False, f\"missing object key {segment!r}\"\n\n            value = value[segment]\n            continue\n\n        if not isinstance(value, list):\n            return False, f\"expected a list for index {segment}\"\n\n        try:\n            value = value[segment]\n        except IndexError:\n            return False, f\"list index {segment} is out of range\"\n\n    return True, value\n\n\ninputs = read_inputs()\npath = inputs[\"path\"]\n\nif not isinstance(path, list) or not all(is_segment(segment) for segment in path):\n    fail(2, f\"{TOOL} needs 'path' to be a list of object keys and list indexes.\")\n\nfound, result = select(inputs[\"value\"], path)\n\nif not found:\n    if \"default\" not in inputs:\n        shown = json.dumps(path, ensure_ascii=False)\n        fail(1, f\"{TOOL} found no value at path {shown}: {result}.\")\n\n    result = inputs[\"default\"]\n\nsys.stdout.buffer.write(json.dumps({\"value\": result}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

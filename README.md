@@ -55,9 +55,10 @@ azathoth init
 ```
 
 `azathoth init` creates the database and installs the standard tools that
-ship in the package: `run_workflow` runs a child workflow, and
-`loop_workflow` repeats one. Composing workflows from other workflows needs
-nothing but the installed package.
+ship in the package: `run_workflow` runs a child workflow, `loop_workflow`
+repeats one, and `json_select`, `json_object` and `json_merge` reshape the
+JSON that passes between steps. Composing workflows from other workflows
+needs nothing but the installed package.
 
 From a clone of this repository, run a workflow built from two tools. It
 needs no model and no API key:

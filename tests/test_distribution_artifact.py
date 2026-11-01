@@ -25,6 +25,9 @@ LIBRARY_DIRECTORY_SCRIPT = "import sysconfig; print(sysconfig.get_path('purelib'
 STANDARD_TOOL_FILES = (
     "run-workflow.json",
     "loop-workflow.json",
+    "json-select.json",
+    "json-object.json",
+    "json-merge.json",
 )
 
 STANDARD_TOOLS_SCRIPT = (
@@ -446,4 +449,7 @@ def test_wheel_loads_the_standard_tool_library_outside_repository(
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "run_workflow@1.0.0 loop_workflow@1.1.0\n"
+    assert result.stdout == (
+        "run_workflow@1.0.0 loop_workflow@1.1.0 json_select@1.0.0 json_object@1.0.0 "
+        "json_merge@1.0.0\n"
+    )

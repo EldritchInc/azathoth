@@ -31,11 +31,17 @@ PARENT_WORKFLOW_ID = "a1000000-0000-4000-8000-000000000003"
 INSTALLED = (
     "Installed tool run_workflow@1.0.0 revision 1.\n"
     "Installed tool loop_workflow@1.1.0 revision 1.\n"
+    "Installed tool json_select@1.0.0 revision 1.\n"
+    "Installed tool json_object@1.0.0 revision 1.\n"
+    "Installed tool json_merge@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
     "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
     "Tool loop_workflow@1.1.0 is already installed (revision 1).\n"
+    "Tool json_select@1.0.0 is already installed (revision 1).\n"
+    "Tool json_object@1.0.0 is already installed (revision 1).\n"
+    "Tool json_merge@1.0.0 is already installed (revision 1).\n"
 )
 
 
