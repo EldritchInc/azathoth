@@ -1009,9 +1009,54 @@ The script path is appended after the command's own arguments, so
 `["python3", "-u"]` runs `python3 -u <script>`. The temporary script is deleted
 once the process exits.
 
-The process inherits Azathoth's environment and working directory, so a tool
-can itself run `azathoth workflow invoke`. This is how child workflows are
-composed: as separate processes, not as a dedicated step type.
+The process runs in Azathoth's working directory, so a tool can itself run
+`azathoth workflow invoke`. This is how child workflows are composed: as
+separate processes, not as a dedicated step type.
+
+## Process Environment
+
+A process does not inherit Azathoth's environment (ADR 0099). It receives:
+
+- the platform's base variables, when Azathoth has them;
+- the variables its implementation grants itself;
+- `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the implementation declares a timeout.
+
+Nothing else reaches it, so a secret such as a provider key, a database path
+or a cloud credential never reaches a tool that did not ask for it.
+
+| Platform | Base variables |
+| --- | --- |
+| macOS, Linux | `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TZ`, `TMPDIR`, `TERM` |
+| Windows | `PATH`, `PATHEXT`, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, `NUMBER_OF_PROCESSORS`, `PROCESSOR_ARCHITECTURE`, `OS` |
+
+On Windows, names match in any case.
+
+An implementation grants itself more by name, or by a prefix ending in `*`:
+
+```json
+{
+  "runtime": "process",
+  "command": ["python3"],
+  "environment": ["GITHUB_TOKEN", "AWS_*"]
+}
+```
+
+- A grant is a variable name, `[A-Za-z_][A-Za-z0-9_]*`, optionally followed
+  by `*` to grant every variable with that prefix. A bare `*` is refused.
+- Grants are unique, and only process implementations take them.
+- A granted variable Azathoth does not have stays absent.
+- Grants are part of the implementation's content and digest, and
+  `tool implementation-show` names them. An implementation without grants
+  serializes without `environment`.
+
+`process_tool_environment(implementation)` returns exactly the environment an
+implementation runs with:
+
+```python
+from azathoth.tools import process_tool_environment
+
+environment = process_tool_environment(implementation)
+```
 
 When the implementation declares `timeout_seconds`, the process also sees it
 (ADR 0093):
@@ -1021,9 +1066,20 @@ AZATHOTH_TOOL_TIMEOUT_SECONDS=<timeout_seconds>
 ```
 
 A tool that runs for a long time, such as a loop over child workflows, reads
-it to stop cleanly before it is killed. A process without a declared timeout
-never sees the variable, even when Azathoth itself runs inside a tool that
-has one.
+it to stop cleanly before it is killed. The variable is managed by the
+engine: it cannot be granted, and a process without a declared timeout never
+sees it, even when Azathoth itself runs inside a tool that has one.
+
+A tool that runs `azathoth` itself grants what that invocation needs, as the
+standard composition tools do:
+
+```json
+"environment": ["AZATHOTH_DATABASE", "OPENROUTER_API_KEY", "AZATHOTH_WORKFLOW_DEPTH"]
+```
+
+Python implementations run in Azathoth's own process and see its whole
+environment. They are trusted; a tool that is not belongs in a process
+implementation.
 
 Failures are explicit `ToolExecutionError`s:
 

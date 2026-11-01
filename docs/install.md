@@ -338,6 +338,14 @@ A release that changes a standard tool ships it as a new version, which is
 added beside the old one. Your workflows keep the exact tool versions they
 name, so upgrading never changes what an existing workflow runs.
 
+Upgrading to 1.1 is the one exception. Process tools stop inheriting your
+environment, so a tool sees your provider key or database only if it grants
+itself them. The 1.1 standard tools do, as new revisions of the same
+versions, and `azathoth init` installs them; until it runs, child workflows
+fail. A process tool of your own that relied on an inherited variable must
+grant it; see
+[Process Environment](../src/azathoth/tools/README.md#process-environment).
+
 To leave the venv without closing the terminal, run `deactivate`.
 
 To uninstall, deactivate and then delete the venv folder. Your database

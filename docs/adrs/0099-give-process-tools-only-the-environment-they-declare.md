@@ -93,6 +93,24 @@ say so.
 `AZATHOTH_WORKFLOW_DEPTH` is granted until lineage is recorded in a child's
 initial context, which is a separate, planned decision.
 
+### A revision, not a new version
+
+ADR 0095 has each release that changes a standard tool ship it as a new
+tool version, with a new implementation ID, so that upgrading Azathoth never
+changes what an existing workflow runs. This change cannot keep that promise
+either way: it is the engine that changes what every process tool sees, and
+an implementation without grants cannot start a child workflow.
+
+A new tool version would leave every existing workflow, and every example,
+requiring `run_workflow@1.0.0` and `loop_workflow@1.1.0`, whose current
+implementations have no grants. They would stay broken until each workflow
+was edited and imported again. So the grants ship as the next revision of
+the same tool versions, which `install-standard` already appends (ADR 0095),
+and existing workflows keep working once it runs.
+
+This is the one exception this decision makes to ADR 0095. A release that
+changes what a standard tool does still ships a new version.
+
 ### Python tools
 
 A `python` implementation runs trusted, in Azathoth's own process, and sees
