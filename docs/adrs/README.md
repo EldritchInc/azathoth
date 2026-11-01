@@ -121,3 +121,4 @@ requests that made it:
 - [ADR 0096: Accept Inputs as Values or References](0096-accept-inputs-as-values-or-references.md)
 - [ADR 0097: Carry Invocations in a Versioned Job Envelope](0097-carry-invocations-in-a-versioned-job-envelope.md)
 - [ADR 0098: Record Step Confidence](0098-record-step-confidence.md)
+- [ADR 0099: Give Process Tools Only the Environment They Declare](0099-give-process-tools-only-the-environment-they-declare.md)

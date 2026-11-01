@@ -1,6 +1,6 @@
 # ADR 0093: Budget Loops From Their Settings
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0099
 - Date: 2026-10-31
 - Decided in: #110
 
