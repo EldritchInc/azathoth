@@ -63,7 +63,8 @@ def step_finished_record(
     """Return the values record of a finished step, or None when it emits nothing.
 
     Only an executed step that declares value emission emits its values.
-    Failed and skipped steps emit nothing.
+    Failed and skipped steps emit nothing. A step that declares a confidence
+    carries it beside its values (ADR 0098).
     """
 
     if event.status is not WorkflowStepStatus.EXECUTED:
@@ -72,11 +73,16 @@ def step_finished_record(
     if not event.step.emit_values:
         return None
 
-    return {
+    record: OutputRecord = {
         "type": OUTPUT_RECORD_TYPE,
         "step_id": str(event.step.id),
         "values": {value.name: value.value for value in event.values},
     }
+
+    if event.confidence is not None:
+        record["confidence"] = event.confidence
+
+    return record
 
 
 def production_invocation_record(

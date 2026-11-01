@@ -118,6 +118,9 @@ def show_workflow(
         if step.emit_values:
             print("Emits values: yes")
 
+        if step.confidence is not None:
+            print(f"Confidence Output: {step.confidence}")
+
         print(f"Dependencies: {len(step.depends_on)}")
 
         print(f"Inputs: {len(step.inputs)}")
