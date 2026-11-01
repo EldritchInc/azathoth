@@ -277,6 +277,9 @@ def _print_tool_implementation(
     if implementation.timeout_seconds is not None:
         print(f"Timeout: {implementation.timeout_seconds:g} seconds")
 
+    if implementation.environment:
+        print(f"Environment: {', '.join(implementation.environment)}")
+
     print("Source:")
     print(implementation.source)
 

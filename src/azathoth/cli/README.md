@@ -2714,15 +2714,21 @@ cannot execute, before anything is saved:
 Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: process, python.
 ```
 
-`tool implementation-show` renders a process implementation's command and
-timeout alongside its runtime:
+`tool implementation-show` renders a process implementation's command,
+timeout and environment grants alongside its runtime:
 
 ```text
 Runtime: process
 Entrypoint: run
 Command: python
 Timeout: 30 seconds
+Environment: AZATHOTH_DATABASE, OPENROUTER_API_KEY, AZATHOTH_WORKFLOW_DEPTH
 ```
+
+A process tool sees only the platform's base variables and the ones it
+grants itself, never Azathoth's whole environment (ADR 0099). `Environment`
+appears only when an implementation grants something; the tools README
+lists the base variables.
 
 `tool verify` runs every implementation through the runtime it declares, so
 process tools are verified against their test cases exactly like Python
@@ -2826,6 +2832,16 @@ message as `tool import`, and the command exits with status 1.
 A new Azathoth release may ship new versions of standard tools. Running the
 command after upgrading adds them beside the old ones, and workflows keep
 the exact versions they require. `azathoth init` runs the same installation.
+
+Azathoth 1.1 also ships new revisions of `run_workflow@1.0.0` and
+`loop_workflow@1.1.0` that grant the environment their child process needs
+(ADR 0099). A database that installed them before 1.1 runs child workflows
+only after the command runs again:
+
+```text
+Installed tool run_workflow@1.0.0 revision 2.
+Installed tool loop_workflow@1.1.0 revision 2.
+```
 
 # Trace Tool Usage
 

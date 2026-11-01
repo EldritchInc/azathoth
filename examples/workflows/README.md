@@ -183,8 +183,10 @@ azathoth run show <RUN_ID>
 
 The tool runs the child with its own Python interpreter
 (`python -m azathoth.cli`), so it does not depend on `azathoth` being on the
-`PATH`. The child inherits the parent's environment, including
-`AZATHOTH_DATABASE`, so both use the same database.
+`PATH`. Process tools see only the environment they grant themselves (ADR
+0099); the tool grants `AZATHOTH_DATABASE`, `OPENROUTER_API_KEY` and
+`AZATHOTH_WORKFLOW_DEPTH`, so the child uses the same database and provider
+as its parent.
 
 Two guards keep children bounded:
 

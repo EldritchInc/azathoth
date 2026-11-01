@@ -1,6 +1,6 @@
 # ADR 0095: Ship a Standard Tool Library
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0099
 - Date: 2026-10-31
 - Decided in: #112
 
