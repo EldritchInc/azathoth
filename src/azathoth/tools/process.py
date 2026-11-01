@@ -39,6 +39,10 @@ class ProcessToolExecutor:
     a timeout never sees one, even when Azathoth itself runs inside a tool
     that has one. A tool that itself invokes `azathoth` grants the variables
     that invocation needs.
+
+    While its step is traced, it also receives that step's W3C trace
+    context, `TRACEPARENT` and, when there is one, `TRACESTATE`, so a child
+    `azathoth` continues the trace under the step (ADR 0100).
     """
 
     async def execute(

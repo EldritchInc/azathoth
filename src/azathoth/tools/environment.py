@@ -4,9 +4,12 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import Final
 
+from azathoth.telemetry.api import active_telemetry
 from azathoth.tools.implementation import (
     ENVIRONMENT_PREFIX_WILDCARD,
+    MANAGED_ENVIRONMENT_VARIABLES,
     PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
+    TRACE_CONTEXT_ENVIRONMENT_VARIABLES,
     ToolImplementation,
 )
 
@@ -89,15 +92,20 @@ def process_tool_environment(
     environ: Mapping[str, str] | None = None,
     *,
     windows: bool | None = None,
+    trace_context: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     """Return the environment one process implementation runs with.
 
     It holds the variables of Azathoth's environment that the platform's base
-    set or the implementation's own grants cover, and, when the
-    implementation declares a timeout, the engine-managed
-    `AZATHOTH_TOOL_TIMEOUT_SECONDS`. Nothing else is inherited, so a secret
-    the implementation did not grant itself never reaches it. On Windows,
-    variable names match in any case.
+    set or the implementation's own grants cover. Nothing else is inherited,
+    so a secret the implementation did not grant itself never reaches it. On
+    Windows, variable names match in any case.
+
+    The engine then sets the variables it manages, which are never inherited
+    (ADR 0099, ADR 0100): `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the
+    implementation declares a timeout, and `TRACEPARENT` and `TRACESTATE`,
+    when a step is being traced. The trace context is the active telemetry's
+    current one, unless one is given.
     """
 
     source = os.environ if environ is None else environ
@@ -107,9 +115,9 @@ def process_tool_environment(
     environment = {
         name: value
         for name, value in source.items()
-        if not grant_matches(
-            PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
+        if not granted(
             name,
+            MANAGED_ENVIRONMENT_VARIABLES,
             case_insensitive=on_windows,
         )
         and granted(name, grants, case_insensitive=on_windows)
@@ -119,6 +127,14 @@ def process_tool_environment(
         environment[PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE] = repr(
             implementation.timeout_seconds
         )
+
+    context = active_telemetry().trace_context() if trace_context is None else trace_context
+
+    for name in TRACE_CONTEXT_ENVIRONMENT_VARIABLES:
+        value = context.get(name)
+
+        if value:
+            environment[name] = value
 
     return environment
 

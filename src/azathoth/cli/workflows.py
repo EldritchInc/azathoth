@@ -48,6 +48,7 @@ from azathoth.cli.step_output import (
     JsonLinesOutputWriter,
     TextStepMessageWriter,
 )
+from azathoth.cli.tracing import run_traced
 from azathoth.cli.workflow_configuration import (
     export_workflow,
     import_workflow,
@@ -64,6 +65,9 @@ from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
+from azathoth.telemetry import Telemetry
+from azathoth.telemetry.invocations import traced_invocation
+from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
     ProductionInvocationFailure,
     SQLiteProductionInvocationRepository,
@@ -76,7 +80,6 @@ from azathoth.workflows import (
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
-    WorkflowRunner,
     WorkflowRunObserver,
     WorkflowScoringPolicy,
 )
@@ -106,7 +109,28 @@ def run_workflow(
     The output format decides what the operator sees while and after the run
     executes. The command returns 0 when the run ends in a result record, and
     1 when it halted or did not produce its declared result.
+
+    With tracing on, the run and its steps are traced (ADR 0100).
     """
+
+    return run_traced(
+        lambda telemetry: _run_workflow(
+            workflow_id,
+            workflow_input=workflow_input,
+            output=output,
+            telemetry=telemetry,
+        )
+    )
+
+
+def _run_workflow(
+    workflow_id: UUID,
+    *,
+    workflow_input: WorkflowRunInput | WorkflowInputFile | None,
+    output: WorkflowOutputFormat,
+    telemetry: Telemetry,
+) -> int:
+    """Execute one configured workflow, tracing it with the given telemetry."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -133,7 +157,8 @@ def run_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 context=configured_run_context(run_input),
-                runner=WorkflowRunner(
+                runner=tracing_runner(
+                    telemetry,
                     observer=_step_observer(
                         output,
                         writer,
@@ -272,7 +297,29 @@ def invoke_workflow(
     The output format decides what the caller sees while and after the
     invocation executes. The command returns 0 when the invocation succeeds
     and 1 when it fails.
+
+    With tracing on, the invocation, its run and their steps are traced
+    (ADR 0100).
     """
+
+    return run_traced(
+        lambda telemetry: _invoke_workflow(
+            workflow_id=workflow_id,
+            payload=payload,
+            output=output,
+            telemetry=telemetry,
+        )
+    )
+
+
+def _invoke_workflow(
+    *,
+    workflow_id: UUID,
+    payload: JsonValue | WorkflowInputFile,
+    output: WorkflowOutputFormat,
+    telemetry: Telemetry,
+) -> int:
+    """Invoke one active production workflow, tracing it with the given telemetry."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -297,29 +344,36 @@ def invoke_workflow(
 
     writer = JsonLinesOutputWriter(sys.stdout) if output is WorkflowOutputFormat.JSONL else None
 
-    result = asyncio.run(
-        invoke_active_production_workflow(
-            runtime=runtime,
-            workflow_id=workflow_id,
-            payload=invocation_input,
-            invocation_repository=SQLiteProductionInvocationRepository(
-                configuration.database,
-            ),
-            run_repository=SQLiteWorkflowRunRepository(
-                configuration.database,
-            ),
-            invocation_run_repository=SQLiteProductionInvocationRunRepository(
-                configuration.database,
-            ),
-            input_provenance=input_provenance,
-            runner=WorkflowRunner(
-                observer=_step_observer(
-                    output,
-                    writer,
+    with traced_invocation(
+        telemetry,
+        workflow_id=workflow_id,
+    ) as trace:
+        result = asyncio.run(
+            invoke_active_production_workflow(
+                runtime=runtime,
+                workflow_id=workflow_id,
+                payload=invocation_input,
+                invocation_repository=SQLiteProductionInvocationRepository(
+                    configuration.database,
                 ),
-            ),
+                run_repository=SQLiteWorkflowRunRepository(
+                    configuration.database,
+                ),
+                invocation_run_repository=SQLiteProductionInvocationRunRepository(
+                    configuration.database,
+                ),
+                input_provenance=input_provenance,
+                runner=tracing_runner(
+                    telemetry,
+                    observer=_step_observer(
+                        output,
+                        writer,
+                    ),
+                ),
+            )
         )
-    )
+
+        trace.record(result)
 
     if output is WorkflowOutputFormat.TEXT:
         rendered = render_production_invocation_result(

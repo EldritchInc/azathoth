@@ -39,7 +39,7 @@
       "id": "c1000000-0000-4000-8000-000000000011",
       "tool_id": "c1000000-0000-4000-8000-000000000001",
       "tool_version": "1.0.0",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "runtime": "process",
       "entrypoint": "run",
       "source": "\"\"\"Invoke a deployed workflow as a child process and return its result.\n\nOnly the child's final JSON Lines record reaches the parent: its result value\non success, or its error message and invocation ID on failure.\n\"\"\"\n\nimport json\nimport os\nimport subprocess\nimport sys\n\nDEPTH_VARIABLE = \"AZATHOTH_WORKFLOW_DEPTH\"\nMAXIMUM_DEPTH = 8\nCHILD_TIMEOUT_SECONDS = 55\n\ninputs = json.load(sys.stdin)\ncall = inputs[\"call\"]\nworkflow_id = call[\"workflow_id\"]\ndepth = int(os.environ.get(DEPTH_VARIABLE, \"0\")) + 1\n\nif depth > MAXIMUM_DEPTH:\n    sys.stderr.write(f\"Child workflow depth {depth} exceeds the limit of {MAXIMUM_DEPTH}.\")\n    sys.exit(2)\n\ntry:\n    completed = subprocess.run(\n        [\n            sys.executable,\n            \"-m\",\n            \"azathoth.cli\",\n            \"workflow\",\n            \"invoke\",\n            workflow_id,\n            \"--input\",\n            json.dumps(call[\"input\"]),\n            \"--output\",\n            \"jsonl\",\n        ],\n        env={\n            **os.environ,\n            DEPTH_VARIABLE: str(depth),\n            \"PYTHONIOENCODING\": \"utf-8\",\n        },\n        capture_output=True,\n        text=True,\n        encoding=\"utf-8\",\n        timeout=CHILD_TIMEOUT_SECONDS,\n        check=False,\n    )\nexcept subprocess.TimeoutExpired:\n    sys.stderr.write(\n        f\"Child workflow {workflow_id} timed out after {CHILD_TIMEOUT_SECONDS} seconds.\"\n    )\n    sys.exit(3)\n\nlines = [line for line in completed.stdout.splitlines() if line.strip()]\nfinal = json.loads(lines[-1]) if lines else {}\n\nif final.get(\"type\") == \"result\":\n    json.dump(final[\"value\"], sys.stdout)\n    sys.exit(0)\n\nif final.get(\"type\") == \"error\":\n    invocation_id = final.get(\"invocation_id\")\n    invocation = f\" invocation {invocation_id}\" if invocation_id else \"\"\n    sys.stderr.write(f\"Child workflow {workflow_id}{invocation} failed: {final['message']}\")\nelse:\n    errors = completed.stderr.strip().splitlines()\n    sys.stderr.write(errors[-1] if errors else f\"Child workflow {workflow_id} failed.\")\n\nsys.exit(completed.returncode or 1)\n",
@@ -50,7 +50,9 @@
       "environment": [
         "AZATHOTH_DATABASE",
         "OPENROUTER_API_KEY",
-        "AZATHOTH_WORKFLOW_DEPTH"
+        "AZATHOTH_WORKFLOW_DEPTH",
+        "AZATHOTH_OTEL",
+        "OTEL_*"
       ]
     }
   ],

@@ -10,6 +10,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.inputs import CLI_INPUT_POLICY
 from azathoth.cli.parsing.jobs import STANDARD_INPUT_REQUEST
 from azathoth.cli.rendering.jobs import render_job_result
+from azathoth.cli.tracing import run_traced
 from azathoth.inputs import SQLiteContentStore
 from azathoth.jobs import (
     JobError,
@@ -22,6 +23,9 @@ from azathoth.jobs import (
     run_invoke_job,
     runtime_job_invoker,
 )
+from azathoth.telemetry import Telemetry
+from azathoth.telemetry.invocations import traced_job, traced_job_invoker
+from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
@@ -46,12 +50,38 @@ def run_job_request(
     conflict or a rejection needs no provider credentials.
 
     The command returns 0 when the job succeeded, and 1 otherwise.
+
+    With tracing on, the job, the invocation it starts, its run and their
+    steps are traced (ADR 0100). Tracing that cannot be configured prints
+    its reason on stderr, prints no envelope and returns 1, before the
+    request is even read.
     """
 
-    result = _run(
-        source,
-        stdin=stdin if stdin is not None else sys.stdin.buffer,
+    return run_traced(
+        lambda telemetry: _run_traced_job(
+            source,
+            stdin=stdin if stdin is not None else sys.stdin.buffer,
+            telemetry=telemetry,
+        )
     )
+
+
+def _run_traced_job(
+    source: str,
+    *,
+    stdin: BinaryIO,
+    telemetry: Telemetry,
+) -> int:
+    """Run one job request inside its job span, and print its result envelope."""
+
+    with traced_job(telemetry) as trace:
+        result = _run(
+            source,
+            stdin=stdin,
+            telemetry=telemetry,
+        )
+
+        trace.record(result)
 
     print(render_job_result(result))
 
@@ -62,6 +92,7 @@ def _run(
     source: str,
     *,
     stdin: BinaryIO,
+    telemetry: Telemetry,
 ) -> JobResult:
     """Read, decode and run one job request."""
 
@@ -101,14 +132,18 @@ def _run(
                 configuration.database,
             ),
             invocation_repository=invocation_repository,
-            invoke=runtime_job_invoker(
-                lambda: load_runtime(configuration),
-                invocation_repository=invocation_repository,
-                run_repository=SQLiteWorkflowRunRepository(
-                    configuration.database,
-                ),
-                invocation_run_repository=SQLiteProductionInvocationRunRepository(
-                    configuration.database,
+            invoke=traced_job_invoker(
+                telemetry,
+                runtime_job_invoker(
+                    lambda: load_runtime(configuration),
+                    invocation_repository=invocation_repository,
+                    run_repository=SQLiteWorkflowRunRepository(
+                        configuration.database,
+                    ),
+                    invocation_run_repository=SQLiteProductionInvocationRunRepository(
+                        configuration.database,
+                    ),
+                    runner=tracing_runner(telemetry),
                 ),
             ),
         )

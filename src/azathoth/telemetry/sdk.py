@@ -6,6 +6,7 @@ on, and only with the `otel` extra installed.
 
 import importlib
 import os
+import sys
 from collections.abc import Callable, Mapping
 from typing import Final, cast
 
@@ -18,6 +19,7 @@ from opentelemetry.sdk.trace.export import (
 )
 
 from azathoth import __version__
+from azathoth.telemetry.configuration import TelemetryConfigurationError
 from azathoth.telemetry.otel import OpenTelemetryTelemetry, extract_trace_context
 
 DEFAULT_SERVICE_NAME: Final = "azathoth"
@@ -35,10 +37,6 @@ NO_EXPORTER: Final = "none"
 SUPPORTED_EXPORTERS: Final = (OTLP_EXPORTER, CONSOLE_EXPORTER, NO_EXPORTER)
 
 _OTLP_HTTP_EXPORTER_MODULE: Final = "opentelemetry.exporter.otlp.proto.http.trace_exporter"
-
-
-class TelemetryConfigurationError(ValueError):
-    """Raised when the environment configures tracing in a way Azathoth does not support."""
 
 
 def service_resource(
@@ -68,6 +66,9 @@ def span_exporter(
 ) -> SpanExporter | None:
     """Return the exporter `OTEL_TRACES_EXPORTER` names: OTLP over HTTP by default.
 
+    The console exporter writes to stderr, so a command whose stdout is a
+    contract, such as `job run`, still prints only its result there.
+
     Raises:
         TelemetryConfigurationError: It names an exporter Azathoth does not
             support, such as several at once.
@@ -79,7 +80,7 @@ def span_exporter(
         return None
 
     if name == CONSOLE_EXPORTER:
-        return ConsoleSpanExporter()
+        return ConsoleSpanExporter(out=sys.stderr)
 
     if name == OTLP_EXPORTER:
         module = importlib.import_module(_OTLP_HTTP_EXPORTER_MODULE)

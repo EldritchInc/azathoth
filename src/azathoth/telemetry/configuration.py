@@ -25,6 +25,10 @@ class TelemetryUnavailableError(RuntimeError):
         super().__init__(MISSING_EXTRA_MESSAGE)
 
 
+class TelemetryConfigurationError(ValueError):
+    """Raised when the environment configures tracing in a way Azathoth does not support."""
+
+
 def telemetry_enabled(
     environ: Mapping[str, str] | None = None,
 ) -> bool:
@@ -67,6 +71,7 @@ def configure_from_environment(
 __all__ = [
     "MISSING_EXTRA_MESSAGE",
     "OTEL_ENABLED_VARIABLE",
+    "TelemetryConfigurationError",
     "TelemetryUnavailableError",
     "configure_from_environment",
     "telemetry_enabled",

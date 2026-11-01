@@ -20,6 +20,7 @@ from azathoth.telemetry.api import (
 from azathoth.telemetry.configuration import (
     MISSING_EXTRA_MESSAGE,
     OTEL_ENABLED_VARIABLE,
+    TelemetryConfigurationError,
     TelemetryUnavailableError,
     configure_from_environment,
     telemetry_enabled,
@@ -48,6 +49,7 @@ __all__ = [
     "Attributes",
     "NoTelemetry",
     "Telemetry",
+    "TelemetryConfigurationError",
     "TelemetrySpan",
     "TelemetryUnavailableError",
     "active_telemetry",
