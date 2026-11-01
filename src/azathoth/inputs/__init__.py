@@ -31,13 +31,17 @@ from azathoth.inputs.source import (
     decode_input_source,
 )
 from azathoth.inputs.store import (
+    CONTENT_TABLES,
     ContentStore,
     InMemoryContentStore,
+    SqlContentStore,
     SQLiteContentStore,
     content_bytes_digest,
 )
 
 __all__ = [
+    "CONTENT_TABLES",
+    "SqlContentStore",
     "DEFAULT_MAX_INPUT_BYTES",
     "FILE_SCHEME",
     "JSON_MEDIA_TYPE",

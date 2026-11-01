@@ -29,6 +29,7 @@ from azathoth.cli.output_format import (
     DEFAULT_WORKFLOW_OUTPUT_FORMAT,
     WorkflowOutputFormat,
 )
+from azathoth.cli.persistence import repositories
 from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import (
     WorkflowExperimentNotFoundError,
@@ -70,13 +71,6 @@ from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
     ProductionInvocationFailure,
-    SQLiteProductionInvocationRepository,
-    SQLiteProductionInvocationRunRepository,
-    SQLiteWorkflowExperimentRepository,
-    SQLiteWorkflowProductionRevisionRepository,
-    SQLiteWorkflowProductionStateRepository,
-    SQLiteWorkflowRunEvaluationRepository,
-    SQLiteWorkflowRunRepository,
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
@@ -177,9 +171,7 @@ def _run_workflow(
 
         return 1
 
-    SQLiteWorkflowRunRepository(
-        configuration.database,
-    ).save(run)
+    repositories(configuration).runs.save(run)
 
     if output is WorkflowOutputFormat.TEXT:
         print(render_workflow_run(run))
@@ -214,7 +206,7 @@ def _resolve_input_file(
     try:
         resolved = resolve_input_file(
             input_file,
-            database=configuration.database,
+            store=repositories(configuration).content,
         )
     except (
         InputSourceError,
@@ -249,16 +241,10 @@ def promote_workflow(
         revision = promote_configured_workflow(
             runtime=runtime,
             workflow_id=workflow_id,
-            production_repository=SQLiteWorkflowProductionStateRepository(
-                configuration.database,
-            ),
-            revision_repository=SQLiteWorkflowProductionRevisionRepository(
-                configuration.database,
-            ),
+            production_repository=repositories(configuration).production_states,
+            revision_repository=repositories(configuration).production_revisions,
             experiment_id=experiment_id,
-            experiment_repository=SQLiteWorkflowExperimentRepository(
-                configuration.database,
-            ),
+            experiment_repository=repositories(configuration).experiments,
         )
     except (
         WorkflowNotConfiguredError,
@@ -353,15 +339,9 @@ def _invoke_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 payload=invocation_input,
-                invocation_repository=SQLiteProductionInvocationRepository(
-                    configuration.database,
-                ),
-                run_repository=SQLiteWorkflowRunRepository(
-                    configuration.database,
-                ),
-                invocation_run_repository=SQLiteProductionInvocationRunRepository(
-                    configuration.database,
-                ),
+                invocation_repository=repositories(configuration).invocations,
+                run_repository=repositories(configuration).runs,
+                invocation_run_repository=repositories(configuration).invocation_runs,
                 input_provenance=input_provenance,
                 runner=tracing_runner(
                     telemetry,
@@ -512,15 +492,9 @@ def optimize_workflow(
                 ),
                 max_generations=generations,
                 recorder=WorkflowExperimentEvidenceRecorder(
-                    runs=SQLiteWorkflowRunRepository(
-                        configuration.database,
-                    ),
-                    evaluations=SQLiteWorkflowRunEvaluationRepository(
-                        configuration.database,
-                    ),
-                    experiments=SQLiteWorkflowExperimentRepository(
-                        configuration.database,
-                    ),
+                    runs=repositories(configuration).runs,
+                    evaluations=repositories(configuration).run_evaluations,
+                    experiments=repositories(configuration).experiments,
                 ),
             )
         )

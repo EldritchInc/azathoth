@@ -69,6 +69,7 @@ from azathoth.tools.revision import (
     ToolDocumentRevision,
     earliest_identical_tool_revision,
 )
+from azathoth.tools.sql_repository import TOOL_TABLES, SqlToolRepository
 from azathoth.tools.sqlite_repository import SQLiteToolRepository
 from azathoth.tools.strategy import ToolStrategy
 from azathoth.tools.testing import ToolTestCase
@@ -76,6 +77,8 @@ from azathoth.tools.verification import ToolTestResult, ToolVerification
 from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
+    "TOOL_TABLES",
+    "SqlToolRepository",
     "InMemoryToolRepository",
     "PROCESS_STDERR_TAIL_CHARACTERS",
     "ENVIRONMENT_GRANT_PATTERN",

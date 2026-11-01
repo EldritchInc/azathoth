@@ -4,13 +4,10 @@ import sys
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_workflow_experiment,
     render_workflow_experiment_summaries,
-)
-from azathoth.workflows import (
-    SQLiteWorkflowExperimentRepository,
-    SQLiteWorkflowRepository,
 )
 
 
@@ -29,17 +26,9 @@ def list_workflow_experiments(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    experiments = SQLiteWorkflowExperimentRepository(
-        configuration.database,
-    ).experiments_for_workflow(workflow_id)
+    experiments = repositories(configuration).experiments.experiments_for_workflow(workflow_id)
 
-    if (
-        not experiments
-        and SQLiteWorkflowRepository(
-            configuration.database,
-        ).get(workflow_id)
-        is None
-    ):
+    if not experiments and repositories(configuration).workflows.get(workflow_id) is None:
         print(
             f"Workflow {workflow_id} is not configured.",
             file=sys.stderr,
@@ -71,9 +60,7 @@ def show_experiment(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    experiment = SQLiteWorkflowExperimentRepository(
-        configuration.database,
-    ).get(experiment_id)
+    experiment = repositories(configuration).experiments.get(experiment_id)
 
     if experiment is None:
         print(

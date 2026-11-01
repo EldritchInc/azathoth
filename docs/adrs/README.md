@@ -124,3 +124,4 @@ requests that made it:
 - [ADR 0099: Give Process Tools Only the Environment They Declare](0099-give-process-tools-only-the-environment-they-declare.md)
 - [ADR 0100: Trace Workflows With OpenTelemetry](0100-trace-workflows-with-opentelemetry.md)
 - [ADR 0101: Ship Azathoth as a Container Image](0101-ship-azathoth-as-a-container-image.md)
+- [ADR 0102: Keep Durable State in PostgreSQL](0102-keep-durable-state-in-postgresql.md)

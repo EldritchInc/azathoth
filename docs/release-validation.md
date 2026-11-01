@@ -99,7 +99,8 @@ The container tests (`tests/container`) must pass, in CI's `container` job
 and with `make container-test`. They prove:
 
 - the image runs Azathoth under `tini`, as uid 10001, with the venv's
-  `python` first on `PATH` and the `otel` extra installed;
+  `python` first on `PATH` and the `otel` and `postgres` extras installed,
+  over libpq 15 or later;
 - that `init` and the child-workflow example work against a fresh volume;
 - that `job run` over standard input prints exactly one result;
 - that a read-only root filesystem with a writable `/tmp` is enough;
@@ -212,6 +213,20 @@ Optimization must never deploy, and never change the configured workflow.
 
 Repositories store domain state. They must not become hidden orchestration or
 provider-policy layers.
+
+Every repository runs on SQLite and on PostgreSQL (ADR 0102). The PostgreSQL
+tests (`tests/persistence`, with `AZATHOTH_TEST_POSTGRES_URL`) must pass, in
+CI's `postgres` job and with `make postgres-test`. They prove:
+
+- that every repository stores and reads back the same values on either
+  database;
+- that revisions, idempotency keys and content stay correct when processes
+  race;
+- that `init` creates the schema, and that every other command refuses a
+  database without it, writing nothing;
+- that the CLI's provider-free lifecycle, child workflows and jobs work over
+  PostgreSQL;
+- that no message shows the database's password.
 
 ## 6. Public Boundaries
 
@@ -335,6 +350,7 @@ by provider downtime, model changes, rate limits and latency.
 [ ] pyproject.toml and src/azathoth/__init__.py declare the release version
 [ ] the pre-release examples run passed on macOS from the locally built wheel
 [ ] CI's container job is green, and make container-test passed locally
+[ ] CI's postgres job is green, and make postgres-test passed locally
 [ ] the TestPyPI trial published, installed and passed the provider-free examples
 [ ] no credentials are committed
 [ ] live verification, if done, was done after the deterministic gate

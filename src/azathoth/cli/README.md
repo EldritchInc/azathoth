@@ -243,8 +243,9 @@ Azathoth 1.1 adds `AZATHOTH_OTEL`, which turns tracing on (see
 
 # AZATHOTH_DATABASE
 
-`AZATHOTH_DATABASE` selects the SQLite database used for durable Azathoth
-configuration and operational evidence.
+`AZATHOTH_DATABASE` selects the database used for durable Azathoth
+configuration and operational evidence: an SQLite file, or, in Azathoth 1.1,
+a PostgreSQL database (ADR 0102).
 
 Example:
 
@@ -259,6 +260,33 @@ azathoth.db
 ```
 
 relative to the current working directory.
+
+A value that starts with `postgresql://` or `postgres://` names a PostgreSQL
+database, and needs the `postgres` extra:
+
+```bash
+export AZATHOTH_DATABASE=postgresql://azathoth:<PASSWORD>@db.example.com:5432/azathoth
+```
+
+`CliRuntimeConfiguration.database` is then a `PostgresLocation` rather than
+a `Path`, and every command opens its repositories through
+`open_repositories` (see
+[`azathoth.persistence`](../persistence/README.md#opening-the-repositories)).
+Commands never show the URL's password.
+
+Every command over a PostgreSQL database that has not been initialized, or
+whose schema is not this Azathoth's, prints one line to stderr, writes
+nothing, and exits with status 1:
+
+```text
+Database postgresql://azathoth@db.example.com:5432/azathoth is not initialized; run azathoth init.
+```
+
+Without the `postgres` extra, it prints instead:
+
+```text
+AZATHOTH_DATABASE names a PostgreSQL database, but psycopg is not installed; install azathoth-ai[postgres].
+```
 
 # Initialize a Database
 
@@ -294,6 +322,19 @@ directory, is reported and nothing is installed:
 ```text
 Unable to open database <PATH>: <ERROR>
 ```
+
+For a PostgreSQL database, `init` creates the schema, or finds it there,
+before it installs the tools, and names the database without its password:
+
+```text
+Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+It is the only command that creates a PostgreSQL schema. Several processes
+may run it at once: they wait for one another, and all but the first report
+the database as `existing`.
 
 `init` stops at the database and its tools. It needs no provider key.
 Authorizing models needs provider credentials and the models they make
@@ -2347,9 +2388,17 @@ No other key is accepted.
 ## Job Results
 
 `job run` prints exactly one result, as one line of JSON on stdout, and
-nothing else, whatever the request. The one exception is tracing that cannot
-be configured (see [Tracing](#tracing)): the command then prints no result,
-because it never reads the request.
+nothing else, whatever the request. There are two exceptions, both
+configuration that is wrong for every request alike, and in both the command
+prints no result, only its error on stderr, and exits with status 1:
+
+- tracing that cannot be configured (see [Tracing](#tracing)), found before
+  the request is read;
+- a PostgreSQL database that cannot be used, because the `postgres` extra is
+  missing or its schema is not this Azathoth's (see
+  [AZATHOTH_DATABASE](#azathoth_database)), found once a valid request is
+  read. A request that cannot be read or decoded is still rejected with a
+  result, since it never reaches the database.
 
 ```json
 {"kind": "invoke", "version": 1, "idempotency_key": "order-4711-review", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve"}}, "error": null}

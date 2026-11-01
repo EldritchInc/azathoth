@@ -1055,6 +1055,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.workflows`](../src/azathoth/workflows/README.md) | Workflow definition, execution, evidence, experiments, and production |
 | [`azathoth.optimization`](../src/azathoth/optimization/README.md) | Empirical candidate generation and optimization |
 | [`azathoth.runtime`](../src/azathoth/runtime/README.md) | Process-local executable composition |
+| [`azathoth.persistence`](../src/azathoth/persistence/README.md) | Durable state in SQLite or PostgreSQL: locations, the schema, transactions and the repositories |
 | [`azathoth.telemetry`](../src/azathoth/telemetry/README.md) | Opt-in OpenTelemetry tracing of jobs, invocations, runs and steps |
 
 Architectural decisions are recorded under [`docs/adrs`](adrs/README.md).

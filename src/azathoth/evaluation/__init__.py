@@ -73,6 +73,14 @@ from azathoth.evaluation.semantic import (
     parse_judge_verdict,
     semantic_judge_prompt,
 )
+from azathoth.evaluation.sql_benchmark_repository import (
+    BENCHMARK_TABLES,
+    SqlBenchmarkRepository,
+)
+from azathoth.evaluation.sql_judge_repository import (
+    JUDGE_ROTATION_TABLES,
+    SqlJudgeRotationRepository,
+)
 from azathoth.evaluation.sqlite_benchmark_repository import (
     SQLiteBenchmarkRepository,
 )
@@ -81,6 +89,10 @@ from azathoth.evaluation.sqlite_judge_repository import (
 )
 
 __all__ = [
+    "BENCHMARK_TABLES",
+    "JUDGE_ROTATION_TABLES",
+    "SqlBenchmarkRepository",
+    "SqlJudgeRotationRepository",
     "SEMANTIC_EVALUATOR_NAME",
     "SEMANTIC_EVALUATOR_VERSION",
     "BenchmarkCase",

@@ -3,7 +3,7 @@
 import asyncio
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.evaluation import SQLiteJudgeRotationRepository
+from azathoth.cli.persistence import repositories
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -13,17 +13,12 @@ from azathoth.providers import (
     OpenRouterModelRegistryLoader,
     ProviderModelCatalogSynchronizer,
     ProviderModelObserver,
-    SQLiteModelPortfolioRepository,
-    SQLiteProviderModelObservationRepository,
 )
 from azathoth.runtime import AzathothRuntime
 from azathoth.tools import (
-    SQLiteToolRepository,
     ToolCatalogLoader,
 )
 from azathoth.workflows import (
-    SQLiteWorkflowProductionStateRepository,
-    SQLiteWorkflowRepository,
     WorkflowCatalogLoader,
 )
 
@@ -38,19 +33,15 @@ def load_runtime(
     judge never blocks commands that do not judge semantically.
     """
 
-    workflows = WorkflowCatalogLoader(
-        SQLiteWorkflowRepository(configuration.database)
-    ).load_catalog()
+    workflows = WorkflowCatalogLoader(repositories(configuration).workflows).load_catalog()
 
-    production_states = SQLiteWorkflowProductionStateRepository(configuration.database).states()
+    production_states = repositories(configuration).production_states.states()
 
     models = _load_current_models(configuration)
 
-    portfolio = ModelPortfolioLoader(
-        SQLiteModelPortfolioRepository(configuration.database)
-    ).load_portfolio()
+    portfolio = ModelPortfolioLoader(repositories(configuration).portfolio).load_portfolio()
 
-    tool_loader = ToolCatalogLoader(SQLiteToolRepository(configuration.database))
+    tool_loader = ToolCatalogLoader(repositories(configuration).tools)
 
     tools = tool_loader.load_catalog()
 
@@ -69,7 +60,7 @@ def load_runtime(
         language_models=language_models,
         tools=tools,
         tool_implementations=tool_implementations,
-        judges=SQLiteJudgeRotationRepository(configuration.database).rotation(),
+        judges=repositories(configuration).judges.rotation(),
     )
 
 
@@ -85,7 +76,7 @@ def _load_current_models(
 
     observer = ProviderModelObserver(
         directory=OpenRouterModelDirectory(provider_configuration),
-        repository=SQLiteProviderModelObservationRepository(configuration.database),
+        repository=repositories(configuration).provider_observations,
     )
 
     synchronizer = ProviderModelCatalogSynchronizer(observers=(observer,))

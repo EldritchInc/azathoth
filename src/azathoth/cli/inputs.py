@@ -5,12 +5,12 @@ from pathlib import Path
 
 from azathoth.inputs import (
     FILE_SCHEME,
+    ContentStore,
     FileInputResolver,
     InputPolicy,
     InputSourceError,
     ReferenceInput,
     ResolvedInput,
-    SQLiteContentStore,
     file_uri,
     infer_media_type,
     resolve_input,
@@ -60,9 +60,9 @@ def input_file_source(
 def resolve_input_file(
     input_file: WorkflowInputFile,
     *,
-    database: Path,
+    store: ContentStore,
 ) -> ResolvedInput:
-    """Resolve one input file under the CLI's policy, storing its content.
+    """Resolve one input file under the CLI's policy, storing its content in a store.
 
     Raises:
         InputSourceError: The file's media type cannot be told.
@@ -73,7 +73,7 @@ def resolve_input_file(
     return resolve_input(
         input_file_source(input_file),
         policy=CLI_INPUT_POLICY,
-        store=SQLiteContentStore(database),
+        store=store,
     )
 
 

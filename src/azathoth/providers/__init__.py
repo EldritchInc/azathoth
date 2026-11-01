@@ -76,6 +76,15 @@ from azathoth.providers.query import ModelQuery
 from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
+from azathoth.providers.sql_portfolio_repository import (
+    MODEL_PORTFOLIO_TABLES,
+    SqlModelPortfolioRepository,
+)
+from azathoth.providers.sql_provider_observation_repository import (
+    PROVIDER_MODEL_OBSERVATION_TABLES,
+    SqlProviderModelObservationRepository,
+)
+from azathoth.providers.sql_repository import MODEL_TABLES, SqlModelRepository
 from azathoth.providers.sqlite_portfolio_repository import (
     SQLiteModelPortfolioRepository,
 )
@@ -85,6 +94,12 @@ from azathoth.providers.sqlite_provider_observation_repository import (
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
+    "MODEL_PORTFOLIO_TABLES",
+    "MODEL_TABLES",
+    "PROVIDER_MODEL_OBSERVATION_TABLES",
+    "SqlModelPortfolioRepository",
+    "SqlModelRepository",
+    "SqlProviderModelObservationRepository",
     "DeterministicLanguageModel",
     "InMemoryModelRepository",
     "InMemoryModelPortfolioRepository",

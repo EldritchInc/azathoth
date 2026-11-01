@@ -7,15 +7,13 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.evaluation import (
     BenchmarkCaseConflictError,
     OutcomeComparison,
-    SQLiteBenchmarkRepository,
 )
 from azathoth.workflows import (
     BenchmarkCaseSourceError,
-    SQLiteWorkflowRunFeedbackRepository,
-    SQLiteWorkflowRunRepository,
     benchmark_case_from_run,
     latest_corrected_output,
     workflow_run_input,
@@ -54,9 +52,7 @@ def add_benchmark_case(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    benchmarks = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    benchmarks = repositories(configuration).benchmarks
 
     dataset = benchmarks.get(benchmark_id)
 
@@ -68,9 +64,7 @@ def add_benchmark_case(
 
         return 1
 
-    run = SQLiteWorkflowRunRepository(
-        configuration.database,
-    ).get(run_id)
+    run = repositories(configuration).runs.get(run_id)
 
     if run is None:
         print(
@@ -96,9 +90,7 @@ def add_benchmark_case(
         expected_value = expected.value
     else:
         feedback = latest_corrected_output(
-            SQLiteWorkflowRunFeedbackRepository(
-                configuration.database,
-            ).feedback_for_run(run_id)
+            repositories(configuration).feedback.feedback_for_run(run_id)
         )
 
         if feedback is None:

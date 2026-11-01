@@ -4,16 +4,14 @@ import sys
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.evaluation import SQLiteJudgeRotationRepository
+from azathoth.cli.persistence import repositories
 from azathoth.providers import (
     ModelCapability,
     ModelMetadata,
     ModelModality,
     ModelPortfolioEntry,
-    SQLiteModelPortfolioRepository,
 )
 from azathoth.workflows import (
-    SQLiteWorkflowProductionStateRepository,
     WorkflowModelUsageReport,
     model_usage_report,
 )
@@ -92,9 +90,7 @@ def authorize_model(
 
         return 1
 
-    repository = SQLiteModelPortfolioRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).portfolio
 
     repository.save(
         ModelPortfolioEntry(
@@ -135,12 +131,7 @@ def deauthorize_model(
 
         return 1
 
-    if (
-        SQLiteJudgeRotationRepository(
-            configuration.database,
-        ).get(identifier)
-        is not None
-    ):
+    if repositories(configuration).judges.get(identifier) is not None:
         print(
             f"Model {identifier!r} is a semantic judge and was not deauthorized.",
             file=sys.stderr,
@@ -156,9 +147,7 @@ def deauthorize_model(
     report = model_usage_report(
         identifier,
         specifications=(),
-        production_states=SQLiteWorkflowProductionStateRepository(
-            configuration.database,
-        ).states(),
+        production_states=repositories(configuration).production_states.states(),
         runs=(),
     )
 
@@ -185,9 +174,7 @@ def deauthorize_model(
 
         _print_production_dependents(report)
 
-    repository = SQLiteModelPortfolioRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).portfolio
 
     repository.delete(identifier)
 

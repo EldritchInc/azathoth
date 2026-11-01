@@ -9,9 +9,9 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.inputs import CLI_INPUT_POLICY
 from azathoth.cli.parsing.jobs import STANDARD_INPUT_REQUEST
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering.jobs import render_job_result
 from azathoth.cli.tracing import run_traced
-from azathoth.inputs import SQLiteContentStore
 from azathoth.jobs import (
     JobError,
     JobErrorCode,
@@ -26,11 +26,6 @@ from azathoth.jobs import (
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job, traced_job_invoker
 from azathoth.telemetry.runs import tracing_runner
-from azathoth.workflows import (
-    SQLiteProductionInvocationRepository,
-    SQLiteProductionInvocationRunRepository,
-    SQLiteWorkflowRunRepository,
-)
 
 
 def run_job_request(
@@ -120,29 +115,21 @@ def _run(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    invocation_repository = SQLiteProductionInvocationRepository(
-        configuration.database,
-    )
+    invocation_repository = repositories(configuration).invocations
 
     return asyncio.run(
         run_invoke_job(
             request,
             policy=CLI_INPUT_POLICY,
-            store=SQLiteContentStore(
-                configuration.database,
-            ),
+            store=repositories(configuration).content,
             invocation_repository=invocation_repository,
             invoke=traced_job_invoker(
                 telemetry,
                 runtime_job_invoker(
                     lambda: load_runtime(configuration),
                     invocation_repository=invocation_repository,
-                    run_repository=SQLiteWorkflowRunRepository(
-                        configuration.database,
-                    ),
-                    invocation_run_repository=SQLiteProductionInvocationRunRepository(
-                        configuration.database,
-                    ),
+                    run_repository=repositories(configuration).runs,
+                    invocation_run_repository=repositories(configuration).invocation_runs,
                     runner=tracing_runner(telemetry),
                 ),
             ),

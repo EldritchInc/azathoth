@@ -132,12 +132,12 @@ def test_a_builder_stage_builds_the_wheel_and_the_runtime_starts_clean() -> None
 # The install
 
 
-def test_azathoth_is_installed_with_the_otel_extra_into_its_own_venv() -> None:
+def test_azathoth_is_installed_with_its_cloud_extras_into_its_own_venv() -> None:
     (install,) = (rest for name, rest in runtime_stage() if name == "RUN" and "pip install" in rest)
 
     assert f"python -m venv {VENV}" in install
     assert f"{VENV}/bin/python -m pip install" in install
-    assert '"$1[otel]"' in install
+    assert '"$1[otel,postgres]"' in install
     assert "--no-cache-dir" in install
 
 

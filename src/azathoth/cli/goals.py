@@ -5,10 +5,10 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.goals import (
     Goal,
     GoalDocumentError,
-    SQLiteGoalRepository,
     decode_goal_document,
 )
 
@@ -18,9 +18,7 @@ def list_goals() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteGoalRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).goals
 
     for goal in repository.goals():
         print(f"{goal.id}  {goal.name}")
@@ -35,9 +33,7 @@ def show_goal(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteGoalRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).goals
 
     goal = repository.get(
         goal_id,
@@ -114,9 +110,7 @@ def import_goal(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteGoalRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).goals
 
     try:
         repository.save(

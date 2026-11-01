@@ -4,15 +4,12 @@ import sys
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_model_usage_report,
     render_tool_usage_report,
 )
-from azathoth.tools import SQLiteToolRepository
 from azathoth.workflows import (
-    SQLiteWorkflowProductionStateRepository,
-    SQLiteWorkflowRepository,
-    SQLiteWorkflowRunRepository,
     model_usage_report,
     tool_usage_report,
 )
@@ -32,15 +29,9 @@ def model_usage(
 
     report = model_usage_report(
         identifier,
-        specifications=SQLiteWorkflowRepository(
-            configuration.database,
-        ).specifications(),
-        production_states=SQLiteWorkflowProductionStateRepository(
-            configuration.database,
-        ).states(),
-        runs=SQLiteWorkflowRunRepository(
-            configuration.database,
-        ).runs(),
+        specifications=repositories(configuration).workflows.specifications(),
+        production_states=repositories(configuration).production_states.states(),
+        runs=repositories(configuration).runs.runs(),
     )
 
     print(render_model_usage_report(report))
@@ -62,18 +53,10 @@ def tool_usage(
 
     report = tool_usage_report(
         tool_id,
-        definitions=SQLiteToolRepository(
-            configuration.database,
-        ).definitions(),
-        specifications=SQLiteWorkflowRepository(
-            configuration.database,
-        ).specifications(),
-        production_states=SQLiteWorkflowProductionStateRepository(
-            configuration.database,
-        ).states(),
-        runs=SQLiteWorkflowRunRepository(
-            configuration.database,
-        ).runs(),
+        definitions=repositories(configuration).tools.definitions(),
+        specifications=repositories(configuration).workflows.specifications(),
+        production_states=repositories(configuration).production_states.states(),
+        runs=repositories(configuration).runs.runs(),
     )
 
     if not report.tool_names and not report.used:

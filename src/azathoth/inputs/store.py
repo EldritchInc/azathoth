@@ -1,10 +1,11 @@
 """Content-addressed storage for resolved input content (ADR 0096)."""
 
 import hashlib
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+from azathoth.persistence import Database, SQLiteDatabase, Table
 
 
 def content_bytes_digest(
@@ -83,19 +84,38 @@ class InMemoryContentStore:
         return digest in self._content
 
 
-class SQLiteContentStore:
-    """Keep content in the `content_blobs` table of a SQLite database.
+CONTENT_TABLES = (
+    Table(
+        name="content_blobs",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS content_blobs (
+                digest TEXT PRIMARY KEY,
+                size_bytes INTEGER NOT NULL,
+                content {blob} NOT NULL,
+                stored_at TEXT NOT NULL
+            )
+            """,
+        ),
+    ),
+)
+"""The tables stored content is kept in."""
+
+
+class SqlContentStore:
+    """Keep content in the `content_blobs` table of a database (ADR 0102).
 
     Each row holds one digest, its content's size, the content, and when it
-    was first stored. Identical content is stored once.
+    was first stored. Identical content is stored once, however many
+    processes store it at once.
     """
 
     def __init__(
         self,
-        database: str | Path,
+        database: Database,
     ) -> None:
-        self._database = str(database)
-        self._initialize()
+        self._database = database
+        database.prepare(CONTENT_TABLES)
 
     def put(
         self,
@@ -105,10 +125,8 @@ class SQLiteContentStore:
 
         digest = content_bytes_digest(content)
 
-        connection = sqlite3.connect(self._database)
-
-        try:
-            connection.execute(
+        with self._database.transaction() as session:
+            session.execute(
                 """
                 INSERT INTO content_blobs (
                     digest,
@@ -122,13 +140,10 @@ class SQLiteContentStore:
                 (
                     digest,
                     len(content),
-                    sqlite3.Binary(content),
+                    bytes(content),
                     datetime.now(UTC).isoformat(),
                 ),
             )
-            connection.commit()
-        finally:
-            connection.close()
 
         return digest
 
@@ -138,20 +153,21 @@ class SQLiteContentStore:
     ) -> bytes | None:
         """Return the content with one digest, or None when it is not stored."""
 
-        connection = sqlite3.connect(self._database)
-
-        try:
-            row = connection.execute(
+        with self._database.transaction() as session:
+            row = session.fetchone(
                 "SELECT content FROM content_blobs WHERE digest = ?",
                 (digest,),
-            ).fetchone()
-        finally:
-            connection.close()
+            )
 
         if row is None:
             return None
 
-        return bytes(row[0])
+        content = row[0]
+
+        if not isinstance(content, bytes | bytearray | memoryview):
+            raise TypeError(f"Stored content {digest} was not bytes.")
+
+        return bytes(content)
 
     def contains(
         self,
@@ -159,42 +175,34 @@ class SQLiteContentStore:
     ) -> bool:
         """Return whether content with one digest is stored."""
 
-        connection = sqlite3.connect(self._database)
-
-        try:
-            row = connection.execute(
+        with self._database.transaction() as session:
+            row = session.fetchone(
                 "SELECT 1 FROM content_blobs WHERE digest = ?",
                 (digest,),
-            ).fetchone()
-        finally:
-            connection.close()
+            )
 
         return row is not None
 
-    def _initialize(self) -> None:
-        """Create the content table."""
 
-        connection = sqlite3.connect(self._database)
+class SQLiteContentStore(SqlContentStore):
+    """Keep content in the `content_blobs` table of a SQLite database.
 
-        try:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS content_blobs (
-                    digest TEXT PRIMARY KEY,
-                    size_bytes INTEGER NOT NULL,
-                    content BLOB NOT NULL,
-                    stored_at TEXT NOT NULL
-                )
-                """
-            )
-            connection.commit()
-        finally:
-            connection.close()
+    Each row holds one digest, its content's size, the content, and when it
+    was first stored. Identical content is stored once.
+    """
+
+    def __init__(
+        self,
+        database: str | Path,
+    ) -> None:
+        super().__init__(SQLiteDatabase(database))
 
 
 __all__ = [
+    "CONTENT_TABLES",
     "ContentStore",
     "InMemoryContentStore",
     "SQLiteContentStore",
+    "SqlContentStore",
     "content_bytes_digest",
 ]

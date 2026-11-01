@@ -270,6 +270,9 @@ separate step (see [Connecting OpenRouter](openrouter.md)).
 
 To start over, delete the file and run `azathoth init` again.
 
+To share one database between several machines, see
+[Optional: Sharing a Database With PostgreSQL](#optional-sharing-a-database-with-postgresql).
+
 ## 6. Get the Examples
 
 The standard tools are part of the PyPI package, but the examples aren't.
@@ -298,6 +301,67 @@ cd ~/azathoth-work/azathoth
 ```powershell
 Set-Location ~/azathoth-work/azathoth
 ```
+
+## Optional: Sharing a Database With PostgreSQL
+
+The SQLite file of step 5 suits one machine. When Azathoth runs on several
+machines, or in several containers, that must share what they know, keep it
+in a PostgreSQL database instead. Most people don't need this; skip it unless
+you do.
+
+You need a PostgreSQL server, version 15 or later, and an empty database on
+it that you may create tables in. PostgreSQL support is an optional extra.
+Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[postgres]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[postgres]"
+```
+
+Then set `AZATHOTH_DATABASE` to the database's URL instead of a file:
+
+```bash
+export AZATHOTH_DATABASE="postgresql://azathoth:<PASSWORD>@db.example.com:5432/azathoth"
+```
+
+```powershell
+$env:AZATHOTH_DATABASE = "postgresql://azathoth:<PASSWORD>@db.example.com:5432/azathoth"
+```
+
+The URL is PostgreSQL's own, so anything it accepts works, such as
+`?sslmode=require` at the end. To keep the password out of the URL, leave it
+out and set `PGPASSWORD`, or use a `.pgpass` file, as you would for `psql`.
+
+Create the schema once, from any one machine:
+
+```bash
+azathoth init
+```
+
+```powershell
+azathoth init
+```
+
+```text
+Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+Azathoth never shows the password: every message names the database without
+it. Unlike an SQLite file, a PostgreSQL database must be initialized before
+anything else can use it; until it is, every command stops with:
+
+```text
+Database postgresql://azathoth@db.example.com:5432/azathoth is not initialized; run azathoth init.
+```
+
+Running `init` again is safe, from any number of machines at once. A database
+already in use by SQLite stays where it is: Azathoth does not copy one into
+the other.
 
 ## Optional: Tracing With OpenTelemetry
 
@@ -464,6 +528,13 @@ PowerShell 5.1, which strips the inner quotes. Use PowerShell 7 (step 1).
 **Garbled characters in a saved result on Windows**, such as `â€"` where a
 dash should be: apply the UTF-8 settings (see
 [Windows: UTF-8 output](#windows-utf-8-output)), then run the command again.
+
+**`psycopg is not installed`**: `AZATHOTH_DATABASE` is a PostgreSQL URL, but
+the `postgres` extra isn't installed in this venv (see
+[Optional: Sharing a Database With PostgreSQL](#optional-sharing-a-database-with-postgresql)).
+
+**`is not initialized; run azathoth init`**: the PostgreSQL database has no
+Azathoth schema yet. Run `azathoth init` once.
 
 **PowerShell won't run `Activate.ps1`**: set the execution policy (see
 [Windows: allowing the activation script](#windows-allowing-the-activation-script)).

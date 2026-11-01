@@ -13,9 +13,12 @@ from azathoth.goals.memory_repository import (
 )
 from azathoth.goals.models import Goal
 from azathoth.goals.repository import GoalRepository
+from azathoth.goals.sql_repository import GOAL_TABLES, SqlGoalRepository
 from azathoth.goals.sqlite_repository import SQLiteGoalRepository
 
 __all__ = [
+    "GOAL_TABLES",
+    "SqlGoalRepository",
     "Goal",
     "GoalCatalog",
     "GoalCatalogLoader",
