@@ -363,6 +363,12 @@ Running `init` again is safe, from any number of machines at once. A database
 already in use by SQLite stays where it is: Azathoth does not copy one into
 the other.
 
+## Optional: Models on Amazon Bedrock
+
+Azathoth runs its models through OpenRouter by default. To run them on
+Amazon Bedrock instead, or as well, with your AWS credentials, install the
+`bedrock` extra and follow [Connecting Amazon Bedrock](bedrock.md).
+
 ## Optional: Tracing With OpenTelemetry
 
 Azathoth can send a trace of every workflow it runs to the tracing backend
@@ -464,6 +470,8 @@ already does (see
 
 If you trace, set `AZATHOTH_OTEL` and the `OTEL_*` variables again too (see
 [Optional: Tracing With OpenTelemetry](#optional-tracing-with-opentelemetry)).
+If you use Bedrock, set `AZATHOTH_BEDROCK`, `AWS_REGION` and
+`AZATHOTH_BEDROCK_PRICING` again (see [Connecting Amazon Bedrock](bedrock.md)).
 
 ## Upgrading, Leaving and Uninstalling
 

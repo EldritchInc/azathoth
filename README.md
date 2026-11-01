@@ -80,6 +80,7 @@ benchmarked, optimized, promoted and invoked in production, follow
 | [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md) | Python, a venv, `pip install`, checking it works, on macOS and Windows; optionally PostgreSQL and tracing |
 | [Running in a Container](https://github.com/EldritchInc/azathoth/blob/main/docs/container.md) | The container image: a database volume or PostgreSQL, keys, jobs over stdin, a read-only root |
 | [Connecting OpenRouter](https://github.com/EldritchInc/azathoth/blob/main/docs/openrouter.md) | An API key, finding and authorizing models, adding judges |
+| [Connecting Amazon Bedrock](https://github.com/EldritchInc/azathoth/blob/main/docs/bedrock.md) | AWS credentials, the IAM policy, pricing Bedrock models and authorizing them |
 | [Getting Started](https://github.com/EldritchInc/azathoth/blob/main/docs/getting-started.md) | One workflow from import to production |
 | [Examples Tour](https://github.com/EldritchInc/azathoth/blob/main/docs/examples.md) | Every example, from a word count to a novel |
 | [Concepts](https://github.com/EldritchInc/azathoth/blob/main/docs/concepts.md) | How Azathoth is put together, and why |
@@ -112,8 +113,8 @@ tests:
   conditionally, retry, and fail in a controlled way. Child workflows and
   loops run through standard tools that ship in the package.
 - **Separates intent from models.** Steps state requirements, and Azathoth
-  chooses from the models you have authorized among those OpenRouter
-  currently offers.
+  chooses from the models you have authorized among those OpenRouter and
+  Amazon Bedrock currently offer.
 - **Records everything**: every run, step, attempt, prompt, reply, token and
   cost, as durable evidence.
 - **Benchmarks** workflows with exact, normalized, schema and model-judged

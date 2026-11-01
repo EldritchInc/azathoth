@@ -233,6 +233,23 @@ regression.
 They are therefore verification tools, not part of the deterministic quality
 gate.
 
+Bedrock has live tests of its own (ADR 0103), disabled by default the same
+way. Every other Bedrock test reaches Bedrock through a fake client, so these
+are the only ones that call AWS. They need AWS credentials allowed to list
+and call Bedrock models, a region, and one model the region offers:
+
+```bash
+export AZATHOTH_RUN_LIVE_BEDROCK_TESTS=1
+export AWS_REGION='us-east-1'
+export BEDROCK_TEST_MODEL='<bedrock-model-id-or-inference-profile-id>'
+python -m pytest tests/providers/test_bedrock_live.py -ra
+```
+
+They may incur AWS charges. The boto3 tests in
+`tests/providers/test_bedrock_client.py` need no AWS: botocore's `Stubber`
+answers them, and they are skipped where the `bedrock` extra is not
+installed.
+
 ## Container Tests
 
 The container image (ADR 0101) is tested in two ways.
