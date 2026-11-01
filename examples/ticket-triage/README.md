@@ -19,6 +19,7 @@ classify ──► billing specialist      (runs when the category is billing)
 | --- | --- |
 | `workflows/triage-ticket.json` | `f1000000-0000-4000-8000-000000000030` |
 | `workflows/classify-ticket.json` | `f1000000-0000-4000-8000-000000000010` |
+| `workflows/classify-ticket-escalating.json` | `f1000000-0000-4000-8000-000000000070` |
 | `tools/finalize-triage.json` | `f1000000-0000-4000-8000-000000000001` |
 | `benchmarks/classify-ticket.json` | `f1000000-0000-4000-8000-000000000050` |
 | `benchmarks/triage-ticket.json` | `f1000000-0000-4000-8000-000000000060` |
@@ -90,6 +91,78 @@ requirements (ADR 0089). The final evaluation runs every candidate against
 the benchmark (ADR 0091), and the report names the winner on quality,
 latency and cost. It does not promote the winner: deploying it is a
 separate, deliberate step.
+
+## Escalating When Unsure
+
+A cheaper classifier is cheaper on every ticket and wrong on some.
+`classify-ticket-escalating.json` keeps the cheap model for the tickets it is
+sure of, and pays for a stronger one only on the rest (ADR 0098):
+
+```text
+classify cheaply ──► confidence < 0.8? ──► escalate to a stronger model
+        │                                           │
+        └──────────────── category ◄────────────────┘
+```
+
+The cheap classifier asks for the same category, urgency and summary as
+`classify-ticket.json`, and for how sure it is, from 0 to 1. It declares that
+output as its confidence:
+
+```json
+"outputs": [..., {"name": "confidence", "path": ["confidence"]}],
+"confidence": "confidence"
+```
+
+Its model must cost at most $0.50 per million input tokens and $1.50 per
+million output tokens, with known pricing. The escalation step has no price
+limit, so it runs on the first authorized model in the portfolio: put the
+strongest model you want to escalate to first.
+
+The escalation step is conditioned on the classifier's confidence:
+
+```json
+"conditions": [{"source": {"producer_step_id": "f1000000-0000-4000-8000-000000000071", "name": "confidence"}, "operator": "less_than", "expected": 0.8}]
+```
+
+It is shown the ticket and the cheap model's guess, and produces the same
+`category`, `urgency` and `summary`. It is declared *first* in the workflow's
+steps, so the workflow's result, `category` read by name, is the escalation
+step's whenever it ran and the classifier's when it was skipped (ADR 0080).
+
+```bash
+azathoth workflow import examples/ticket-triage/workflows/classify-ticket-escalating.json
+
+azathoth workflow run f1000000-0000-4000-8000-000000000070 \
+    --input '{"subject": "Downgrade my plan", "body": "How do I move from Pro to the Starter plan at renewal?", "customer_tier": "standard"}' \
+    --output text
+```
+
+The text report names the classifier's confidence beside its model. A ticket
+the classifier is sure of shows the escalation step as `skipped`; one it is
+unsure of shows it `executed`, on the stronger model.
+
+A step whose confidence is not a number from 0 to 1 fails that attempt and
+is retried, so a model that forgets to say how sure it is never passes for
+sure or unsure.
+
+Whether escalating pays off is an empirical question, and the classifier's
+benchmark answers it. Compare the escalating classifier with the plain one on
+quality, latency and cost:
+
+```bash
+azathoth benchmark compare f1000000-0000-4000-8000-000000000050 \
+    --workflow f1000000-0000-4000-8000-000000000010 \
+    --workflow f1000000-0000-4000-8000-000000000070 \
+    --target-latency 5 \
+    --target-cost 0.001
+```
+
+The threshold, 0.8, is the condition's `expected` value. A model's
+confidence in itself is not calibrated: a confidently wrong answer is not
+escalated, and too high a threshold escalates nearly everything. Change the
+threshold, import the workflow again, and compare again.
+
+## The Triage Benchmark
 
 The triage benchmark has three semantic cases, judged on the reply and the
 routing, and one schema case requiring a complete, valid triage record.

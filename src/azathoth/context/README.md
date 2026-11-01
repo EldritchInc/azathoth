@@ -180,6 +180,10 @@ means or how it should affect execution.
 
 Interpretation belongs to consuming behavior.
 
+A workflow step that declares a confidence records it on every event it adds
+to the workflow's context (ADR 0098). Workflow conditions act on the step's
+confidence output, not on event confidence.
+
 ### Occurrence Time
 
 Every event records `occurred_at`.
