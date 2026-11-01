@@ -1,5 +1,26 @@
 """Language model provider abstractions."""
 
+from azathoth.providers.bedrock_client import (
+    BedrockClient,
+    BedrockClientError,
+    BedrockDriver,
+    Boto3BedrockClient,
+    boto3_driver,
+    configure_bedrock,
+)
+from azathoth.providers.bedrock_configuration import (
+    BEDROCK_ENABLED_VARIABLE,
+    BEDROCK_PRICING_VARIABLE,
+    BEDROCK_PROVIDER,
+    MISSING_BEDROCK_EXTRA_MESSAGE,
+    MISSING_REGION_MESSAGE,
+    BedrockConfiguration,
+    BedrockConfigurationError,
+    BedrockPricing,
+    BedrockUnavailableError,
+    bedrock_enabled,
+    load_bedrock_pricing,
+)
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
 from azathoth.providers.deterministic import DeterministicLanguageModel
@@ -94,6 +115,23 @@ from azathoth.providers.sqlite_provider_observation_repository import (
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
+    "BEDROCK_ENABLED_VARIABLE",
+    "BEDROCK_PRICING_VARIABLE",
+    "BEDROCK_PROVIDER",
+    "MISSING_BEDROCK_EXTRA_MESSAGE",
+    "MISSING_REGION_MESSAGE",
+    "BedrockClient",
+    "BedrockClientError",
+    "BedrockConfiguration",
+    "BedrockConfigurationError",
+    "BedrockDriver",
+    "BedrockPricing",
+    "BedrockUnavailableError",
+    "Boto3BedrockClient",
+    "bedrock_enabled",
+    "boto3_driver",
+    "configure_bedrock",
+    "load_bedrock_pricing",
     "MODEL_PORTFOLIO_TABLES",
     "MODEL_TABLES",
     "PROVIDER_MODEL_OBSERVATION_TABLES",

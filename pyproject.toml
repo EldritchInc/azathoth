@@ -62,7 +62,11 @@ otel = [
 postgres = [
     "psycopg[binary]>=3.2,<4",
 ]
+bedrock = [
+    "boto3>=1.39,<2",
+]
 dev = [
+    "boto3>=1.39,<2",
     "build",
     "mypy",
     "opentelemetry-api>=1.27,<2",
