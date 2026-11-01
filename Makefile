@@ -1,4 +1,4 @@
-.PHONY: install test lint format typecheck check
+.PHONY: install test lint format typecheck check container-test
 
 install:
 	python -m pip install -e ".[dev]"
@@ -20,3 +20,7 @@ check:
 	python -m ruff format --check .
 	python -m mypy src/azathoth tests
 	python -m pytest
+
+container-test:
+	docker build --tag azathoth:test .
+	AZATHOTH_RUN_CONTAINER_TESTS=1 AZATHOTH_CONTAINER_IMAGE=azathoth:test python -m pytest tests/container -ra

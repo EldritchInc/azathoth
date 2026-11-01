@@ -1,0 +1,10 @@
+# Only what the image's build needs (ADR 0101). Everything else, such as a
+# venv, a database, caches or built distributions, never reaches the build.
+*
+!pyproject.toml
+!README.md
+!LICENSE
+!src/
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
