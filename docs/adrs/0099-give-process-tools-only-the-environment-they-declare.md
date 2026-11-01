@@ -62,8 +62,8 @@ An implementation grants itself further variables by name:
   It is not an error; the tool decides what a missing variable means.
 
 A grant is part of the implementation's content, so it is pinned by the
-implementation's digest (ADR 0076), and `tool show` and
-`tool implementation-show` name it. An implementation without grants
+implementation's digest (ADR 0076), and `tool implementation-show` names
+it. An implementation without grants
 serializes without `environment`, so existing documents keep their digests
 (ADR 0077).
 

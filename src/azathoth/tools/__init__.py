@@ -29,6 +29,8 @@ from azathoth.tools.execution import (
     PythonToolExecutor,
 )
 from azathoth.tools.implementation import (
+    ENVIRONMENT_GRANT_PATTERN,
+    ENVIRONMENT_PREFIX_WILDCARD,
     PROCESS_TOOL_RUNTIME,
     ToolImplementation,
 )
@@ -67,6 +69,8 @@ from azathoth.tools.verifier import ToolVerifier
 __all__ = [
     "InMemoryToolRepository",
     "PROCESS_STDERR_TAIL_CHARACTERS",
+    "ENVIRONMENT_GRANT_PATTERN",
+    "ENVIRONMENT_PREFIX_WILDCARD",
     "PROCESS_TOOL_RUNTIME",
     "PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE",
     "PYTHON_TOOL_RUNTIME",

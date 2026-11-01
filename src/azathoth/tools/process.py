@@ -14,14 +14,12 @@ from azathoth.tools.exceptions import (
 )
 from azathoth.tools.implementation import (
     PROCESS_TOOL_RUNTIME,
+    PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
     ToolImplementation,
 )
 
 PROCESS_STDERR_TAIL_CHARACTERS = 500
 """The most trailing stderr characters quoted when a process tool fails."""
-
-PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE = "AZATHOTH_TOOL_TIMEOUT_SECONDS"
-"""The variable that tells a process tool its own timeout, in seconds (ADR 0093)."""
 
 _OUTPUT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 

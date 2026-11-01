@@ -1,5 +1,6 @@
 """Domain models describing durable tool implementations."""
 
+import re
 from typing import Any, Self
 from uuid import UUID, uuid4
 
@@ -14,6 +15,17 @@ from pydantic import (
 
 PROCESS_TOOL_RUNTIME = "process"
 """The runtime name of tool implementations executed as subprocesses."""
+
+PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE = "AZATHOTH_TOOL_TIMEOUT_SECONDS"
+"""The variable that tells a process tool its own timeout, in seconds (ADR 0093)."""
+
+ENVIRONMENT_GRANT_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*\*?$"
+"""A grant names one variable, or a prefix of names followed by `*` (ADR 0099)."""
+
+ENVIRONMENT_PREFIX_WILDCARD = "*"
+"""The suffix that turns a grant into a prefix of variable names."""
+
+_ENVIRONMENT_GRANT = re.compile(ENVIRONMENT_GRANT_PATTERN)
 
 _PROCESS_ONLY_FIELDS = (
     "command",
@@ -30,6 +42,11 @@ class ToolImplementation(BaseModel):
     covers exactly what executes. Other runtimes declare neither field, and
     an implementation that leaves them unset serializes without them, so its
     documents and content digests are unchanged.
+
+    A process implementation may also grant itself environment variables
+    beyond the base environment every process tool receives: exact names, or
+    prefixes ending in `*` (ADR 0099). An implementation without grants
+    serializes without them.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -51,6 +68,41 @@ class ToolImplementation(BaseModel):
         default=None,
         gt=0.0,
     )
+
+    environment: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_environment_grants(self) -> Self:
+        """Require well-formed, unique grants, and only on process implementations.
+
+        Raises:
+            ValueError: A grant is malformed, repeated, names the managed
+                timeout variable, or is declared by another runtime.
+        """
+
+        if not self.environment:
+            return self
+
+        if self.runtime != PROCESS_TOOL_RUNTIME:
+            raise ValueError("Only process tool implementations may grant environment variables.")
+
+        for grant in self.environment:
+            if _ENVIRONMENT_GRANT.fullmatch(grant) is None:
+                raise ValueError(
+                    f"Environment grant {grant!r} must be a variable name, "
+                    "or a prefix of one followed by '*'."
+                )
+
+            if grant == PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE:
+                raise ValueError(
+                    f"{PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE} is set by the engine "
+                    "from timeout_seconds and cannot be granted."
+                )
+
+        if len(set(self.environment)) != len(self.environment):
+            raise ValueError("Environment grants must be unique.")
+
+        return self
 
     @model_validator(mode="after")
     def validate_process_configuration(self) -> Self:
@@ -82,5 +134,8 @@ class ToolImplementation(BaseModel):
         for name in _PROCESS_ONLY_FIELDS:
             if serialized.get(name) is None:
                 serialized.pop(name, None)
+
+        if not serialized.get("environment"):
+            serialized.pop("environment", None)
 
         return serialized
