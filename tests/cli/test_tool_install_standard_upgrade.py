@@ -19,7 +19,13 @@ from tests.cli.test_tool_import import configure_database
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
-CHILD_GRANTS = ("AZATHOTH_DATABASE", "OPENROUTER_API_KEY", "AZATHOTH_WORKFLOW_DEPTH")
+CHILD_GRANTS = (
+    "AZATHOTH_DATABASE",
+    "OPENROUTER_API_KEY",
+    "AZATHOTH_WORKFLOW_DEPTH",
+    "AZATHOTH_OTEL",
+    "OTEL_*",
+)
 
 PRE_GRANT_VERSIONS = {"run_workflow": "1.0.0", "loop_workflow": "1.1.0"}
 

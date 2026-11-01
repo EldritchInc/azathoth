@@ -19,6 +19,24 @@ PROCESS_TOOL_RUNTIME = "process"
 PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE = "AZATHOTH_TOOL_TIMEOUT_SECONDS"
 """The variable that tells a process tool its own timeout, in seconds (ADR 0093)."""
 
+TRACEPARENT_ENVIRONMENT_VARIABLE = "TRACEPARENT"
+"""The variable carrying the W3C `traceparent` of the step a process tool runs in (ADR 0100)."""
+
+TRACESTATE_ENVIRONMENT_VARIABLE = "TRACESTATE"
+"""The variable carrying the W3C `tracestate` of the step a process tool runs in (ADR 0100)."""
+
+TRACE_CONTEXT_ENVIRONMENT_VARIABLES = (
+    TRACEPARENT_ENVIRONMENT_VARIABLE,
+    TRACESTATE_ENVIRONMENT_VARIABLE,
+)
+"""The variables carrying a step's trace context to a process tool."""
+
+MANAGED_ENVIRONMENT_VARIABLES = (
+    PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
+    *TRACE_CONTEXT_ENVIRONMENT_VARIABLES,
+)
+"""The variables the engine sets itself: never inherited, and never grantable."""
+
 ENVIRONMENT_GRANT_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*\*?$"
 """A grant names one variable, or a prefix of names followed by `*` (ADR 0099)."""
 
@@ -76,8 +94,8 @@ class ToolImplementation(BaseModel):
         """Require well-formed, unique grants, and only on process implementations.
 
         Raises:
-            ValueError: A grant is malformed, repeated, names the managed
-                timeout variable, or is declared by another runtime.
+            ValueError: A grant is malformed, repeated, names a variable the
+                engine manages, or is declared by another runtime.
         """
 
         if not self.environment:
@@ -97,6 +115,11 @@ class ToolImplementation(BaseModel):
                 raise ValueError(
                     f"{PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE} is set by the engine "
                     "from timeout_seconds and cannot be granted."
+                )
+
+            if grant in TRACE_CONTEXT_ENVIRONMENT_VARIABLES:
+                raise ValueError(
+                    f"{grant} is set by the engine from the active trace and cannot be granted."
                 )
 
         if len(set(self.environment)) != len(self.environment):

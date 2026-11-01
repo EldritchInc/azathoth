@@ -568,6 +568,7 @@ class WorkflowRunner:
                     layer_index=layer_index,
                     status=WorkflowStepStatus.FAILED,
                     failure=attempts[-1].failure,
+                    attempts=attempts,
                 )
             )
         else:
@@ -586,6 +587,8 @@ class WorkflowRunner:
                         outputs=step.outputs,
                         output=execution.output,
                     ),
+                    attempts=attempts,
+                    execution=execution,
                 )
             )
 
@@ -786,6 +789,7 @@ class WorkflowRunner:
                             layer_index=layer_index,
                             status=WorkflowStepStatus.FAILED,
                             failure=failure.attempts[-1].failure,
+                            attempts=failure.attempts,
                         )
                     )
 

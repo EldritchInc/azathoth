@@ -298,6 +298,84 @@ cd ~/azathoth-work/azathoth
 Set-Location ~/azathoth-work/azathoth
 ```
 
+## Optional: Tracing With OpenTelemetry
+
+Azathoth can send a trace of every workflow it runs to the tracing backend
+you already use, such as a local OpenTelemetry Collector, Honeycomb, Datadog
+or AWS X-Ray. Most people don't need this; skip it unless you operate
+Azathoth alongside other services.
+
+Tracing is an optional extra. Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[otel]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[otel]"
+```
+
+Then turn it on, and tell it where to send spans. Everything except
+`AZATHOTH_OTEL` is OpenTelemetry's own standard configuration:
+
+```bash
+export AZATHOTH_OTEL=1
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"
+export OTEL_SERVICE_NAME="azathoth"
+```
+
+```powershell
+$env:AZATHOTH_OTEL = "1"
+$env:OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318"
+$env:OTEL_SERVICE_NAME = "azathoth"
+```
+
+Spans go out over OTLP with HTTP and protobuf; gRPC isn't supported. A
+backend that needs an API key takes it in `OTEL_EXPORTER_OTLP_HEADERS`, for
+example `x-honeycomb-team=<KEY>`. The service name defaults to `azathoth`.
+
+To check that tracing works without a backend, print the spans instead. They
+go to stderr, so a command's own output is unchanged:
+
+```bash
+export OTEL_TRACES_EXPORTER=console
+```
+
+```powershell
+$env:OTEL_TRACES_EXPORTER = "console"
+```
+
+`azathoth workflow run`, `azathoth workflow invoke` and `azathoth job run`
+are traced. Each workflow run is one trace, with a span for each step, its
+model, tokens, cost, retries and confidence. A child workflow continues its
+parent's trace, under the step that started it. Spans never carry what a
+workflow read, wrote or said: no inputs, prompts, replies, outputs or error
+messages. Those stay in Azathoth's database, and each span names the run or
+invocation to look up with `azathoth run show` or `azathoth invocation show`.
+
+Child workflows need the 1.1 standard tools to pass the tracing settings on.
+If you initialized your database before 1.1, run `azathoth init` again.
+
+If `AZATHOTH_OTEL` is set but the extra isn't installed, a traced command
+runs nothing and says so:
+
+```text
+AZATHOTH_OTEL is set, but OpenTelemetry is not installed; install azathoth-ai[otel].
+```
+
+To turn tracing off, unset `AZATHOTH_OTEL`:
+
+```bash
+unset AZATHOTH_OTEL
+```
+
+```powershell
+Remove-Item Env:AZATHOTH_OTEL
+```
+
+The [telemetry reference](../src/azathoth/telemetry/README.md) lists every
+span and attribute.
+
 ## Each New Terminal
 
 A venv and an environment variable last only as long as the terminal window.
@@ -318,6 +396,9 @@ $env:AZATHOTH_DATABASE = "$HOME\azathoth-work\azathoth.db"
 On Windows, also apply the UTF-8 settings, unless your PowerShell profile
 already does (see
 [Windows: UTF-8 output](#windows-utf-8-output)).
+
+If you trace, set `AZATHOTH_OTEL` and the `OTEL_*` variables again too (see
+[Optional: Tracing With OpenTelemetry](#optional-tracing-with-opentelemetry)).
 
 ## Upgrading, Leaving and Uninstalling
 

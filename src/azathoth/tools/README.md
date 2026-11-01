@@ -1019,7 +1019,8 @@ A process does not inherit Azathoth's environment (ADR 0099). It receives:
 
 - the platform's base variables, when Azathoth has them;
 - the variables its implementation grants itself;
-- `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the implementation declares a timeout.
+- `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the implementation declares a timeout;
+- `TRACEPARENT` and `TRACESTATE`, when its step is traced (ADR 0100).
 
 Nothing else reaches it, so a secret such as a provider key, a database path
 or a cloud credential never reaches a tool that did not ask for it.
@@ -1050,7 +1051,7 @@ An implementation grants itself more by name, or by a prefix ending in `*`:
   serializes without `environment`.
 
 `process_tool_environment(implementation)` returns exactly the environment an
-implementation runs with:
+implementation runs with, including the variables the engine manages:
 
 ```python
 from azathoth.tools import process_tool_environment
@@ -1070,12 +1071,44 @@ it to stop cleanly before it is killed. The variable is managed by the
 engine: it cannot be granted, and a process without a declared timeout never
 sees it, even when Azathoth itself runs inside a tool that has one.
 
+When tracing is on (ADR 0100), a process run by a traced step also sees that
+step's W3C trace context:
+
+```text
+TRACEPARENT=00-<trace ID>-<step span ID>-01
+TRACESTATE=<vendor state>
+```
+
+`TRACESTATE` appears only when the trace has one. Both are managed by the
+engine, like the timeout: they cannot be granted, and a copy in Azathoth's
+own environment never reaches a tool, so a process outside a traced step
+sees neither. A child `azathoth` that sees them continues the trace under the
+step that started it. `process_tool_environment` takes the trace context of
+the active telemetry's current span, or the one passed as `trace_context`.
+
+| Managed variable | Set when |
+| --- | --- |
+| `AZATHOTH_TOOL_TIMEOUT_SECONDS` | The implementation declares `timeout_seconds` |
+| `TRACEPARENT` | The process runs in a traced step |
+| `TRACESTATE` | The process runs in a traced step whose trace has state |
+
+`MANAGED_ENVIRONMENT_VARIABLES` names all three.
+
 A tool that runs `azathoth` itself grants what that invocation needs, as the
 standard composition tools do:
 
 ```json
-"environment": ["AZATHOTH_DATABASE", "OPENROUTER_API_KEY", "AZATHOTH_WORKFLOW_DEPTH"]
+"environment": [
+  "AZATHOTH_DATABASE",
+  "OPENROUTER_API_KEY",
+  "AZATHOTH_WORKFLOW_DEPTH",
+  "AZATHOTH_OTEL",
+  "OTEL_*"
+]
 ```
+
+`AZATHOTH_OTEL` and `OTEL_*` let the child export its part of the trace. A
+tool that never runs `azathoth` needs neither.
 
 Python implementations run in Azathoth's own process and see its whole
 environment. They are trusted; a tool that is not belongs in a process

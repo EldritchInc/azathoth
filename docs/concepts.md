@@ -1043,6 +1043,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.cli`](../src/azathoth/cli/README.md) | Installed operator surface and runtime bootstrap |
 | [`azathoth.context`](../src/azathoth/context/README.md) | Immutable event-backed working context |
 | [`azathoth.inputs`](../src/azathoth/inputs/README.md) | External inputs as values or references, media types, resolution and the content store |
+| [`azathoth.jobs`](../src/azathoth/jobs/README.md) | The versioned job envelope: one request and one result per invocation |
 | [`azathoth.goals`](../src/azathoth/goals/README.md) | Durable objective intent |
 | [`azathoth.strategies`](../src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
 | [`azathoth.execution`](../src/azathoth/execution/README.md) | Strategy execution evidence |
@@ -1054,5 +1055,6 @@ Detailed architecture lives with each major package.
 | [`azathoth.workflows`](../src/azathoth/workflows/README.md) | Workflow definition, execution, evidence, experiments, and production |
 | [`azathoth.optimization`](../src/azathoth/optimization/README.md) | Empirical candidate generation and optimization |
 | [`azathoth.runtime`](../src/azathoth/runtime/README.md) | Process-local executable composition |
+| [`azathoth.telemetry`](../src/azathoth/telemetry/README.md) | Opt-in OpenTelemetry tracing of jobs, invocations, runs and steps |
 
 Architectural decisions are recorded under [`docs/adrs`](adrs/README.md).

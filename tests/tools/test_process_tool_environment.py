@@ -382,12 +382,18 @@ def test_a_real_process_sees_exactly_the_built_environment(
 # The standard tools
 
 
-CHILD_GRANTS = ("AZATHOTH_DATABASE", "OPENROUTER_API_KEY", "AZATHOTH_WORKFLOW_DEPTH")
+CHILD_GRANTS = (
+    "AZATHOTH_DATABASE",
+    "OPENROUTER_API_KEY",
+    "AZATHOTH_WORKFLOW_DEPTH",
+    "AZATHOTH_OTEL",
+    "OTEL_*",
+)
 
 
 @pytest.mark.parametrize(
     ("name", "version"),
-    [("run_workflow", "1.0.1"), ("loop_workflow", "1.1.1")],
+    [("run_workflow", "1.0.2"), ("loop_workflow", "1.1.2")],
 )
 def test_the_standard_tools_grant_what_their_child_process_needs(
     name: str,
@@ -403,14 +409,18 @@ def test_the_standard_tools_grant_what_their_child_process_needs(
     assert implementation.version == version
 
 
-def test_the_standard_tools_see_the_database_and_key_but_no_other_secret() -> None:
+def test_the_standard_tools_see_the_database_key_and_tracing_but_no_other_secret() -> None:
+    environ = {**POSIX_ENVIRONMENT, "AZATHOTH_OTEL": "1", "OTEL_SERVICE_NAME": "support"}
+
     for document in standard_tool_documents():
         (implementation,) = document.implementations
 
-        environment = posix(implementation)
+        environment = posix(implementation, environ)
 
         assert environment["AZATHOTH_DATABASE"] == "/var/azathoth/azathoth.db"
         assert environment["OPENROUTER_API_KEY"] == "sk-or-secret"
+        assert environment["AZATHOTH_OTEL"] == "1"
+        assert environment["OTEL_SERVICE_NAME"] == "support"
+        assert environment["OTEL_EXPORTER_OTLP_HEADERS"] == "authorization=Bearer otel-secret"
         assert "AWS_SECRET_ACCESS_KEY" not in environment
-        assert "OTEL_EXPORTER_OTLP_HEADERS" not in environment
         assert "DATABASE_URL" not in environment
