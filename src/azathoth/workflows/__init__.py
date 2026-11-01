@@ -263,6 +263,26 @@ from azathoth.workflows.scoring import (
     WorkflowScoringPolicy,
     aggregate_workflow_scorecards,
 )
+from azathoth.workflows.sql_benchmark_execution_repository import (
+    WORKFLOW_BENCHMARK_EXECUTION_TABLES,
+    SqlWorkflowBenchmarkExecutionRepository,
+)
+from azathoth.workflows.sql_experiment_repository import (
+    WORKFLOW_EXPERIMENT_TABLES,
+    SqlWorkflowExperimentRepository,
+)
+from azathoth.workflows.sql_feedback_repository import (
+    WORKFLOW_RUN_FEEDBACK_TABLES,
+    SqlWorkflowRunFeedbackRepository,
+)
+from azathoth.workflows.sql_run_evaluation_repository import (
+    WORKFLOW_RUN_EVALUATION_TABLES,
+    SqlWorkflowRunEvaluationRepository,
+)
+from azathoth.workflows.sql_run_repository import (
+    WORKFLOW_RUN_TABLES,
+    SqlWorkflowRunRepository,
+)
 from azathoth.workflows.sqlite_benchmark_execution_repository import (
     SQLiteWorkflowBenchmarkExecutionRepository,
 )
@@ -336,6 +356,11 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "WORKFLOW_BENCHMARK_EXECUTION_TABLES",
+    "WORKFLOW_EXPERIMENT_TABLES",
+    "WORKFLOW_RUN_EVALUATION_TABLES",
+    "WORKFLOW_RUN_FEEDBACK_TABLES",
+    "WORKFLOW_RUN_TABLES",
     "BenchmarkCaseSourceError",
     "IdempotencyKeyInUseError",
     "InMemoryProductionInvocationRepository",
@@ -372,6 +397,11 @@ __all__ = [
     "SQLiteWorkflowRunEvaluationRepository",
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
+    "SqlWorkflowBenchmarkExecutionRepository",
+    "SqlWorkflowExperimentRepository",
+    "SqlWorkflowRunEvaluationRepository",
+    "SqlWorkflowRunFeedbackRepository",
+    "SqlWorkflowRunRepository",
     "ToolStepSpecification",
     "MAX_CONFIDENCE",
     "MAX_IDEMPOTENCY_KEY_LENGTH",
