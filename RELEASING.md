@@ -33,6 +33,12 @@ azathoth
 These names intentionally differ only where required by Python package naming
 conventions. The name `azathoth` on PyPI belongs to an unrelated project.
 
+Each release is also published as a container image (ADR 0101):
+
+```text
+ghcr.io/eldritchinc/azathoth:<version>
+```
+
 ## Version Authority
 
 Azathoth records its version in:
@@ -90,7 +96,17 @@ It requires, once:
 - the same on TestPyPI, with the environment `testpypi`;
 - recommended: a required reviewer on the `pypi` environment, under
   Settings → Environments in GitHub, so a pushed tag waits for approval before
-  anything reaches PyPI.
+  anything reaches PyPI. The image waits for the same approval, because it is
+  published only after the wheel.
+
+The image is pushed with the workflow's own `GITHUB_TOKEN`, so it needs no
+secret either. After the first release creates the
+`ghcr.io/eldritchinc/azathoth` package, once:
+
+- make the package public, under the organization's Packages →
+  `azathoth` → Package settings → Change visibility;
+- and connect it to the `EldritchInc/azathoth` repository there, if GitHub
+  did not, so the release workflow keeps permission to push it.
 
 ## Deterministic Validation
 
@@ -172,6 +188,19 @@ released. The workflow's `build` job validates exactly what it publishes:
 5. it passes those same files, unchanged, to the publishing job.
 
 Nothing is rebuilt between validation and publication.
+
+Once the wheel is published, the `publish-image` job builds the container
+image from the same commit:
+
+1. it builds the image for `linux/amd64`, and requires `azathoth --version`
+   inside it to print `azathoth <version>`;
+2. it builds the image for `linux/amd64` and `linux/arm64`, and pushes both
+   to `ghcr.io/eldritchinc/azathoth` as `<version>`, `<major>.<minor>` and
+   `latest`, labeled with the version and the commit.
+
+A manual run builds both architectures and pushes nothing. The container
+image tests prove the rest on every pull request (see
+[Container Tests](CONTRIBUTING.md#container-tests)).
 
 To build and inspect the artifacts locally:
 
@@ -305,6 +334,20 @@ rm -rf ~/azathoth-release-check
 A failure in this run blocks the release, just as a failing test would. Fix
 it on a branch, merge, and run it again from step 1.
 
+### 6. Test the image
+
+With Docker running and the development venv active again, from the
+checkout on `main`, build the release commit's image and run its tests:
+
+```bash
+source .venv/bin/activate
+make container-test
+```
+
+They must pass, as they did in CI. Then follow steps 2 and 3 of
+[Running in a Container](docs/container.md) once by hand, with the image you
+built (`azathoth:test`) and a fresh volume, and remove the volume afterwards.
+
 ## Trial Release on TestPyPI
 
 Before the first release, and whenever the release workflow changes, publish
@@ -314,7 +357,8 @@ the release candidate to TestPyPI:
 2. in GitHub, open Actions → Release → Run workflow, and run it on `main`.
 
 A manual run builds and validates exactly as a tagged run does, then publishes
-to TestPyPI instead of PyPI.
+to TestPyPI instead of PyPI. It also builds the container image for both
+architectures, and checks its version, without pushing it.
 
 Then confirm that the published artifact installs and works. Use a fresh venv,
 not the one from the pre-release run, from inside the checkout:
@@ -363,9 +407,15 @@ git tag -a v1.0.0 -m "Azathoth 1.0.0"
 git push origin v1.0.0
 ```
 
-The workflow then builds, validates and publishes to PyPI. When the `pypi`
-environment has a required reviewer, the publishing job waits for that
-approval.
+The workflow then builds, validates and publishes to PyPI, and then
+publishes the container image. When the `pypi` environment has a required
+reviewer, both wait for that approval.
+
+Confirm that the image is public and reports the release:
+
+```bash
+docker run --rm ghcr.io/eldritchinc/azathoth:<version> --version
+```
 
 Push a release tag once. Never move or reuse a tag that has been pushed. A tag
 pushed by mistake, before anything was published, is removed with:

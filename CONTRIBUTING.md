@@ -233,6 +233,34 @@ regression.
 They are therefore verification tools, not part of the deterministic quality
 gate.
 
+## Container Tests
+
+The container image (ADR 0101) is tested in two ways.
+
+`tests/container/test_dockerfile.py` and `tests/container/test_workflows.py`
+read the `Dockerfile` and the GitHub workflows, need no Docker, and run with
+every other test.
+
+`tests/container/test_image.py` builds the image and runs it: its version
+and user, `init`, the child-workflow example, a job over standard input, a
+read-only root, and tracing. It needs a running Docker engine, so it is
+disabled by default. With Docker running:
+
+```bash
+make container-test
+```
+
+This builds the checkout as `azathoth:test`, then runs the image tests
+against it. To test an image built some other way, name it:
+
+```bash
+AZATHOTH_RUN_CONTAINER_TESTS=1 AZATHOTH_CONTAINER_IMAGE=<IMAGE> python -m pytest tests/container -ra
+```
+
+CI's `container` job runs them on every pull request. Run them locally
+whenever a change touches the `Dockerfile`, `.dockerignore`, the standard
+tools, process tools, or how Azathoth finds its database.
+
 ## Code Quality
 
 While working, let ruff fix and format what it can:

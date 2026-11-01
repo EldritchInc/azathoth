@@ -133,7 +133,8 @@ A deployment pins `X.Y.Z`.
 ### Publishing
 
 The release workflow publishes the image to the GitHub Container Registry,
-public, from the commit it tags, after the wheel is built. Before pushing,
+public, from the commit it tags, once the wheel is published, so a required
+reviewer on the PyPI release gates the image too. Before pushing,
 it runs the image and requires `azathoth --version` to print the tag's
 version. It pushes with the workflow's own token, so no credential is stored.
 A manual run of the release workflow builds both architectures and pushes

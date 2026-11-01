@@ -86,6 +86,25 @@ The packaging tests (`tests/test_package.py` and
   repository;
 - that provider-free inspection works from the installed artifact.
 
+The container image is the same release, packaged for deployment (ADR 0101).
+The release workflow must:
+
+- publish the image only after the wheel is published, from the same commit;
+- require `azathoth --version` inside the image to print `azathoth <version>`
+  before anything is pushed;
+- push `linux/amd64` and `linux/arm64` as `<version>`, `<major>.<minor>` and
+  `latest`.
+
+The container tests (`tests/container`) must pass, in CI's `container` job
+and with `make container-test`. They prove:
+
+- the image runs Azathoth under `tini`, as uid 10001, with the venv's
+  `python` first on `PATH` and the `otel` extra installed;
+- that `init` and the child-workflow example work against a fresh volume;
+- that `job run` over standard input prints exactly one result;
+- that a read-only root filesystem with a writable `/tmp` is enough;
+- that tracing to the console leaves standard output untouched.
+
 ## 3. The Documentation
 
 The docs are part of the release. The docs tests (`tests/test_docs.py`) must
@@ -315,6 +334,7 @@ by provider downtime, model changes, rate limits and latency.
 [ ] docs tests pass, and the documents above were reviewed
 [ ] pyproject.toml and src/azathoth/__init__.py declare the release version
 [ ] the pre-release examples run passed on macOS from the locally built wheel
+[ ] CI's container job is green, and make container-test passed locally
 [ ] the TestPyPI trial published, installed and passed the provider-free examples
 [ ] no credentials are committed
 [ ] live verification, if done, was done after the deterministic gate
@@ -324,6 +344,7 @@ by provider downtime, model changes, rate limits and latency.
 
 ```text
 the documented journeys work, on macOS and Windows, from the published wheel
+the published image runs them too, on amd64 and arm64
 the deterministic repository is green on every supported platform
 durable boundaries survive reconstruction
 production changes only through promotion
