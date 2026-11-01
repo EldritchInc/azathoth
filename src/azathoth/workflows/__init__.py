@@ -148,10 +148,12 @@ from azathoth.workflows.models import (
     WorkflowSpecification,
 )
 from azathoth.workflows.observation import (
+    CombinedRunObserver,
     WorkflowRunEvent,
     WorkflowRunObserver,
     WorkflowStepFinished,
     WorkflowStepStarted,
+    combine_observers,
 )
 from azathoth.workflows.production import (
     WorkflowProductionEmission,
@@ -448,6 +450,7 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunEvaluation",
     "WorkflowRunEvaluationRepository",
+    "CombinedRunObserver",
     "WorkflowRunEvent",
     "WorkflowRunFeedback",
     "WorkflowRunFeedbackDisposition",
@@ -481,6 +484,7 @@ __all__ = [
     "aggregate_workflow_scorecards",
     "benchmark_case_from_run",
     "complete_production_invocation",
+    "combine_observers",
     "create_production_invocation",
     "create_workflow_input_event",
     "create_workflow_input_events",
