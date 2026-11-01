@@ -6,6 +6,8 @@ from azathoth.providers.bedrock import (
     BedrockModelRegistryLoader,
 )
 from azathoth.providers.bedrock_client import (
+    AWS_DEFAULT_REGION_VARIABLE,
+    AWS_REGION_VARIABLE,
     BedrockClient,
     BedrockClientError,
     BedrockDriver,
@@ -121,6 +123,8 @@ from azathoth.providers.sqlite_provider_observation_repository import (
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
+    "AWS_DEFAULT_REGION_VARIABLE",
+    "AWS_REGION_VARIABLE",
     "BLOCKED_STOP_REASONS",
     "BedrockLanguageModel",
     "BedrockModelRegistryLoader",

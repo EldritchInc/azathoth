@@ -137,7 +137,7 @@ def test_azathoth_is_installed_with_its_cloud_extras_into_its_own_venv() -> None
 
     assert f"python -m venv {VENV}" in install
     assert f"{VENV}/bin/python -m pip install" in install
-    assert '"$1[otel,postgres]"' in install
+    assert '"$1[otel,postgres,bedrock]"' in install
     assert "--no-cache-dir" in install
 
 

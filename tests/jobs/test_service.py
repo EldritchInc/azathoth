@@ -932,6 +932,25 @@ def test_a_runtime_is_composed_only_when_a_job_invokes() -> None:
     assert harness.loader.loads == 1
 
 
+def test_a_runtime_that_runs_its_own_event_loop_is_composed_outside_the_jobs() -> None:
+    """Composition discovers provider models with `asyncio.run`, as the CLI's does."""
+
+    async def discover() -> AzathothRuntime:
+        return create_runtime()
+
+    harness = RuntimeHarness()
+    harness.invoke = runtime_job_invoker(
+        lambda: asyncio.run(discover()),
+        invocation_repository=harness.repository,
+        run_repository=harness.run_repository,
+        invocation_run_repository=InMemoryProductionInvocationRunRepository(),
+    )
+
+    result = harness.run(request_data())
+
+    assert result.status is JobStatus.SUCCEEDED
+
+
 def test_a_runtime_invoker_is_composed_once_across_invocations() -> None:
     harness = RuntimeHarness()
 

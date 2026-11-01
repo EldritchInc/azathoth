@@ -112,6 +112,11 @@ from azathoth.cli.workflows import (
 )
 from azathoth.persistence import DatabaseSchemaError, DatabaseUnavailableError
 from azathoth.persistence.repositories import close_postgres_databases
+from azathoth.providers import (
+    BedrockConfigurationError,
+    BedrockUnavailableError,
+    ModelDiscoveryError,
+)
 
 
 def main(
@@ -120,8 +125,10 @@ def main(
     """Run the Azathoth command-line application.
 
     Output is always written as UTF-8, whatever the platform's code page.
-    A PostgreSQL database that cannot be used here is reported on stderr,
-    and the command exits with status 1.
+    A PostgreSQL database that cannot be used here, Bedrock configuration
+    that cannot be used, and a provider whose models cannot be discovered
+    are each reported on stderr in one line, and the command exits with
+    status 1.
     """
 
     use_utf8_streams(
@@ -138,11 +145,17 @@ def main(
     except (
         DatabaseUnavailableError,
         DatabaseSchemaError,
+        BedrockUnavailableError,
+        BedrockConfigurationError,
+        ModelDiscoveryError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
         # postgres extra is missing or its schema is not this Azathoth's,
-        # stops any command before it changes anything (ADR 0102).
+        # stops any command before it changes anything (ADR 0102). So does
+        # a provider that is on but cannot be used: Bedrock without its
+        # extra, its region or a usable pricing document, or any provider
+        # whose models cannot be discovered (ADR 0103).
         #
         print(
             str(exc),

@@ -1103,12 +1103,17 @@ standard composition tools do:
   "OPENROUTER_API_KEY",
   "AZATHOTH_WORKFLOW_DEPTH",
   "AZATHOTH_OTEL",
-  "OTEL_*"
+  "OTEL_*",
+  "AZATHOTH_BEDROCK",
+  "AZATHOTH_BEDROCK_PRICING",
+  "AWS_*"
 ]
 ```
 
-`AZATHOTH_OTEL` and `OTEL_*` let the child export its part of the trace. A
-tool that never runs `azathoth` needs neither.
+`AZATHOTH_OTEL` and `OTEL_*` let the child export its part of the trace.
+`AZATHOTH_BEDROCK`, `AZATHOTH_BEDROCK_PRICING` and `AWS_*` let it run Bedrock
+models with its parent's region, prices and AWS credentials (ADR 0103). A
+tool that never runs `azathoth` needs none of them.
 
 Python implementations run in Azathoth's own process and see its whole
 environment. They are trusted; a tool that is not belongs in a process

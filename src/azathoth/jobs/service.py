@@ -1,5 +1,6 @@
 """Running job requests: replay, conflict, resolution, invocation (ADR 0097)."""
 
+import asyncio
 from collections.abc import Callable, Mapping
 from typing import Protocol
 from uuid import UUID
@@ -79,7 +80,9 @@ def runtime_job_invoker(
 
     `load_runtime` is called once, on the first invocation, so a job that is
     replayed, conflicts or is rejected never loads provider state or
-    credentials.
+    credentials. It runs in a worker thread, because composing a runtime
+    discovers provider models with an event loop of its own, which cannot
+    run inside the job's.
     """
 
     runtimes: list[AzathothRuntime] = []
@@ -93,7 +96,7 @@ def runtime_job_invoker(
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         if not runtimes:
-            runtimes.append(load_runtime())
+            runtimes.append(await asyncio.to_thread(load_runtime))
 
         runtime = runtimes[0]
 
