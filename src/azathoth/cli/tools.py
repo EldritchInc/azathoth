@@ -7,10 +7,10 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.revisions import content_digest
 from azathoth.standard import standard_tool_documents
 from azathoth.tools import (
-    SQLiteToolRepository,
     ToolDefinition,
     ToolDocumentError,
     ToolDocumentRevision,
@@ -29,9 +29,7 @@ def list_tools() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     for definition in repository.definitions():
         print(f"{definition.id}  {definition.version}  {definition.name}")
@@ -48,9 +46,7 @@ def show_tool(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     definition = repository.get_definition(
         tool_id,
@@ -77,9 +73,7 @@ def list_tool_versions(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     definitions = tuple(
         definition for definition in repository.definitions() if definition.id == tool_id
@@ -108,9 +102,7 @@ def list_tool_implementations(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     definition = repository.get_definition(
         tool_id,
@@ -144,9 +136,7 @@ def show_tool_implementation(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     implementation = repository.get_implementation(
         implementation_id,
@@ -174,9 +164,7 @@ def list_tool_test_cases(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     definitions = tuple(
         definition for definition in repository.definitions() if definition.id == tool_id
@@ -207,9 +195,7 @@ def show_tool_test_case(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     test_case = repository.get_test_case(
         test_case_id,
@@ -330,9 +316,7 @@ def list_tool_history(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = SQLiteToolRepository(
-        configuration.database,
-    ).document_revisions(tool_id)
+    history = repositories(configuration).tools.document_revisions(tool_id)
 
     selected = tuple(
         revision for revision in history if version is None or revision.tool_version == version
@@ -386,9 +370,7 @@ def export_tool(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     latest = repository.latest_document_revision(
         tool_id,
@@ -488,9 +470,7 @@ def import_tool(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     try:
         revision = repository.save_document(document)
@@ -532,9 +512,7 @@ def install_standard_tools() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     for document in standard_tool_documents():
         definition = document.definition

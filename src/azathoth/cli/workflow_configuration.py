@@ -6,14 +6,15 @@ from uuid import UUID
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     PromptSpecification,
 )
 from azathoth.workflows import (
-    SQLiteWorkflowRepository,
     ToolStepSpecification,
     WorkflowDocumentError,
+    WorkflowRepository,
     WorkflowResultReference,
     WorkflowSpecificationRevision,
     decode_workflow_document,
@@ -50,7 +51,7 @@ def show_workflow(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteWorkflowRepository(configuration.database)
+    repository = repositories(configuration).workflows
 
     selected = _selected_revision(
         repository,
@@ -147,7 +148,7 @@ def export_workflow(
     configuration = CliRuntimeConfiguration.from_environment()
 
     selected = _selected_revision(
-        SQLiteWorkflowRepository(configuration.database),
+        repositories(configuration).workflows,
         workflow_id,
         revision,
     )
@@ -175,7 +176,7 @@ def list_workflow_history(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = SQLiteWorkflowRepository(configuration.database).revisions(workflow_id)
+    history = repositories(configuration).workflows.revisions(workflow_id)
 
     if not history:
         print(
@@ -209,7 +210,7 @@ def list_workflow_history(
 
 
 def _selected_revision(
-    repository: SQLiteWorkflowRepository,
+    repository: WorkflowRepository,
     workflow_id: UUID,
     revision: int | None,
 ) -> WorkflowSpecificationRevision | None:
@@ -296,7 +297,7 @@ def import_workflow(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteWorkflowRepository(configuration.database)
+    repository = repositories(configuration).workflows
 
     revision = repository.save(specification)
 

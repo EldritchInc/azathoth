@@ -27,6 +27,18 @@ FIRST_CASE_ID = UUID("c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1")
 SEMANTIC_CASE_ID = UUID("c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2")
 
 
+def database_path(
+    configuration: CliRuntimeConfiguration,
+) -> Path:
+    """Return the SQLite file a test's configuration names."""
+
+    database = configuration.database
+
+    assert isinstance(database, Path)
+
+    return database
+
+
 def configure(
     *,
     tmp_path: Path,
@@ -82,7 +94,7 @@ def save_benchmark(
 ) -> None:
     """Persist one benchmark with the given cases."""
 
-    SQLiteBenchmarkRepository(configuration.database).save(
+    SQLiteBenchmarkRepository(database_path(configuration)).save(
         BenchmarkDataset(
             id=BENCHMARK_ID,
             name="optimize-checks",
@@ -191,7 +203,7 @@ def test_optimize_rejects_workflow_without_result_before_runtime(
         ),
     )
 
-    SQLiteWorkflowRepository(configuration.database).save(
+    SQLiteWorkflowRepository(database_path(configuration)).save(
         create_workflow().model_copy(
             update={
                 "result": None,

@@ -110,6 +110,8 @@ from azathoth.cli.workflows import (
     run_workflow,
     show_workflow,
 )
+from azathoth.persistence import DatabaseSchemaError, DatabaseUnavailableError
+from azathoth.persistence.repositories import close_postgres_databases
 
 
 def main(
@@ -118,6 +120,8 @@ def main(
     """Run the Azathoth command-line application.
 
     Output is always written as UTF-8, whatever the platform's code page.
+    A PostgreSQL database that cannot be used here is reported on stderr,
+    and the command exits with status 1.
     """
 
     use_utf8_streams(
@@ -129,7 +133,25 @@ def main(
 
     arguments = parser.parse_args(argv)
 
-    result = _dispatch(arguments)
+    try:
+        result = _dispatch(arguments)
+    except (
+        DatabaseUnavailableError,
+        DatabaseSchemaError,
+    ) as exc:
+        #
+        # A PostgreSQL database that cannot be used here, because the
+        # postgres extra is missing or its schema is not this Azathoth's,
+        # stops any command before it changes anything (ADR 0102).
+        #
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+    finally:
+        close_postgres_databases()
 
     if result is not None:
         return result

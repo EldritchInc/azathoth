@@ -5,9 +5,9 @@ import sys
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.tools import (
     RuntimeToolExecutor,
-    SQLiteToolRepository,
     ToolExecutionError,
     ToolImplementation,
     ToolTestCase,
@@ -25,9 +25,7 @@ def verify_tool(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteToolRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).tools
 
     definition = repository.get_definition(
         tool_id,

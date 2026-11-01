@@ -17,6 +17,7 @@ from azathoth.cli.benchmark_execution import (
 )
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_workflow_benchmark_comparison_execution,
     render_workflow_benchmark_execution,
@@ -27,8 +28,8 @@ from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDatasetRevision,
     BenchmarkDocumentError,
+    BenchmarkRepository,
     SemanticJudgingError,
-    SQLiteBenchmarkRepository,
     UnsupportedComparisonError,
     decode_benchmark_document,
     earliest_identical_benchmark_revision,
@@ -39,9 +40,6 @@ from azathoth.runtime import (
     WorkflowNotConfiguredError,
 )
 from azathoth.workflows import (
-    SQLiteWorkflowBenchmarkExecutionRepository,
-    SQLiteWorkflowRunEvaluationRepository,
-    SQLiteWorkflowRunRepository,
     WorkflowBenchmarkEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
@@ -54,9 +52,7 @@ def list_benchmarks() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).benchmarks
 
     for dataset in repository.datasets():
         print(f"{dataset.id}  {dataset.version}  {dataset.name}")
@@ -73,9 +69,7 @@ def show_benchmark(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).benchmarks
 
     selected = _selected_revision(
         repository,
@@ -110,9 +104,7 @@ def export_benchmark(
     configuration = CliRuntimeConfiguration.from_environment()
 
     selected = _selected_revision(
-        SQLiteBenchmarkRepository(
-            configuration.database,
-        ),
+        repositories(configuration).benchmarks,
         benchmark_id,
         revision,
     )
@@ -140,9 +132,7 @@ def list_benchmark_history(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = SQLiteBenchmarkRepository(
-        configuration.database,
-    ).revisions(benchmark_id)
+    history = repositories(configuration).benchmarks.revisions(benchmark_id)
 
     if not history:
         print(
@@ -177,7 +167,7 @@ def list_benchmark_history(
 
 
 def _selected_revision(
-    repository: SQLiteBenchmarkRepository,
+    repository: BenchmarkRepository,
     benchmark_id: UUID,
     revision: int | None,
 ) -> BenchmarkDatasetRevision | None:
@@ -228,9 +218,7 @@ def list_benchmark_cases(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).benchmarks
 
     dataset = repository.get(
         benchmark_id,
@@ -258,9 +246,7 @@ def show_benchmark_case(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).benchmarks
 
     dataset = repository.get(
         benchmark_id,
@@ -410,9 +396,7 @@ def import_benchmark(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = SQLiteBenchmarkRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).benchmarks
 
     saved = repository.save(
         dataset,
@@ -610,17 +594,11 @@ def list_benchmark_executions(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    executions = SQLiteWorkflowBenchmarkExecutionRepository(
-        configuration.database,
-    ).executions_for_benchmark(benchmark_id)
+    execution_repository = repositories(configuration).benchmark_executions
 
-    if (
-        not executions
-        and SQLiteBenchmarkRepository(
-            configuration.database,
-        ).get(benchmark_id)
-        is None
-    ):
+    executions = execution_repository.executions_for_benchmark(benchmark_id)
+
+    if not executions and repositories(configuration).benchmarks.get(benchmark_id) is None:
         print(
             f"Benchmark dataset {benchmark_id} is not configured.",
             file=sys.stderr,
@@ -655,9 +633,7 @@ def show_benchmark_execution(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    execution = SQLiteWorkflowBenchmarkExecutionRepository(
-        configuration.database,
-    ).get(execution_id)
+    execution = repositories(configuration).benchmark_executions.get(execution_id)
 
     if execution is None:
         print(
@@ -678,15 +654,9 @@ def _benchmark_recorder(
     """Return the recorder that saves benchmark evidence to the configured database."""
 
     return WorkflowBenchmarkEvidenceRecorder(
-        runs=SQLiteWorkflowRunRepository(
-            configuration.database,
-        ),
-        evaluations=SQLiteWorkflowRunEvaluationRepository(
-            configuration.database,
-        ),
-        executions=SQLiteWorkflowBenchmarkExecutionRepository(
-            configuration.database,
-        ),
+        runs=repositories(configuration).runs,
+        evaluations=repositories(configuration).run_evaluations,
+        executions=repositories(configuration).benchmark_executions,
     )
 
 

@@ -4,6 +4,7 @@ import sys
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_production_invocation,
     render_production_invocation_summaries,
@@ -12,11 +13,6 @@ from azathoth.cli.rendering import (
 )
 from azathoth.workflows import (
     ProductionInvocationResult,
-    SQLiteProductionInvocationRepository,
-    SQLiteProductionInvocationRunRepository,
-    SQLiteWorkflowProductionRevisionRepository,
-    SQLiteWorkflowProductionStateRepository,
-    SQLiteWorkflowRepository,
     active_production_revision,
 )
 
@@ -33,9 +29,7 @@ def show_workflow_production(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    state = SQLiteWorkflowProductionStateRepository(
-        configuration.database,
-    ).get(workflow_id)
+    state = repositories(configuration).production_states.get(workflow_id)
 
     if state is None:
         if _is_configured(configuration, workflow_id):
@@ -48,9 +42,7 @@ def show_workflow_production(
 
         return 1
 
-    revisions = SQLiteWorkflowProductionRevisionRepository(
-        configuration.database,
-    ).revisions_for_workflow(workflow_id)
+    revisions = repositories(configuration).production_revisions.revisions_for_workflow(workflow_id)
 
     print(
         render_workflow_production(
@@ -79,9 +71,7 @@ def list_workflow_revisions(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    revisions = SQLiteWorkflowProductionRevisionRepository(
-        configuration.database,
-    ).revisions_for_workflow(workflow_id)
+    revisions = repositories(configuration).production_revisions.revisions_for_workflow(workflow_id)
 
     if not revisions and not _is_configured(configuration, workflow_id):
         _report_unconfigured(workflow_id)
@@ -100,9 +90,7 @@ def list_workflow_revisions(
     if not newest_first:
         return 0
 
-    state = SQLiteWorkflowProductionStateRepository(
-        configuration.database,
-    ).get(workflow_id)
+    state = repositories(configuration).production_states.get(workflow_id)
 
     active = (
         active_production_revision(
@@ -137,9 +125,7 @@ def list_workflow_invocations(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    invocation_repository = SQLiteProductionInvocationRepository(
-        configuration.database,
-    )
+    invocation_repository = repositories(configuration).invocations
 
     invocations = invocation_repository.invocations_for_workflow(workflow_id)
 
@@ -160,9 +146,7 @@ def list_workflow_invocations(
     if not newest_first:
         return 0
 
-    run_repository = SQLiteProductionInvocationRunRepository(
-        configuration.database,
-    )
+    run_repository = repositories(configuration).invocation_runs
 
     results: dict[UUID, ProductionInvocationResult] = {}
     run_ids: dict[UUID, UUID] = {}
@@ -196,9 +180,7 @@ def show_invocation(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    invocation_repository = SQLiteProductionInvocationRepository(
-        configuration.database,
-    )
+    invocation_repository = repositories(configuration).invocations
 
     invocation = invocation_repository.get(invocation_id)
 
@@ -210,9 +192,7 @@ def show_invocation(
 
         return 1
 
-    association = SQLiteProductionInvocationRunRepository(
-        configuration.database,
-    ).get(invocation_id)
+    association = repositories(configuration).invocation_runs.get(invocation_id)
 
     print(
         render_production_invocation(
@@ -231,12 +211,7 @@ def _is_configured(
 ) -> bool:
     """Return whether one workflow is present in configuration."""
 
-    return (
-        SQLiteWorkflowRepository(
-            configuration.database,
-        ).get(workflow_id)
-        is not None
-    )
+    return repositories(configuration).workflows.get(workflow_id) is not None
 
 
 def _report_unconfigured(

@@ -253,6 +253,24 @@ def test_the_otel_extra_is_installed(
     assert completed.stdout == "ok\n"
 
 
+def test_the_postgres_extra_is_installed(
+    image: str,
+) -> None:
+    completed = succeeded(
+        docker(
+            "run",
+            "--rm",
+            "--entrypoint",
+            "python",
+            image,
+            "-c",
+            "import psycopg; print(psycopg.pq.version() >= 150000)",
+        )
+    )
+
+    assert completed.stdout == "True\n"
+
+
 # Running workflows
 
 

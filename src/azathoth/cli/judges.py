@@ -4,9 +4,9 @@ import sys
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.evaluation import (
     JudgeEntry,
-    SQLiteJudgeRotationRepository,
 )
 
 
@@ -41,9 +41,7 @@ def add_judge(
         return 1
 
     try:
-        SQLiteJudgeRotationRepository(
-            configuration.database,
-        ).add(
+        repositories(configuration).judges.add(
             JudgeEntry(
                 provider=model.provider,
                 model=model.model,
@@ -74,9 +72,7 @@ def remove_judge(
     configuration = CliRuntimeConfiguration.from_environment()
 
     try:
-        SQLiteJudgeRotationRepository(
-            configuration.database,
-        ).remove(
+        repositories(configuration).judges.remove(
             identifier,
         )
     except ValueError as exc:
@@ -101,13 +97,7 @@ def list_judges() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    for identifier in (
-        SQLiteJudgeRotationRepository(
-            configuration.database,
-        )
-        .rotation()
-        .identifiers
-    ):
+    for identifier in repositories(configuration).judges.rotation().identifiers:
         print(identifier)
 
     return 0

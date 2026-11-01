@@ -22,8 +22,9 @@ COPY src ./src
 RUN python -m build --wheel --outdir /dist
 
 #
-# Install it, with the otel extra, into a venv that is first on PATH, so the
-# standard tools' child workflows run Azathoth's own Python.
+# Install it, with the otel and postgres extras (ADR 0100, ADR 0102), into a
+# venv that is first on PATH, so the standard tools' child workflows run
+# Azathoth's own Python.
 #
 FROM ${PYTHON_IMAGE}
 
@@ -55,7 +56,7 @@ COPY --from=builder /dist/ /tmp/dist/
 RUN python -m venv /opt/azathoth/venv \
     && set -- /tmp/dist/*.whl \
     && /opt/azathoth/venv/bin/python -m pip install --no-cache-dir --root-user-action=ignore \
-        "$1[otel]" \
+        "$1[otel,postgres]" \
     && rm -rf /tmp/dist
 
 WORKDIR /var/lib/azathoth

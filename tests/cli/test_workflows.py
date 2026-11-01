@@ -535,7 +535,7 @@ def test_optimize_workflow_renders_optimization_session(
         database=tmp_path / "azathoth.db",
     )
 
-    save_benchmark(configuration.database)
+    save_benchmark(tmp_path / "azathoth.db")
 
     monkeypatch.setattr(
         CliRuntimeConfiguration,
@@ -593,7 +593,7 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
         database=tmp_path / "azathoth.db",
     )
 
-    benchmark = save_benchmark(configuration.database)
+    benchmark = save_benchmark(tmp_path / "azathoth.db")
 
     monkeypatch.setattr(
         CliRuntimeConfiguration,

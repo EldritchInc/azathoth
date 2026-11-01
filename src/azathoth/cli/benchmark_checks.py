@@ -9,15 +9,13 @@ import sys
 from uuid import UUID
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.evaluation import (
     BenchmarkDataset,
     OutcomeComparison,
     OutcomeEvaluator,
-    SQLiteBenchmarkRepository,
-    SQLiteJudgeRotationRepository,
     UnsupportedComparisonError,
 )
-from azathoth.workflows import SQLiteWorkflowRepository
 
 
 def configured_benchmark(
@@ -26,9 +24,7 @@ def configured_benchmark(
 ) -> BenchmarkDataset | None:
     """Return one durable benchmark, reporting it when it is not configured."""
 
-    dataset = SQLiteBenchmarkRepository(
-        configuration.database,
-    ).get(
+    dataset = repositories(configuration).benchmarks.get(
         benchmark_id,
     )
 
@@ -70,13 +66,7 @@ def comparisons_supported(
 
     evaluator = OutcomeEvaluator()
 
-    judges_configured = bool(
-        SQLiteJudgeRotationRepository(
-            configuration.database,
-        )
-        .rotation()
-        .entries
-    )
+    judges_configured = bool(repositories(configuration).judges.rotation().entries)
 
     for case in dataset.cases:
         if case.expected.comparison is OutcomeComparison.SEMANTIC:
@@ -116,9 +106,7 @@ def results_declared(
     Unconfigured identifiers are left for runtime bootstrap to report.
     """
 
-    repository = SQLiteWorkflowRepository(
-        configuration.database,
-    )
+    repository = repositories(configuration).workflows
 
     for workflow_id in workflow_ids:
         specification = repository.get(workflow_id)

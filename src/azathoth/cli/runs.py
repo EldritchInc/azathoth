@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import JsonValue, ValidationError
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     WorkflowRunSource,
     render_workflow_run,
@@ -15,13 +16,6 @@ from azathoth.cli.rendering import (
     render_workflow_run_summaries,
 )
 from azathoth.workflows import (
-    SQLiteProductionInvocationRunRepository,
-    SQLiteWorkflowBenchmarkExecutionRepository,
-    SQLiteWorkflowExperimentRepository,
-    SQLiteWorkflowRepository,
-    SQLiteWorkflowRunEvaluationRepository,
-    SQLiteWorkflowRunFeedbackRepository,
-    SQLiteWorkflowRunRepository,
     WorkflowRunFeedback,
     WorkflowRunFeedbackDisposition,
 )
@@ -42,17 +36,9 @@ def list_workflow_runs(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    runs = SQLiteWorkflowRunRepository(
-        configuration.database,
-    ).runs_for_workflow(workflow_id)
+    runs = repositories(configuration).runs.runs_for_workflow(workflow_id)
 
-    if (
-        not runs
-        and SQLiteWorkflowRepository(
-            configuration.database,
-        ).get(workflow_id)
-        is None
-    ):
+    if not runs and repositories(configuration).workflows.get(workflow_id) is None:
         print(
             f"Workflow {workflow_id} is not configured.",
             file=sys.stderr,
@@ -78,9 +64,7 @@ def list_workflow_runs(
     )
 
     latest_dispositions = _latest_dispositions(
-        SQLiteWorkflowRunFeedbackRepository(
-            configuration.database,
-        ).feedback(),
+        repositories(configuration).feedback.feedback(),
     )
 
     print(
@@ -105,9 +89,7 @@ def show_run(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    run = SQLiteWorkflowRunRepository(
-        configuration.database,
-    ).get(run_id)
+    run = repositories(configuration).runs.get(run_id)
 
     if run is None:
         print(
@@ -117,13 +99,9 @@ def show_run(
 
         return 1
 
-    evaluations = SQLiteWorkflowRunEvaluationRepository(
-        configuration.database,
-    ).evaluations_for_run(run_id)
+    evaluations = repositories(configuration).run_evaluations.evaluations_for_run(run_id)
 
-    feedback = SQLiteWorkflowRunFeedbackRepository(
-        configuration.database,
-    ).feedback_for_run(run_id)
+    feedback = repositories(configuration).feedback.feedback_for_run(run_id)
 
     print(
         "\n\n".join(
@@ -155,12 +133,7 @@ def record_run_feedback(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    if (
-        SQLiteWorkflowRunRepository(
-            configuration.database,
-        ).get(run_id)
-        is None
-    ):
+    if repositories(configuration).runs.get(run_id) is None:
         print(
             f"Run {run_id} was not found.",
             file=sys.stderr,
@@ -194,9 +167,7 @@ def record_run_feedback(
 
         return 1
 
-    SQLiteWorkflowRunFeedbackRepository(
-        configuration.database,
-    ).save(feedback)
+    repositories(configuration).feedback.save(feedback)
 
     print(f"Recorded {disposition.value} feedback {feedback.id} for run {run_id}.")
 
@@ -217,24 +188,22 @@ def _run_sources(
 
     sources: dict[UUID, WorkflowRunSource] = {
         case.run_id: WorkflowRunSource.BENCHMARK
-        for execution in SQLiteWorkflowBenchmarkExecutionRepository(
-            configuration.database,
-        ).executions_for_workflow(workflow_id)
+        for execution in repositories(configuration).benchmark_executions.executions_for_workflow(
+            workflow_id
+        )
         for candidate in execution.candidates
         if candidate.workflow.id == workflow_id
         for case in candidate.cases
     }
 
-    for experiment in SQLiteWorkflowExperimentRepository(
-        configuration.database,
-    ).experiments_for_workflow(workflow_id):
+    experiments = repositories(configuration).experiments.experiments_for_workflow(workflow_id)
+
+    for experiment in experiments:
         for observation in experiment.observations:
             for case in observation.cases:
                 sources[case.run_id] = WorkflowRunSource.EXPERIMENT
 
-    for association in SQLiteProductionInvocationRunRepository(
-        configuration.database,
-    ).associations():
+    for association in repositories(configuration).invocation_runs.associations():
         sources[association.run_id] = WorkflowRunSource.PRODUCTION
 
     return sources
