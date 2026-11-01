@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from pydantic import JsonValue
+
 from azathoth.context import Context, ContextEvent
 from azathoth.execution import ExecutionResult, StrategyExecutor
 from azathoth.prompting import WORKFLOW_INPUT_BOUND_EVENT_TYPE
@@ -19,6 +21,7 @@ from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.confidence import step_confidence
 from azathoth.workflows.execution import (
     WorkflowRun,
     WorkflowStepRun,
@@ -142,6 +145,34 @@ class WorkflowRunner:
                 producer_step_id=step.id,
             )
             for binding in step.outputs
+        )
+
+    @staticmethod
+    def _resolve_confidence(
+        *,
+        step_id: UUID,
+        confidence: str | None,
+        outputs: tuple[WorkflowValueBinding, ...],
+        output: JsonValue,
+    ) -> float | None:
+        """Return the confidence one step execution reports, if it declares one.
+
+        Raises:
+            WorkflowValueResolutionError: The confidence output does not
+                resolve against the output.
+            WorkflowStepConfidenceError: The confidence is not a number from
+                0 to 1 (ADR 0098).
+        """
+
+        if confidence is None:
+            return None
+
+        binding = next(binding for binding in outputs if binding.name == confidence)
+
+        return step_confidence(
+            step_id,
+            confidence,
+            binding.resolve(output),
         )
 
     @staticmethod
@@ -400,6 +431,8 @@ class WorkflowRunner:
         context: Context,
         retry_policy: WorkflowRetryPolicy,
         outputs: tuple[WorkflowValueBinding, ...] = (),
+        step_id: UUID | None = None,
+        confidence: str | None = None,
     ) -> tuple[
         ExecutionResult | None,
         tuple[WorkflowStepAttempt, ...],
@@ -415,7 +448,14 @@ class WorkflowRunner:
         with its `WorkflowValueResolutionError`, so it is retried like any
         other failure: a model may produce the declared shape on a later
         attempt.
+
+        A step that declares a confidence also requires it to be a number
+        from 0 to 1; anything else fails the attempt with its
+        `WorkflowStepConfidenceError`, and is retried the same way (ADR 0098).
         """
+
+        if confidence is not None and step_id is None:
+            raise ValueError("A step that declares a confidence must name its step.")
 
         attempts: list[WorkflowStepAttempt] = []
 
@@ -435,6 +475,14 @@ class WorkflowRunner:
 
                 for binding in outputs:
                     binding.resolve(execution.output)
+
+                if step_id is not None:
+                    self._resolve_confidence(
+                        step_id=step_id,
+                        confidence=confidence,
+                        outputs=outputs,
+                        output=execution.output,
+                    )
 
                 completed_at = datetime.now(
                     tz=UTC,
@@ -509,6 +557,8 @@ class WorkflowRunner:
             context=step_context,
             retry_policy=step.retry_policy,
             outputs=step.outputs,
+            step_id=step.id,
+            confidence=step.confidence,
         )
 
         if execution is None:
@@ -529,6 +579,12 @@ class WorkflowRunner:
                     values=self._resolve_values(
                         step=step,
                         execution=execution,
+                    ),
+                    confidence=self._resolve_confidence(
+                        step_id=step.id,
+                        confidence=step.confidence,
+                        outputs=step.outputs,
+                        output=execution.output,
                     ),
                 )
             )
@@ -572,8 +628,13 @@ class WorkflowRunner:
         current_context: Context,
         execution_context: Context,
         execution: ExecutionResult,
+        confidence: float | None = None,
     ) -> Context:
-        """Append only events produced during strategy execution."""
+        """Append only events produced during strategy execution.
+
+        A step that reports a confidence records it on every event it adds
+        to the workflow's context (ADR 0098).
+        """
 
         if execution.initial_context != execution_context:
             raise RuntimeError(
@@ -587,7 +648,13 @@ class WorkflowRunner:
         merged = current_context
 
         for event in produced_events:
-            merged = merged.append(event)
+            merged = merged.append(
+                event
+                if confidence is None
+                else event.model_copy(
+                    update={"confidence": confidence},
+                )
+            )
 
         return merged
 
@@ -834,10 +901,18 @@ class WorkflowRunner:
                 if result.step_context is None:
                     raise RuntimeError("Executed workflow step is missing its execution context.")
 
+                confidence = self._resolve_confidence(
+                    step_id=step.id,
+                    confidence=step.confidence,
+                    outputs=step.outputs,
+                    output=execution.output,
+                )
+
                 current_context = self._merge_execution_context(
                     current_context=current_context,
                     execution_context=result.step_context,
                     execution=execution,
+                    confidence=confidence,
                 )
 
                 values = self._resolve_values(
@@ -853,6 +928,7 @@ class WorkflowRunner:
                         execution=execution,
                         attempts=result.attempts,
                         values=values,
+                        confidence=confidence,
                     )
                 )
 
