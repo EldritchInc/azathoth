@@ -21,6 +21,7 @@ from azathoth.providers.bedrock_configuration import (
     bedrock_enabled,
     load_bedrock_pricing,
 )
+from azathoth.providers.bedrock_directory import BedrockModelDirectory
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
 from azathoth.providers.deterministic import DeterministicLanguageModel
@@ -125,6 +126,7 @@ __all__ = [
     "BedrockConfiguration",
     "BedrockConfigurationError",
     "BedrockDriver",
+    "BedrockModelDirectory",
     "BedrockPricing",
     "BedrockUnavailableError",
     "Boto3BedrockClient",

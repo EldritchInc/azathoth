@@ -67,3 +67,54 @@ class FakeBedrockClient:
             page["nextToken"] = f"page-{index + 1}"
 
         return page
+
+
+def foundation_model(
+    model_id: str,
+    *,
+    name: str | None = None,
+    inputs: tuple[str, ...] = ("TEXT",),
+    outputs: tuple[str, ...] = ("TEXT",),
+    inference_types: tuple[str, ...] = ("ON_DEMAND",),
+    streaming: bool = True,
+    status: str = "ACTIVE",
+) -> dict[str, object]:
+    """Return one foundation model summary, as `ListFoundationModels` gives it."""
+
+    return {
+        "modelArn": f"arn:aws:bedrock:us-east-1::foundation-model/{model_id}",
+        "modelId": model_id,
+        "modelName": name or model_id,
+        "providerName": model_id.split(".")[0],
+        "inputModalities": list(inputs),
+        "outputModalities": list(outputs),
+        "responseStreamingSupported": streaming,
+        "customizationsSupported": [],
+        "inferenceTypesSupported": list(inference_types),
+        "modelLifecycle": {"status": status},
+    }
+
+
+def inference_profile(
+    profile_id: str,
+    *model_ids: str,
+    name: str | None = None,
+    status: str = "ACTIVE",
+    profile_type: str = "SYSTEM_DEFINED",
+) -> dict[str, object]:
+    """Return one inference profile summary, as `ListInferenceProfiles` gives it."""
+
+    return {
+        "inferenceProfileName": name or profile_id,
+        "inferenceProfileArn": (
+            f"arn:aws:bedrock:us-east-1:123456789012:inference-profile/{profile_id}"
+        ),
+        "inferenceProfileId": profile_id,
+        "models": [
+            {"modelArn": f"arn:aws:bedrock:{region}::foundation-model/{model_id}"}
+            for model_id in model_ids
+            for region in ("us-east-1", "us-west-2")
+        ],
+        "status": status,
+        "type": profile_type,
+    }
