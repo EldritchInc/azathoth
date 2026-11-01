@@ -21,6 +21,7 @@ from azathoth.cli.rendering.invocation_history import (
 from azathoth.cli.rendering.invocations import (
     render_production_invocation_result,
 )
+from azathoth.cli.rendering.jobs import render_job_result
 from azathoth.cli.rendering.optimization import (
     render_workflow_optimization_session,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "production_invocation_record",
     "render_model_usage_report",
     "render_output_record",
+    "render_job_result",
     "render_production_invocation",
     "render_production_invocation_result",
     "render_production_invocation_summaries",

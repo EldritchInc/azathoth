@@ -427,6 +427,24 @@ azathoth benchmark import examples/code-review/benchmarks/review-change.json
 azathoth benchmark run d2000000-0000-4000-8000-000000000030 --workflow d2000000-0000-4000-8000-000000000010
 ```
 
+To ask for the review as a versioned job instead, promote the workflow and
+give `job run` the request in `examples/code-review/jobs/review-rename.json`
+(ADR 0097):
+
+```bash
+azathoth workflow promote d2000000-0000-4000-8000-000000000010
+azathoth job run examples/code-review/jobs/review-rename.json
+```
+
+```powershell
+azathoth workflow promote d2000000-0000-4000-8000-000000000010
+azathoth job run examples/code-review/jobs/review-rename.json
+```
+
+`job run` prints one JSON result envelope. Running it again replays the
+recorded result rather than reviewing the change twice. See
+[As a Job](../examples/code-review/README.md#as-a-job).
+
 More detail: [Code Review Example](../examples/code-review/README.md).
 
 ## 8. Novel: Loops Inside Loops

@@ -968,6 +968,30 @@ The durable invocation result is represented by:
 
 Failure classification is provided by `ProductionInvocationErrorCode`.
 
+## Invocation Idempotency
+
+An invocation started through a job envelope (ADR 0097) records
+`InvocationIdempotency`: the caller's idempotency key and the request digest
+it was started with. An invocation started otherwise records none.
+
+`invoke_production_workflow` takes `idempotency` and saves it with the
+invocation before anything runs. A key is unique across recorded
+invocations, whichever workflow they target: saving an invocation under a key
+another one holds raises `IdempotencyKeyInUseError` and saves nothing, so of
+two requests racing with one key, exactly one runs.
+
+`ProductionInvocationRepository.invocation_for_idempotency_key(key)` finds
+the invocation a key names. `validate_idempotency_key` holds the key rule: 1
+to 255 characters, with no control characters.
+
+`SQLiteProductionInvocationRepository` writes the key and digest to their
+own `idempotency_key` and `request_digest` columns, with a unique index on
+the key. A table from before ADR 0097 gains the columns in place, keeping
+every invocation and its sequence.
+
+Replay, conflict and resolution belong to the job envelope, in
+`azathoth.jobs`, not to the invocation service.
+
 ## Invocation and Run Identity
 
 Production invocation and workflow execution remain separately identifiable.

@@ -392,6 +392,8 @@ def test_sqlite_repository_migrates_revision_coupled_invocation_schema(
         "invocation_id",
         "workflow_id",
         "payload",
+        "idempotency_key",
+        "request_digest",
     )
 
     assert "production_invocations_revision_id_sequence" not in indexes

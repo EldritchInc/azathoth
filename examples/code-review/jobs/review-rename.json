@@ -1,0 +1,16 @@
+{
+  "kind": "invoke",
+  "version": 1,
+  "idempotency_key": "code-review-rename-1",
+  "workflow_id": "d2000000-0000-4000-8000-000000000010",
+  "input": {
+    "value": {
+      "title": "Rename total to order_total",
+      "description": "A clearer name; no behavior changes.",
+      "diff": "-def total(order):\n+def order_total(order):\n"
+    }
+  },
+  "caller_metadata": {
+    "source": "examples/code-review"
+  }
+}

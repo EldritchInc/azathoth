@@ -49,6 +49,7 @@ from azathoth.cli.inputs import (
     CLI_INPUT_POLICY,
     WorkflowInputFile,
 )
+from azathoth.cli.jobs import run_job_request
 from azathoth.cli.judges import (
     add_judge,
     list_judges,
@@ -212,6 +213,7 @@ __all__ = [
     "render_workflow_run_feedback",
     "render_workflow_run_summaries",
     "run_benchmark",
+    "run_job_request",
     "run_workflow",
     "show_model",
     "show_run",

@@ -8,6 +8,7 @@ from pydantic import JsonValue
 from azathoth.inputs import InputProvenance
 from azathoth.runtime import AzathothRuntime
 from azathoth.workflows import (
+    InvocationIdempotency,
     ProductionInvocationRepository,
     ProductionInvocationResult,
     ProductionInvocationRunRepository,
@@ -28,8 +29,14 @@ async def invoke_active_production_workflow(
     caller_metadata: Mapping[str, JsonValue] | None = None,
     runner: WorkflowRunner | None = None,
     input_provenance: InputProvenance | None = None,
+    idempotency: InvocationIdempotency | None = None,
 ) -> ProductionInvocationResult:
-    """Invoke the active production state for one workflow."""
+    """Invoke the active production state for one workflow.
+
+    Raises:
+        IdempotencyKeyInUseError: The idempotency key is already recorded on
+            another invocation. Nothing is saved and nothing runs.
+    """
 
     return await invoke_production_workflow(
         workflow_id=workflow_id,
@@ -47,4 +54,5 @@ async def invoke_active_production_workflow(
         tool_resolver=runtime.tool_resolver,
         tool_implementation_resolver=runtime.tool_implementation_resolver,
         input_provenance=input_provenance,
+        idempotency=idempotency,
     )

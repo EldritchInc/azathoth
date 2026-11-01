@@ -24,6 +24,7 @@ from azathoth.cli.dispatching import (
     dispatch_experiment_command,
     dispatch_goal_command,
     dispatch_invocation_command,
+    dispatch_job_command,
     dispatch_judge_command,
     dispatch_model_command,
     dispatch_run_command,
@@ -40,6 +41,7 @@ from azathoth.cli.goals import (
     show_goal,
 )
 from azathoth.cli.initialization import initialize_database
+from azathoth.cli.jobs import run_job_request
 from azathoth.cli.judges import (
     add_judge,
     list_judges,
@@ -59,6 +61,7 @@ from azathoth.cli.parsing import (
     GOAL_COMMAND,
     INIT_COMMAND,
     INVOCATION_COMMAND,
+    JOB_COMMAND,
     JUDGE_COMMAND,
     MODEL_COMMAND,
     RUN_COMMAND,
@@ -214,6 +217,12 @@ def _dispatch(
         return dispatch_invocation_command(
             arguments,
             show_invocation=show_invocation,
+        )
+
+    if command == JOB_COMMAND:
+        return dispatch_job_command(
+            arguments,
+            run_job_request=run_job_request,
         )
 
     if command == MODEL_COMMAND:

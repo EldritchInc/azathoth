@@ -61,6 +61,14 @@ from azathoth.cli.parsing.invocations import (
     INVOCATION_SHOW_ACTION,
     add_invocation_parser,
 )
+from azathoth.cli.parsing.jobs import (
+    JOB_ACTION_ATTRIBUTE,
+    JOB_COMMAND,
+    JOB_REQUEST_ATTRIBUTE,
+    JOB_RUN_ACTION,
+    STANDARD_INPUT_REQUEST,
+    add_job_parser,
+)
 from azathoth.cli.parsing.judges import (
     JUDGE_ACTION_ATTRIBUTE,
     JUDGE_ADD_ACTION,
@@ -195,6 +203,7 @@ def build_parser() -> ArgumentParser:
     add_goal_parser(commands)
 
     add_init_parser(commands)
+    add_job_parser(commands)
 
     return parser
 
@@ -244,6 +253,10 @@ __all__ = [
     "INVOCATION_COMMAND",
     "INVOCATION_ID_ATTRIBUTE",
     "INVOCATION_SHOW_ACTION",
+    "JOB_ACTION_ATTRIBUTE",
+    "JOB_COMMAND",
+    "JOB_REQUEST_ATTRIBUTE",
+    "JOB_RUN_ACTION",
     "JUDGE_ACTION_ATTRIBUTE",
     "JUDGE_ADD_ACTION",
     "JUDGE_COMMAND",
@@ -268,6 +281,7 @@ __all__ = [
     "RUN_FEEDBACK_REASON_ATTRIBUTE",
     "RUN_ID_ATTRIBUTE",
     "RUN_SHOW_ACTION",
+    "STANDARD_INPUT_REQUEST",
     "TARGET_COST_ATTRIBUTE",
     "TARGET_LATENCY_ATTRIBUTE",
     "TOOL_ACTION_ATTRIBUTE",

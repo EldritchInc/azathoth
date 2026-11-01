@@ -87,6 +87,34 @@ path, size and digest beside its input. The result is the review:
 Reviewing `changes/order-search.json` the same way should request changes,
 with a high-severity security finding for the SQL injection.
 
+## As a Job
+
+`jobs/review-rename.json` asks for the same review as a versioned job request
+(ADR 0097). A job invokes what was promoted to production, so promote the
+workflow first:
+
+```bash
+azathoth workflow promote d2000000-0000-4000-8000-000000000010
+
+azathoth job run examples/code-review/jobs/review-rename.json
+```
+
+`job run` prints one result envelope. Its `result` is what production
+emits: the review above, under `result`, the name promotion gives a
+workflow's declared result:
+
+```json
+{"kind": "invoke", "version": 1, "idempotency_key": "code-review-rename-1", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve", "findings": [], "counts": {"high": 0, "medium": 0, "low": 0}, "summary": "No issues found."}}, "error": null}
+```
+
+Run it again and nothing runs: the key's invocation is replayed, with
+`"replayed": true`. Change the request but keep its key, and it is rejected
+as an `idempotency_conflict`; a new attempt needs a new key.
+
+The request carries the change inline, because a reference in a job must be
+an absolute `file://` URI. To send the file instead, set `input` to
+`{"uri": "file:///absolute/path/to/rename.json", "media_type": "application/json"}`.
+
 ## Benchmark
 
 `benchmarks/review-change.json` has four cases:

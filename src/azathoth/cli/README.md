@@ -105,6 +105,9 @@ azathoth
 ├── invocation
 │   └── show <INVOCATION_ID>
 │
+├── job
+│   └── run <FILE | ->
+│
 ├── model
 │   ├── list
 │   ├── show <MODEL_IDENTIFIER>
@@ -2208,6 +2211,15 @@ Result:
 `Caller Metadata` appears only when metadata was recorded. `Input` is the
 payload the caller supplied to `workflow invoke`.
 
+An invocation started by [`job run`](#run-a-job) also names its idempotency
+key and request digest, right after `Run ID`:
+
+```text
+Run ID: <RUN_ID>
+Idempotency Key: order-4711-review
+Request Digest: <SHA-256>
+```
+
 A failed invocation renders its message and optional metadata instead of a
 result:
 
@@ -2235,6 +2247,113 @@ Invocation <INVOCATION_ID> was not found.
 `workflow production`, `workflow revisions`, `workflow invocations`, and
 `invocation show` read durable state only. They do not require provider
 credentials or runtime bootstrap.
+
+# Run a Job
+
+`job run` invokes a production workflow from a versioned job request, and
+prints the result as a versioned job result (ADR 0097):
+
+```bash
+azathoth job run request.json
+azathoth job run - < request.json
+```
+
+It is the typed job API that programs share, and the queue worker,
+Azathoth-MCP and the UI will speak it too. Unlike `workflow invoke`, a
+request names everything in one document, and carries an idempotency key, so
+it can be retried safely.
+
+## Job Requests
+
+A request is one JSON object:
+
+```json
+{
+  "kind": "invoke",
+  "version": 1,
+  "idempotency_key": "order-4711-review",
+  "workflow_id": "d2000000-0000-4000-8000-000000000010",
+  "input": {"value": {"title": "Rename total to order_total"}},
+  "caller_metadata": {"ticket": "OPS-12"}
+}
+```
+
+- `kind` is `invoke` and `version` is `1`; both are required.
+- `idempotency_key` is required: 1 to 255 characters, with no control
+  characters.
+- `input` is an inline value or a reference. Like `--input-file`, `job run`
+  resolves only `file://` references, which must be absolute:
+  `{"uri": "file:///Users/you/change.json", "media_type": "application/json"}`.
+  A reference is resolved, capped and stored exactly as an input file is
+  (see [Input Files](#input-files)).
+- `caller_metadata` is optional, and is recorded with the invocation.
+
+No other key is accepted.
+
+## Job Results
+
+`job run` prints exactly one result, as one line of JSON on stdout, and
+nothing else, whatever happens:
+
+```json
+{"kind": "invoke", "version": 1, "idempotency_key": "order-4711-review", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve"}}, "error": null}
+```
+
+`result` is what production emits, exactly as `workflow invoke --output
+result` prints it.
+
+| Status | Meaning |
+| --- | --- |
+| `succeeded` | The invocation completed; `result` holds what production emits. |
+| `failed` | The invocation completed with a production failure. |
+| `rejected` | No invocation was recorded: the request, its version or its input was refused, or its key was already used for a different request. |
+| `incomplete` | The key's invocation exists but has no result: it was interrupted, or is still running. |
+
+A job that did not succeed carries an `error` with a `code`, a `message` and
+`metadata`. A failed job carries the same code `workflow invoke` reports,
+such as `workflow_not_deployed` or `timeout`. A rejected one carries
+`invalid_request`, `unsupported_version`, `idempotency_conflict` or
+`invalid_input`. An unsupported version names the versions that would be
+accepted:
+
+```json
+{"code": "unsupported_version", "message": "Job version 2 is not supported; supported versions: 1.", "metadata": {"supported_versions": [1]}}
+```
+
+A request file that cannot be read, or is not JSON, is still answered with a
+rejected result.
+
+## Job Exit Status
+
+`job run` exits with status 0 when the job `succeeded`, and 1 for every other
+status. The result on stdout says why.
+
+## Retrying Jobs
+
+A request sent again with the same key and the same content does not run
+again. It reports the recorded invocation, with `"replayed": true`:
+
+- a finished invocation replays as `succeeded` or `failed`;
+- an invocation without a result is `incomplete`.
+
+Failures replay too: a key always reports the same outcome. Send a new key to
+try again.
+
+The same key with different content, another input, another workflow or
+other caller metadata, is rejected as `idempotency_conflict`. Key order and
+formatting do not matter; the request is compared by its canonical form.
+
+A rejected request records nothing, so its key may be sent again once the
+request is fixed. Keys never expire in 1.1.
+
+## Jobs Load the Runtime Only to Invoke
+
+The database is opened only for a request that decodes, and the runtime,
+with any provider credential, is composed only when a workflow is actually
+invoked. A replay, a conflict or a rejection needs no credentials.
+
+`job run` streams no step records. A job is a request and a response; use
+`workflow invoke --output jsonl` to watch steps live.
 
 # No Dedicated Rollback Command in V1
 

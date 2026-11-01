@@ -7,6 +7,7 @@ from azathoth.workflows.production_invocation import (
     ProductionInvocationResult,
 )
 from azathoth.workflows.production_invocation_repository import (
+    IdempotencyKeyInUseError,
     ProductionInvocationRepository,
 )
 
@@ -19,15 +20,30 @@ class InMemoryProductionInvocationRepository:
     ) -> None:
         self._invocations: dict[UUID, ProductionInvocation] = {}
         self._results: dict[UUID, ProductionInvocationResult] = {}
+        self._keys: dict[str, UUID] = {}
 
     def save(
         self,
         invocation: ProductionInvocation,
     ) -> None:
-        """Persist one production invocation without replacing history."""
+        """Persist one production invocation without replacing history.
+
+        Raises:
+            IdempotencyKeyInUseError: The invocation's idempotency key is
+                already recorded on another invocation.
+            ValueError: The invocation is already recorded.
+        """
 
         if invocation.id in self._invocations:
             raise ValueError(f"Production invocation {invocation.id} already exists.")
+
+        idempotency = invocation.idempotency
+
+        if idempotency is not None:
+            if idempotency.key in self._keys:
+                raise IdempotencyKeyInUseError(idempotency.key)
+
+            self._keys[idempotency.key] = invocation.id
 
         self._invocations[invocation.id] = invocation
 
@@ -38,6 +54,19 @@ class InMemoryProductionInvocationRepository:
         """Return one production invocation by identifier."""
 
         return self._invocations.get(invocation_id)
+
+    def invocation_for_idempotency_key(
+        self,
+        key: str,
+    ) -> ProductionInvocation | None:
+        """Return the production invocation recorded under one idempotency key."""
+
+        invocation_id = self._keys.get(key)
+
+        if invocation_id is None:
+            return None
+
+        return self._invocations[invocation_id]
 
     def invocations(
         self,
