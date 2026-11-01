@@ -132,3 +132,12 @@ the table on first use. `InMemoryContentStore` keeps content in process
 memory, for tests and embedding.
 
 Nothing removes stored content yet.
+
+## Job Envelopes
+
+A job request embeds a `WorkflowInputSource` as its `input`, and is resolved
+with the same `resolve_input`, under the policy of the entry point that
+received it (ADR 0097). `azathoth job run` uses the CLI's policy, `file://`
+only. A request's digest names a reference by its URI and media type, never
+by its content, so a retried request is recognized without reading the
+content again.
