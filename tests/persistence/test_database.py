@@ -181,6 +181,20 @@ def test_percent_and_question_marks_survive_in_literals_and_parameters(
         ) == [("50% off?",)]
 
 
+def test_executing_reports_how_many_rows_changed(
+    database: Database,
+) -> None:
+    ready(database)
+
+    for thing_id in ("a", "b", "c"):
+        insert(database, thing_id, count=1)
+
+    with database.transaction() as session:
+        assert session.execute("UPDATE things SET count = ? WHERE count = ?", (2, 1)) == 3
+        assert session.execute("DELETE FROM things WHERE thing_id = ?", ("a",)) == 1
+        assert session.execute("DELETE FROM things WHERE thing_id = ?", ("missing",)) == 0
+
+
 # Order
 
 

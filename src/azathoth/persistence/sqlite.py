@@ -41,8 +41,8 @@ class SQLiteSession:
         self,
         statement: str,
         parameters: Sequence[Parameter] = (),
-    ) -> None:
-        self._cursor(statement, parameters)
+    ) -> int:
+        return self._cursor(statement, parameters).rowcount
 
     def fetchone(
         self,

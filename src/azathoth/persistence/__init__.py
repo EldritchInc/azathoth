@@ -37,6 +37,7 @@ from azathoth.persistence.location import (
 from azathoth.persistence.opening import open_database
 from azathoth.persistence.postgres import PostgresDatabase
 from azathoth.persistence.sqlite import SQLiteDatabase
+from azathoth.persistence.values import require_integer, require_text
 
 __all__ = [
     "MISSING_DRIVER_MESSAGE",
@@ -65,4 +66,6 @@ __all__ = [
     "open_database",
     "parse_database_location",
     "redact_url",
+    "require_integer",
+    "require_text",
 ]

@@ -48,6 +48,11 @@ SCHEMA_STATEMENTS: Final = (
 class PostgresCursor(Protocol):
     """The part of a psycopg cursor Azathoth uses."""
 
+    @property
+    def rowcount(
+        self,
+    ) -> int: ...
+
     def fetchone(
         self,
     ) -> tuple[object, ...] | None: ...
@@ -131,8 +136,8 @@ class PostgresSession:
         self,
         statement: str,
         parameters: Sequence[Parameter] = (),
-    ) -> None:
-        self._cursor(statement, parameters)
+    ) -> int:
+        return self._cursor(statement, parameters).rowcount
 
     def fetchone(
         self,

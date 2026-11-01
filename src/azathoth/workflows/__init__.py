@@ -275,6 +275,18 @@ from azathoth.workflows.sql_feedback_repository import (
     WORKFLOW_RUN_FEEDBACK_TABLES,
     SqlWorkflowRunFeedbackRepository,
 )
+from azathoth.workflows.sql_production_repository import (
+    WORKFLOW_PRODUCTION_STATE_TABLES,
+    SqlWorkflowProductionStateRepository,
+)
+from azathoth.workflows.sql_production_revision_repository import (
+    WORKFLOW_PRODUCTION_REVISION_TABLES,
+    SqlWorkflowProductionRevisionRepository,
+)
+from azathoth.workflows.sql_repository import (
+    WORKFLOW_SPECIFICATION_TABLES,
+    SqlWorkflowRepository,
+)
 from azathoth.workflows.sql_run_evaluation_repository import (
     WORKFLOW_RUN_EVALUATION_TABLES,
     SqlWorkflowRunEvaluationRepository,
@@ -356,6 +368,12 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "WORKFLOW_PRODUCTION_REVISION_TABLES",
+    "WORKFLOW_PRODUCTION_STATE_TABLES",
+    "WORKFLOW_SPECIFICATION_TABLES",
+    "SqlWorkflowProductionRevisionRepository",
+    "SqlWorkflowProductionStateRepository",
+    "SqlWorkflowRepository",
     "WORKFLOW_BENCHMARK_EXECUTION_TABLES",
     "WORKFLOW_EXPERIMENT_TABLES",
     "WORKFLOW_RUN_EVALUATION_TABLES",

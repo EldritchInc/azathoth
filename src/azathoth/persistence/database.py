@@ -49,8 +49,8 @@ class Session(Protocol):
         self,
         statement: str,
         parameters: Sequence[Parameter] = (),
-    ) -> None:
-        """Execute one statement.
+    ) -> int:
+        """Execute one statement, and return how many rows it changed.
 
         Raises:
             IntegrityError: The statement would break a constraint.

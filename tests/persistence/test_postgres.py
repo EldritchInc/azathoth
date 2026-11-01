@@ -87,6 +87,12 @@ class ScriptedCursor:
     ) -> None:
         self._rows = rows
 
+    @property
+    def rowcount(
+        self,
+    ) -> int:
+        return len(self._rows)
+
     def fetchone(
         self,
     ) -> tuple[object, ...] | None:
