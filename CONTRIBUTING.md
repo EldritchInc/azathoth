@@ -261,6 +261,32 @@ CI's `container` job runs them on every pull request. Run them locally
 whenever a change touches the `Dockerfile`, `.dockerignore`, the standard
 tools, process tools, or how Azathoth finds its database.
 
+## PostgreSQL Tests
+
+Every repository runs on SQLite and on PostgreSQL (ADR 0102), and
+`tests/persistence` runs each of their tests against both. Without a server,
+the PostgreSQL half is skipped. With Docker running:
+
+```bash
+make postgres-test
+```
+
+This starts a throwaway `postgres:17` container on `127.0.0.1:54329`, runs
+`tests/persistence` against it, and stops it. To use a server of your own,
+name a database the tests may create schemas in:
+
+```bash
+AZATHOTH_TEST_POSTGRES_URL=postgresql://<USER>:<PASSWORD>@<HOST>/<DATABASE> python -m pytest tests/persistence -ra
+```
+
+Each test gets a fresh schema of its own, which it drops when it ends, so
+tests never see one another's rows, and the database is left as it was.
+
+CI's `postgres` job runs them on every pull request. Run them locally
+whenever a change touches SQL, a repository, a `Table`, or
+`azathoth.persistence`. A repository's SQL must be the subset both
+databases share (see [`azathoth.persistence`](src/azathoth/persistence/README.md#writing-sql-once)).
+
 ## Code Quality
 
 While working, let ruff fix and format what it can:
@@ -364,6 +390,10 @@ They should not silently own:
 - production authority beyond the domain artifact they explicitly store.
 
 Persistence code should remain boring.
+
+A repository is written once, as a `Sql…` class against `Database`, and runs
+on SQLite and PostgreSQL alike. Its tests use the `database` fixture of
+`tests/persistence`, so they run on both.
 
 That is a feature.
 

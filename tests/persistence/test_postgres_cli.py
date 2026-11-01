@@ -144,6 +144,34 @@ def test_without_the_extra_a_command_says_what_to_install(
     assert cli(capsys, "init") == (1, "", f"{MISSING_DRIVER_MESSAGE}\n")
 
 
+def test_a_job_over_an_uninitialized_database_prints_no_result(
+    database_url: str,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "request.json"
+    source.write_text(
+        json.dumps(
+            {
+                "kind": "invoke",
+                "version": 1,
+                "idempotency_key": "postgres-uninitialized-1",
+                "workflow_id": CHILD_WORKFLOW_ID,
+                "input": {"value": "the old ones wait"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    shown = PostgresLocation(database_url).display()
+
+    assert cli(capsys, "job", "run", str(source)) == (
+        1,
+        "",
+        f"Database {shown} is not initialized; run azathoth init.\n",
+    )
+
+
 # The lifecycle
 
 

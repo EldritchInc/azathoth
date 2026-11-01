@@ -77,8 +77,8 @@ benchmarked, optimized, promoted and invoked in production, follow
 
 | Guide | What it covers |
 | --- | --- |
-| [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md) | Python, a venv, `pip install`, checking it works, on macOS and Windows |
-| [Running in a Container](https://github.com/EldritchInc/azathoth/blob/main/docs/container.md) | The container image: a database volume, keys, jobs over stdin, a read-only root |
+| [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md) | Python, a venv, `pip install`, checking it works, on macOS and Windows; optionally PostgreSQL and tracing |
+| [Running in a Container](https://github.com/EldritchInc/azathoth/blob/main/docs/container.md) | The container image: a database volume or PostgreSQL, keys, jobs over stdin, a read-only root |
 | [Connecting OpenRouter](https://github.com/EldritchInc/azathoth/blob/main/docs/openrouter.md) | An API key, finding and authorizing models, adding judges |
 | [Getting Started](https://github.com/EldritchInc/azathoth/blob/main/docs/getting-started.md) | One workflow from import to production |
 | [Examples Tour](https://github.com/EldritchInc/azathoth/blob/main/docs/examples.md) | Every example, from a word count to a novel |

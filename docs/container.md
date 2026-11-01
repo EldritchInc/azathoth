@@ -82,6 +82,44 @@ user, uid 10001, not as you; Docker gives a new named volume to that user,
 but a folder you mount keeps its own owner, and on Linux the container can't
 write to it until it belongs to uid 10001.
 
+### Or a PostgreSQL database
+
+Containers on several hosts can share one PostgreSQL database instead of a
+volume. The image includes PostgreSQL support, so pass the database's URL as
+`AZATHOTH_DATABASE` (see
+[Optional: Sharing a Database With PostgreSQL](install.md#optional-sharing-a-database-with-postgresql)),
+and run `init` once, from any one container:
+
+```bash
+docker run --rm -e AZATHOTH_DATABASE="postgresql://azathoth:<PASSWORD>@db.example.com:5432/azathoth" $IMAGE init
+```
+
+```powershell
+docker run --rm -e AZATHOTH_DATABASE="postgresql://azathoth:<PASSWORD>@db.example.com:5432/azathoth" $IMAGE init
+```
+
+```text
+Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
+Installed tool run_workflow@1.0.0 revision 1.
+Installed tool loop_workflow@1.1.0 revision 1.
+```
+
+Then pass the same `-e AZATHOTH_DATABASE=…` wherever this guide passes
+`-v azathoth-data:/var/lib/azathoth`. A server on your own machine is
+`host.docker.internal` from inside a container, not `localhost`.
+
+A password on the command line stays in your shell's history. To keep it
+out, put the variables in a file that only you can read, one `NAME=value`
+per line, and pass `--env-file` with its path instead of `-e`:
+
+```bash
+docker run --rm --env-file "$HOME/azathoth.env" $IMAGE workflow list
+```
+
+```powershell
+docker run --rm --env-file "$HOME\azathoth.env" $IMAGE workflow list
+```
+
 ## 3. Run the Examples
 
 The examples aren't in the image. Clone the repository (see
@@ -233,6 +271,11 @@ docker image rm $IMAGE
 **An error ending in `unable to open database file`**: the database's folder
 isn't writable by the container's user. Use a named volume (step 2), or, on Linux, make the
 folder you mount belong to uid 10001.
+
+**`Connection refused`** from `init` with a PostgreSQL URL naming
+`localhost`: inside a container, `localhost` is the container itself. Name
+the server's host, or `host.docker.internal` for a server on your own
+machine.
 
 **A document you import can't be found**: its path is outside the
 container. Mount the folder that holds it, and pass the path

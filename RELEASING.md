@@ -348,6 +348,18 @@ They must pass, as they did in CI. Then follow steps 2 and 3 of
 [Running in a Container](docs/container.md) once by hand, with the image you
 built (`azathoth:test`) and a fresh volume, and remove the volume afterwards.
 
+### 7. Test PostgreSQL
+
+Still with Docker running, run the persistence tests against a throwaway
+PostgreSQL server:
+
+```bash
+make postgres-test
+```
+
+They must pass, as they did in CI (see
+[PostgreSQL Tests](CONTRIBUTING.md#postgresql-tests)).
+
 ## Trial Release on TestPyPI
 
 Before the first release, and whenever the release workflow changes, publish
