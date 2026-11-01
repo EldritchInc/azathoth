@@ -475,8 +475,8 @@ set a credit limit on your key. It needs an authorized model with a context
 window of at least 200,000 tokens, because the final review reads the whole
 book at once.
 
-Install the standard tools, which include the loop tool, and import the
-novel's tools and workflows:
+Install the standard tools, which include the loop tool and the tools that
+check and assemble the book, and import the novel's tools and workflows:
 
 ```bash
 azathoth tool install-standard

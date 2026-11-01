@@ -10,9 +10,9 @@
       "id": "e1000000-0000-4000-8000-000000000041",
       "specification": {
         "requirement": {
-          "name": "echo_json",
+          "name": "json_select",
           "version": "1.0.0",
-          "runtime": "python"
+          "runtime": "process"
         }
       },
       "depends_on": [],
@@ -22,6 +22,12 @@
           "source": {
             "event_type": "workflow.input.received",
             "field_name": "input"
+          }
+        },
+        {
+          "name": "path",
+          "source": {
+            "value": []
           }
         }
       ],

@@ -10,9 +10,9 @@
       "id": "e1000000-0000-4000-8000-000000000071",
       "specification": {
         "requirement": {
-          "name": "echo_json",
+          "name": "json_select",
           "version": "1.0.0",
-          "runtime": "python"
+          "runtime": "process"
         }
       },
       "depends_on": [],
@@ -22,6 +22,12 @@
           "source": {
             "event_type": "workflow.input.received",
             "field_name": "input"
+          }
+        },
+        {
+          "name": "path",
+          "source": {
+            "value": []
           }
         }
       ],
@@ -99,7 +105,7 @@
       ],
       "outputs": [
         {
-          "name": "story",
+          "name": "planned_story",
           "path": []
         }
       ],
@@ -112,6 +118,104 @@
       },
       "failure_policy": "fail_workflow",
       "message": "Planning the story"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000090",
+      "specification": {
+        "requirement": {
+          "name": "validate_json",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000072"
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "name": "planned_story"
+          }
+        },
+        {
+          "name": "schema",
+          "source": {
+            "value": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "premise": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "setting": {
+                  "type": "string"
+                },
+                "tone": {
+                  "type": "string"
+                },
+                "characters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ]
+                  }
+                },
+                "arc": {
+                  "type": "string"
+                },
+                "subplots": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "premise"
+              ]
+            }
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "story",
+          "path": [
+            "value"
+          ]
+        },
+        {
+          "name": "title",
+          "path": [
+            "value",
+            "title"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Checking the story plan"
     },
     {
       "id": "e1000000-0000-4000-8000-000000000073",
@@ -155,13 +259,13 @@
       },
       "depends_on": [
         "e1000000-0000-4000-8000-000000000071",
-        "e1000000-0000-4000-8000-000000000072"
+        "e1000000-0000-4000-8000-000000000090"
       ],
       "inputs": [
         {
           "name": "story",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
             "name": "story"
           }
         },
@@ -175,7 +279,7 @@
       ],
       "outputs": [
         {
-          "name": "outline",
+          "name": "planned_outline",
           "path": [
             "chapters"
           ]
@@ -192,6 +296,71 @@
       "message": "Outlining the chapters"
     },
     {
+      "id": "e1000000-0000-4000-8000-000000000091",
+      "specification": {
+        "requirement": {
+          "name": "validate_json",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000073"
+      ],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000073",
+            "name": "planned_outline"
+          }
+        },
+        {
+          "name": "schema",
+          "source": {
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "number",
+                  "summary"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "outline",
+          "path": [
+            "value"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Checking the outline"
+    },
+    {
       "id": "e1000000-0000-4000-8000-000000000074",
       "specification": {
         "requirement": {
@@ -202,8 +371,8 @@
       },
       "depends_on": [
         "e1000000-0000-4000-8000-000000000071",
-        "e1000000-0000-4000-8000-000000000072",
-        "e1000000-0000-4000-8000-000000000073"
+        "e1000000-0000-4000-8000-000000000090",
+        "e1000000-0000-4000-8000-000000000091"
       ],
       "inputs": [
         {
@@ -216,14 +385,14 @@
         {
           "name": "story",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
             "name": "story"
           }
         },
         {
           "name": "outline",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000073",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000091",
             "name": "outline"
           }
         },
@@ -343,14 +512,14 @@
         "output_format": "json"
       },
       "depends_on": [
-        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000090",
         "e1000000-0000-4000-8000-000000000075"
       ],
       "inputs": [
         {
           "name": "story",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
             "name": "story"
           }
         },
@@ -440,7 +609,7 @@
       },
       "depends_on": [
         "e1000000-0000-4000-8000-000000000071",
-        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000090",
         "e1000000-0000-4000-8000-000000000075",
         "e1000000-0000-4000-8000-000000000076"
       ],
@@ -455,7 +624,7 @@
         {
           "name": "story",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
             "name": "story"
           }
         },
@@ -550,7 +719,7 @@
         "output_format": "json"
       },
       "depends_on": [
-        "e1000000-0000-4000-8000-000000000072",
+        "e1000000-0000-4000-8000-000000000090",
         "e1000000-0000-4000-8000-000000000077",
         "e1000000-0000-4000-8000-000000000078"
       ],
@@ -558,7 +727,7 @@
         {
           "name": "story",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
             "name": "story"
           }
         },
@@ -586,32 +755,137 @@
       "message": "Checking the novel for coherence"
     },
     {
-      "id": "e1000000-0000-4000-8000-000000000080",
+      "id": "e1000000-0000-4000-8000-000000000092",
       "specification": {
         "requirement": {
-          "name": "assemble_novel",
+          "name": "join_text",
           "version": "1.0.0",
-          "runtime": "python"
+          "runtime": "process"
         }
       },
       "depends_on": [
-        "e1000000-0000-4000-8000-000000000072",
         "e1000000-0000-4000-8000-000000000077",
-        "e1000000-0000-4000-8000-000000000078",
-        "e1000000-0000-4000-8000-000000000079"
+        "e1000000-0000-4000-8000-000000000078"
       ],
       "inputs": [
         {
-          "name": "story",
+          "name": "items",
           "source": {
-            "producer_step_id": "e1000000-0000-4000-8000-000000000072",
-            "name": "story"
+            "name": "chapters"
+          }
+        },
+        {
+          "name": "item_template",
+          "source": {
+            "value": "## Chapter {number}: {title}\n\n{text}"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chapter_markdown",
+          "path": [
+            "text"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Assembling the novel"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000093",
+      "specification": {
+        "requirement": {
+          "name": "render_template",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000090",
+        "e1000000-0000-4000-8000-000000000092"
+      ],
+      "inputs": [
+        {
+          "name": "template",
+          "source": {
+            "value": "# {title}\n\n{chapters}\n"
+          }
+        },
+        {
+          "name": "title",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
+            "name": "title"
+          }
+        },
+        {
+          "name": "chapters",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000092",
+            "name": "chapter_markdown"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "markdown",
+          "path": [
+            "text"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000094",
+      "specification": {
+        "requirement": {
+          "name": "json_object",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "e1000000-0000-4000-8000-000000000077",
+        "e1000000-0000-4000-8000-000000000078",
+        "e1000000-0000-4000-8000-000000000079",
+        "e1000000-0000-4000-8000-000000000090",
+        "e1000000-0000-4000-8000-000000000093"
+      ],
+      "inputs": [
+        {
+          "name": "title",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000090",
+            "name": "title"
           }
         },
         {
           "name": "chapters",
           "source": {
             "name": "chapters"
+          }
+        },
+        {
+          "name": "markdown",
+          "source": {
+            "producer_step_id": "e1000000-0000-4000-8000-000000000093",
+            "name": "markdown"
           }
         },
         {
@@ -626,7 +900,7 @@
         {
           "name": "novel",
           "path": [
-            "novel"
+            "value"
           ]
         }
       ],
@@ -637,8 +911,7 @@
         "backoff_multiplier": 1.0,
         "maximum_delay_seconds": null
       },
-      "failure_policy": "fail_workflow",
-      "message": "Assembling the novel"
+      "failure_policy": "fail_workflow"
     }
   ],
   "result": {

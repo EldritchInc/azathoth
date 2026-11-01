@@ -26,8 +26,8 @@ from azathoth.workflows import (
     workflow_result,
 )
 from tests.examples.test_novel_revision_examples import (
-    ECHO_TOOL_DOCUMENT,
     NOVEL_EXAMPLES,
+    SELECT_TOOL_DOCUMENT,
     RoutingLanguageModel,
     generate_novel_candidate,
     read_tool,
@@ -187,7 +187,7 @@ def write_chapter(
     candidate = generate_novel_candidate(
         workflow,
         model,
-        read_tool(ECHO_TOOL_DOCUMENT),
+        read_tool(SELECT_TOOL_DOCUMENT),
         read_tool(PREPARE_TOOL_DOCUMENT),
         read_tool(FINALIZE_TOOL_DOCUMENT),
         stub_loop_tool(),
