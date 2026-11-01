@@ -131,7 +131,8 @@ Its reply is:
 
 - the text blocks of the reply's message, in order, joined; other blocks,
   such as reasoning, are not part of the answer;
-- the input, output and total tokens from `usage`;
+- the input and output tokens from `usage`, and their sum as the total,
+  as step metrics require;
 - the latency Bedrock reports, in `metrics.latencyMs`;
 - the cost, from the pricing document.
 

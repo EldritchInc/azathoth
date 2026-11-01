@@ -1,5 +1,10 @@
 """Language model provider abstractions."""
 
+from azathoth.providers.bedrock import (
+    BLOCKED_STOP_REASONS,
+    BedrockLanguageModel,
+    BedrockModelRegistryLoader,
+)
 from azathoth.providers.bedrock_client import (
     BedrockClient,
     BedrockClientError,
@@ -116,6 +121,9 @@ from azathoth.providers.sqlite_provider_observation_repository import (
 from azathoth.providers.sqlite_repository import SQLiteModelRepository
 
 __all__ = [
+    "BLOCKED_STOP_REASONS",
+    "BedrockLanguageModel",
+    "BedrockModelRegistryLoader",
     "BEDROCK_ENABLED_VARIABLE",
     "BEDROCK_PRICING_VARIABLE",
     "BEDROCK_PROVIDER",

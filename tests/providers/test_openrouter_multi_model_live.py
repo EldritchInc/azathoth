@@ -124,6 +124,7 @@ def test_multiple_openrouter_models_execute_live_from_one_registry() -> None:
             assert response.total_tokens == (response.prompt_tokens + response.completion_tokens)
 
             assert response.latency_ms >= 0
+            assert response.estimated_cost_usd is not None
             assert response.estimated_cost_usd >= 0.0
 
     asyncio.run(complete_all_models())
