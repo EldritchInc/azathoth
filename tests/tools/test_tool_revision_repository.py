@@ -22,6 +22,7 @@ from tests.cli.test_tool_import import (
     create_definition,
     create_document,
     create_implementation,
+    create_renamed_document,
     create_test_case,
 )
 
@@ -179,6 +180,49 @@ def test_conflicting_documents_change_nothing(
         assert repository.implementations() == (create_implementation(),)
         assert repository.latest_document_revision(TOOL_ID, "2.0.0") is None
         assert len(repository.document_revisions(TOOL_ID)) == 1
+
+
+@pytest.mark.parametrize("version", ["1.0.0", "2.0.0"])
+def test_a_document_cannot_rename_a_saved_tool(
+    tmp_path: Path,
+    version: str,
+) -> None:
+    for repository in create_repositories(tmp_path):
+        repository.save_document(create_document())
+
+        with pytest.raises(ValueError) as error:
+            repository.save_document(create_renamed_document(version))
+
+        assert str(error.value) == (
+            f"Tool {TOOL_ID} is named 'word_count'; a document cannot rename it to 'line_count'."
+        )
+        assert repository.definitions() == (create_definition(),)
+        assert repository.implementations() == (create_implementation(),)
+        assert len(repository.document_revisions(TOOL_ID)) == 1
+
+
+def test_a_document_cannot_rename_a_tool_saved_artifact_by_artifact(
+    tmp_path: Path,
+) -> None:
+    for repository in create_repositories(tmp_path):
+        repository.save_definition(create_definition())
+
+        with pytest.raises(ValueError, match="cannot rename it to 'line_count'"):
+            repository.save_document(create_renamed_document("1.0.0"))
+
+        assert repository.definitions() == (create_definition(),)
+
+
+def test_a_new_version_keeping_the_name_is_still_saved(
+    tmp_path: Path,
+) -> None:
+    for repository in create_repositories(tmp_path):
+        repository.save_document(create_document())
+
+        revision = repository.save_document(create_second_version_document())
+
+        assert revision.number == 1
+        assert revision.document.definition.version == "2.0.0"
 
 
 def test_versions_saved_artifact_by_artifact_become_first_revisions(

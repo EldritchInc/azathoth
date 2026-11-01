@@ -265,6 +265,33 @@ def create_changed_document() -> ToolDocument:
     )
 
 
+RENAMED_IMPLEMENTATION_ID = UUID("55555555-5555-5555-5555-555555555555")
+
+
+def create_renamed_document(
+    version: str,
+) -> ToolDocument:
+    """Create a different tool, `line_count`, that reuses this tool's ID at one version."""
+
+    return ToolDocument(
+        definition=create_definition().model_copy(
+            update={
+                "name": "line_count",
+                "description": "Count lines.",
+                "version": version,
+            },
+        ),
+        implementations=(
+            create_implementation().model_copy(
+                update={
+                    "id": RENAMED_IMPLEMENTATION_ID,
+                    "tool_version": version,
+                },
+            ),
+        ),
+    )
+
+
 def import_document(
     tmp_path: Path,
     document: ToolDocument,
@@ -506,3 +533,58 @@ def test_tool_import_rejects_a_test_case_of_another_tool(
 
     assert repository.definitions() == ()
     assert repository.implementations() == ()
+
+
+def test_tool_import_rejects_a_different_tool_that_reuses_a_tool_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    import_document(tmp_path, create_document())
+
+    capsys.readouterr()
+
+    result = import_document(tmp_path, create_renamed_document("1.0.0"), name="renamed.json")
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.out == ""
+    assert captured.err == (
+        f"Tool {TOOL_ID} is named 'word_count'; a document cannot rename it to 'line_count'.\n"
+    )
+
+    repository = SQLiteToolRepository(database)
+
+    assert repository.get_implementation(RENAMED_IMPLEMENTATION_ID) is None
+    assert len(repository.document_revisions(TOOL_ID)) == 1
+
+
+def test_the_cli_readme_documents_the_real_rename_message(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_database(database=tmp_path / "azathoth.db", monkeypatch=monkeypatch)
+
+    import_document(tmp_path, create_document())
+    import_document(tmp_path, create_renamed_document("1.0.0"), name="renamed.json")
+
+    message = capsys.readouterr().err.splitlines()[-1]
+
+    documented = (
+        message.replace(str(TOOL_ID), "<TOOL_ID>")
+        .replace("'word_count'", "'<NAME>'")
+        .replace("'line_count'", "'<NEW_NAME>'")
+    )
+
+    readme = Path(__file__).parents[2] / "src" / "azathoth" / "cli" / "README.md"
+
+    assert f"\n{documented}\n" in readme.read_text(encoding="utf-8")

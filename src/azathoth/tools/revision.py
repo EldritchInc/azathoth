@@ -152,17 +152,29 @@ def unrevisioned_document(
 def document_artifact_conflict(
     document: ToolDocument,
     *,
+    definitions: Iterable[ToolDefinition],
     implementations: Iterable[ToolImplementation],
     test_cases: Iterable[ToolTestCase],
 ) -> str | None:
-    """Return why a document's artifact IDs clash with current artifacts, if they do.
+    """Return why a document's IDs clash with current artifacts, if they do.
 
-    An implementation ID already used by another tool, or by another version
-    of the same tool, clashes. A test case ID already used by another tool
-    clashes; test cases may be shared by the versions of one tool.
+    A tool ID already saved under another name clashes, in any version: a
+    document never renames a tool, so a different tool that reuses an ID is
+    rejected rather than recorded as a revision of the tool it collides
+    with. An implementation ID already used by another tool, or by another
+    version of the same tool, clashes. A test case ID already used by
+    another tool clashes; test cases may be shared by the versions of one
+    tool.
     """
 
     definition = document.definition
+
+    for existing_definition in definitions:
+        if existing_definition.id == definition.id and existing_definition.name != definition.name:
+            return (
+                f"Tool {definition.id} is named {existing_definition.name!r}; "
+                f"a document cannot rename it to {definition.name!r}."
+            )
 
     current_implementations = {
         implementation.id: implementation for implementation in implementations

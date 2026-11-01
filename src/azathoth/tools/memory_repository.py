@@ -133,14 +133,16 @@ class InMemoryToolRepository:
         the document's artifacts are added or replaced in place.
 
         Raises:
-            ValueError: An artifact ID in the document belongs to another
-                tool, or an implementation ID to another version.
+            ValueError: The tool ID is saved under another name, an artifact
+                ID in the document belongs to another tool, or an
+                implementation ID to another version.
         """
 
         definition = document.definition
 
         conflict = document_artifact_conflict(
             document,
+            definitions=self._definitions.values(),
             implementations=self._implementations.values(),
             test_cases=self._test_cases.values(),
         )

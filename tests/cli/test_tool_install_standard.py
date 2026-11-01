@@ -294,6 +294,39 @@ def test_install_fails_when_another_tool_holds_a_standard_implementation_id(
     assert revision_numbers(database) == []
 
 
+def test_install_stops_at_a_different_tool_that_holds_a_standard_tool_id(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    select = standard_document("json_select")
+    (implementation,) = select.implementations
+
+    SQLiteToolRepository(database).save_document(
+        ToolDocument(
+            definition=select.definition.model_copy(update={"name": "countdown_step"}),
+            implementations=(implementation.model_copy(update={"id": OTHER_TOOL_ID}),),
+        )
+    )
+
+    assert install_standard_tools() == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.out == (
+        "Installed tool run_workflow@1.0.0 revision 1.\n"
+        "Installed tool loop_workflow@1.1.0 revision 1.\n"
+    )
+    assert captured.err == (
+        f"Tool {select.definition.id} is named 'countdown_step'; "
+        "a document cannot rename it to 'json_select'.\n"
+    )
+    assert revision_numbers(database) == [
+        ("run_workflow", 1),
+        ("loop_workflow", 1),
+        ("countdown_step", 1),
+    ]
+
+
 def test_main_dispatches_install_standard(
     database: Path,
     capsys: pytest.CaptureFixture[str],

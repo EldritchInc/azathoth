@@ -2905,14 +2905,19 @@ drops is no longer current, unless the latest revision of another version of
 the same tool still holds that test case. Re-importing an earlier document
 restores its artifacts exactly.
 
-A document is rejected, with nothing saved, when an implementation ID belongs
-to another tool or another version, or a test case ID belongs to another
+A document is rejected, with nothing saved, when its tool ID is already saved
+under another name, in any version, when an implementation ID belongs to
+another tool or another version, or when a test case ID belongs to another
 tool:
 
 ```text
+Tool <TOOL_ID> is named '<NAME>'; a document cannot rename it to '<NEW_NAME>'.
 Tool implementation <IMPLEMENTATION_ID> belongs to tool <TOOL_ID>@<VERSION>.
 Tool test case <TEST_CASE_ID> belongs to tool <TOOL_ID>.
 ```
+
+A tool's name is the capability workflows require, so a document never
+renames one: a different tool that reuses an ID needs an ID of its own.
 
 List every version's revisions, newest first, with:
 
@@ -2987,9 +2992,10 @@ digest with the latest revision of the same exact tool version:
   ```
 
 Nothing is edited in place, so the command is always safe to run again. The
-first document that cannot be saved, because an implementation ID in it
-belongs to another tool or version, stops the installation with the same
-message as `tool import`, and the command exits with status 1.
+first document that cannot be saved, because its tool ID holds another tool
+or an implementation ID in it belongs to another tool or version, stops the
+installation with the same message as `tool import`, and the command exits
+with status 1. The documents before it stay installed.
 
 A new Azathoth release may ship new versions of standard tools. Running the
 command after upgrading adds them beside the old ones, and workflows keep
