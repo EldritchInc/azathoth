@@ -16,7 +16,8 @@ This guide covers macOS and Windows. Each command is shown twice:
 On Linux, the macOS commands work unchanged.
 
 To work on Azathoth itself rather than use it, see
-[Contributing](../CONTRIBUTING.md) instead.
+[Contributing](../CONTRIBUTING.md) instead. To run Azathoth in a container,
+without installing Python, see [Running in a Container](container.md).
 
 ## What You Need
 

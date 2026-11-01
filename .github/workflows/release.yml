@@ -14,6 +14,9 @@ jobs:
     name: Build and check distributions
     runs-on: ubuntu-latest
 
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -108,3 +111,82 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+
+  publish-image:
+    name: Publish the container image
+    needs:
+      - build
+      - publish-pypi
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success'
+      && (needs.publish-pypi.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      IMAGE: ghcr.io/eldritchinc/azathoth
+      VERSION: ${{ needs.build.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Name the image's tags
+        id: tags
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE}:${VERSION}"
+            echo "${IMAGE}:${VERSION%.*}"
+            echo "${IMAGE}:latest"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the image for this runner
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: azathoth:release
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max
+
+      - name: Require the image to report the declared version
+        run: |
+          reported="$(docker run --rm azathoth:release --version)"
+          if [ "${reported}" != "azathoth ${VERSION}" ]; then
+            echo "The image reports ${reported}, not azathoth ${VERSION}." >&2
+            exit 1
+          fi
+
+      - name: Log in to the GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build for every architecture, and push on a tag
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max

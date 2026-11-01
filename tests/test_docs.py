@@ -18,6 +18,7 @@ USER_GUIDES = (
     "docs/openrouter.md",
     "docs/examples.md",
     "docs/getting-started.md",
+    "docs/container.md",
 )
 
 FENCE = re.compile(r"^\s*```(?P<language>\S*)\s*$")
