@@ -51,6 +51,12 @@ from azathoth.workflows.condition import (
     WorkflowConditionEvaluationError,
     WorkflowConditionOperator,
 )
+from azathoth.workflows.confidence import (
+    MAX_CONFIDENCE,
+    MIN_CONFIDENCE,
+    WorkflowStepConfidenceError,
+    step_confidence,
+)
 from azathoth.workflows.document import (
     WorkflowDocumentError,
     decode_workflow_document,
@@ -365,7 +371,9 @@ __all__ = [
     "SQLiteWorkflowRunFeedbackRepository",
     "SQLiteWorkflowRunRepository",
     "ToolStepSpecification",
+    "MAX_CONFIDENCE",
     "MAX_IDEMPOTENCY_KEY_LENGTH",
+    "MIN_CONFIDENCE",
     "REQUEST_DIGEST_PATTERN",
     "RUN_FAILURE_EVALUATOR_NAME",
     "RUN_FAILURE_EVALUATOR_VERSION",
@@ -456,6 +464,7 @@ __all__ = [
     "WorkflowSpecification",
     "WorkflowSpecificationRevision",
     "WorkflowStepAttempt",
+    "WorkflowStepConfidenceError",
     "WorkflowStepFailure",
     "WorkflowStepFinished",
     "WorkflowStepRun",
@@ -507,6 +516,7 @@ __all__ = [
     "require_workflow_run_repository",
     "resolve_named_value",
     "resolve_production_model_selection",
+    "step_confidence",
     "tool_usage_report",
     "validate_idempotency_key",
     "workflow_result",

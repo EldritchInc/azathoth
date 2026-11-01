@@ -47,6 +47,9 @@ class WorkflowCandidateStep:
 
     The message and value emission are carried unchanged from the step
     specification. They are presentation only and never affect execution.
+
+    The confidence, also carried unchanged, names the declared output the
+    step reports its confidence in (ADR 0098).
     """
 
     id: UUID
@@ -61,6 +64,7 @@ class WorkflowCandidateStep:
     failure_policy: WorkflowFailurePolicy = WorkflowFailurePolicy.FAIL_WORKFLOW
     message: str | None = None
     emit_values: bool = False
+    confidence: str | None = None
 
 
 @dataclass(frozen=True)

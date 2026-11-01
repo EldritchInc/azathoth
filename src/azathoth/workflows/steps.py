@@ -46,6 +46,10 @@ class WorkflowStepSpecification(BaseModel):
 
     A step that leaves them unset serializes without them, so its documents
     and content digests are unchanged.
+
+    The optional confidence names one of the step's declared outputs as the
+    step's confidence in what it produced (ADR 0098). A step without one
+    serializes without it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -71,6 +75,31 @@ class WorkflowStepSpecification(BaseModel):
     )
 
     emit_values: bool = False
+
+    confidence: str | None = Field(
+        default=None,
+        min_length=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_confidence_output(self) -> Self:
+        """Ensure a declared confidence names one of the step's declared outputs.
+
+        Raises:
+            ValueError: The confidence names an output the step does not
+                declare.
+        """
+
+        if self.confidence is None:
+            return self
+
+        if self.confidence not in {binding.name for binding in self.outputs}:
+            raise ValueError(
+                f"Workflow step {self.id} declares confidence {self.confidence!r}, "
+                "which is not one of its declared outputs."
+            )
+
+        return self
 
     @model_validator(mode="after")
     def validate_emitted_values(self) -> Self:
@@ -120,7 +149,7 @@ class WorkflowStepSpecification(BaseModel):
         self,
         handler: SerializerFunctionWrapHandler,
     ) -> dict[str, Any]:
-        """Serialize the step, omitting an unset message and disabled value emission."""
+        """Serialize the step, omitting unset presentation fields and confidence."""
 
         serialized: dict[str, Any] = handler(self)
 
@@ -129,5 +158,8 @@ class WorkflowStepSpecification(BaseModel):
 
         if not serialized.get("emit_values"):
             serialized.pop("emit_values", None)
+
+        if serialized.get("confidence") is None:
+            serialized.pop("confidence", None)
 
         return serialized
