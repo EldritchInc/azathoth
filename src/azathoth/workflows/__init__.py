@@ -275,6 +275,14 @@ from azathoth.workflows.sql_feedback_repository import (
     WORKFLOW_RUN_FEEDBACK_TABLES,
     SqlWorkflowRunFeedbackRepository,
 )
+from azathoth.workflows.sql_production_invocation_repository import (
+    PRODUCTION_INVOCATION_TABLES,
+    SqlProductionInvocationRepository,
+)
+from azathoth.workflows.sql_production_invocation_run_repository import (
+    PRODUCTION_INVOCATION_RUN_TABLES,
+    SqlProductionInvocationRunRepository,
+)
 from azathoth.workflows.sql_production_repository import (
     WORKFLOW_PRODUCTION_STATE_TABLES,
     SqlWorkflowProductionStateRepository,
@@ -368,6 +376,10 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "PRODUCTION_INVOCATION_RUN_TABLES",
+    "PRODUCTION_INVOCATION_TABLES",
+    "SqlProductionInvocationRepository",
+    "SqlProductionInvocationRunRepository",
     "WORKFLOW_PRODUCTION_REVISION_TABLES",
     "WORKFLOW_PRODUCTION_STATE_TABLES",
     "WORKFLOW_SPECIFICATION_TABLES",
