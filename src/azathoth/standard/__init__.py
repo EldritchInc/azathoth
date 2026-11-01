@@ -14,6 +14,9 @@ STANDARD_TOOL_FILES = (
     "json-object.json",
     "json-merge.json",
     "validate-json.json",
+    "chunk-text.json",
+    "join-text.json",
+    "render-template.json",
 )
 """The packaged tool documents, in the order they are installed."""
 

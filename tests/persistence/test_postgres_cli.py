@@ -35,6 +35,9 @@ INSTALLED = (
     "Installed tool json_object@1.0.0 revision 1.\n"
     "Installed tool json_merge@1.0.0 revision 1.\n"
     "Installed tool validate_json@1.0.0 revision 1.\n"
+    "Installed tool chunk_text@1.0.0 revision 1.\n"
+    "Installed tool join_text@1.0.0 revision 1.\n"
+    "Installed tool render_template@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
@@ -44,6 +47,9 @@ ALREADY_INSTALLED = (
     "Tool json_object@1.0.0 is already installed (revision 1).\n"
     "Tool json_merge@1.0.0 is already installed (revision 1).\n"
     "Tool validate_json@1.0.0 is already installed (revision 1).\n"
+    "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
+    "Tool join_text@1.0.0 is already installed (revision 1).\n"
+    "Tool render_template@1.0.0 is already installed (revision 1).\n"
 )
 
 

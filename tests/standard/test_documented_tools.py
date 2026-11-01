@@ -21,6 +21,16 @@ INSTALL_DOCUMENTS = (
     PROJECT_ROOT / "docs" / "container.md",
 )
 
+DATA_TOOL_PREFIXES = (
+    "json_select ",
+    "json_object ",
+    "json_merge ",
+    "validate_json ",
+    "chunk_text ",
+    "join_text ",
+    "render_template ",
+)
+
 TEXT_BLOCK = re.compile(r"```text\n(?P<body>.*?)```", re.DOTALL)
 
 #
@@ -90,6 +100,55 @@ DOCUMENTED_FAILURES: tuple[tuple[str, dict[str, JsonValue], int, str], ...] = (
         "validate_json could not resolve a reference in the schema: "
         "Unresolvable: https://example.com/story.json.",
     ),
+    (
+        "chunk_text",
+        {"text": "x", "max_characters": 0},
+        2,
+        "chunk_text needs 'max_characters' to be a whole number of at least 1.",
+    ),
+    (
+        "chunk_text",
+        {"text": "x", "max_characters": 4, "overlap_characters": 4},
+        2,
+        "chunk_text needs 'overlap_characters' to be a whole number from 0 to one less than "
+        "'max_characters'.",
+    ),
+    (
+        "join_text",
+        {"items": ["a", {"title": "b"}]},
+        2,
+        "join_text joins strings, or objects through an item_template; item $[1] is an object.",
+    ),
+    (
+        "join_text",
+        {"items": [{"title": "a"}, {"title": "b"}, {}], "item_template": "{title}"},
+        1,
+        "join_text found no value for {title} in item $[2].",
+    ),
+    (
+        "render_template",
+        {"template": "# {title}"},
+        2,
+        "render_template has no value for {title}.",
+    ),
+    (
+        "render_template",
+        {"template": "# {story.title}", "story": {"title": "x"}},
+        2,
+        "render_template allows only plain {name} placeholders; {story.title} is not one.",
+    ),
+    (
+        "render_template",
+        {"template": "a } b"},
+        2,
+        "render_template could not read the template: Single '}' encountered in format string.",
+    ),
+    (
+        "render_template",
+        {"template": "{template}"},
+        2,
+        "render_template reserves the name 'template' for the template itself.",
+    ),
 )
 
 
@@ -122,7 +181,7 @@ def test_every_message_the_readme_documents_is_pinned() -> None:
         line
         for block in text_blocks(STANDARD_README)
         for line in block.splitlines()
-        if line.startswith(("json_select ", "json_object ", "json_merge ", "validate_json "))
+        if line.startswith(DATA_TOOL_PREFIXES)
     }
 
     assert documented == pinned
@@ -179,3 +238,31 @@ def test_the_documented_second_init_reports_the_whole_library_installed() -> Non
 
 def test_the_readme_documents_the_real_missing_jsonschema_message() -> None:
     assert f"{IMPORT_MESSAGE}\n" in STANDARD_README.read_text(encoding="utf-8")
+
+
+def test_the_documented_chapter_template_renders_a_book() -> None:
+    text = STANDARD_README.read_text(encoding="utf-8")
+
+    (item_template,) = re.findall(r'"item_template", "source": \{"value": (".*?")\}', text)
+    (book_template,) = re.findall(r'"template", "source": \{"value": (".*?")\}', text)
+
+    chapters = run_standard_tool(
+        "join_text",
+        {
+            "items": [
+                {"number": 1, "title": "Dusk", "text": "The lamp was cold."},
+                {"number": 2, "title": "Dawn", "text": "The sea slept."},
+            ],
+            "item_template": json.loads(item_template),
+        },
+    )["text"]
+
+    assert run_standard_tool(
+        "render_template",
+        {"template": json.loads(book_template), "title": "The Keeper", "chapters": chapters},
+    ) == {
+        "text": (
+            "# The Keeper\n\n## Chapter 1: Dusk\n\nThe lamp was cold.\n\n"
+            "## Chapter 2: Dawn\n\nThe sea slept.\n"
+        )
+    }

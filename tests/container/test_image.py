@@ -157,6 +157,9 @@ def deployment(
             "Installed tool json_object@1.0.0 revision 1.",
             "Installed tool json_merge@1.0.0 revision 1.",
             "Installed tool validate_json@1.0.0 revision 1.",
+            "Installed tool chunk_text@1.0.0 revision 1.",
+            "Installed tool join_text@1.0.0 revision 1.",
+            "Installed tool render_template@1.0.0 revision 1.",
         ]
 
         for arguments in (

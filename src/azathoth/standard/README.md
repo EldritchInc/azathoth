@@ -9,14 +9,17 @@ The library holds two kinds of tool. The composition tools run other
 workflows, and the data-shaping tools reshape the values that pass between
 steps:
 
-| Tool            | Version | Implementation | Purpose                                     |
-| --------------- | ------- | -------------- | ------------------------------------------- |
-| `run_workflow`  | 1.0.0   | 1.0.3          | Run a child workflow once (ADR 0084).       |
-| `loop_workflow` | 1.1.0   | 1.1.3          | Run a child workflow repeatedly (ADR 0090). |
-| `json_select`   | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
-| `json_object`   | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
-| `json_merge`    | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
-| `validate_json` | 1.0.0   | 1.0.0          | Check a value against a JSON Schema.        |
+| Tool              | Version | Implementation | Purpose                                     |
+| ----------------- | ------- | -------------- | ------------------------------------------- |
+| `run_workflow`    | 1.0.0   | 1.0.3          | Run a child workflow once (ADR 0084).       |
+| `loop_workflow`   | 1.1.0   | 1.1.3          | Run a child workflow repeatedly (ADR 0090). |
+| `json_select`     | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
+| `json_object`     | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
+| `json_merge`      | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
+| `validate_json`   | 1.0.0   | 1.0.0          | Check a value against a JSON Schema.        |
+| `chunk_text`      | 1.0.0   | 1.0.0          | Split text into chunks of a size.           |
+| `join_text`       | 1.0.0   | 1.0.0          | Join strings, or rendered objects.          |
+| `render_template` | 1.0.0   | 1.0.0          | Render a text template from inputs.         |
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -56,8 +59,8 @@ to the child.
 
 The data-shaping tools turn one step's output into the next step's input:
 they pick a field out of a model's reply, gather values from several steps
-into one object, lay defaults under a request, or check that a reply has
-the shape the next step needs. Each one is a process
+into one object, lay defaults under a request, check that a reply has the
+shape the next step needs, split a long text, or put a document together. Each one is a process
 tool that runs its source with `python`, like the composition tools, but:
 
 - it grants itself no variables, so it sees only the base environment;
@@ -86,11 +89,11 @@ so every message is written to fit.
 
 `json_select` returns the value at `path` inside `value`, as `value`:
 
-| Input     | Required | Meaning                                              |
-| --------- | -------- | ---------------------------------------------------- |
-| `value`   | yes      | Any JSON value                                       |
-| `path`    | yes      | A list of object keys (strings) and list indexes     |
-| `default` | no       | The result when nothing is at `path`                 |
+| Input     | Required | Meaning                                          |
+| --------- | -------- | ------------------------------------------------ |
+| `value`   | yes      | Any JSON value                                   |
+| `path`    | yes      | A list of object keys (strings) and list indexes |
+| `default` | no       | The result when nothing is at `path`             |
 
 A path reads exactly like an output binding's: a string is an object key,
 and an integer is a list index, counting from the end when negative. An
@@ -238,6 +241,111 @@ container. Any other Python fails with status 2:
 validate_json needs the jsonschema package, which Azathoth installs; run it with the Python that runs Azathoth.
 ```
 
+### Templates
+
+`render_template` and `join_text` fill templates the way prompt templates
+are filled, so one template language covers prompts and text:
+
+- `{name}` is replaced by the value called `name`; `{{` and `}}` are literal
+  braces.
+- A string is inserted as it is. Any other value is inserted as compact JSON,
+  exactly as a prompt renders it: `{"title":"The Keeper"}`, `3`, `true`,
+  `null`.
+- Only plain names are placeholders. Fields, indexes, conversions and
+  format specifications, such as `{story.title}`, `{chapters[0]}`, `{n!r}`
+  or `{n:>3}`, fail with status 2; select a nested value with `json_select`
+  first.
+
+### chunk_text
+
+`chunk_text` splits `text` into `chunks`, each at most `max_characters`
+characters long:
+
+| Input                | Required | Meaning                                        |
+| -------------------- | -------- | ---------------------------------------------- |
+| `text`               | yes      | The text to split                              |
+| `max_characters`     | yes      | The most characters in one chunk, at least 1   |
+| `overlap_characters` | no       | How far a chunk reaches back into the last one |
+
+Characters are Unicode code points. No tokenizer is involved, so how many
+tokens a chunk is depends on the model that reads it; leave room for that
+when choosing `max_characters`.
+
+Each chunk ends at the last boundary in the second half of its allowed
+length, in this order of preference: a paragraph break, a line break, the
+end of a sentence, any whitespace. A chunk with none of these is cut at
+exactly `max_characters`. The boundary stays at the end of the chunk before
+it, so without overlap `join_text` with an empty `separator` gives back the
+text exactly. Empty text gives no chunks.
+
+With `overlap_characters`, each chunk starts that many characters before the
+previous one ended, by characters and not at a boundary, so a chunk can
+start inside a word. A chunk always starts after the one before it.
+
+`max_characters` must be a whole number of at least 1, and
+`overlap_characters` a whole number from 0 to one less than
+`max_characters`; anything else fails with status 2:
+
+```text
+chunk_text needs 'max_characters' to be a whole number of at least 1.
+chunk_text needs 'overlap_characters' to be a whole number from 0 to one less than 'max_characters'.
+```
+
+### join_text
+
+`join_text` joins `items` into one `text`:
+
+| Input           | Required | Meaning                                             |
+| --------------- | -------- | --------------------------------------------------- |
+| `items`         | yes      | An array of strings, or of objects with a template  |
+| `separator`     | no       | What goes between items; two line breaks by default |
+| `item_template` | no       | A template each object is rendered through          |
+
+Without `item_template`, every item must be a string. With it, every item
+must be an object, and each is rendered from its own fields. This renders a
+book's chapters:
+
+```json
+{"name": "item_template", "source": {"value": "## Chapter {number}: {title}\n\n{text}"}}
+```
+
+An item that is the wrong kind fails with status 2, and an object that lacks
+a field the template names fails with status 1, naming the item by its JSON
+path:
+
+```text
+join_text joins strings, or objects through an item_template; item $[1] is an object.
+join_text found no value for {title} in item $[2].
+```
+
+### render_template
+
+`render_template` renders `template` from the step's other inputs into
+`text`. Every input other than `template` is a value the template may use,
+and the ones it does not use are ignored. This step puts a book together:
+
+```json
+{
+  "specification": {"requirement": {"name": "render_template", "version": "1.0.0", "runtime": "process"}},
+  "inputs": [
+    {"name": "template", "source": {"value": "# {title}\n\n{chapters}\n"}},
+    {"name": "title", "source": {"producer_step_id": "<PLAN STEP ID>", "name": "title"}},
+    {"name": "chapters", "source": {"producer_step_id": "<JOIN STEP ID>", "name": "text"}}
+  ],
+  "outputs": [{"name": "markdown", "path": ["text"]}]
+}
+```
+
+A placeholder with no input of its name fails with status 2, and so does a
+template that is not one:
+
+```text
+render_template has no value for {title}.
+render_template allows only plain {name} placeholders; {story.title} is not one.
+render_template could not read the template: Single '}' encountered in format string.
+render_template reserves the name 'template' for the template itself.
+```
+
 ## Installing
 
 The library reaches a database through the CLI:
@@ -284,6 +392,9 @@ Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
 Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 A database that already holds implementations 1.0.1 and 1.1.1 gets 1.0.3 and

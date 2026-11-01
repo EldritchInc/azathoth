@@ -305,6 +305,9 @@ Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
 Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 `init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
@@ -323,6 +326,9 @@ Tool json_select@1.0.0 is already installed (revision 1).
 Tool json_object@1.0.0 is already installed (revision 1).
 Tool json_merge@1.0.0 is already installed (revision 1).
 Tool validate_json@1.0.0 is already installed (revision 1).
+Tool chunk_text@1.0.0 is already installed (revision 1).
+Tool join_text@1.0.0 is already installed (revision 1).
+Tool render_template@1.0.0 is already installed (revision 1).
 ```
 
 A database that cannot be opened, for example because the path is a
@@ -343,6 +349,9 @@ Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
 Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 It is the only command that creates a PostgreSQL schema. Several processes
@@ -2950,12 +2959,15 @@ one version, so each such revision holds every test case of its tool.
 Azathoth ships a standard tool library inside the package (ADR 0095):
 
 ```text
-run_workflow   1.0.0   run a child workflow once
-loop_workflow  1.1.0   run a child workflow repeatedly
-json_select    1.0.0   select one value from JSON by path
-json_object    1.0.0   build one object from a step's inputs
-json_merge     1.0.0   deep-merge one object into another
-validate_json  1.0.0   check a value against a JSON Schema
+run_workflow     1.0.0   run a child workflow once
+loop_workflow    1.1.0   run a child workflow repeatedly
+json_select      1.0.0   select one value from JSON by path
+json_object      1.0.0   build one object from a step's inputs
+json_merge       1.0.0   deep-merge one object into another
+validate_json    1.0.0   check a value against a JSON Schema
+chunk_text       1.0.0   split text into chunks of a size
+join_text        1.0.0   join strings, or rendered objects, into one text
+render_template  1.0.0   render a text template from a step's inputs
 ```
 
 The [standard tool library](../standard/README.md) describes each tool's inputs, outputs
@@ -2974,6 +2986,9 @@ Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
 Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 For each standard document, in that order, the command compares its content
@@ -3019,6 +3034,9 @@ Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
 Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 # Trace Tool Usage

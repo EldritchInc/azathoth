@@ -1,0 +1,57 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000006",
+    "name": "join_text",
+    "description": "Join a list of strings, or of objects rendered through an item template, into one text with a separator.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array"
+          },
+          "separator": {
+            "type": "string"
+          },
+          "item_template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000066",
+      "tool_id": "c2000000-0000-4000-8000-000000000006",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Join a list of items into one text.\n\nWithout `item_template`, every item must be a string, and the items are\njoined with `separator`, two line breaks unless the step gives another.\n\nWith `item_template`, every item must be an object, and each is first\nrendered through the template from its own fields. The template uses the\nsame placeholders as prompt templates: `{name}` is replaced by the item's\nfield `name`, and `{{` and `}}` are literal braces. A string is inserted as\nit is, and any other value as compact JSON. Only plain names are allowed.\n\"\"\"\n\nimport json\nimport string\nimport sys\n\nTOOL = \"join_text\"\nINPUTS = (\"items\", \"separator\", \"item_template\")\nDEFAULT_SEPARATOR = \"\\n\\n\"\nTYPE_NAMES = (\n    (dict, \"an object\"),\n    (list, \"an array\"),\n    (str, \"a string\"),\n    (bool, \"a boolean\"),\n    (int, \"a number\"),\n    (float, \"a number\"),\n)\n\n\ndef fail(status, message):\n    sys.stderr.write(message)\n    sys.exit(status)\n\n\ndef read_inputs():\n    inputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\n    for name in inputs:\n        if name not in INPUTS:\n            fail(2, f\"{TOOL} does not take the input {name!r}.\")\n\n    if \"items\" not in inputs:\n        fail(2, f\"{TOOL} needs the input 'items'.\")\n\n    return inputs\n\n\ndef type_name(value):\n    for kind, name in TYPE_NAMES:\n        if isinstance(value, kind):\n            return name\n\n    return \"null\"\n\n\ndef parse(template):\n    try:\n        pieces = list(string.Formatter().parse(template))\n    except ValueError as error:\n        fail(2, f\"{TOOL} could not read the item template: {error}.\")\n\n    for _, name, spec, conversion in pieces:\n        if name is None:\n            continue\n\n        if not name.isidentifier() or spec or conversion is not None:\n            shown = \"{\" + name + (\"!\" + conversion if conversion else \"\")\n            shown = shown + (\":\" + spec if spec else \"\") + \"}\"\n            fail(2, f\"{TOOL} allows only plain {{name}} placeholders; {shown} is not one.\")\n\n    return pieces\n\n\ndef render_value(value):\n    if isinstance(value, str):\n        return value\n\n    return json.dumps(value, ensure_ascii=False, separators=(\",\", \":\"))\n\n\ndef render(pieces, item, index):\n    parts = []\n\n    for literal, name, _, _ in pieces:\n        parts.append(literal)\n\n        if name is None:\n            continue\n\n        if name not in item:\n            fail(1, f\"{TOOL} found no value for {{{name}}} in item $[{index}].\")\n\n        parts.append(render_value(item[name]))\n\n    return \"\".join(parts)\n\n\ninputs = read_inputs()\nitems = inputs[\"items\"]\nseparator = inputs.get(\"separator\", DEFAULT_SEPARATOR)\ntemplated = \"item_template\" in inputs\n\nif not isinstance(items, list):\n    fail(2, f\"{TOOL} needs 'items' to be an array.\")\n\nif not isinstance(separator, str):\n    fail(2, f\"{TOOL} needs 'separator' to be a string.\")\n\nif not templated:\n    for index, item in enumerate(items):\n        if not isinstance(item, str):\n            fail(\n                2,\n                f\"{TOOL} joins strings, or objects through an item_template; \"\n                f\"item $[{index}] is {type_name(item)}.\",\n            )\n\n    texts = items\nelse:\n    template = inputs[\"item_template\"]\n\n    if not isinstance(template, str):\n        fail(2, f\"{TOOL} needs 'item_template' to be a string.\")\n\n    pieces = parse(template)\n    texts = []\n\n    for index, item in enumerate(items):\n        if not isinstance(item, dict):\n            fail(\n                2,\n                f\"{TOOL} fills its item_template from objects; \"\n                f\"item $[{index}] is {type_name(item)}.\",\n            )\n\n        texts.append(render(pieces, item, index))\n\nresult = separator.join(texts)\n\nsys.stdout.buffer.write(json.dumps({\"text\": result}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}
