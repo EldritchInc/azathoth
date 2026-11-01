@@ -118,6 +118,7 @@ def generate_workflow_candidate(
                 failure_policy=workflow_step.failure_policy,
                 message=workflow_step.message,
                 emit_values=workflow_step.emit_values,
+                confidence=workflow_step.confidence,
             )
         )
 

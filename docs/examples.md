@@ -67,7 +67,7 @@ everything it needs, even when an earlier example already did.
 | 2 | Classify sentiment | The whole lifecycle: run, benchmark, optimize, promote, invoke | Yes | No | Only for the semantic benchmark |
 | 3 | Child workflow | One workflow calling another | No | The child | — |
 | 4 | Countdown loop | Repeating a child workflow | No | The loop body | — |
-| 5 | Ticket triage | Conditional routing, a cheaper classifier | Yes | No | Only for the triage benchmark |
+| 5 | Ticket triage | Conditional routing, a cheaper classifier, escalating when unsure | Yes | No | Only for the triage benchmark |
 | 6 | Workflow writer | JSON replies, a validator tool, one repair pass | Yes | No | Yes |
 | 7 | Code review | Concurrent reviewers, a merge done by code | Yes | No | Yes |
 | 8 | Novel | Nested loops, conditional revision, long runs | Yes, including a 200,000-token context window | Three loop bodies | Yes |
@@ -323,6 +323,23 @@ azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f100
 azathoth benchmark import examples/ticket-triage/benchmarks/classify-ticket.json
 azathoth workflow optimize f1000000-0000-4000-8000-000000000010 --benchmark f1000000-0000-4000-8000-000000000050 --target-latency 5 --target-cost 0.001
 ```
+
+A cheap classifier can also hand the tickets it is unsure of to a stronger
+model. `classify-ticket-escalating.json` declares the cheap step's confidence
+and runs an escalation step only when it is below 0.8 (ADR 0098). Compare it
+with the plain classifier on the same benchmark:
+
+```bash
+azathoth workflow import examples/ticket-triage/workflows/classify-ticket-escalating.json
+azathoth benchmark compare f1000000-0000-4000-8000-000000000050 --workflow f1000000-0000-4000-8000-000000000010 --workflow f1000000-0000-4000-8000-000000000070 --target-latency 5 --target-cost 0.001
+```
+
+```powershell
+azathoth workflow import examples/ticket-triage/workflows/classify-ticket-escalating.json
+azathoth benchmark compare f1000000-0000-4000-8000-000000000050 --workflow f1000000-0000-4000-8000-000000000010 --workflow f1000000-0000-4000-8000-000000000070 --target-latency 5 --target-cost 0.001
+```
+
+See [Escalating When Unsure](../examples/ticket-triage/README.md#escalating-when-unsure).
 
 The whole-triage benchmark has semantic cases, so it needs a judge:
 

@@ -878,12 +878,14 @@ Each line is one JSON object with a `type`:
 ```text
 {"type": "step", "step_id": "<STEP_ID>", "message": "Counting words"}
 {"type": "output", "step_id": "<STEP_ID>", "values": {"count": 4}}
+{"type": "output", "step_id": "<STEP_ID>", "values": {"category": "billing", "confidence": 0.62}, "confidence": 0.62}
 {"type": "result", "run_id": "<RUN_ID>", "value": 4}
 {"type": "error", "run_id": "<RUN_ID>", "code": "workflow_execution_failed", ...}
 ```
 
 - `step` is written when a step that declares a `message` starts.
-- `output` is written when a step that sets `emit_values` succeeds.
+- `output` is written when a step that sets `emit_values` succeeds. A step
+  that declares a confidence (ADR 0098) also carries it as `confidence`.
 - Failed and skipped steps write nothing after their `step` record.
 - The stream ends with exactly one `result` or `error` record.
 
@@ -1076,6 +1078,19 @@ azathoth run show <RUN_ID>
 The run is rendered exactly as `workflow run` rendered it: identity, status,
 statistics, and per-step evidence, followed by every feedback record for that
 run, oldest first.
+
+A step that declares a confidence (ADR 0098) names it after its strategy:
+
+```text
+Strategy: Classify ticket cheaply [<PROVIDER>/<MODEL>]
+Confidence: 0.62
+```
+
+`workflow show` names the output a step reports as its confidence:
+
+```text
+Confidence Output: confidence
+```
 
 Each executed step also lists the resources its strategy bound:
 

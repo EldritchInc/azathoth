@@ -25,7 +25,12 @@ class WorkflowStepStatus(StrEnum):
 
 
 class WorkflowStepRun(BaseModel):
-    """The recorded result of one workflow step."""
+    """The recorded result of one workflow step.
+
+    A step that declares a confidence and succeeds records it, from 0 to 1
+    (ADR 0098). Skipped and failed steps record none, and runs recorded
+    before step confidence load with none.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -35,6 +40,11 @@ class WorkflowStepRun(BaseModel):
     execution: ExecutionResult | None = None
     attempts: tuple[WorkflowStepAttempt, ...] = ()
     values: tuple[WorkflowValue, ...] = ()
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
 
     @model_validator(mode="after")
     def validate_execution_status(self) -> "WorkflowStepRun":
@@ -78,6 +88,9 @@ class WorkflowStepRun(BaseModel):
             if self.values:
                 raise ValueError("Failed workflow steps cannot produce workflow values.")
 
+            if self.confidence is not None:
+                raise ValueError("Failed workflow steps cannot record a confidence.")
+
         if self.status is WorkflowStepStatus.SKIPPED:
             if self.execution is not None:
                 raise ValueError("Skipped workflow steps cannot include an execution result.")
@@ -87,6 +100,9 @@ class WorkflowStepRun(BaseModel):
 
             if self.values:
                 raise ValueError("Skipped workflow steps cannot produce workflow values.")
+
+            if self.confidence is not None:
+                raise ValueError("Skipped workflow steps cannot record a confidence.")
 
         return self
 

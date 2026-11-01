@@ -67,13 +67,19 @@ def _append_execution(
     lines: list[str],
     step: WorkflowStepRun,
 ) -> None:
-    """Append successful execution evidence for one workflow step."""
+    """Append successful execution evidence for one workflow step.
+
+    A step that recorded a confidence names it after its strategy (ADR 0098).
+    """
 
     execution = step.execution
 
     assert execution is not None
 
     lines.append(f"Strategy: {execution.strategy_name}")
+
+    if step.confidence is not None:
+        lines.append(f"Confidence: {step.confidence}")
 
     metrics = execution.metrics
 

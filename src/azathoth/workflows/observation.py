@@ -25,8 +25,9 @@ class WorkflowStepStarted:
 class WorkflowStepFinished:
     """A workflow step reached its final status.
 
-    An executed step carries its declared values. A failed step carries the
-    failure of its final attempt. A skipped step carries neither.
+    An executed step carries its declared values, and its confidence when it
+    declares one (ADR 0098). A failed step carries the failure of its final
+    attempt. A skipped step carries neither.
     """
 
     step: WorkflowCandidateStep
@@ -34,6 +35,7 @@ class WorkflowStepFinished:
     status: WorkflowStepStatus
     values: tuple[WorkflowValue, ...] = ()
     failure: WorkflowStepFailure | None = None
+    confidence: float | None = None
 
 
 WorkflowRunEvent = WorkflowStepStarted | WorkflowStepFinished

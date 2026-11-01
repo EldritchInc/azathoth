@@ -492,6 +492,47 @@ Failure handling is represented by `WorkflowFailurePolicy`.
 These policies affect execution but remain separate from the resulting
 `WorkflowRun` evidence.
 
+## Step Confidence
+
+A step may name one of its declared outputs as its confidence (ADR 0098):
+
+```json
+"outputs": [{"name": "category", "path": ["category"]}, {"name": "confidence", "path": ["confidence"]}],
+"confidence": "confidence"
+```
+
+A name the step does not declare makes the specification invalid. A step
+without `confidence` serializes without it, so digests are unchanged.
+
+On every attempt, after the outputs resolve, `step_confidence` checks the
+value: a JSON number from 0 to 1, integers included, booleans refused.
+Anything else fails the attempt with `WorkflowStepConfidenceError`, retried
+under the step's retry policy like an output that does not resolve:
+
+```text
+Workflow step <STEP_ID> confidence 'confidence' must be a number from 0 to 1; got 1.5.
+```
+
+A step that succeeds records its confidence on its `WorkflowStepRun`, on its
+`WorkflowStepFinished` event, and on every event it adds to the workflow's
+context. Skipped and failed steps, and steps without a declared confidence,
+record none.
+
+Escalation is composed, not built in. A step that backs another up:
+
+- is conditioned on the first step's confidence, for example `less_than` 0.8;
+- produces the same output names;
+- is declared before the first step in the workflow's step order.
+
+A value read by name comes from the first step in declared order that
+produced it (ADR 0080), so consumers get the escalation step's value when it
+ran and the first step's when it was skipped. The escalation step is an
+ordinary step, so optimization, production model resolution, usage guards and
+cost evidence all apply to it unchanged.
+
+A confidence is only as good as whatever reports it, and Azathoth does not
+calibrate it. Benchmarks show whether an escalation threshold helps.
+
 ## Evaluation and Evidence
 
 Workflow execution evidence can be evaluated independently of execution.
