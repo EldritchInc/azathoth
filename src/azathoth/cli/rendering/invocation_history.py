@@ -59,7 +59,11 @@ def render_production_invocation(
     result: ProductionInvocationResult | None,
     run_id: UUID | None,
 ) -> str:
-    """Render the full recorded history of one production invocation."""
+    """Render the full recorded history of one production invocation.
+
+    An invocation started through a job envelope names its idempotency key
+    and request digest (ADR 0097).
+    """
 
     lines = [
         f"Invocation ID: {invocation.id}",
@@ -68,6 +72,14 @@ def render_production_invocation(
         f"Outcome: {production_invocation_outcome(result)}",
         f"Run ID: {run_id if run_id is not None else NO_RUN_MARKER}",
     ]
+
+    if invocation.idempotency is not None:
+        lines.extend(
+            (
+                f"Idempotency Key: {invocation.idempotency.key}",
+                f"Request Digest: {invocation.idempotency.request_digest}",
+            )
+        )
 
     if invocation.caller_metadata:
         lines.extend(
