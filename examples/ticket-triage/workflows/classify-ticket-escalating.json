@@ -1,0 +1,192 @@
+{
+  "metadata": {
+    "id": "f1000000-0000-4000-8000-000000000070",
+    "name": "classify ticket, escalating when unsure",
+    "description": "Classify one support ticket on a cheap model, and hand it to a stronger model only when the cheap one is not sure. The escalation step is declared first, so its category is the one read whenever it ran.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000072",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000082",
+          "name": "Escalate ticket classification",
+          "description": "Classify a ticket the cheap classifier was unsure about, on a stronger model.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You are a senior support lead. A first classifier was unsure how to triage this customer support ticket.\n\nThe ticket, as JSON:\n{ticket}\n\nThe first classifier's guess at its category: {first_category}\n\nClassify it yourself; the guess may be wrong. The category is exactly one of: billing (charges, refunds, invoices, plans), technical (errors, bugs, outages, integrations), account (signing in, passwords, profile, access, deletion) or other. The urgency is low, normal or high: high when the customer cannot work at all, is losing money, or reports a security problem. Reply with one JSON object and no other text:\n\n{{\"category\": \"billing\", \"urgency\": \"normal\", \"summary\": \"<one sentence>\"}}",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            },
+            {
+              "variable_name": "first_category",
+              "input_name": "first_category"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [
+        "f1000000-0000-4000-8000-000000000071"
+      ],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "first_category",
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000071",
+            "name": "category"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "category",
+          "path": [
+            "category"
+          ]
+        },
+        {
+          "name": "urgency",
+          "path": [
+            "urgency"
+          ]
+        },
+        {
+          "name": "summary",
+          "path": [
+            "summary"
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "source": {
+            "producer_step_id": "f1000000-0000-4000-8000-000000000071",
+            "name": "confidence"
+          },
+          "operator": "less_than",
+          "expected": 0.8
+        }
+      ],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000071",
+      "specification": {
+        "metadata": {
+          "id": "f1000000-0000-4000-8000-000000000081",
+          "name": "Classify ticket cheaply",
+          "description": "Classify a support ticket's category and urgency, summarize it, and say how sure it is.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "You triage customer support tickets.\n\nThe ticket, as JSON:\n{ticket}\n\nClassify it. The category is exactly one of: billing (charges, refunds, invoices, plans), technical (errors, bugs, outages, integrations), account (signing in, passwords, profile, access, deletion) or other. The urgency is low, normal or high: high when the customer cannot work at all, is losing money, or reports a security problem. The confidence is how sure you are of the category, from 0 to 1: below 0.8 when the ticket could fairly belong to more than one category, or says too little to tell. Reply with one JSON object and no other text:\n\n{{\"category\": \"billing\", \"urgency\": \"normal\", \"summary\": \"<one sentence>\", \"confidence\": 0.9}}",
+          "bindings": [
+            {
+              "variable_name": "ticket",
+              "input_name": "ticket"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": 0.5,
+            "maximum_output_usd_per_million_tokens": 1.5,
+            "require_known_pricing": true
+          }
+        },
+        "output_format": "json"
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "ticket",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "category",
+          "path": [
+            "category"
+          ]
+        },
+        {
+          "name": "urgency",
+          "path": [
+            "urgency"
+          ]
+        },
+        {
+          "name": "summary",
+          "path": [
+            "summary"
+          ]
+        },
+        {
+          "name": "confidence",
+          "path": [
+            "confidence"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "confidence": "confidence"
+    }
+  ],
+  "result": {
+    "name": "category"
+  }
+}
