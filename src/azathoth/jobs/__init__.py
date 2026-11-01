@@ -31,6 +31,14 @@ from azathoth.jobs.envelope import (
     job_result_from_invocation,
     rejected_job_result,
 )
+from azathoth.jobs.service import (
+    JobInvoker,
+    recorded_job_result,
+    run_invoke_job,
+    run_job,
+    run_job_content,
+    runtime_job_invoker,
+)
 
 __all__ = [
     "DIGEST_EXCLUDED_FIELDS",
@@ -45,6 +53,7 @@ __all__ = [
     "InvokeJobRequest",
     "JobError",
     "JobErrorCode",
+    "JobInvoker",
     "JobKind",
     "JobRequestError",
     "JobResult",
@@ -57,5 +66,10 @@ __all__ = [
     "job_result_from_invocation",
     "parse_job_request",
     "readable_idempotency_key",
+    "recorded_job_result",
     "rejected_job_result",
+    "run_invoke_job",
+    "run_job",
+    "run_job_content",
+    "runtime_job_invoker",
 ]
