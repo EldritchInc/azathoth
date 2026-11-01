@@ -328,9 +328,20 @@ steps of one layer interleave. Skipped steps and steps whose inputs did not
 resolve finish without starting. Each event carries the candidate step,
 including its message and value emission.
 
+A finished executed or failed step also carries every attempt it made, and
+an executed step its final execution, with the model, tokens and cost it
+reported, so an observer can report what a step cost and how often it was
+retried.
+
 Observation never changes recorded evidence. The runner discards anything an
 observer raises, so a failing progress printer can never become a step
 failure or cost a run its evidence.
+
+`combine_observers(*observers)` lets several observers watch one run, such
+as a progress printer and a tracer (ADR 0100). It drops absent ones, and
+returns `None` when none is left, or the observer itself when one is. A
+`CombinedRunObserver` delivers each event to every observer in order, and
+one that raises never keeps an event from the rest.
 
 ## Values and Data Flow
 

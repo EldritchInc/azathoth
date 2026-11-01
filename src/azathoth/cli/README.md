@@ -238,6 +238,9 @@ AZATHOTH_DATABASE
 OPENROUTER_API_KEY
 ```
 
+Azathoth 1.1 adds `AZATHOTH_OTEL`, which turns tracing on (see
+[Tracing](#tracing)).
+
 # AZATHOTH_DATABASE
 
 `AZATHOTH_DATABASE` selects the SQLite database used for durable Azathoth
@@ -310,6 +313,42 @@ The credential is used when CLI runtime composition requires current OpenRouter
 model state and executable OpenRouter model implementations.
 
 It is not persisted as workflow configuration.
+
+# Tracing
+
+`workflow run`, `workflow invoke` and `job run` are traced with
+OpenTelemetry when `AZATHOTH_OTEL` is set and the `otel` extra is installed
+(ADR 0100):
+
+```bash
+python -m pip install "azathoth-ai[otel]"
+export AZATHOTH_OTEL=1
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+The rest is OpenTelemetry's standard `OTEL_*` configuration. Each command
+exports one trace:
+
+```text
+job run            azathoth.job > azathoth.invocation > azathoth.run > azathoth.step
+workflow invoke    azathoth.invocation > azathoth.run > azathoth.step
+workflow run       azathoth.run > azathoth.step
+```
+
+Tracing is configured before a command does anything else. When it cannot
+be, the command runs nothing, prints why on stderr and exits with status 1;
+`job run` then prints no result at all:
+
+```text
+AZATHOTH_OTEL is set, but OpenTelemetry is not installed; install azathoth-ai[otel].
+```
+
+Spans are flushed before the command exits, and a backend that cannot be
+reached never changes its exit status or stdout. Spans carry no content:
+the telemetry README lists every span and attribute.
+
+Other commands, benchmark runs and optimization among them, are not traced
+in 1.1.
 
 # Durable Configuration Versus Process Configuration
 
@@ -2308,7 +2347,9 @@ No other key is accepted.
 ## Job Results
 
 `job run` prints exactly one result, as one line of JSON on stdout, and
-nothing else, whatever happens:
+nothing else, whatever the request. The one exception is tracing that cannot
+be configured (see [Tracing](#tracing)): the command then prints no result,
+because it never reads the request.
 
 ```json
 {"kind": "invoke", "version": 1, "idempotency_key": "order-4711-review", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve"}}, "error": null}
@@ -2835,8 +2876,9 @@ the exact versions they require. `azathoth init` runs the same installation.
 
 Azathoth 1.1 also ships new revisions of `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` that grant the environment their child process needs
-(ADR 0099). A database that installed them before 1.1 runs child workflows
-only after the command runs again:
+(ADR 0099), including the tracing configuration (ADR 0100). A database that
+installed them before 1.1 runs child workflows only after the command runs
+again:
 
 ```text
 Installed tool run_workflow@1.0.0 revision 2.

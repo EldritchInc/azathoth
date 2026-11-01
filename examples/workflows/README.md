@@ -186,7 +186,9 @@ The tool runs the child with its own Python interpreter
 `PATH`. Process tools see only the environment they grant themselves (ADR
 0099); the tool grants `AZATHOTH_DATABASE`, `OPENROUTER_API_KEY` and
 `AZATHOTH_WORKFLOW_DEPTH`, so the child uses the same database and provider
-as its parent.
+as its parent. It also grants `AZATHOTH_OTEL` and `OTEL_*`, so with tracing
+on, the child continues the parent's trace under the step that started it
+(ADR 0100).
 
 Two guards keep children bounded:
 

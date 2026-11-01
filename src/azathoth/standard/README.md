@@ -9,17 +9,26 @@ The library holds the two composition tools:
 
 | Tool            | Version | Implementation | Purpose                                     |
 | --------------- | ------- | -------------- | ------------------------------------------- |
-| `run_workflow`  | 1.0.0   | 1.0.1          | Run a child workflow once (ADR 0084).       |
-| `loop_workflow` | 1.1.0   | 1.1.1          | Run a child workflow repeatedly (ADR 0090). |
+| `run_workflow`  | 1.0.0   | 1.0.2          | Run a child workflow once (ADR 0084).       |
+| `loop_workflow` | 1.1.0   | 1.1.2          | Run a child workflow repeatedly (ADR 0090). |
 
 Both run `azathoth workflow invoke` in a child process, so both grant
-themselves the variables it needs (ADR 0099):
+themselves the variables it needs (ADR 0099), and the tracing configuration
+it needs to continue a trace (ADR 0100):
 
 ```json
-"environment": ["AZATHOTH_DATABASE", "OPENROUTER_API_KEY", "AZATHOTH_WORKFLOW_DEPTH"]
+"environment": [
+  "AZATHOTH_DATABASE",
+  "OPENROUTER_API_KEY",
+  "AZATHOTH_WORKFLOW_DEPTH",
+  "AZATHOTH_OTEL",
+  "OTEL_*"
+]
 ```
 
-No other variable outside the base environment reaches them.
+No other variable outside the base environment reaches them. When their step
+is traced, the engine also gives them its `TRACEPARENT`, which they pass on
+to the child.
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -53,18 +62,25 @@ version with a new implementation ID, because an implementation ID belongs to
 one tool version only, and workflows keep requiring the exact versions they
 name.
 
-There has been one exception. When process tools stopped inheriting
-Azathoth's environment (ADR 0099), `run_workflow@1.0.0` and
+There has been one exception, made twice in 1.1. When process tools stopped
+inheriting Azathoth's environment (ADR 0099), `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` gained their grants as the next revision of the same
 versions, implementations 1.0.1 and 1.1.1, because without grants no
-existing workflow could run a child at all. A database that installed the
-library before that runs `azathoth tool install-standard`, or
-`azathoth init`, once to pick them up:
+existing workflow could run a child at all. When tracing arrived (ADR 0100),
+they gained `AZATHOTH_OTEL` and `OTEL_*` the same way, as implementations
+1.0.2 and 1.1.2, so a child continues its parent's trace.
+
+A database that installed the library from Azathoth 1.0 runs
+`azathoth tool install-standard`, or `azathoth init`, once to pick up the
+current revisions:
 
 ```text
 Installed tool run_workflow@1.0.0 revision 2.
 Installed tool loop_workflow@1.1.0 revision 2.
 ```
+
+A database that already holds implementations 1.0.1 and 1.1.1 gets 1.0.2 and
+1.1.2 as revision 3 the same way.
 
 A tool belongs here when it is pure Python, deterministic, works on Windows,
 needs no network, and has no side effects outside its inputs. The
