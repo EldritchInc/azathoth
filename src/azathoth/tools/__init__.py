@@ -19,6 +19,11 @@ from azathoth.tools.document import (
     decode_tool_document,
     encode_tool_document,
 )
+from azathoth.tools.environment import (
+    POSIX_BASE_ENVIRONMENT,
+    WINDOWS_BASE_ENVIRONMENT,
+    process_tool_environment,
+)
 from azathoth.tools.exceptions import (
     ToolEntrypointError,
     ToolExecutionError,
@@ -71,9 +76,11 @@ __all__ = [
     "PROCESS_STDERR_TAIL_CHARACTERS",
     "ENVIRONMENT_GRANT_PATTERN",
     "ENVIRONMENT_PREFIX_WILDCARD",
+    "POSIX_BASE_ENVIRONMENT",
     "PROCESS_TOOL_RUNTIME",
     "PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE",
     "PYTHON_TOOL_RUNTIME",
+    "WINDOWS_BASE_ENVIRONMENT",
     "ProcessToolExecutor",
     "PythonToolExecutor",
     "RuntimeToolExecutor",
@@ -108,6 +115,7 @@ __all__ = [
     "default_tool_executors",
     "earliest_identical_tool_revision",
     "encode_tool_document",
+    "process_tool_environment",
     "require_tool_repository",
     "supported_tool_runtimes",
     "unsupported_runtime_message",

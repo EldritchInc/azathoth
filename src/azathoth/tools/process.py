@@ -2,12 +2,12 @@
 
 import asyncio
 import json
-import os
 import tempfile
 from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
+from azathoth.tools.environment import process_tool_environment
 from azathoth.tools.exceptions import (
     ToolExecutionError,
     UnsupportedToolRuntimeError,
@@ -30,13 +30,15 @@ class ProcessToolExecutor:
     The implementation source is written to a temporary script whose path is
     appended to the declared command. The inputs are written to the
     process's stdin as one JSON object, and its stdout must be one JSON
-    object. The process inherits Azathoth's environment and working
-    directory, so a tool can itself invoke `azathoth`.
+    object. The process runs in Azathoth's working directory.
 
-    When the implementation declares a timeout, the process sees it in
-    `AZATHOTH_TOOL_TIMEOUT_SECONDS`, so it can pace itself. A process
-    without a timeout never sees one, even when Azathoth itself runs inside
-    a tool that has one.
+    It does not inherit Azathoth's environment (ADR 0099). It receives the
+    platform's base variables, those its implementation grants itself, and,
+    when the implementation declares a timeout,
+    `AZATHOTH_TOOL_TIMEOUT_SECONDS`, so it can pace itself. A process without
+    a timeout never sees one, even when Azathoth itself runs inside a tool
+    that has one. A tool that itself invokes `azathoth` grants the variables
+    that invocation needs.
     """
 
     async def execute(
@@ -126,20 +128,9 @@ class ProcessToolExecutor:
     def _environment(
         implementation: ToolImplementation,
     ) -> dict[str, str]:
-        """Return Azathoth's environment with the implementation's own timeout."""
+        """Return the environment the implementation runs with (ADR 0099)."""
 
-        environment = {
-            name: value
-            for name, value in os.environ.items()
-            if name != PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE
-        }
-
-        if implementation.timeout_seconds is not None:
-            environment[PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE] = repr(
-                implementation.timeout_seconds
-            )
-
-        return environment
+        return process_tool_environment(implementation)
 
     @classmethod
     async def _start(

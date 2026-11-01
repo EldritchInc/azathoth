@@ -49,6 +49,7 @@ def create_implementation(
     *,
     command: tuple[str, ...] = PYTHON_COMMAND,
     timeout_seconds: float | None = None,
+    environment: tuple[str, ...] = (),
 ) -> ToolImplementation:
     """Create one process implementation running the given script."""
 
@@ -60,6 +61,7 @@ def create_implementation(
         source=source,
         command=command,
         timeout_seconds=timeout_seconds,
+        environment=environment,
     )
 
 
@@ -148,7 +150,27 @@ def test_process_tool_script_is_removed_after_execution() -> None:
     assert not Path(script).exists()
 
 
-def test_process_tool_inherits_the_environment(
+def test_process_tool_does_not_inherit_a_variable_it_did_not_grant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        ENVIRONMENT_VARIABLE,
+        "eldritch",
+    )
+
+    result = execute(
+        create_implementation(
+            "import json, os\n"
+            f"print(json.dumps({{'value': os.environ.get('{ENVIRONMENT_VARIABLE}')}}))\n",
+        ),
+    )
+
+    assert result == {
+        "value": None,
+    }
+
+
+def test_process_tool_sees_a_variable_it_granted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
@@ -160,6 +182,7 @@ def test_process_tool_inherits_the_environment(
         create_implementation(
             "import json, os\n"
             f"print(json.dumps({{'value': os.environ['{ENVIRONMENT_VARIABLE}']}}))\n",
+            environment=(ENVIRONMENT_VARIABLE,),
         ),
     )
 
@@ -383,7 +406,7 @@ def test_process_tool_without_a_timeout_sees_none_even_when_inherited(
     }
 
 
-def test_process_tool_with_a_timeout_still_inherits_the_environment(
+def test_process_tool_with_a_timeout_still_sees_its_grants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
@@ -396,6 +419,7 @@ def test_process_tool_with_a_timeout_still_inherits_the_environment(
             "import json, os\n"
             f"print(json.dumps({{'value': os.environ['{ENVIRONMENT_VARIABLE}']}}))\n",
             timeout_seconds=30,
+            environment=("AZATHOTH_PROCESS_*",),
         ),
     )
 
