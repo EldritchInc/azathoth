@@ -1093,6 +1093,40 @@ walks through running a child workflow. The tool reads `--output jsonl` and
 keeps only the final record, so a failure also reports the child's invocation
 ID.
 
+## Child Lineage
+
+A child records where it came from (ADR 0104). The step whose process tool
+starts `azathoth` hands it its lineage in `AZATHOTH_LINEAGE`, which the
+engine sets and no tool grants (see the tools README). `workflow run`,
+`workflow invoke` and `job run` record it in the initial context of the run
+or invocation they start, as a `workflow.lineage.received` event, one level
+deeper than the step's own run:
+
+```text
+root run            depth 0
+└── run_workflow ── child invocation       depth 1, parent: that step of the root run
+                    └── run_workflow ── grandchild   depth 2, same root
+```
+
+A command started without `AZATHOTH_LINEAGE`, or with it empty, starts a
+root and records no lineage, so everything run from a shell records exactly
+what it always has.
+
+Nesting is bounded by the engine at 8 levels below the root. A child that
+would run deeper is refused before anything is resolved or recorded: no
+input file is stored, and no invocation or run is saved. So is lineage that
+is not valid. Each prints one line on stderr, writes nothing on stdout, and
+exits with status 1:
+
+```text
+Workflow <WORKFLOW_ID> would run at depth 9, beyond the limit of 8 nested workflows.
+AZATHOTH_LINEAGE is not valid lineage: step: Field required.
+```
+
+The tool that started the child reports that line as its step's failure, as
+it reports any child failure. `invocation show` and `run show` name a
+child's lineage.
+
 # `workflow run` Is Development/Configured Execution
 
 `workflow run` does not mean:
@@ -1228,6 +1262,19 @@ azathoth run show <RUN_ID>
 The run is rendered exactly as `workflow run` rendered it: identity, status,
 statistics, and per-step evidence, followed by every feedback record for that
 run, oldest first.
+
+A run started by a step of another run (see [Child Lineage](#child-lineage))
+names its lineage right after its ID:
+
+```text
+Run ID: <RUN_ID>
+Depth: 1
+Parent Workflow ID: <WORKFLOW_ID>
+Parent Run ID: <RUN_ID>
+Parent Step ID: <STEP_ID> (attempt 1)
+Root Workflow ID: <WORKFLOW_ID>
+Root Run ID: <RUN_ID>
+```
 
 A step that declares a confidence (ADR 0098) names it after its strategy:
 
@@ -2385,6 +2432,11 @@ Idempotency Key: order-4711-review
 Request Digest: <SHA-256>
 ```
 
+An invocation started by a step of another run (see
+[Child Lineage](#child-lineage)) then names its lineage, as `run show` does:
+its depth, the parent workflow, run and step with the step's attempt, and the
+root workflow and run.
+
 A failed invocation renders its message and optional metadata instead of a
 result:
 
@@ -2473,7 +2525,11 @@ prints no result, only its error on stderr, and exits with status 1:
   usable pricing document, or any provider whose models cannot be discovered
   (see [Current Provider Models](#current-provider-models)), found when the
   job first needs the runtime. A job that is replayed, conflicts or is
-  rejected never composes it, so it still gets its result.
+  rejected never composes it, so it still gets its result;
+- a job started by a step of another run whose lineage is not valid, or
+  that would be nested too deeply (see [Child Lineage](#child-lineage)),
+  found once a valid request is read, before anything is replayed, resolved
+  or recorded.
 
 ```json
 {"kind": "invoke", "version": 1, "idempotency_key": "order-4711-review", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": {"verdict": "approve"}}, "error": null}

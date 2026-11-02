@@ -110,6 +110,7 @@ from azathoth.cli.workflows import (
     run_workflow,
     show_workflow,
 )
+from azathoth.context import LineageError, WorkflowDepthError
 from azathoth.persistence import DatabaseSchemaError, DatabaseUnavailableError
 from azathoth.persistence.repositories import close_postgres_databases
 from azathoth.providers import (
@@ -126,9 +127,9 @@ def main(
 
     Output is always written as UTF-8, whatever the platform's code page.
     A PostgreSQL database that cannot be used here, Bedrock configuration
-    that cannot be used, and a provider whose models cannot be discovered
-    are each reported on stderr in one line, and the command exits with
-    status 1.
+    that cannot be used, a provider whose models cannot be discovered,
+    lineage that is not valid and a child nested too deeply are each
+    reported on stderr in one line, and the command exits with status 1.
     """
 
     use_utf8_streams(
@@ -148,6 +149,8 @@ def main(
         BedrockUnavailableError,
         BedrockConfigurationError,
         ModelDiscoveryError,
+        LineageError,
+        WorkflowDepthError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -155,7 +158,9 @@ def main(
         # stops any command before it changes anything (ADR 0102). So does
         # a provider that is on but cannot be used: Bedrock without its
         # extra, its region or a usable pricing document, or any provider
-        # whose models cannot be discovered (ADR 0103).
+        # whose models cannot be discovered (ADR 0103). So does a child
+        # whose lineage is not valid, or that would be nested too deeply
+        # (ADR 0104).
         #
         print(
             str(exc),

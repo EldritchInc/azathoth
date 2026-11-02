@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
-from azathoth.context import Context
+from azathoth.context import Context, WorkflowLineage, create_lineage_event
 from azathoth.inputs import (
     JSON_MEDIA_TYPE,
     InputProvenance,
@@ -48,28 +48,36 @@ class WorkflowRunInput:
 
 def configured_run_context(
     workflow_input: WorkflowRunInput | None,
+    *,
+    lineage: WorkflowLineage | None = None,
 ) -> Context:
     """Return the initial context of one configured run.
 
     A run given input starts with one canonical workflow input event, exactly
     as benchmark cases and production invocations do, followed by its
     provenance when it was resolved from a reference. A run given no input
-    starts with an empty context.
+    starts with an empty context. A run started by a step of another run
+    records its lineage last (ADR 0104).
     """
 
+    lineage_events = (create_lineage_event(lineage),) if lineage is not None else ()
+
     if workflow_input is None:
-        return Context()
+        return Context(events=lineage_events)
 
     provenance = workflow_input.provenance
 
     return Context(
-        events=create_workflow_input_events(
-            ResolvedInput(
-                value=workflow_input.payload,
-                media_type=provenance.media_type if provenance is not None else JSON_MEDIA_TYPE,
-                provenance=provenance,
+        events=(
+            *create_workflow_input_events(
+                ResolvedInput(
+                    value=workflow_input.payload,
+                    media_type=provenance.media_type if provenance is not None else JSON_MEDIA_TYPE,
+                    provenance=provenance,
+                ),
+                producer=CONFIGURED_RUN_PRODUCER,
             ),
-            producer=CONFIGURED_RUN_PRODUCER,
+            *lineage_events,
         )
     )
 

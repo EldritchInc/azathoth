@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 from azathoth.context import (
     Context,
     ContextEvent,
+    WorkflowLineage,
+    create_lineage_event,
 )
 from azathoth.inputs import (
     JSON_MEDIA_TYPE,
@@ -152,6 +154,7 @@ def create_production_invocation(
     caller_metadata: Mapping[str, JsonValue] | None = None,
     input_provenance: InputProvenance | None = None,
     idempotency: InvocationIdempotency | None = None,
+    lineage: WorkflowLineage | None = None,
 ) -> ProductionInvocation:
     """Create one production invocation from caller-supplied input.
 
@@ -163,7 +166,9 @@ def create_production_invocation(
 
     When the input was resolved from a reference, its provenance follows as
     a `workflow.input.resolved` event (ADR 0096). An invocation started
-    through a job envelope records its idempotency (ADR 0097).
+    through a job envelope records its idempotency (ADR 0097). An invocation
+    started by a step of another run records its lineage last, as a
+    `workflow.lineage.received` event (ADR 0104).
     """
 
     invocation_id = uuid4()
@@ -191,6 +196,11 @@ def create_production_invocation(
                 ),
                 producer=PRODUCTION_INVOCATION_PRODUCER,
                 occurred_at=created_at,
+            ),
+            *(
+                (create_lineage_event(lineage, occurred_at=created_at),)
+                if lineage is not None
+                else ()
             ),
         )
     )

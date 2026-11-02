@@ -1007,6 +1007,11 @@ reads, and as the canonical `workflow.input.received` event that benchmark
 cases also emit. A prompt bound to the workflow input therefore renders
 identically when its workflow is optimized and when it is invoked.
 
+An invocation started by a step of another run, which passes `lineage` to
+`create_production_invocation` and `invoke_production_workflow`, records it
+last, as a `workflow.lineage.received` event at the same time (ADR 0104). A
+root invocation records none.
+
 It is created independently of any production revision identity.
 
 The invocation service receives the workflow's active production state and

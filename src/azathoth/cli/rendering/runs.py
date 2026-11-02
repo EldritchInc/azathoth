@@ -5,6 +5,7 @@ import json
 from pydantic import JsonValue
 
 from azathoth.cli.rendering._json import render_json_value
+from azathoth.cli.rendering.lineage import render_lineage_lines
 from azathoth.strategies import StrategyResourceBinding
 from azathoth.workflows import (
     WorkflowRun,
@@ -16,7 +17,11 @@ from azathoth.workflows import (
 def render_workflow_run(
     run: WorkflowRun,
 ) -> str:
-    """Render one completed workflow run for a human operator."""
+    """Render one completed workflow run for a human operator.
+
+    A run started by a step of another run names its depth, the parent step
+    and the root run, right after its ID (ADR 0104).
+    """
 
     statistics = run.statistics
 
@@ -25,6 +30,7 @@ def render_workflow_run(
         f"Workflow ID: {run.workflow.id}",
         f"Workflow Revision: {_render_revision(run.workflow_revision)}",
         f"Run ID: {run.id}",
+        *render_lineage_lines(run.initial_context),
         f"Status: {'succeeded' if run.succeeded else 'failed'}",
         f"Duration: {run.duration_seconds:.3f}s",
         f"Steps: {statistics.total_steps}",

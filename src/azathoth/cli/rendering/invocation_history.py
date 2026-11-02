@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.rendering._json import render_json_value
+from azathoth.cli.rendering.lineage import render_lineage_lines
 from azathoth.workflows import (
     ProductionInvocation,
     ProductionInvocationErrorCode,
@@ -62,7 +63,8 @@ def render_production_invocation(
     """Render the full recorded history of one production invocation.
 
     An invocation started through a job envelope names its idempotency key
-    and request digest (ADR 0097).
+    and request digest (ADR 0097). An invocation started by a step of another
+    run names its depth, the parent step and the root run (ADR 0104).
     """
 
     lines = [
@@ -80,6 +82,8 @@ def render_production_invocation(
                 f"Request Digest: {invocation.idempotency.request_digest}",
             )
         )
+
+    lines.extend(render_lineage_lines(invocation.initial_context))
 
     if invocation.caller_metadata:
         lines.extend(
