@@ -1179,6 +1179,31 @@ declared result. With `--output text`, it exits 0 when the run succeeded.
 Configuration or candidate-generation failures are emitted to standard error
 and also return failure.
 
+# Runs Journaled and Leased While They Execute
+
+`workflow run`, `workflow invoke` and `job run` journal each run while it
+executes, and hold its lease until it ends (ADR 0105). The lease lasts 60
+seconds and is renewed every 15, so a command that is killed outright leaves
+a run whose lease lapses within a minute.
+
+A command stopped by Ctrl-C prints one line on stderr and exits with
+status 130:
+
+```text
+Interrupted.
+```
+
+One stopped by SIGTERM, as a container runtime or a process supervisor
+sends it, prints one line on stderr and exits with status 143:
+
+```text
+Terminated.
+```
+
+Either way the run stops where it is, releases its lease at once, and is not
+recorded as a finished run: its journal shows how far it got. Nothing is
+printed on stdout, and `job run` prints no envelope.
+
 # Configured Runs Are Persisted
 
 Every completed configured run is persisted as durable evidence, whether it

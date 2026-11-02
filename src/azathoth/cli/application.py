@@ -81,6 +81,14 @@ from azathoth.cli.runs import (
     show_run,
 )
 from azathoth.cli.streams import use_utf8_streams
+from azathoth.cli.termination import (
+    INTERRUPTED_MESSAGE,
+    INTERRUPTED_STATUS,
+    TERMINATED_MESSAGE,
+    TERMINATED_STATUS,
+    CommandTerminated,
+    terminating_on_sigterm,
+)
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
@@ -130,6 +138,10 @@ def main(
     that cannot be used, a provider whose models cannot be discovered,
     lineage that is not valid and a child nested too deeply are each
     reported on stderr in one line, and the command exits with status 1.
+
+    A command stopped by Ctrl-C prints `Interrupted.` and exits with 130;
+    one stopped by SIGTERM prints `Terminated.` and exits with 143. Either
+    unwinds first, so a run it was executing releases its lease (ADR 0105).
     """
 
     use_utf8_streams(
@@ -142,7 +154,22 @@ def main(
     arguments = parser.parse_args(argv)
 
     try:
-        result = _dispatch(arguments)
+        with terminating_on_sigterm():
+            result = _dispatch(arguments)
+    except KeyboardInterrupt:
+        print(
+            INTERRUPTED_MESSAGE,
+            file=sys.stderr,
+        )
+
+        return INTERRUPTED_STATUS
+    except CommandTerminated:
+        print(
+            TERMINATED_MESSAGE,
+            file=sys.stderr,
+        )
+
+        return TERMINATED_STATUS
     except (
         DatabaseUnavailableError,
         DatabaseSchemaError,

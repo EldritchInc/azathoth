@@ -243,6 +243,7 @@ def test_a_parent_workflow_runs_its_promoted_child_over_postgresql(
         runs = repositories.runs.runs()
         invocations = repositories.invocations.invocations()
         journals = [repositories.run_journal.entries(run.id) for run in runs]
+        leases = [repositories.run_leases.get(run.id) for run in runs]
         child_run_id = repositories.run_journal.invocation_run_id(invocations[0].id)
     finally:
         close_postgres_databases()
@@ -255,6 +256,11 @@ def test_a_parent_workflow_runs_its_promoted_child_over_postgresql(
     #
     assert [rebuilt(journal) for journal in journals] == list(runs)
     assert child_run_id == runs[0].id
+
+    #
+    # Each run held its lease while it executed, and released it after.
+    #
+    assert leases == [None, None]
 
 
 def test_jobs_run_replay_and_conflict_over_postgresql(

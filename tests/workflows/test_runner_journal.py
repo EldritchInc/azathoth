@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 
 from azathoth.context import Context, ContextEvent, LineageError
-from azathoth.strategies import StrategyMetadata, StrategyOutcome
+from azathoth.strategies import Strategy, StrategyMetadata, StrategyOutcome
 from azathoth.workflows import (
     InMemoryRunJournalRepository,
     JournalAttemptFinished,
@@ -99,7 +99,7 @@ def candidate(
 
 def step(
     step_id: UUID,
-    strategy: FlakyStrategy,
+    strategy: Strategy,
     *,
     depends_on: tuple[UUID, ...] = (),
     attempts: int = 1,

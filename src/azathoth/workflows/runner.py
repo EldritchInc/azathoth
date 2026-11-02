@@ -55,6 +55,11 @@ from azathoth.workflows.run_journal import (
     RunJournalRepository,
     RunJournalWriter,
 )
+from azathoth.workflows.run_lease import (
+    RunLeaseKeeper,
+    RunLeasePolicy,
+    RunLeaseRepository,
+)
 from azathoth.workflows.value import (
     WorkflowConstantValue,
     WorkflowContextReference,
@@ -155,6 +160,12 @@ class WorkflowRunner:
     each layer's commit, and the run's finish. An entry that cannot be
     recorded stops the run at once with that error, recording nothing more,
     because a run whose journal is incomplete could not be resumed.
+
+    A runner given a lease repository too holds each run's lease while it
+    executes: acquired before the run's first entry, renewed from a thread
+    of its own, and released when the run ends, however it ends. Once the
+    lease is lost, the run stops before its next entry with the
+    `RunLeaseLostError`. A lease that cannot be released lapses on its own.
     """
 
     def __init__(
@@ -164,11 +175,18 @@ class WorkflowRunner:
         sleep: RetrySleep | None = None,
         observer: WorkflowRunObserver | None = None,
         journal: RunJournalRepository | None = None,
+        leases: RunLeaseRepository | None = None,
+        lease_policy: RunLeasePolicy | None = None,
     ) -> None:
+        if leases is not None and journal is None:
+            raise ValueError("A runner that leases its runs must journal them.")
+
         self._executor = executor if executor is not None else StrategyExecutor()
         self._sleep: RetrySleep = sleep if sleep is not None else _sleep
         self._observer = observer
         self._journal = journal
+        self._leases = leases
+        self._lease_policy = lease_policy if lease_policy is not None else RunLeasePolicy()
 
     def _notify(
         self,
@@ -828,7 +846,7 @@ class WorkflowRunner:
             LineageError: The initial context records lineage that is not
                 valid lineage. Nothing has run, and nothing is journaled.
             RunJournalError: An entry of the run's journal could not be
-                recorded. The run stops there.
+                recorded, or the run's lease was lost. The run stops there.
         """
 
         run_id = uuid4()
@@ -838,16 +856,60 @@ class WorkflowRunner:
             run_id=run_id,
         )
 
+        keeper = (
+            RunLeaseKeeper(self._leases, run_id, policy=self._lease_policy)
+            if self._leases is not None
+            else None
+        )
+
         journal = (
             RunJournalWriter(
                 self._journal,
                 run_id=run_id,
                 workflow_id=workflow.metadata.id,
                 invocation_id=invocation_id,
+                fence=keeper.check if keeper is not None else None,
             )
             if self._journal is not None
             else None
         )
+
+        if keeper is None:
+            return await self._execute_run(
+                workflow=workflow,
+                context=context,
+                run_id=run_id,
+                lineage=lineage,
+                journal=journal,
+            )
+
+        keeper.acquire()
+        keeper.start()
+
+        try:
+            return await self._execute_run(
+                workflow=workflow,
+                context=context,
+                run_id=run_id,
+                lineage=lineage,
+                journal=journal,
+            )
+        finally:
+            keeper.stop()
+
+            with contextlib.suppress(Exception):
+                keeper.release()
+
+    async def _execute_run(
+        self,
+        *,
+        workflow: WorkflowCandidate,
+        context: Context,
+        run_id: UUID,
+        lineage: RunLineage,
+        journal: RunJournalWriter | None,
+    ) -> _WorkflowExecutionResult:
+        """Execute the run's layers in order, journaling them if there is a journal."""
 
         started_at = datetime.now(
             tz=UTC,

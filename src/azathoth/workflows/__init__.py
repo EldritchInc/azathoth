@@ -265,6 +265,19 @@ from azathoth.workflows.run_journal import (
     RunJournalRepository,
     RunJournalWriter,
 )
+from azathoth.workflows.run_lease import (
+    LEASE_DURATION,
+    LEASE_RENEWAL_INTERVAL,
+    InMemoryRunLeaseRepository,
+    RunLease,
+    RunLeaseError,
+    RunLeaseHeldError,
+    RunLeaseKeeper,
+    RunLeaseLostError,
+    RunLeasePolicy,
+    RunLeaseRepository,
+    lease_holder,
+)
 from azathoth.workflows.run_progress_tables import (
     RUN_CHILD_TABLES,
     RUN_JOURNAL_TABLES,
@@ -320,6 +333,7 @@ from azathoth.workflows.sql_run_evaluation_repository import (
     SqlWorkflowRunEvaluationRepository,
 )
 from azathoth.workflows.sql_run_journal_repository import SqlRunJournalRepository
+from azathoth.workflows.sql_run_lease_repository import SqlRunLeaseRepository
 from azathoth.workflows.sql_run_repository import (
     WORKFLOW_RUN_TABLES,
     SqlWorkflowRunRepository,
@@ -415,6 +429,18 @@ __all__ = [
     "RunJournalRepository",
     "RunJournalWriter",
     "SqlRunJournalRepository",
+    "LEASE_DURATION",
+    "LEASE_RENEWAL_INTERVAL",
+    "InMemoryRunLeaseRepository",
+    "RunLease",
+    "RunLeaseError",
+    "RunLeaseHeldError",
+    "RunLeaseKeeper",
+    "RunLeaseLostError",
+    "RunLeasePolicy",
+    "RunLeaseRepository",
+    "SqlRunLeaseRepository",
+    "lease_holder",
     "PRODUCTION_INVOCATION_TABLES",
     "SqlProductionInvocationRepository",
     "SqlProductionInvocationRunRepository",

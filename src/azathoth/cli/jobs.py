@@ -141,6 +141,7 @@ def _run(
                     runner=tracing_runner(
                         telemetry,
                         journal=repositories(configuration).run_journal,
+                        leases=repositories(configuration).run_leases,
                     ),
                     lineage=lineage,
                 ),

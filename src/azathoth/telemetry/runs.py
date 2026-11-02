@@ -35,6 +35,7 @@ from azathoth.workflows import (
     combine_observers,
 )
 from azathoth.workflows.run_journal import RunJournalRepository
+from azathoth.workflows.run_lease import RunLeasePolicy, RunLeaseRepository
 from azathoth.workflows.runner import RetrySleep
 
 RUN_FAILED_ERROR_TYPE = "WorkflowRunFailed"
@@ -220,7 +221,7 @@ class TracingWorkflowRunner(WorkflowRunner):
     """A workflow runner that traces every run it executes, and its steps.
 
     Each run is executed by a plain runner with the same executor, retry
-    sleep and journal, observed by both this runner's own observer and the
+    sleep, journal and leases, observed by both this runner's own observer and the
     run's tracing observer, so concurrent runs never share a trace.
     """
 
@@ -232,12 +233,16 @@ class TracingWorkflowRunner(WorkflowRunner):
         sleep: RetrySleep | None = None,
         observer: WorkflowRunObserver | None = None,
         journal: RunJournalRepository | None = None,
+        leases: RunLeaseRepository | None = None,
+        lease_policy: RunLeasePolicy | None = None,
     ) -> None:
         super().__init__(
             executor=executor,
             sleep=sleep,
             observer=observer,
             journal=journal,
+            leases=leases,
+            lease_policy=lease_policy,
         )
 
         self._telemetry = telemetry
@@ -253,6 +258,8 @@ class TracingWorkflowRunner(WorkflowRunner):
             sleep=self._sleep,
             observer=combine_observers(trace.observer, self._observer),
             journal=self._journal,
+            leases=self._leases,
+            lease_policy=self._lease_policy,
         )
 
     async def run(
@@ -304,16 +311,18 @@ def tracing_runner(
     *,
     observer: WorkflowRunObserver | None = None,
     journal: RunJournalRepository | None = None,
+    leases: RunLeaseRepository | None = None,
 ) -> WorkflowRunner:
     """Return a runner that traces its runs when telemetry is on, and a plain one otherwise.
 
-    Either records each run's journal in the given repository (ADR 0105).
+    Either records each run's journal in the given repository, and holds
+    each run's lease in the given one (ADR 0105).
     """
 
     if not telemetry.enabled:
-        return WorkflowRunner(observer=observer, journal=journal)
+        return WorkflowRunner(observer=observer, journal=journal, leases=leases)
 
-    return TracingWorkflowRunner(telemetry, observer=observer, journal=journal)
+    return TracingWorkflowRunner(telemetry, observer=observer, journal=journal, leases=leases)
 
 
 __all__ = [

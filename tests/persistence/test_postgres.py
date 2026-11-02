@@ -484,3 +484,60 @@ def test_a_connection_the_server_dropped_is_opened_again(
     finally:
         database.close()
         admin.close()
+
+
+# Transactions from several threads (ADR 0105)
+
+
+def test_transactions_from_two_threads_on_one_connection_take_turns(
+    postgres_database: PostgresDatabase,
+) -> None:
+    ready(postgres_database)
+
+    inside = threading.Event()
+    timeline: list[str] = []
+
+    def first() -> None:
+        with postgres_database.transaction() as session:
+            timeline.append("first began")
+            inside.set()
+            session.execute("INSERT INTO things (thing_id, count) VALUES (?, ?)", ("one", 1))
+            threading.Event().wait(0.2)
+            timeline.append("first committing")
+
+    def second() -> None:
+        inside.wait()
+
+        with postgres_database.transaction() as session:
+            timeline.append("second began")
+            session.execute("INSERT INTO things (thing_id, count) VALUES (?, ?)", ("two", 2))
+
+    threads = [threading.Thread(target=first), threading.Thread(target=second)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    assert timeline == ["first began", "first committing", "second began"]
+    assert thing_ids(postgres_database) == ["one", "two"]
+
+
+def test_a_failed_transaction_in_one_thread_leaves_the_others_turn_intact(
+    postgres_database: PostgresDatabase,
+) -> None:
+    ready(postgres_database)
+    insert(postgres_database, "one")
+
+    def collide() -> None:
+        with pytest.raises(IntegrityError), postgres_database.transaction() as session:
+            session.execute("INSERT INTO things (thing_id, count) VALUES (?, ?)", ("one", 1))
+
+    thread = threading.Thread(target=collide)
+    thread.start()
+    thread.join()
+
+    insert(postgres_database, "two")
+
+    assert thing_ids(postgres_database) == ["one", "two"]

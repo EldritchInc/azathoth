@@ -165,6 +165,7 @@ def _run_workflow(
                         writer,
                     ),
                     journal=repositories(configuration).run_journal,
+                    leases=repositories(configuration).run_leases,
                 ),
             )
         )
@@ -366,6 +367,7 @@ def _invoke_workflow(
                         writer,
                     ),
                     journal=repositories(configuration).run_journal,
+                    leases=repositories(configuration).run_leases,
                 ),
             )
         )

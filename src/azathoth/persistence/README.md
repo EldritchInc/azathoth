@@ -171,6 +171,10 @@ opened when it is first used. A connection found closed or broken, such as
 one the server dropped while it sat idle, is opened again before the next
 transaction begins. Every repository over the same URL shares it.
 
+Transactions on the connection take turns: one begun in another thread, such
+as a run's lease renewal (ADR 0105), waits until the one in progress commits
+or rolls back.
+
 A process with many connections to many databases, such as a queue worker,
 needs a pool; ADR 0107 adds one.
 

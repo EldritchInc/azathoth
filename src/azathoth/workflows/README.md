@@ -396,6 +396,40 @@ run collide at the first position they share:
 Run <RUN_ID> already records journal position <POSITION>.
 ```
 
+### Run Leases
+
+A runner given a `RunLeaseRepository` as well holds each run's lease while it
+executes (ADR 0105), so that only one process executes a run at a time. A
+runner that leases its runs must journal them.
+
+A `RunLeaseKeeper` acquires the lease before the run's first entry, renews it
+from a daemon thread of its own, and releases it when the run ends, whether
+it finished, halted, failed to journal or was cancelled. A `RunLeasePolicy`
+sets how long a lease lasts, 60 seconds by default, and how often it is
+renewed, every 15. Each process holds a lease under a name of its own: its
+host, its process ID and a unique suffix.
+
+A lease that lapses, because its process was killed or lost its database,
+may be taken by another process. One that is live refuses:
+
+```text
+Run <RUN_ID> is still running (its lease expires at <TIME>).
+```
+
+The keeper's `check` is the journal's fence. Once the lease is lost, the run
+stops before its next entry, with a `RunLeaseLostError`, and journals
+nothing more:
+
+```text
+Run <RUN_ID> was taken over by another process.
+Run <RUN_ID>'s lease expired at <TIME> before it could be renewed.
+```
+
+A renewal that fails for another reason, such as a database that is briefly
+unreachable, is tried again at the next interval; only a lease that lapses
+meanwhile is lost. A lease that cannot be released when the run ends costs
+the run nothing: it lapses on its own.
+
 ## Values and Data Flow
 
 Workflow data flow is explicit.
@@ -1180,6 +1214,7 @@ Durable repositories include contracts for:
 - production invocations
 - invocation/run associations
 - run journals
+- run leases
 
 Both deterministic in-memory implementations and SQLite implementations are
 provided for the relevant repository contracts.

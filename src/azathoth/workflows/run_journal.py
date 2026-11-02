@@ -229,6 +229,9 @@ class InMemoryRunJournalRepository:
 Clock: TypeAlias = Callable[[], datetime]
 """Return the current time."""
 
+Fence: TypeAlias = Callable[[], None]
+"""Raise when this process may no longer write a run's journal."""
+
 
 def _now() -> datetime:
     """Return the current time in UTC."""
@@ -237,7 +240,12 @@ def _now() -> datetime:
 
 
 class RunJournalWriter:
-    """Record one run's journal, numbering its entries in order."""
+    """Record one run's journal, numbering its entries in order.
+
+    A writer given a fence calls it before every entry, so a process that no
+    longer holds the run, such as one whose lease was taken over, stops
+    before it writes another (ADR 0105).
+    """
 
     def __init__(
         self,
@@ -248,6 +256,7 @@ class RunJournalWriter:
         invocation_id: UUID | None = None,
         next_position: int = 1,
         clock: Clock | None = None,
+        fence: Fence | None = None,
     ) -> None:
         if next_position < 1:
             raise ValueError("A run's journal is numbered from 1.")
@@ -258,6 +267,7 @@ class RunJournalWriter:
         self._invocation_id = invocation_id
         self._next_position = next_position
         self._clock: Clock = clock if clock is not None else _now
+        self._fence = fence
 
     @property
     def run_id(
@@ -284,7 +294,11 @@ class RunJournalWriter:
         Raises:
             RunJournalPositionTakenError: Another process already recorded
                 this position. The writer does not move on.
+            RunJournalError: The fence refused, so nothing is recorded.
         """
+
+        if self._fence is not None:
+            self._fence()
 
         entry = RunJournalEntry(
             run_id=self._run_id,
@@ -303,6 +317,7 @@ class RunJournalWriter:
 
 __all__ = [
     "Clock",
+    "Fence",
     "InMemoryRunJournalRepository",
     "JournalAttemptFinished",
     "JournalAttemptStarted",

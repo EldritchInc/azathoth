@@ -60,6 +60,7 @@ from azathoth.workflows import (
     ProductionInvocationRepository,
     ProductionInvocationRunRepository,
     RunJournalRepository,
+    RunLeaseRepository,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowBenchmarkExecutionRepository,
@@ -73,6 +74,7 @@ from azathoth.workflows import (
     SqlProductionInvocationRepository,
     SqlProductionInvocationRunRepository,
     SqlRunJournalRepository,
+    SqlRunLeaseRepository,
     SqlWorkflowBenchmarkExecutionRepository,
     SqlWorkflowExperimentRepository,
     SqlWorkflowProductionRevisionRepository,
@@ -291,6 +293,14 @@ class Repositories:
         """
 
         return SqlRunJournalRepository(self._database)
+
+    @cached_property
+    def run_leases(
+        self,
+    ) -> RunLeaseRepository:
+        """Return the leases on runs while they execute (ADR 0105)."""
+
+        return SqlRunLeaseRepository(self._database)
 
     @cached_property
     def tools(
