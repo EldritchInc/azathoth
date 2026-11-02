@@ -343,6 +343,22 @@ returns `None` when none is left, or the observer itself when one is. A
 `CombinedRunObserver` delivers each event to every observer in order, and
 one that raises never keeps an event from the rest.
 
+### Run Identity and Lineage
+
+A run's ID is assigned when the run starts, and the recorded `WorkflowRun`
+keeps it, so a step can name the run it belongs to before the run is
+recorded.
+
+While each attempt of a step executes, its lineage is current (ADR 0104):
+the workflow, the run, the step and the attempt number, with the run's depth
+and root, read from the lineage its initial context records. A run whose
+context records none is a root at depth 0. Anything the step starts as a
+child, such as a process tool that runs `azathoth`, learns from it where it
+was started. The context README describes the lineage model.
+
+Lineage in the initial context that is not valid lineage stops the run
+before any step executes, with the `LineageError`.
+
 ## Values and Data Flow
 
 Workflow data flow is explicit.

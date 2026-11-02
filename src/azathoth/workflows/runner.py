@@ -5,11 +5,17 @@ import contextlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 
-from azathoth.context import Context, ContextEvent
+from azathoth.context import (
+    Context,
+    ContextEvent,
+    RunLineage,
+    run_lineage,
+    running_step,
+)
 from azathoth.execution import ExecutionResult, StrategyExecutor
 from azathoth.prompting import WORKFLOW_INPUT_BOUND_EVENT_TYPE
 from azathoth.strategies import Strategy
@@ -101,6 +107,11 @@ class WorkflowRunner:
     An optional observer is told live when each step starts and finishes, in
     the order that actually happens. It only watches: the recorded run is the
     same with or without it.
+
+    A run's ID is assigned when it starts. While a step attempt executes,
+    its lineage is current (ADR 0104): its run, its depth and its root, read
+    from the lineage the initial context records, so anything the step starts
+    as a child learns where it came from.
     """
 
     def __init__(
@@ -433,6 +444,7 @@ class WorkflowRunner:
         outputs: tuple[WorkflowValueBinding, ...] = (),
         step_id: UUID | None = None,
         confidence: str | None = None,
+        lineage: RunLineage | None = None,
     ) -> tuple[
         ExecutionResult | None,
         tuple[WorkflowStepAttempt, ...],
@@ -452,6 +464,9 @@ class WorkflowRunner:
         A step that declares a confidence also requires it to be a number
         from 0 to 1; anything else fails the attempt with its
         `WorkflowStepConfidenceError`, and is retried the same way (ADR 0098).
+
+        With a run's lineage and a step, each attempt executes with that
+        attempt's lineage current (ADR 0104).
         """
 
         if confidence is not None and step_id is None:
@@ -468,10 +483,17 @@ class WorkflowRunner:
             )
 
             try:
-                execution = await self._executor.execute(
-                    strategy,
-                    context,
-                )
+                if lineage is not None and step_id is not None:
+                    with running_step(lineage.step(step_id=step_id, attempt=attempt_number)):
+                        execution = await self._executor.execute(
+                            strategy,
+                            context,
+                        )
+                else:
+                    execution = await self._executor.execute(
+                        strategy,
+                        context,
+                    )
 
                 for binding in outputs:
                     binding.resolve(execution.output)
@@ -542,6 +564,7 @@ class WorkflowRunner:
         step: WorkflowCandidateStep,
         step_context: Context,
         layer_index: int,
+        lineage: RunLineage | None = None,
     ) -> _StepOutcome:
         """Execute one eligible step to retry exhaustion, reporting its progress live."""
 
@@ -559,6 +582,7 @@ class WorkflowRunner:
             outputs=step.outputs,
             step_id=step.id,
             confidence=step.confidence,
+            lineage=lineage,
         )
 
         if execution is None:
@@ -603,6 +627,7 @@ class WorkflowRunner:
         eligible: tuple[tuple[WorkflowCandidateStep, Context], ...],
         *,
         layer_index: int = 0,
+        lineage: RunLineage | None = None,
     ) -> tuple[_StepOutcome, ...]:
         """Execute eligible layer steps concurrently, returning outcomes in order.
 
@@ -618,6 +643,7 @@ class WorkflowRunner:
                         step=step,
                         step_context=step_context,
                         layer_index=layer_index,
+                        lineage=lineage,
                     )
                 )
                 for step, step_context in eligible
@@ -698,7 +724,19 @@ class WorkflowRunner:
         workflow: WorkflowCandidate,
         context: Context,
     ) -> _WorkflowExecutionResult:
-        """Execute a workflow candidate while preserving terminal failure evidence."""
+        """Execute a workflow candidate while preserving terminal failure evidence.
+
+        Raises:
+            LineageError: The initial context records lineage that is not
+                valid lineage. Nothing has run.
+        """
+
+        run_id = uuid4()
+        lineage = run_lineage(
+            context,
+            workflow_id=workflow.metadata.id,
+            run_id=run_id,
+        )
 
         started_at = datetime.now(
             tz=UTC,
@@ -808,6 +846,7 @@ class WorkflowRunner:
             outcomes = await self._execute_layer(
                 tuple(eligible),
                 layer_index=layer_index,
+                lineage=lineage,
             )
 
             for (step, step_context), outcome in zip(
@@ -944,6 +983,7 @@ class WorkflowRunner:
         )
 
         run = WorkflowRun(
+            id=run_id,
             workflow=workflow.metadata,
             workflow_revision=workflow.revision,
             steps=tuple(completed_steps),

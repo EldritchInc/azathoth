@@ -686,9 +686,73 @@ Higher-level systems may construct those capabilities using their own domain
 models and then contribute relevant information to execution through
 `ContextEvent` objects.
 
+## Lineage
+
+A run started by a step of another run is that step's child (ADR 0104). Its
+initial context records where it came from in one `workflow.lineage.received`
+event, produced by `azathoth.lineage`, after its input events:
+
+```json
+{
+  "depth": 2,
+  "parent": {"workflow_id": "<ID>", "run_id": "<ID>", "step_id": "<ID>", "attempt": 1},
+  "root": {"workflow_id": "<ID>", "run_id": "<ID>"}
+}
+```
+
+`depth` counts the levels between the run and its root: a child of a root
+run is at depth 1. `parent` is the attempt of the step that started the run,
+and `root` the run at the top of the tree. A run started from outside
+Azathoth records no lineage event: it is a root, at depth 0, and its context
+is exactly what it always was.
+
+```text
+root run            depth 0, no lineage event
+└── step attempt ── child run          depth 1, parent: that attempt
+                    └── step attempt ── grandchild run   depth 2, same root
+```
+
+The model lives beside `Context`:
+
+| Name | Meaning |
+| --- | --- |
+| `WorkflowLineage` | What a child run records: `depth`, `parent`, `root` |
+| `LineageRun` | A workflow and one of its runs |
+| `LineageStep` | One attempt of one step of a run |
+| `RunLineage` | A run, its depth and its root, from its initial context |
+| `StepLineage` | What a running step tells a child: its attempt, its run's depth, its root |
+| `lineage_of(context)` | The lineage a context records, or `None` for a root |
+| `run_lineage(context, ...)` | A run's lineage; a root run is its own root |
+| `child_lineage(step, workflow_id=...)` | A child's lineage, one level below the step's run |
+| `create_lineage_event(lineage)` | The event a child records |
+
+A context records lineage at most once. A second lineage event, or one that
+is not valid lineage, raises `LineageError`:
+
+```text
+A context records lineage once; this one has 2 events.
+The context's lineage is not valid lineage: parent: Field required.
+```
+
+The engine bounds nesting, not a tool. A child deeper than
+`MAX_WORKFLOW_DEPTH`, 8, raises `WorkflowDepthError`:
+
+```text
+Workflow <WORKFLOW_ID> would run at depth 9, beyond the limit of 8 nested workflows.
+```
+
+While a step attempt executes, the runner makes its `StepLineage` current;
+`active_step_lineage()` returns it, and `running_step(lineage)` sets it for a
+block and restores the previous one afterwards. It follows the task that runs
+the step, including work the step hands to a thread with `asyncio.to_thread`,
+so concurrent steps each see their own. Outside a step it is `None`.
+`encode_step_lineage` and `decode_step_lineage` carry a step's lineage to a
+child process as compact JSON; decoding names the first problem it finds,
+without the value, as a `LineageError`.
+
 ## Public Surface
 
-The V1 public context package exports:
+The public context package exports the context itself:
 
 ```python
 from azathoth.context import (
@@ -697,8 +761,9 @@ from azathoth.context import (
 )
 ```
 
-That intentionally small API reflects the package's narrow architectural
-responsibility.
+and the lineage model above, with its constants `LINEAGE_EVENT_TYPE`,
+`LINEAGE_PRODUCER` and `MAX_WORKFLOW_DEPTH`. That small API reflects the
+package's narrow architectural responsibility.
 
 ## V1 Context Principles
 
