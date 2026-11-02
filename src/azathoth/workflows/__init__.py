@@ -247,6 +247,11 @@ from azathoth.workflows.revision import (
     WorkflowSpecificationRevision,
     earliest_identical_revision,
 )
+from azathoth.workflows.run_children import (
+    InMemoryRunChildRepository,
+    RunChild,
+    RunChildRepository,
+)
 from azathoth.workflows.run_evaluation import WorkflowRunEvaluation
 from azathoth.workflows.run_evaluation_repository import (
     WorkflowRunEvaluationRepository,
@@ -343,6 +348,7 @@ from azathoth.workflows.sql_repository import (
     WORKFLOW_SPECIFICATION_TABLES,
     SqlWorkflowRepository,
 )
+from azathoth.workflows.sql_run_child_repository import SqlRunChildRepository
 from azathoth.workflows.sql_run_evaluation_repository import (
     WORKFLOW_RUN_EVALUATION_TABLES,
     SqlWorkflowRunEvaluationRepository,
@@ -455,6 +461,10 @@ __all__ = [
     "RunJournalRepository",
     "RunJournalWriter",
     "SqlRunJournalRepository",
+    "InMemoryRunChildRepository",
+    "RunChild",
+    "RunChildRepository",
+    "SqlRunChildRepository",
     "LEASE_DURATION",
     "LEASE_RENEWAL_INTERVAL",
     "InMemoryRunLeaseRepository",

@@ -81,7 +81,8 @@ azathoth
 │   │   └── --experiment <EXPERIMENT_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
-│   │   └── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   └── --idempotency-key <KEY>
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
 │   │   └── --limit <COUNT>
@@ -94,6 +95,7 @@ azathoth
 │
 ├── run
 │   ├── show <RUN_ID>
+│   ├── children <RUN_ID>
 │   ├── resume <RUN_ID>
 │   │   └── --output <FORMAT>
 │   └── feedback <RUN_ID>
@@ -1145,6 +1147,66 @@ AZATHOTH_LINEAGE is not valid lineage: step: Field required.
 The tool that started the child reports that line as its step's failure, as
 it reports any child failure. `invocation show` and `run show` name a
 child's lineage.
+
+## Children Under a Key
+
+`workflow invoke` takes an idempotency key, and then runs the invocation
+exactly as [`job run`](#run-a-job) runs a request under that key (ADR 0097):
+
+```bash
+azathoth workflow invoke <WORKFLOW_ID> --input <JSON> --idempotency-key <KEY>
+```
+
+The same request under the same key replays the recorded result, without
+running anything, and reports it as the first invocation did. One that was
+interrupted is resumed, once nothing runs it any more (ADR 0105). A key used
+for another request, an invocation still running, and an input that cannot
+be resolved end the output with an error record, carrying the job error's
+`code` and `message`, or print the message on stderr in text, and exit with
+status 1.
+
+The standard composition tools, `run_workflow` 1.0.5 and `loop_workflow`
+1.1.5, invoke every child under the key of the step attempt that starts it,
+`azathoth:<RUN_ID>:<STEP_ID>:<ATTEMPT>`, and a loop under one key per
+iteration, `azathoth:<RUN_ID>:<STEP_ID>:<ATTEMPT>:<ITERATION>`. So a parent
+that is resumed reuses the children it already ran, and a loop resumed
+halfway replays its finished iterations instead of running them again. A
+retried attempt has a new number, and runs its children again. A child that
+another process still runs is waited for, until the tool's timeout.
+
+## The Children of a Run
+
+A child is indexed under the run whose step started it, as soon as it
+starts. List a run's children, oldest first, with:
+
+```bash
+azathoth run children <RUN_ID>
+```
+
+```text
+Child Run ID: <RUN_ID>
+Workflow ID: <WORKFLOW_ID>
+Invocation ID: <INVOCATION_ID>
+Parent Step ID: <STEP_ID> (attempt 1)
+Status: succeeded
+```
+
+Children are separated by a blank line. A child that started but is not
+recorded as finished is `unfinished`; one that ran no invocation names `no
+invocation`. It lists the children of a run that never finished too. A run
+that started none says so; one neither recorded nor journaled is not found,
+and exits with status 1:
+
+```text
+Run <RUN_ID> started no children.
+Run <RUN_ID> was not found.
+```
+
+`run show` names how many children a run started, after its lineage:
+
+```text
+Children: 2
+```
 
 # `workflow run` Is Development/Configured Execution
 

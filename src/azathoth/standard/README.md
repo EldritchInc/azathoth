@@ -11,8 +11,8 @@ steps:
 
 | Tool              | Version | Implementation | Purpose                                     |
 | ----------------- | ------- | -------------- | ------------------------------------------- |
-| `run_workflow`    | 1.0.0   | 1.0.4          | Run a child workflow once (ADR 0084).       |
-| `loop_workflow`   | 1.1.0   | 1.1.4          | Run a child workflow repeatedly (ADR 0090). |
+| `run_workflow`    | 1.0.0   | 1.0.5          | Run a child workflow once (ADR 0084).       |
+| `loop_workflow`   | 1.1.0   | 1.1.5          | Run a child workflow repeatedly (ADR 0090). |
 | `json_select`     | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
 | `json_object`     | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
 | `json_merge`      | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
@@ -372,7 +372,7 @@ version with a new implementation ID, because an implementation ID belongs to
 one tool version only, and workflows keep requiring the exact versions they
 name.
 
-There has been one exception, made four times in 1.1. When process tools stopped
+There has been one exception, made five times in 1.1. When process tools stopped
 inheriting Azathoth's environment (ADR 0099), `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` gained their grants as the next revision of the same
 versions, implementations 1.0.1 and 1.1.1, because without grants no
@@ -386,7 +386,13 @@ the engine took over bounding depth (ADR 0104), they lost their own depth
 counter and the `AZATHOTH_WORKFLOW_DEPTH` grant the same way, as
 implementations 1.0.4 and 1.1.4, which also write their errors as UTF-8.
 Implementations 1.0.3 and 1.1.3 still run: they count depth themselves, and
-the engine's limit applies to their children too.
+the engine's limit applies to their children too. When runs became
+resumable (ADR 0105), they began invoking every child under the
+idempotency key of the step attempt that starts it, and a loop's children
+under one key per iteration, the same way, as implementations 1.0.5 and
+1.1.5: a parent that is resumed then reuses the children it already ran,
+and waits for one another process still runs. Their grants, timeouts and
+definitions are unchanged.
 
 A database that installed the library from Azathoth 1.0 runs
 `azathoth tool install-standard`, or `azathoth init`, once to pick up the
@@ -405,8 +411,8 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 ```
 
-A database that already holds a later revision, 1.0.1 to 1.0.3 and 1.1.1 to
-1.1.3, gets 1.0.4 and 1.1.4 as the next revision of each the same way.
+A database that already holds a later revision, 1.0.1 to 1.0.4 and 1.1.1 to
+1.1.4, gets 1.0.5 and 1.1.5 as the next revision of each the same way.
 
 A tool belongs here when it is pure Python, deterministic, works on Windows,
 needs no network, and has no side effects outside its inputs. The

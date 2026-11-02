@@ -77,6 +77,7 @@ from azathoth.cli.production_inspection import (
 )
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.runs import (
+    list_run_children,
     list_workflow_runs,
     record_run_feedback,
     show_run,
@@ -280,6 +281,7 @@ def _dispatch(
             record_run_feedback=record_run_feedback,
             show_run=show_run,
             resume_run=resume_run,
+            list_run_children=list_run_children,
         )
 
     if command == EXPERIMENT_COMMAND:

@@ -59,6 +59,7 @@ from azathoth.workflows import (
     WORKFLOW_SPECIFICATION_TABLES,
     ProductionInvocationRepository,
     ProductionInvocationRunRepository,
+    RunChildRepository,
     RunJournalRepository,
     RunLeaseRepository,
     SQLiteProductionInvocationRepository,
@@ -73,6 +74,7 @@ from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
     SqlProductionInvocationRepository,
     SqlProductionInvocationRunRepository,
+    SqlRunChildRepository,
     SqlRunJournalRepository,
     SqlRunLeaseRepository,
     SqlWorkflowBenchmarkExecutionRepository,
@@ -293,6 +295,14 @@ class Repositories:
         """
 
         return SqlRunJournalRepository(self._database)
+
+    @cached_property
+    def run_children(
+        self,
+    ) -> RunChildRepository:
+        """Return the index of the runs each step of another run started (ADR 0105)."""
+
+        return SqlRunChildRepository(self._database)
 
     @cached_property
     def run_leases(

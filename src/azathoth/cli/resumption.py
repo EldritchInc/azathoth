@@ -16,13 +16,13 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.output_format import DEFAULT_WORKFLOW_OUTPUT_FORMAT, WorkflowOutputFormat
 from azathoth.cli.persistence import repositories
-from azathoth.cli.step_output import JsonLinesOutputWriter
-from azathoth.cli.tracing import run_traced
-from azathoth.cli.workflows import (
+from azathoth.cli.reporting import (
     report_configured_run,
     report_invocation_result,
     step_observer,
 )
+from azathoth.cli.step_output import JsonLinesOutputWriter
+from azathoth.cli.tracing import run_traced
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_invocation
@@ -217,6 +217,7 @@ def _resume_run(
                     observer=step_observer(output, writer),
                     journal=stores.run_journal,
                     leases=stores.run_leases,
+                    children=stores.run_children,
                 ),
             )
         )
@@ -295,6 +296,7 @@ def _resume_invocation(
                         observer=step_observer(output, writer),
                         journal=stores.run_journal,
                         leases=stores.run_leases,
+                        children=stores.run_children,
                     ),
                     journal=stores.run_journal,
                     run_repository=stores.runs,

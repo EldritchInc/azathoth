@@ -34,6 +34,7 @@ from azathoth.workflows import (
     WorkflowStepStatus,
     combine_observers,
 )
+from azathoth.workflows.run_children import RunChildRepository
 from azathoth.workflows.run_journal import RunJournalRepository
 from azathoth.workflows.run_lease import RunLeasePolicy, RunLeaseRepository
 from azathoth.workflows.runner import RetrySleep
@@ -235,6 +236,7 @@ class TracingWorkflowRunner(WorkflowRunner):
         journal: RunJournalRepository | None = None,
         leases: RunLeaseRepository | None = None,
         lease_policy: RunLeasePolicy | None = None,
+        children: RunChildRepository | None = None,
     ) -> None:
         super().__init__(
             executor=executor,
@@ -243,6 +245,7 @@ class TracingWorkflowRunner(WorkflowRunner):
             journal=journal,
             leases=leases,
             lease_policy=lease_policy,
+            children=children,
         )
 
         self._telemetry = telemetry
@@ -260,6 +263,7 @@ class TracingWorkflowRunner(WorkflowRunner):
             journal=self._journal,
             leases=self._leases,
             lease_policy=self._lease_policy,
+            children=self._children,
         )
 
     async def run(
@@ -332,17 +336,25 @@ def tracing_runner(
     observer: WorkflowRunObserver | None = None,
     journal: RunJournalRepository | None = None,
     leases: RunLeaseRepository | None = None,
+    children: RunChildRepository | None = None,
 ) -> WorkflowRunner:
     """Return a runner that traces its runs when telemetry is on, and a plain one otherwise.
 
-    Either records each run's journal in the given repository, and holds
-    each run's lease in the given one (ADR 0105).
+    Either records each run's journal in the given repository, holds each
+    run's lease in the given one, and indexes each child run under its
+    parent in the given one (ADR 0105).
     """
 
     if not telemetry.enabled:
-        return WorkflowRunner(observer=observer, journal=journal, leases=leases)
+        return WorkflowRunner(observer=observer, journal=journal, leases=leases, children=children)
 
-    return TracingWorkflowRunner(telemetry, observer=observer, journal=journal, leases=leases)
+    return TracingWorkflowRunner(
+        telemetry,
+        observer=observer,
+        journal=journal,
+        leases=leases,
+        children=children,
+    )
 
 
 __all__ = [

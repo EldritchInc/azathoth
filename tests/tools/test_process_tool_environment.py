@@ -397,7 +397,7 @@ CHILD_GRANTS = (
 
 @pytest.mark.parametrize(
     ("name", "version"),
-    [("run_workflow", "1.0.4"), ("loop_workflow", "1.1.4")],
+    [("run_workflow", "1.0.5"), ("loop_workflow", "1.1.5")],
 )
 def test_the_standard_tools_grant_what_their_child_process_needs(
     name: str,

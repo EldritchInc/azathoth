@@ -205,4 +205,4 @@ def test_cli_run_help_lists_feedback_action(
     captured = capsys.readouterr()
 
     assert raised.value.code == 0
-    assert "{show,resume,feedback}" in captured.out
+    assert "{show,children,resume,feedback}" in captured.out

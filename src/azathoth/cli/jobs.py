@@ -134,6 +134,7 @@ def _run(
         telemetry,
         journal=stores.run_journal,
         leases=stores.run_leases,
+        children=stores.run_children,
     )
 
     return asyncio.run(

@@ -7,6 +7,7 @@ from typing import cast
 from pydantic import JsonValue
 
 from azathoth.inputs import validate_media_type
+from azathoth.workflows import validate_idempotency_key
 
 COMMAND_ATTRIBUTE = "command"
 
@@ -32,6 +33,22 @@ def json_value(
         JsonValue,
         parsed,
     )
+
+
+def idempotency_key(
+    value: str,
+) -> str:
+    """Parse one idempotency key command-line value (ADR 0097).
+
+    Raises:
+        ArgumentTypeError: The key is empty, too long, or holds a control
+            character.
+    """
+
+    try:
+        return validate_idempotency_key(value)
+    except ValueError as exc:
+        raise ArgumentTypeError(str(exc)) from exc
 
 
 def media_type(

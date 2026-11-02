@@ -13,6 +13,7 @@ from azathoth.context import (
     Context,
     ContextEvent,
     RunLineage,
+    lineage_of,
     run_lineage,
     running_step,
 )
@@ -45,6 +46,7 @@ from azathoth.workflows.references import (
     resolve_named_value,
 )
 from azathoth.workflows.retry import WorkflowRetryPolicy
+from azathoth.workflows.run_children import RunChild, RunChildRepository
 from azathoth.workflows.run_journal import (
     JournalAttemptFinished,
     JournalAttemptStarted,
@@ -216,6 +218,9 @@ class WorkflowRunner:
     of its own, and released when the run ends, however it ends. Once the
     lease is lost, the run stops before its next entry with the
     `RunLeaseLostError`. A lease that cannot be released lapses on its own.
+
+    A runner given a child repository indexes each run started with lineage
+    under the run whose step started it, once, as the run starts.
     """
 
     def __init__(
@@ -227,6 +232,7 @@ class WorkflowRunner:
         journal: RunJournalRepository | None = None,
         leases: RunLeaseRepository | None = None,
         lease_policy: RunLeasePolicy | None = None,
+        children: RunChildRepository | None = None,
     ) -> None:
         if leases is not None and journal is None:
             raise ValueError("A runner that leases its runs must journal them.")
@@ -237,6 +243,7 @@ class WorkflowRunner:
         self._journal = journal
         self._leases = leases
         self._lease_policy = lease_policy if lease_policy is not None else RunLeasePolicy()
+        self._children = children
 
     def _notify(
         self,
@@ -1055,6 +1062,19 @@ class WorkflowRunner:
             if self._journal is not None
             else None
         )
+
+        parent = lineage_of(context)
+
+        if self._children is not None and parent is not None:
+            self._children.record(
+                RunChild.of(
+                    parent,
+                    run_id=run_id,
+                    workflow_id=workflow.metadata.id,
+                    invocation_id=invocation_id,
+                    recorded_at=datetime.now(tz=UTC),
+                )
+            )
 
         if keeper is None:
             return await self._execute_run(

@@ -12,6 +12,7 @@ RUN_COMMAND = "run"
 
 RUN_ACTION_ATTRIBUTE = "run_action"
 
+RUN_CHILDREN_ACTION = "children"
 RUN_FEEDBACK_ACTION = "feedback"
 RUN_RESUME_ACTION = "resume"
 RUN_SHOW_ACTION = "show"
@@ -50,6 +51,18 @@ def add_run_parser(
         type=UUID,
         metavar="RUN_ID",
         help="Workflow run UUID to inspect.",
+    )
+
+    run_children_parser = run_actions.add_parser(
+        RUN_CHILDREN_ACTION,
+        help="List the runs a run's steps started, with each one's status.",
+    )
+
+    run_children_parser.add_argument(
+        RUN_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="RUN_ID",
+        help="Workflow run UUID whose children to list.",
     )
 
     run_resume_parser = run_actions.add_parser(

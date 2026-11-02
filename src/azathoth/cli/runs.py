@@ -10,6 +10,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     WorkflowRunSource,
+    render_run_children,
     render_unfinished_run,
     render_workflow_run,
     render_workflow_run_evaluations,
@@ -113,10 +114,46 @@ def show_run(
     print(
         "\n\n".join(
             (
-                render_workflow_run(run, resumes=journal_resumes(entries)),
+                render_workflow_run(
+                    run,
+                    resumes=journal_resumes(entries),
+                    children=len(repositories(configuration).run_children.children_of(run_id)),
+                ),
                 render_workflow_run_evaluations(evaluations),
                 render_workflow_run_feedback(feedback),
             )
+        )
+    )
+
+    return 0
+
+
+def list_run_children(
+    run_id: UUID,
+) -> int:
+    """List the runs a run's steps started, oldest first, with each one's status (ADR 0105).
+
+    It works for a run that never finished too, because a child is indexed
+    as it starts. A run neither recorded nor journaled is not found.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    stores = repositories(configuration)
+
+    children = stores.run_children.children_of(run_id)
+
+    if not children and stores.runs.get(run_id) is None and not stores.run_journal.entries(run_id):
+        print(
+            f"Run {run_id} was not found.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(
+        render_run_children(
+            run_id,
+            [(child, stores.runs.get(child.child_run_id)) for child in children],
         )
     )
 

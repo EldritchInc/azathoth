@@ -574,7 +574,10 @@ def test_cli_passes_requested_output_format_to_run_and_invoke(
         workflow_id: UUID,
         payload: JsonValue,
         output: WorkflowOutputFormat,
+        idempotency_key: str | None = None,
     ) -> int:
+        assert idempotency_key is None
+
         requested.append(("invoke", output))
 
         return 0
