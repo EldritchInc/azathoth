@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
+from typing import Final
 
 from azathoth.persistence.database import (
     InitializationOutcome,
@@ -14,6 +15,9 @@ from azathoth.persistence.database import (
 from azathoth.persistence.dialect import Dialect, identifier, render
 from azathoth.persistence.errors import IntegrityError
 from azathoth.persistence.location import SQLiteLocation
+
+BUSY_TIMEOUT_SECONDS: Final = 30.0
+"""How long a transaction waits for another process's to commit before it gives up."""
 
 
 def bound(
@@ -75,7 +79,16 @@ class SQLiteSession:
 
 
 class SQLiteDatabase:
-    """An SQLite file, opened afresh for each transaction."""
+    """An SQLite file, opened afresh for each transaction.
+
+    Every transaction begins immediately, taking the file's write lock, and
+    waits up to `BUSY_TIMEOUT_SECONDS` for another process's transaction to
+    commit. A transaction that began deferred and then wrote could be
+    refused at once, without waiting, whenever another process was writing,
+    so processes that share a file, such as the children of one map
+    (ADR 0106), would fail each other. Taking the lock first serializes them
+    instead.
+    """
 
     def __init__(
         self,
@@ -110,28 +123,27 @@ class SQLiteDatabase:
     ) -> AbstractContextManager[SQLiteSession]:
         """Run a block as one transaction.
 
-        A lock takes `BEGIN IMMEDIATE`, which in SQLite locks the whole file
-        for writing, whichever table is named.
+        Every transaction takes `BEGIN IMMEDIATE`, which in SQLite locks the
+        whole file for writing, so a lock names a table only to check it.
         """
 
         if lock is not None:
             identifier(lock)
 
-        return self._transaction(immediate=lock is not None)
+        return self._transaction()
 
     @contextmanager
     def _transaction(
         self,
-        *,
-        immediate: bool,
     ) -> Iterator[SQLiteSession]:
         connection = sqlite3.connect(
             self._location.path,
             isolation_level=None,
+            timeout=BUSY_TIMEOUT_SECONDS,
         )
 
         try:
-            connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
 
             try:
                 yield SQLiteSession(connection)

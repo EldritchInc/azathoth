@@ -808,14 +808,17 @@ Larger behavior is built by composing workflows, not by adding control flow:
   production state and returns its result (ADR 0084);
 - **loops**: the `loop_workflow` tool invokes a child once per iteration and
   carries plain JSON state between iterations, until the child says it is
-  done or a limit is reached (ADR 0090).
+  done or a limit is reached (ADR 0090);
+- **maps**: the `map_workflow` tool invokes a child once per item of a list,
+  several at a time, and returns the results in the list's order (ADR 0106).
 
 Every child invocation is a production invocation with its own run, so each
 piece can be inspected, benchmarked, optimized and promoted on its own. Each
 child also records its lineage in its initial context: its depth, the step
 and run that started it, and the root of its tree (ADR 0104). Loops are
-bounded by an iteration limit and a time budget, and every child by the
-engine's 8-level depth limit.
+bounded by an iteration limit and a time budget, maps by an item limit, a
+concurrency limit and a time budget, and every child by the engine's 8-level
+depth limit.
 The budget is a loop setting, bounded by the loop tool's own timeout, which
 Azathoth tells every process tool (ADR 0093).
 
@@ -839,8 +842,8 @@ azathoth invocation resume <INVOCATION_ID>
 Committed layers and finished attempts are reused, and only the attempt in
 flight runs again. The composition tools invoke every child under a key of
 the step attempt, and every loop iteration under its own, so a resumed
-parent reuses the children it already ran: a loop resumed halfway carries on
-from where it was. `job run` resumes an interrupted invocation under its key
+parent reuses the children it already ran: a loop or a map resumed halfway
+carries on from where it was. `job run` resumes an interrupted invocation under its key
 by itself. `run children <RUN_ID>` lists what a run's steps started.
 
 ## Benchmarks and Judges

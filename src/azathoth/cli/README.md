@@ -307,6 +307,7 @@ azathoth init
 Database: /path/to/azathoth.db (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
@@ -328,6 +329,7 @@ Running it again is safe:
 Database: /path/to/azathoth.db (existing)
 Tool run_workflow@1.0.0 is already installed (revision 1).
 Tool loop_workflow@1.1.0 is already installed (revision 1).
+Tool map_workflow@1.0.0 is already installed (revision 1).
 Tool json_select@1.0.0 is already installed (revision 1).
 Tool json_object@1.0.0 is already installed (revision 1).
 Tool json_merge@1.0.0 is already installed (revision 1).
@@ -351,6 +353,7 @@ before it installs the tools, and names the database without its password:
 Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
@@ -3206,6 +3209,7 @@ azathoth tool install-standard
 ```text
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
@@ -3254,6 +3258,7 @@ again, which also installs the tools that are new in 1.1:
 ```text
 Installed tool run_workflow@1.0.0 revision 2.
 Installed tool loop_workflow@1.1.0 revision 2.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.

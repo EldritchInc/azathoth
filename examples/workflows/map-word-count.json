@@ -1,0 +1,60 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000007",
+    "name": "map a word count",
+    "description": "Count the words of every text in a list by invoking the deployed count-words-in-one-mapped-item workflow once per text, four at a time. The caller supplies the list.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000071",
+      "specification": {
+        "requirement": {
+          "name": "map_workflow",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "value": {
+              "workflow_id": "a1000000-0000-4000-8000-000000000006",
+              "max_items": 100,
+              "max_concurrency": 4
+            }
+          }
+        },
+        {
+          "name": "items",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "results",
+          "path": [
+            "results"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Mapping the child workflow"
+    }
+  ],
+  "result": {
+    "name": "results"
+  }
+}

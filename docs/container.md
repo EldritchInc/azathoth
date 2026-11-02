@@ -71,6 +71,7 @@ docker run --rm -v azathoth-data:/var/lib/azathoth $IMAGE init
 Database: /var/lib/azathoth/azathoth.db (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.
@@ -109,6 +110,7 @@ docker run --rm -e AZATHOTH_DATABASE="postgresql://azathoth:<PASSWORD>@db.exampl
 Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.

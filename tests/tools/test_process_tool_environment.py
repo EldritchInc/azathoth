@@ -382,7 +382,7 @@ def test_a_real_process_sees_exactly_the_built_environment(
 # The standard tools
 
 
-COMPOSITION_TOOLS = ("run_workflow", "loop_workflow")
+COMPOSITION_TOOLS = ("run_workflow", "loop_workflow", "map_workflow")
 
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
@@ -397,7 +397,7 @@ CHILD_GRANTS = (
 
 @pytest.mark.parametrize(
     ("name", "version"),
-    [("run_workflow", "1.0.5"), ("loop_workflow", "1.1.5")],
+    [("run_workflow", "1.0.5"), ("loop_workflow", "1.1.5"), ("map_workflow", "1.0.0")],
 )
 def test_the_standard_tools_grant_what_their_child_process_needs(
     name: str,

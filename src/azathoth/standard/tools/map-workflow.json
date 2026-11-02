@@ -1,0 +1,93 @@
+{
+  "definition": {
+    "id": "c1000000-0000-4000-8000-000000000004",
+    "name": "map_workflow",
+    "description": "Invoke a deployed child workflow once per item of a list, several at a time, and return the results in item order.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "workflow_id": {
+                "type": "string"
+              },
+              "max_items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "max_concurrency": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16
+              },
+              "child_timeout_seconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "budget_seconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "workflow_id",
+              "max_items"
+            ]
+          },
+          "items": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "settings",
+          "items"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "count"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c1000000-0000-4000-8000-000000000044",
+      "tool_id": "c1000000-0000-4000-8000-000000000004",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Invoke a deployed child workflow once per item of a list, several at a time.\n\nEach child receives {\"item\": <item>, \"index\": <i>}, where i is the item's\n0-based position, and the results come back in item order, each the child's\nwhole emitted result. At most max_concurrency children run at once.\n\nEvery item runs to its end, so one that fails never cancels another. The map\nfails when any item failed, naming the first by index and how many failed.\n\nThe map runs for at most budget_seconds (ADR 0093). The budget defaults to\nDEFAULT_BUDGET_SECONDS, or less when the tool's own timeout is shorter, and an\nexplicit budget must fit inside that timeout less a margin. Azathoth tells the\ntool its timeout in AZATHOTH_TOOL_TIMEOUT_SECONDS. Children still running when\nthe budget runs out are left to finish on their own.\n\nEach child records where it came from, and Azathoth bounds how deeply children\nnest (ADR 0104). Each item's child is invoked under the idempotency key of\nthis step's attempt and the item's index (ADR 0105), so a map whose parent is\nresumed replays the items it already ran, resumes the ones it was running,\nand runs the rest. A child another process still runs is waited for, until\nthe item's timeout. Errors are written as UTF-8, whatever the platform's\nencoding.\n\"\"\"\n\nimport json\nimport os\nimport subprocess\nimport sys\nimport threading\nimport time\nfrom concurrent.futures import ThreadPoolExecutor, wait\n\nTIMEOUT_VARIABLE = \"AZATHOTH_TOOL_TIMEOUT_SECONDS\"\nDECLARED_TIMEOUT_SECONDS = 86400\nMARGIN_SECONDS = 60\nDEFAULT_BUDGET_SECONDS = 7140\nDEFAULT_CHILD_TIMEOUT_SECONDS = 600\nDEFAULT_MAX_CONCURRENCY = 4\nMAX_CONCURRENCY = 16\nLINEAGE_VARIABLE = \"AZATHOTH_LINEAGE\"\nSTILL_RUNNING_CODE = \"invocation_incomplete\"\nWAIT_SECONDS = 1\n\n\ndef fail(message, *, now=False):\n    \"\"\"Write the message as UTF-8 and exit with status 1.\n\n    With now, exit at once, without waiting for the children still running.\n    \"\"\"\n\n    sys.stderr.buffer.write(message.encode(\"utf-8\"))\n    sys.stderr.flush()\n\n    if now:\n        os._exit(1)\n\n    sys.exit(1)\n\n\ndef is_integer(value):\n    \"\"\"Return whether a JSON value is an integer, and not a boolean.\"\"\"\n\n    return isinstance(value, int) and not isinstance(value, bool)\n\n\ndef is_number(value):\n    \"\"\"Return whether a JSON value is a number, and not a boolean.\"\"\"\n\n    return isinstance(value, (int, float)) and not isinstance(value, bool)\n\n\ndef idempotency_key(index):\n    \"\"\"Return the key of one item's child in this step attempt, or None outside a step.\"\"\"\n\n    lineage = os.environ.get(LINEAGE_VARIABLE)\n\n    if not lineage:\n        return None\n\n    step = json.loads(lineage)[\"step\"]\n\n    return f\"azathoth:{step['run_id']}:{step['step_id']}:{step['attempt']}:{index}\"\n\n\ninputs = json.load(sys.stdin)\nsettings = inputs[\"settings\"]\nitems = inputs.get(\"items\")\nworkflow_id = settings.get(\"workflow_id\")\nmax_items = settings.get(\"max_items\")\nmax_concurrency = settings.get(\"max_concurrency\", DEFAULT_MAX_CONCURRENCY)\nchild_timeout = settings.get(\"child_timeout_seconds\", DEFAULT_CHILD_TIMEOUT_SECONDS)\nbudget = settings.get(\"budget_seconds\")\n\nif not isinstance(workflow_id, str) or not workflow_id:\n    fail(\"Map settings must name the child workflow_id.\")\n\nif not is_integer(max_items) or max_items < 1:\n    fail(\"Map settings must set max_items to a positive integer.\")\n\nif not is_integer(max_concurrency) or not 1 <= max_concurrency <= MAX_CONCURRENCY:\n    fail(f\"Map settings must set max_concurrency to an integer from 1 to {MAX_CONCURRENCY}.\")\n\nif not is_number(child_timeout) or child_timeout <= 0:\n    fail(\"Map settings must set child_timeout_seconds to a positive number.\")\n\nif not isinstance(items, list):\n    fail(\"Map items must be a list.\")\n\nif len(items) > max_items:\n    fail(f\"Map of {len(items)} items exceeds its max_items of {max_items}.\")\n\ntool_timeout = float(os.environ.get(TIMEOUT_VARIABLE, DECLARED_TIMEOUT_SECONDS))\nceiling = tool_timeout - MARGIN_SECONDS\n\nif budget is None:\n    budget = min(DEFAULT_BUDGET_SECONDS, ceiling)\nelif not is_number(budget) or budget <= 0:\n    fail(\"Map settings must set budget_seconds to a positive number.\")\nelif budget > ceiling:\n    fail(\n        f\"Map budget of {budget:g} seconds exceeds the tool's timeout of \"\n        f\"{tool_timeout:g} seconds less a {MARGIN_SECONDS}-second margin.\"\n    )\n\ndeadline = time.monotonic() + budget\ncount = len(items)\nfinished = 0\nfinished_lock = threading.Lock()\n\n\ndef run_item(index):\n    \"\"\"Invoke one item's child to its end; return (result, None) or (None, message).\"\"\"\n\n    global finished\n\n    item_deadline = time.monotonic() + child_timeout\n    key = idempotency_key(index)\n    timed_out = (\n        f\"Item {index} of {count}: child workflow {workflow_id} \"\n        f\"timed out after {child_timeout:g} seconds.\"\n    )\n\n    command = [\n        sys.executable,\n        \"-m\",\n        \"azathoth.cli\",\n        \"workflow\",\n        \"invoke\",\n        workflow_id,\n        \"--input\",\n        json.dumps({\"item\": items[index], \"index\": index}),\n        \"--output\",\n        \"jsonl\",\n    ]\n\n    if key is not None:\n        command.extend([\"--idempotency-key\", key])\n\n    try:\n        while True:\n            left = item_deadline - time.monotonic()\n\n            if left <= 0:\n                return None, timed_out\n\n            child = subprocess.Popen(\n                command,\n                env={**os.environ, \"PYTHONIOENCODING\": \"utf-8\"},\n                stdout=subprocess.PIPE,\n                stderr=subprocess.PIPE,\n                text=True,\n                encoding=\"utf-8\",\n            )\n\n            try:\n                stdout, stderr = child.communicate(timeout=left)\n            except subprocess.TimeoutExpired:\n                child.kill()\n                child.communicate()\n\n                return None, timed_out\n\n            lines = [line for line in stdout.splitlines() if line.strip()]\n            final = json.loads(lines[-1]) if lines else {}\n\n            if final.get(\"type\") == \"error\" and final.get(\"code\") == STILL_RUNNING_CODE:\n                time.sleep(min(WAIT_SECONDS, max(item_deadline - time.monotonic(), 0)))\n                continue\n\n            break\n\n        if final.get(\"type\") == \"result\":\n            return final.get(\"value\"), None\n\n        if final.get(\"type\") == \"error\":\n            invocation_id = final.get(\"invocation_id\")\n            invocation = f\" invocation {invocation_id}\" if invocation_id else \"\"\n\n            return None, (\n                f\"Item {index} of {count}: child workflow {workflow_id}{invocation} \"\n                f\"failed: {final['message']}\"\n            )\n\n        errors = stderr.strip().splitlines()\n\n        return None, (\n            f\"Item {index} of {count}: \"\n            + (errors[-1] if errors else f\"child workflow {workflow_id} failed.\")\n        )\n    finally:\n        with finished_lock:\n            finished += 1\n\n\nresults = [None] * count\nfailures = {}\n\nif count:\n    pool = ThreadPoolExecutor(max_workers=min(max_concurrency, count))\n    futures = {pool.submit(run_item, index): index for index in range(count)}\n    done, pending = wait(futures, timeout=max(deadline - time.monotonic(), 0))\n\n    if pending:\n        with finished_lock:\n            ended = finished\n\n        fail(\n            f\"Map over child workflow {workflow_id} ran out of time \"\n            f\"after {ended} of {count} items finished.\",\n            now=True,\n        )\n\n    pool.shutdown()\n\n    for future, index in futures.items():\n        value, message = future.result()\n\n        if message is None:\n            results[index] = value\n        else:\n            failures[index] = message\n\nif failures:\n    first = min(failures)\n\n    fail(f\"{failures[first]} ({len(failures)} of {count} items failed).\")\n\njson.dump({\"results\": results, \"count\": count}, sys.stdout)\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 86400.0,
+      "environment": [
+        "AZATHOTH_DATABASE",
+        "OPENROUTER_API_KEY",
+        "AZATHOTH_OTEL",
+        "OTEL_*",
+        "AZATHOTH_BEDROCK",
+        "AZATHOTH_BEDROCK_PRICING",
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}

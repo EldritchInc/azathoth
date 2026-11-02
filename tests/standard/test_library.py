@@ -43,6 +43,7 @@ def test_standard_documents_load_in_their_fixed_order() -> None:
     assert tool_references(standard_tool_documents()) == [
         "run_workflow@1.0.0",
         "loop_workflow@1.1.0",
+        "map_workflow@1.0.0",
         "json_select@1.0.0",
         "json_object@1.0.0",
         "json_merge@1.0.0",
@@ -57,6 +58,7 @@ def test_standard_documents_keep_their_tool_ids() -> None:
     assert [document.definition.id for document in standard_tool_documents()] == [
         UUID("c1000000-0000-4000-8000-000000000001"),
         UUID("c1000000-0000-4000-8000-000000000002"),
+        UUID("c1000000-0000-4000-8000-000000000004"),
         UUID("c2000000-0000-4000-8000-000000000001"),
         UUID("c2000000-0000-4000-8000-000000000002"),
         UUID("c2000000-0000-4000-8000-000000000003"),
@@ -140,6 +142,7 @@ def test_standard_implementations_keep_their_ids() -> None:
     ] == [
         UUID("c1000000-0000-4000-8000-000000000011"),
         UUID("c1000000-0000-4000-8000-000000000022"),
+        UUID("c1000000-0000-4000-8000-000000000044"),
         UUID("c2000000-0000-4000-8000-000000000011"),
         UUID("c2000000-0000-4000-8000-000000000022"),
         UUID("c2000000-0000-4000-8000-000000000033"),
@@ -165,7 +168,7 @@ def test_only_the_composition_tools_grant_themselves_environment_variables() -> 
         if implementation.environment
     ]
 
-    assert granting == ["run_workflow", "loop_workflow"]
+    assert granting == ["run_workflow", "loop_workflow", "map_workflow"]
 
 
 @pytest.mark.parametrize(
