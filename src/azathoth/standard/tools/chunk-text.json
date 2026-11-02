@@ -1,0 +1,63 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000005",
+    "name": "chunk_text",
+    "description": "Split text into chunks of at most a number of characters, breaking at paragraphs, lines, sentences or whitespace where it can, with optional overlap.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "max_characters": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "overlap_characters": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "text",
+          "max_characters"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "chunks"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000055",
+      "tool_id": "c2000000-0000-4000-8000-000000000005",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Split text into chunks of at most `max_characters` characters.\n\nCharacters are Unicode code points; no tokenizer is involved, so the size of\na chunk in a model's tokens is not known here. Each chunk ends at the last\nboundary that falls in the second half of its allowed length, preferring a\nparagraph break, then a line break, then the end of a sentence, then any\nwhitespace. A chunk with none of these is cut at exactly `max_characters`.\nThe boundary stays at the end of the chunk before it, so without overlap the\nchunks joined with no separator are the text exactly.\n\nWith `overlap_characters`, each chunk after the first starts up to that many\ncharacters before the previous chunk ended.\n\"\"\"\n\nimport json\nimport re\nimport sys\n\nTOOL = \"chunk_text\"\nINPUTS = (\"text\", \"max_characters\", \"overlap_characters\")\nREQUIRED = (\"text\", \"max_characters\")\nSENTENCE_END = re.compile(r\"[.!?][\\\"')\\]]*\\s\")\nWHITESPACE = re.compile(r\"\\s\")\n\n\ndef fail(status, message):\n    sys.stderr.buffer.write(message.encode(\"utf-8\"))\n    sys.exit(status)\n\n\ndef read_inputs():\n    inputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\n    for name in inputs:\n        if name not in INPUTS:\n            fail(2, f\"{TOOL} does not take the input {name!r}.\")\n\n    for name in REQUIRED:\n        if name not in inputs:\n            fail(2, f\"{TOOL} needs the input {name!r}.\")\n\n    return inputs\n\n\ndef is_integer(value):\n    return isinstance(value, int) and not isinstance(value, bool)\n\n\ndef last_end(pattern, window):\n    end = 0\n\n    for match in pattern.finditer(window):\n        end = match.end()\n\n    return end\n\n\ndef boundary(window):\n    least = len(window) // 2\n\n    for separator in (\"\\n\\n\", \"\\n\"):\n        found = window.rfind(separator)\n\n        if found != -1 and found + len(separator) > least:\n            return found + len(separator)\n\n    for pattern in (SENTENCE_END, WHITESPACE):\n        end = last_end(pattern, window)\n\n        if end > least:\n            return end\n\n    return len(window)\n\n\ndef chunks(text, size, overlap):\n    result = []\n    start = 0\n\n    while start < len(text):\n        if len(text) - start <= size:\n            result.append(text[start:])\n            break\n\n        cut = start + boundary(text[start : start + size])\n        result.append(text[start:cut])\n        start = max(cut - overlap, start + 1)\n\n    return result\n\n\ninputs = read_inputs()\ntext = inputs[\"text\"]\nsize = inputs[\"max_characters\"]\noverlap = inputs.get(\"overlap_characters\", 0)\n\nif not isinstance(text, str):\n    fail(2, f\"{TOOL} needs 'text' to be a string.\")\n\nif not is_integer(size) or size < 1:\n    fail(2, f\"{TOOL} needs 'max_characters' to be a whole number of at least 1.\")\n\nif not is_integer(overlap) or overlap < 0 or overlap >= size:\n    fail(\n        2,\n        f\"{TOOL} needs 'overlap_characters' to be a whole number from 0 to \"\n        f\"one less than 'max_characters'.\",\n    )\n\nresult = chunks(text, size, overlap)\n\nsys.stdout.buffer.write(json.dumps({\"chunks\": result}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

@@ -9,13 +9,16 @@ import pytest
 from pydantic import JsonValue
 
 from azathoth.prompting import ContextPromptStrategySpec, PortfolioModelSelection
+from azathoth.standard import standard_tool_documents
 from azathoth.tools import (
     ToolDocument,
+    ToolExecutionError,
     ToolImplementation,
     decode_tool_document,
     encode_tool_document,
 )
 from azathoth.workflows import (
+    ToolStepSpecification,
     WorkflowConstantValue,
     WorkflowRun,
     WorkflowSpecification,
@@ -31,8 +34,9 @@ from tests.examples.test_novel_chapter_examples import (
     with_constant_input,
 )
 from tests.examples.test_novel_revision_examples import (
-    ECHO_TOOL_DOCUMENT,
     NOVEL_EXAMPLES,
+    SELECT_TOOL_DOCUMENT,
+    STANDARD_TOOLS,
     RoutingLanguageModel,
     generate_novel_candidate,
     read_tool,
@@ -52,7 +56,13 @@ PREPARE_CHAPTERS_TOOL_DOCUMENT = TOOLS / "prepare-chapters.json"
 
 PREPARE_FINAL_TOOL_DOCUMENT = TOOLS / "prepare-final-edits.json"
 
-ASSEMBLE_TOOL_DOCUMENT = TOOLS / "assemble-novel.json"
+VALIDATE_TOOL_DOCUMENT = STANDARD_TOOLS / "validate-json.json"
+
+JOIN_TOOL_DOCUMENT = STANDARD_TOOLS / "join-text.json"
+
+RENDER_TOOL_DOCUMENT = STANDARD_TOOLS / "render-template.json"
+
+OBJECT_TOOL_DOCUMENT = STANDARD_TOOLS / "json-object.json"
 
 EDIT_QUEUE_WORKFLOW_DOCUMENT = WORKFLOWS / "edit-queue.json"
 
@@ -71,6 +81,8 @@ PREPARE_CHAPTERS_STEP_ID = UUID("e1000000-0000-4000-8000-000000000074")
 FINAL_EDITS_STEP_ID = UUID("e1000000-0000-4000-8000-000000000077")
 
 PREPARE_FINAL_STEP_ID = UUID("e1000000-0000-4000-8000-000000000078")
+
+VALIDATE_IMPLEMENTATION_ID = "c2000000-0000-4000-8000-000000000044"
 
 CHAPTER_TIMEOUT_SECONDS = 1800
 
@@ -132,7 +144,6 @@ DOCUMENTS = (
     MERGE_TOOL_DOCUMENT,
     PREPARE_CHAPTERS_TOOL_DOCUMENT,
     PREPARE_FINAL_TOOL_DOCUMENT,
-    ASSEMBLE_TOOL_DOCUMENT,
     EDIT_QUEUE_WORKFLOW_DOCUMENT,
     NOVEL_WORKFLOW_DOCUMENT,
 )
@@ -194,13 +205,15 @@ def novel_model(
     *,
     chapters: int = 3,
     edits: JsonValue = None,
+    story: JsonValue = STORY,
+    outline_reply: str | None = None,
 ) -> RoutingLanguageModel:
     """Script the story, outline, final review and coherence replies."""
 
     return RoutingLanguageModel(
         (
-            (STORY_MARKER, json.dumps(STORY)),
-            (OUTLINE_MARKER, outline(chapters)),
+            (STORY_MARKER, json.dumps(story)),
+            (OUTLINE_MARKER, outline(chapters) if outline_reply is None else outline_reply),
             (REVIEW_MARKER, json.dumps({"edits": edits if edits is not None else []})),
             (COHERENCE_MARKER, json.dumps(COHERENCE_REPORT)),
         )
@@ -240,10 +253,13 @@ def write_novel(
     candidate = generate_novel_candidate(
         workflow,
         model,
-        read_tool(ECHO_TOOL_DOCUMENT),
+        read_tool(SELECT_TOOL_DOCUMENT),
         read_tool(PREPARE_CHAPTERS_TOOL_DOCUMENT),
         read_tool(PREPARE_FINAL_TOOL_DOCUMENT),
-        read_tool(ASSEMBLE_TOOL_DOCUMENT),
+        read_tool(VALIDATE_TOOL_DOCUMENT),
+        read_tool(JOIN_TOOL_DOCUMENT),
+        read_tool(RENDER_TOOL_DOCUMENT),
+        read_tool(OBJECT_TOOL_DOCUMENT),
         stub_loop_tool(),
     )
 
@@ -270,7 +286,7 @@ def edit_queue(
     candidate = generate_novel_candidate(
         workflow,
         RoutingLanguageModel(()),
-        read_tool(ECHO_TOOL_DOCUMENT),
+        read_tool(SELECT_TOOL_DOCUMENT),
         read_tool(PICK_TOOL_DOCUMENT),
         read_tool(MERGE_TOOL_DOCUMENT),
         stub_loop_tool(),
@@ -716,3 +732,115 @@ def test_whole_book_prompts_read_the_finished_chapters() -> None:
 
     assert "Text of chapter 2." in review_prompt
     assert "Edited: Text of chapter 2." in coherence_prompt
+
+
+def rejected_plan(
+    model: RoutingLanguageModel,
+) -> str:
+    """Run the novel workflow with a model whose plan must be rejected; return the error."""
+
+    workflow = read_workflow(NOVEL_WORKFLOW_DOCUMENT)
+
+    candidate = generate_novel_candidate(
+        workflow,
+        model,
+        read_tool(SELECT_TOOL_DOCUMENT),
+        read_tool(PREPARE_CHAPTERS_TOOL_DOCUMENT),
+        read_tool(PREPARE_FINAL_TOOL_DOCUMENT),
+        read_tool(VALIDATE_TOOL_DOCUMENT),
+        read_tool(JOIN_TOOL_DOCUMENT),
+        read_tool(RENDER_TOOL_DOCUMENT),
+        read_tool(OBJECT_TOOL_DOCUMENT),
+        stub_loop_tool(),
+    )
+
+    with pytest.raises(ToolExecutionError) as error:
+        run_with_input(candidate, {"idea": "A lighthouse."})
+
+    return str(error.value)
+
+
+def test_a_story_plan_without_a_title_stops_the_novel() -> None:
+    model = novel_model(story={"premise": "A light keeps the sea asleep."})
+
+    assert rejected_plan(model) == (
+        f"Tool implementation {VALIDATE_IMPLEMENTATION_ID} exited with status 1: "
+        "validate_json rejected the value at $: 'title' is a required property."
+    )
+    assert model.prompts_containing(OUTLINE_MARKER) == ()
+
+
+def test_a_story_plan_with_a_nameless_character_stops_the_novel() -> None:
+    model = novel_model(
+        story={
+            "title": "The Keeper",
+            "premise": "A light keeps the sea asleep.",
+            "characters": [{"role": "keeper"}],
+        }
+    )
+
+    assert rejected_plan(model).endswith(
+        "validate_json rejected the value at $.characters[0]: 'name' is a required property."
+    )
+
+
+def test_an_empty_outline_stops_the_novel_before_any_chapter() -> None:
+    model = novel_model(outline_reply='{"chapters": []}')
+
+    assert rejected_plan(model).endswith(
+        "validate_json rejected the value at $: [] should be non-empty."
+    )
+    assert model.prompts_containing(REVIEW_MARKER) == ()
+
+
+def test_an_outline_entry_without_a_summary_stops_the_novel() -> None:
+    model = novel_model(outline_reply='{"chapters": [{"number": 1}]}')
+
+    assert rejected_plan(model).endswith(
+        "validate_json rejected the value at $[0]: 'summary' is a required property."
+    )
+
+
+def test_the_novel_shapes_its_values_with_the_standard_tools() -> None:
+    standard = {document.definition.name for document in standard_tool_documents()}
+
+    tools = sorted(
+        step.specification.requirement.name
+        for path in sorted(WORKFLOWS.glob("*.json"))
+        for step in read_workflow(path).steps
+        if isinstance(step.specification, ToolStepSpecification)
+        and step.specification.requirement.name in standard
+    )
+
+    assert tools == [
+        "join_text",
+        "json_object",
+        "json_select",
+        "json_select",
+        "json_select",
+        "json_select",
+        "loop_workflow",
+        "loop_workflow",
+        "loop_workflow",
+        "loop_workflow",
+        "render_template",
+        "validate_json",
+        "validate_json",
+    ]
+    assert sorted(path.name for path in TOOLS.glob("*.json")) == [
+        "finalize-chapter.json",
+        "merge-edit.json",
+        "pack-revision.json",
+        "pick-edit.json",
+        "prepare-chapters.json",
+        "prepare-final-edits.json",
+        "prepare-revision.json",
+    ]
+
+
+def test_the_readme_shows_the_real_rejection_of_a_plan() -> None:
+    message = rejected_plan(novel_model(story={"premise": "A light keeps the sea asleep."}))
+
+    readme = NOVEL_EXAMPLES / "README.md"
+
+    assert f"\n{message}\n" in readme.read_text(encoding="utf-8")

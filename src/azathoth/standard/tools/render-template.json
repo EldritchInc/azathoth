@@ -1,0 +1,50 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000007",
+    "name": "render_template",
+    "description": "Render a text template with {name} placeholders, as in prompt templates, from the step's named inputs.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "template"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000077",
+      "tool_id": "c2000000-0000-4000-8000-000000000007",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Render a text template from the step's named inputs.\n\nTemplates use the same placeholders as prompt templates: `{name}` is\nreplaced by the input called `name`, and `{{` and `}}` are literal braces. A\nstring is inserted as it is, and any other value as compact JSON, exactly as\na prompt renders it. Only plain names are allowed: no fields, indexes,\nconversions or format specifications; select nested values with\n`json_select` first. Inputs the template does not use are ignored.\n\"\"\"\n\nimport json\nimport string\nimport sys\n\nTOOL = \"render_template\"\n\n\ndef fail(status, message):\n    sys.stderr.buffer.write(message.encode(\"utf-8\"))\n    sys.exit(status)\n\n\ndef parse(template):\n    try:\n        pieces = list(string.Formatter().parse(template))\n    except ValueError as error:\n        fail(2, f\"{TOOL} could not read the template: {error}.\")\n\n    for _, name, spec, conversion in pieces:\n        if name is None:\n            continue\n\n        if not name.isidentifier() or spec or conversion is not None:\n            shown = \"{\" + name + (\"!\" + conversion if conversion else \"\")\n            shown = shown + (\":\" + spec if spec else \"\") + \"}\"\n            fail(2, f\"{TOOL} allows only plain {{name}} placeholders; {shown} is not one.\")\n\n    return pieces\n\n\ndef render_value(value):\n    if isinstance(value, str):\n        return value\n\n    return json.dumps(value, ensure_ascii=False, separators=(\",\", \":\"))\n\n\ninputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\nif \"template\" not in inputs:\n    fail(2, f\"{TOOL} needs the input 'template'.\")\n\ntemplate = inputs.pop(\"template\")\n\nif not isinstance(template, str):\n    fail(2, f\"{TOOL} needs 'template' to be a string.\")\n\nparts = []\n\nfor literal, name, _, _ in parse(template):\n    parts.append(literal)\n\n    if name is None:\n        continue\n\n    if name == \"template\":\n        fail(2, f\"{TOOL} reserves the name 'template' for the template itself.\")\n\n    if name not in inputs:\n        fail(2, f\"{TOOL} has no value for {{{name}}}.\")\n\n    parts.append(render_value(inputs[name]))\n\nsys.stdout.buffer.write(json.dumps({\"text\": \"\".join(parts)}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

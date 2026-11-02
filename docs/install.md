@@ -254,13 +254,24 @@ azathoth init
 Database: /Users/you/azathoth-work/azathoth.db (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 The standard tools ship inside the package, so composing workflows needs no
 copy of the repository:
 
 - `run_workflow` runs a child workflow once;
-- `loop_workflow` runs a child workflow repeatedly.
+- `loop_workflow` runs a child workflow repeatedly;
+- `json_select`, `json_object` and `json_merge` reshape the JSON that passes
+  between steps, and `validate_json` checks it against a JSON Schema;
+- `chunk_text`, `join_text` and `render_template` split, join and fill in
+  text.
 
 Like every tool, they reach the database only by a recorded import, which is
 what `init` does. It needs no provider key, and running it again is safe: it
@@ -349,6 +360,13 @@ azathoth init
 Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 Azathoth never shows the password: every message names the database without
@@ -495,8 +513,8 @@ name, so upgrading never changes what an existing workflow runs.
 Upgrading to 1.1 is the one exception. Process tools stop inheriting your
 environment, so a tool sees your provider key or database only if it grants
 itself them. The 1.1 standard tools do, as new revisions of the same
-versions, and `azathoth init` installs them; until it runs, child workflows
-fail. A process tool of your own that relied on an inherited variable must
+versions, and `azathoth init` installs them, along with the data-shaping
+tools that are new in 1.1; until it runs, child workflows fail. A process tool of your own that relied on an inherited variable must
 grant it; see
 [Process Environment](../src/azathoth/tools/README.md#process-environment).
 

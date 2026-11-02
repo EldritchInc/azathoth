@@ -55,11 +55,11 @@ from tests.examples.test_novel_revision_examples import (
     APPLY_MARKER,
     CHAPTER,
     CONTEXT,
-    ECHO_TOOL_DOCUMENT,
     PACK_TOOL_DOCUMENT,
     REQUESTS,
     REVISE_WORKFLOW_DOCUMENT,
     REVISED,
+    SELECT_TOOL_DOCUMENT,
     VERIFY_MARKER,
     RoutingLanguageModel,
 )
@@ -387,7 +387,7 @@ def test_revise_chapter_promotes_and_invokes(
     results = promote_and_invoke(
         cli,
         workflow=REVISE_WORKFLOW_DOCUMENT,
-        tools=(ECHO_TOOL_DOCUMENT, PACK_TOOL_DOCUMENT),
+        tools=(SELECT_TOOL_DOCUMENT, PACK_TOOL_DOCUMENT),
         models=novelist_catalog(),
         language_model=RoutingLanguageModel(
             (

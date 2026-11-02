@@ -5,7 +5,6 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-import pytest
 from pydantic import JsonValue
 
 from azathoth.context import Context
@@ -47,7 +46,9 @@ from tests.model_authorization import generate_workflow_candidate
 
 NOVEL_EXAMPLES = Path(__file__).parents[2] / "examples" / "novel"
 
-ECHO_TOOL_DOCUMENT = NOVEL_EXAMPLES / "tools" / "echo-json.json"
+STANDARD_TOOLS = Path(__file__).parents[2] / "src" / "azathoth" / "standard" / "tools"
+
+SELECT_TOOL_DOCUMENT = STANDARD_TOOLS / "json-select.json"
 
 PACK_TOOL_DOCUMENT = NOVEL_EXAMPLES / "tools" / "pack-revision.json"
 
@@ -205,7 +206,7 @@ def revise(
     candidate = generate_novel_candidate(
         workflow,
         model,
-        read_tool(ECHO_TOOL_DOCUMENT),
+        read_tool(SELECT_TOOL_DOCUMENT),
         read_tool(PACK_TOOL_DOCUMENT),
     )
 
@@ -222,17 +223,8 @@ def revise(
     return workflow_result(run, workflow.result, steps=candidate.steps)
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        pytest.param(ECHO_TOOL_DOCUMENT, id="echo-json"),
-        pytest.param(PACK_TOOL_DOCUMENT, id="pack-revision"),
-    ],
-)
-def test_revision_tool_examples_are_canonical(
-    path: Path,
-) -> None:
-    encoded = path.read_text(encoding="utf-8")
+def test_pack_revision_tool_example_is_canonical() -> None:
+    encoded = PACK_TOOL_DOCUMENT.read_text(encoding="utf-8")
 
     assert encode_tool_document(decode_tool_document(encoded)) == encoded.rstrip("\n")
 
@@ -343,7 +335,7 @@ def test_revise_chapter_runs_on_every_benchmark_input() -> None:
     candidate = generate_novel_candidate(
         workflow,
         model,
-        read_tool(ECHO_TOOL_DOCUMENT),
+        read_tool(SELECT_TOOL_DOCUMENT),
         read_tool(PACK_TOOL_DOCUMENT),
     )
 

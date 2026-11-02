@@ -1,0 +1,54 @@
+{
+  "definition": {
+    "id": "c2000000-0000-4000-8000-000000000004",
+    "name": "validate_json",
+    "description": "Check a JSON value against a JSON Schema and return it unchanged, or fail with its first violation.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "schema": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "schema"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {}
+        },
+        "required": [
+          "value"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c2000000-0000-4000-8000-000000000044",
+      "tool_id": "c2000000-0000-4000-8000-000000000004",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Check a JSON value against a JSON Schema, and fail when it does not match.\n\nThe schema's dialect follows its `$schema` keyword and defaults to Draft\n2020-12, as everywhere else in Azathoth. A schema refers only to itself: no\n`$ref` is fetched from the network. A value that matches is returned\nunchanged, so the steps after this one read the checked value.\n\nA value that does not match fails the step with its first violation, by JSON\npath and then by message, and the number of others. Long messages are cut\nshort, because the engine quotes only the end of a tool's error output.\n\"\"\"\n\nimport json\nimport sys\n\nTOOL = \"validate_json\"\nINPUTS = (\"value\", \"schema\")\nMESSAGE_LIMIT = 300\nPATH_LIMIT = 120\n\n\ndef fail(status, message):\n    sys.stderr.buffer.write(message.encode(\"utf-8\"))\n    sys.exit(status)\n\n\ndef read_inputs():\n    inputs = json.loads(sys.stdin.buffer.read().decode(\"utf-8\"))\n\n    for name in inputs:\n        if name not in INPUTS:\n            fail(2, f\"{TOOL} does not take the input {name!r}.\")\n\n    for name in INPUTS:\n        if name not in inputs:\n            fail(2, f\"{TOOL} needs the input {name!r}.\")\n\n    return inputs\n\n\ndef shorten(text, limit):\n    if len(text) <= limit:\n        return text\n\n    return text[: limit - 1] + \"…\"\n\n\ndef sentence(text):\n    return text if text.endswith(\"…\") else f\"{text}.\"\n\n\ndef render_path(parts):\n    return \"$\" + \"\".join(f\"[{part}]\" if isinstance(part, int) else f\".{part}\" for part in parts)\n\n\ninputs = read_inputs()\nschema = inputs[\"schema\"]\n\nif not isinstance(schema, (dict, bool)):\n    fail(2, f\"{TOOL} needs 'schema' to be a JSON Schema: an object or a boolean.\")\n\ntry:\n    from jsonschema import Draft202012Validator\n    from jsonschema.exceptions import SchemaError\n    from jsonschema.validators import validator_for\n    from referencing.exceptions import Unresolvable\nexcept ImportError:\n    fail(\n        2,\n        f\"{TOOL} needs the jsonschema package, which Azathoth installs; \"\n        \"run it with the Python that runs Azathoth.\",\n    )\n\nif isinstance(schema, bool):\n    validator_class = Draft202012Validator\nelse:\n    validator_class = validator_for(schema, default=Draft202012Validator)\n\n    try:\n        validator_class.check_schema(schema)\n    except SchemaError as error:\n        problem = shorten(error.message, MESSAGE_LIMIT)\n        fail(2, sentence(f\"{TOOL} was given an invalid schema: {problem}\"))\n\ntry:\n    violations = sorted(\n        (render_path(error.absolute_path), error.message)\n        for error in validator_class(schema).iter_errors(inputs[\"value\"])\n    )\nexcept Unresolvable as error:\n    reference = shorten(str(error), MESSAGE_LIMIT)\n    fail(2, sentence(f\"{TOOL} could not resolve a reference in the schema: {reference}\"))\n\nif violations:\n    path, message = violations[0]\n    others = len(violations) - 1\n    rest = \"\"\n\n    if others == 1:\n        rest = \" (and 1 more error)\"\n    elif others > 1:\n        rest = f\" (and {others} more errors)\"\n\n    location = shorten(path, PATH_LIMIT)\n    detail = shorten(message, MESSAGE_LIMIT)\n    fail(1, sentence(f\"{TOOL} rejected the value at {location}: {detail}{rest}\"))\n\nsys.stdout.buffer.write(json.dumps({\"value\": inputs[\"value\"]}, ensure_ascii=False).encode(\"utf-8\"))\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 60.0
+    }
+  ],
+  "test_cases": []
+}

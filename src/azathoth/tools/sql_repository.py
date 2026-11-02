@@ -257,8 +257,9 @@ class SqlToolRepository:
         document's artifacts are added or replaced in place.
 
         Raises:
-            ValueError: An artifact ID in the document belongs to another
-                tool, or an implementation ID to another version.
+            ValueError: The tool ID is saved under another name, an artifact
+                ID in the document belongs to another tool, or an
+                implementation ID to another version.
         """
 
         definition = document.definition
@@ -266,6 +267,7 @@ class SqlToolRepository:
         with self._database.transaction(lock=TOOL_DOCUMENT_REVISIONS) as session:
             conflict = document_artifact_conflict(
                 document,
+                definitions=definitions(session),
                 implementations=implementations(session),
                 test_cases=test_cases(session),
             )
@@ -486,6 +488,17 @@ def payloads(
     )
 
 
+def definitions(
+    session: Session,
+) -> tuple[ToolDefinition, ...]:
+    """Return every saved definition, of every version."""
+
+    return tuple(
+        ToolDefinition.model_validate_json(payload)
+        for payload in payloads(session, "tool_definitions")
+    )
+
+
 def implementations(
     session: Session,
 ) -> tuple[ToolImplementation, ...]:
@@ -688,6 +701,7 @@ __all__ = [
     "TOOL_DOCUMENT_REVISIONS",
     "TOOL_TABLES",
     "SqlToolRepository",
+    "definitions",
     "implementations",
     "insert_revision",
     "latest_revision",

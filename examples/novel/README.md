@@ -43,7 +43,8 @@ ending are never written.
 
 The book needs language models. With a provider configured and models
 authorized (see the CLI README), install the standard tools, which include
-the loop tool, and import the novel's own tools and workflows:
+the loop tool and the tools that check and assemble the book, and import the
+novel's own tools and workflows:
 
 ```bash
 azathoth tool install-standard
@@ -136,6 +137,32 @@ The steps that follow read `chapter` by name. The first step in declared
 order that produced it wins (ADR 0080), so `revise` is declared before
 `prepare`, even though it depends on it. When it ran, its revision wins; when
 it was skipped, the unrevised draft is used.
+
+## Standard Tools
+
+Besides the loop, the workflows shape their values with the standard
+data-shaping tools (see the
+[standard tool library](../../src/azathoth/standard/README.md)), and keep their
+own tools for the loop protocol and the story's rules:
+
+| Step | Tool | What it does |
+| --- | --- | --- |
+| First step of every workflow | `json_select` | Exposes the request, with `path: []`, to the steps' output bindings |
+| Check the story plan | `validate_json` | Stops the novel when the plan has no `title` or `premise`, or a character without a `name` |
+| Check the outline | `validate_json` | Stops the novel before any chapter when the outline is empty, or an entry has no `number` or `summary` |
+| Assemble the novel | `join_text` | Renders the chapters as `## Chapter {number}: {title}` sections |
+| | `render_template` | Puts the title above them: `# {title}` |
+| | `json_object` | Builds the result from the title, chapters, Markdown and report |
+
+A model's JSON reply is parsed but not checked, so without the two checks a
+plan missing a field would travel on into chapters that cost far more than
+the plan did. With them, a bad plan fails its step:
+
+```text
+Tool implementation c2000000-0000-4000-8000-000000000044 exited with status 1: validate_json rejected the value at $: 'title' is a required property.
+```
+
+Run the novel again; the plan is drafted afresh.
 
 ## Time
 

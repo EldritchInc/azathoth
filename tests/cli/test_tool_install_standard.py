@@ -24,11 +24,25 @@ OTHER_TOOL_ID = UUID("c9000000-0000-4000-8000-000000000001")
 INSTALLED = (
     "Installed tool run_workflow@1.0.0 revision 1.\n"
     "Installed tool loop_workflow@1.1.0 revision 1.\n"
+    "Installed tool json_select@1.0.0 revision 1.\n"
+    "Installed tool json_object@1.0.0 revision 1.\n"
+    "Installed tool json_merge@1.0.0 revision 1.\n"
+    "Installed tool validate_json@1.0.0 revision 1.\n"
+    "Installed tool chunk_text@1.0.0 revision 1.\n"
+    "Installed tool join_text@1.0.0 revision 1.\n"
+    "Installed tool render_template@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
     "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
     "Tool loop_workflow@1.1.0 is already installed (revision 1).\n"
+    "Tool json_select@1.0.0 is already installed (revision 1).\n"
+    "Tool json_object@1.0.0 is already installed (revision 1).\n"
+    "Tool json_merge@1.0.0 is already installed (revision 1).\n"
+    "Tool validate_json@1.0.0 is already installed (revision 1).\n"
+    "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
+    "Tool join_text@1.0.0 is already installed (revision 1).\n"
+    "Tool render_template@1.0.0 is already installed (revision 1).\n"
 )
 
 
@@ -166,7 +180,17 @@ def test_installing_again_writes_nothing(
 
     assert captured.out == ALREADY_INSTALLED
     assert captured.err == ""
-    assert revision_numbers(database) == [("run_workflow", 1), ("loop_workflow", 1)]
+    assert revision_numbers(database) == [
+        ("run_workflow", 1),
+        ("loop_workflow", 1),
+        ("json_select", 1),
+        ("json_object", 1),
+        ("json_merge", 1),
+        ("validate_json", 1),
+        ("chunk_text", 1),
+        ("join_text", 1),
+        ("render_template", 1),
+    ]
 
 
 def test_install_skips_a_tool_already_imported_from_the_same_document(
@@ -185,6 +209,13 @@ def test_install_skips_a_tool_already_imported_from_the_same_document(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
         "Installed tool loop_workflow@1.1.0 revision 1.\n"
+        "Installed tool json_select@1.0.0 revision 1.\n"
+        "Installed tool json_object@1.0.0 revision 1.\n"
+        "Installed tool json_merge@1.0.0 revision 1.\n"
+        "Installed tool validate_json@1.0.0 revision 1.\n"
+        "Installed tool chunk_text@1.0.0 revision 1.\n"
+        "Installed tool join_text@1.0.0 revision 1.\n"
+        "Installed tool render_template@1.0.0 revision 1.\n"
     )
 
 
@@ -204,6 +235,13 @@ def test_install_appends_a_revision_over_a_modified_copy(
     assert capsys.readouterr().out == (
         "Installed tool run_workflow@1.0.0 revision 1.\n"
         "Installed tool loop_workflow@1.1.0 revision 2.\n"
+        "Installed tool json_select@1.0.0 revision 1.\n"
+        "Installed tool json_object@1.0.0 revision 1.\n"
+        "Installed tool json_merge@1.0.0 revision 1.\n"
+        "Installed tool validate_json@1.0.0 revision 1.\n"
+        "Installed tool chunk_text@1.0.0 revision 1.\n"
+        "Installed tool join_text@1.0.0 revision 1.\n"
+        "Installed tool render_template@1.0.0 revision 1.\n"
     )
 
     loop = standard_document("loop_workflow")
@@ -236,12 +274,26 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
         "Installed tool loop_workflow@1.1.0 revision 3 (identical to revision 1).\n"
+        "Tool json_select@1.0.0 is already installed (revision 1).\n"
+        "Tool json_object@1.0.0 is already installed (revision 1).\n"
+        "Tool json_merge@1.0.0 is already installed (revision 1).\n"
+        "Tool validate_json@1.0.0 is already installed (revision 1).\n"
+        "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
+        "Tool join_text@1.0.0 is already installed (revision 1).\n"
+        "Tool render_template@1.0.0 is already installed (revision 1).\n"
     )
     assert revision_numbers(database) == [
         ("run_workflow", 1),
         ("loop_workflow", 1),
         ("loop_workflow", 2),
         ("loop_workflow", 3),
+        ("json_select", 1),
+        ("json_object", 1),
+        ("json_merge", 1),
+        ("validate_json", 1),
+        ("chunk_text", 1),
+        ("join_text", 1),
+        ("render_template", 1),
     ]
 
 
@@ -268,6 +320,39 @@ def test_install_fails_when_another_tool_holds_a_standard_implementation_id(
         f"Tool implementation {implementation.id} belongs to tool {OTHER_TOOL_ID}@1.0.0.\n"
     )
     assert revision_numbers(database) == []
+
+
+def test_install_stops_at_a_different_tool_that_holds_a_standard_tool_id(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    select = standard_document("json_select")
+    (implementation,) = select.implementations
+
+    SQLiteToolRepository(database).save_document(
+        ToolDocument(
+            definition=select.definition.model_copy(update={"name": "countdown_step"}),
+            implementations=(implementation.model_copy(update={"id": OTHER_TOOL_ID}),),
+        )
+    )
+
+    assert install_standard_tools() == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.out == (
+        "Installed tool run_workflow@1.0.0 revision 1.\n"
+        "Installed tool loop_workflow@1.1.0 revision 1.\n"
+    )
+    assert captured.err == (
+        f"Tool {select.definition.id} is named 'countdown_step'; "
+        "a document cannot rename it to 'json_select'.\n"
+    )
+    assert revision_numbers(database) == [
+        ("run_workflow", 1),
+        ("loop_workflow", 1),
+        ("countdown_step", 1),
+    ]
 
 
 def test_main_dispatches_install_standard(

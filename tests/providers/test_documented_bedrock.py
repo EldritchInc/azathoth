@@ -24,6 +24,8 @@ PROVIDERS_README = PROJECT_ROOT / "src" / "azathoth" / "providers" / "README.md"
 
 BEDROCK_GRANTS = ("AZATHOTH_BEDROCK", "AZATHOTH_BEDROCK_PRICING", "AWS_*")
 
+COMPOSITION_TOOLS = ("run_workflow", "loop_workflow")
+
 
 def section(
     path: Path,
@@ -101,6 +103,9 @@ def test_the_guide_names_the_grants_the_standard_tools_really_have() -> None:
     children = section(BEDROCK_GUIDE, "## Child Workflows")
 
     for document in standard_tool_documents():
+        if document.definition.name not in COMPOSITION_TOOLS:
+            continue
+
         (implementation,) = document.implementations
 
         for grant in BEDROCK_GRANTS:

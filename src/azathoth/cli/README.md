@@ -301,6 +301,13 @@ azathoth init
 Database: /path/to/azathoth.db (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 `init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
@@ -315,6 +322,13 @@ Running it again is safe:
 Database: /path/to/azathoth.db (existing)
 Tool run_workflow@1.0.0 is already installed (revision 1).
 Tool loop_workflow@1.1.0 is already installed (revision 1).
+Tool json_select@1.0.0 is already installed (revision 1).
+Tool json_object@1.0.0 is already installed (revision 1).
+Tool json_merge@1.0.0 is already installed (revision 1).
+Tool validate_json@1.0.0 is already installed (revision 1).
+Tool chunk_text@1.0.0 is already installed (revision 1).
+Tool join_text@1.0.0 is already installed (revision 1).
+Tool render_template@1.0.0 is already installed (revision 1).
 ```
 
 A database that cannot be opened, for example because the path is a
@@ -331,6 +345,13 @@ before it installs the tools, and names the database without its password:
 Database: postgresql://azathoth@db.example.com:5432/azathoth (created)
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 It is the only command that creates a PostgreSQL schema. Several processes
@@ -2896,14 +2917,19 @@ drops is no longer current, unless the latest revision of another version of
 the same tool still holds that test case. Re-importing an earlier document
 restores its artifacts exactly.
 
-A document is rejected, with nothing saved, when an implementation ID belongs
-to another tool or another version, or a test case ID belongs to another
+A document is rejected, with nothing saved, when its tool ID is already saved
+under another name, in any version, when an implementation ID belongs to
+another tool or another version, or when a test case ID belongs to another
 tool:
 
 ```text
+Tool <TOOL_ID> is named '<NAME>'; a document cannot rename it to '<NEW_NAME>'.
 Tool implementation <IMPLEMENTATION_ID> belongs to tool <TOOL_ID>@<VERSION>.
 Tool test case <TEST_CASE_ID> belongs to tool <TOOL_ID>.
 ```
+
+A tool's name is the capability workflows require, so a document never
+renames one: a different tool that reuses an ID needs an ID of its own.
 
 List every version's revisions, newest first, with:
 
@@ -2933,9 +2959,19 @@ one version, so each such revision holds every test case of its tool.
 Azathoth ships a standard tool library inside the package (ADR 0095):
 
 ```text
-run_workflow   1.0.0   run a child workflow once
-loop_workflow  1.1.0   run a child workflow repeatedly
+run_workflow     1.0.0   run a child workflow once
+loop_workflow    1.1.0   run a child workflow repeatedly
+json_select      1.0.0   select one value from JSON by path
+json_object      1.0.0   build one object from a step's inputs
+json_merge       1.0.0   deep-merge one object into another
+validate_json    1.0.0   check a value against a JSON Schema
+chunk_text       1.0.0   split text into chunks of a size
+join_text        1.0.0   join strings, or rendered objects, into one text
+render_template  1.0.0   render a text template from a step's inputs
 ```
+
+The [standard tool library](../standard/README.md) describes each tool's inputs, outputs
+and failures.
 
 Install it into the configured database with:
 
@@ -2946,6 +2982,13 @@ azathoth tool install-standard
 ```text
 Installed tool run_workflow@1.0.0 revision 1.
 Installed tool loop_workflow@1.1.0 revision 1.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 For each standard document, in that order, the command compares its content
@@ -2969,9 +3012,10 @@ digest with the latest revision of the same exact tool version:
   ```
 
 Nothing is edited in place, so the command is always safe to run again. The
-first document that cannot be saved, because an implementation ID in it
-belongs to another tool or version, stops the installation with the same
-message as `tool import`, and the command exits with status 1.
+first document that cannot be saved, because its tool ID holds another tool
+or an implementation ID in it belongs to another tool or version, stops the
+installation with the same message as `tool import`, and the command exits
+with status 1. The documents before it stay installed.
 
 A new Azathoth release may ship new versions of standard tools. Running the
 command after upgrading adds them beside the old ones, and workflows keep
@@ -2981,11 +3025,18 @@ Azathoth 1.1 also ships new revisions of `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` that grant the environment their child process needs
 (ADR 0099), including the tracing configuration (ADR 0100). A database that
 installed them before 1.1 runs child workflows only after the command runs
-again:
+again, which also installs the tools that are new in 1.1:
 
 ```text
 Installed tool run_workflow@1.0.0 revision 2.
 Installed tool loop_workflow@1.1.0 revision 2.
+Installed tool json_select@1.0.0 revision 1.
+Installed tool json_object@1.0.0 revision 1.
+Installed tool json_merge@1.0.0 revision 1.
+Installed tool validate_json@1.0.0 revision 1.
+Installed tool chunk_text@1.0.0 revision 1.
+Installed tool join_text@1.0.0 revision 1.
+Installed tool render_template@1.0.0 revision 1.
 ```
 
 # Trace Tool Usage
