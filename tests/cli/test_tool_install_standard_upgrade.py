@@ -1,7 +1,12 @@
-"""Tests for upgrading a database's standard tools to their environment grants.
+"""Tests for upgrading a database's standard composition tools to their current revisions.
 
 The grants arrived with ADR 0099, and grew for tracing (ADR 0100) and for
-Bedrock (ADR 0103).
+Bedrock (ADR 0103). With lineage (ADR 0104) the engine bounds depth, so the
+tools stopped counting it and lost the `AZATHOTH_WORKFLOW_DEPTH` grant.
+
+Every earlier revision is reconstructed from the Bedrock-era documents, as
+they shipped, checked into `tests/fixtures/standard`, and each reconstruction
+is pinned by its content digest.
 """
 
 import re
@@ -17,16 +22,21 @@ from azathoth.tools import (
     WINDOWS_BASE_ENVIRONMENT,
     SQLiteToolRepository,
     ToolDocument,
+    decode_tool_document,
     encode_tool_document,
 )
 from tests.cli.test_tool_import import configure_database
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
+BEDROCK_ERA_DOCUMENTS = (
+    PROJECT_ROOT / "tests" / "fixtures" / "standard" / "run-workflow-1.0.3.json",
+    PROJECT_ROOT / "tests" / "fixtures" / "standard" / "loop-workflow-1.1.3.json",
+)
+
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
     "OPENROUTER_API_KEY",
-    "AZATHOTH_WORKFLOW_DEPTH",
     "AZATHOTH_OTEL",
     "OTEL_*",
     "AZATHOTH_BEDROCK",
@@ -64,6 +74,28 @@ TRACING_ERA_IMPLEMENTATION_DIGESTS = {
     "loop_workflow": "019aec70d48c0da29d46587d3ab7bf8da60dbab3cd57d5b278332165c9a70ea8",
 }
 
+BEDROCK_ERA_VERSIONS = {"run_workflow": "1.0.3", "loop_workflow": "1.1.3"}
+
+BEDROCK_ERA_GRANTS = (
+    "AZATHOTH_DATABASE",
+    "OPENROUTER_API_KEY",
+    "AZATHOTH_WORKFLOW_DEPTH",
+    "AZATHOTH_OTEL",
+    "OTEL_*",
+    "AZATHOTH_BEDROCK",
+    "AZATHOTH_BEDROCK_PRICING",
+    "AWS_*",
+)
+
+#
+# Implementation digests of the standard tools as they shipped with Bedrock
+# (ADR 0103), before lineage. The checked-in documents must match them.
+#
+BEDROCK_ERA_IMPLEMENTATION_DIGESTS = {
+    "run_workflow": "7b1d95ac42877fcdb5ab7ea206dad2d799f784424034700608bb24fe4119ce99",
+    "loop_workflow": "430c1e814ecee9d078f8430f1a1316aa1c7adbcb6345c66e91dca715a2a1e9a7",
+}
+
 UPGRADED = (
     "Installed tool run_workflow@1.0.0 revision 2.\n"
     "Installed tool loop_workflow@1.1.0 revision 2.\n"
@@ -87,10 +119,18 @@ def composition_documents() -> tuple[ToolDocument, ...]:
     )
 
 
+def bedrock_era_documents() -> tuple[ToolDocument, ...]:
+    """Return the composition tools as they shipped with Bedrock, in installation order."""
+
+    return tuple(
+        decode_tool_document(path.read_text(encoding="utf-8")) for path in BEDROCK_ERA_DOCUMENTS
+    )
+
+
 def pre_grant_document(
     document: ToolDocument,
 ) -> ToolDocument:
-    """Return one standard document as it was before its environment grants."""
+    """Return one Bedrock-era document as it was before its environment grants."""
 
     return document.model_copy(
         update={
@@ -110,7 +150,7 @@ def pre_grant_document(
 def tracing_era_document(
     document: ToolDocument,
 ) -> ToolDocument:
-    """Return one standard document as it shipped with tracing, before Bedrock."""
+    """Return one Bedrock-era document as it shipped with tracing, before Bedrock."""
 
     return document.model_copy(
         update={
@@ -139,7 +179,7 @@ def database(
 
     configure_database(database=path, monkeypatch=monkeypatch)
 
-    for document in composition_documents():
+    for document in bedrock_era_documents():
         source = tmp_path / f"{document.definition.name}.json"
         source.write_text(encode_tool_document(pre_grant_document(document)), encoding="utf-8")
 
@@ -151,13 +191,76 @@ def database(
 
 
 def test_the_tracing_era_documents_are_the_ones_that_shipped_with_tracing() -> None:
-    for document in composition_documents():
+    for document in bedrock_era_documents():
         (implementation,) = tracing_era_document(document).implementations
 
         assert (
             content_digest(implementation)
             == TRACING_ERA_IMPLEMENTATION_DIGESTS[document.definition.name]
         )
+
+
+def test_the_bedrock_era_documents_are_the_ones_that_shipped_with_bedrock() -> None:
+    documents = bedrock_era_documents()
+
+    assert [document.definition.name for document in documents] == [
+        "run_workflow",
+        "loop_workflow",
+    ]
+
+    for document in documents:
+        (implementation,) = document.implementations
+
+        assert implementation.version == BEDROCK_ERA_VERSIONS[document.definition.name]
+        assert implementation.environment == BEDROCK_ERA_GRANTS
+        assert (
+            content_digest(implementation)
+            == BEDROCK_ERA_IMPLEMENTATION_DIGESTS[document.definition.name]
+        )
+
+
+def test_the_current_revisions_keep_their_ids_and_drop_only_the_depth_grant() -> None:
+    for current, shipped in zip(composition_documents(), bedrock_era_documents(), strict=True):
+        assert current.definition == shipped.definition
+
+        (implementation,) = current.implementations
+        (previous,) = shipped.implementations
+
+        assert implementation.id == previous.id
+        assert implementation.environment == tuple(
+            grant for grant in previous.environment if grant != "AZATHOTH_WORKFLOW_DEPTH"
+        )
+        assert "AZATHOTH_WORKFLOW_DEPTH" not in implementation.source
+
+
+def test_installing_over_bedrock_era_tools_appends_the_lineage_revisions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "azathoth.db"
+
+    configure_database(database=path, monkeypatch=monkeypatch)
+
+    for document in bedrock_era_documents():
+        source = tmp_path / f"{document.definition.name}.json"
+        source.write_text(encode_tool_document(document), encoding="utf-8")
+
+        assert import_tool(source) == 0
+
+    capsys.readouterr()
+
+    assert install_standard_tools() == 0
+    assert capsys.readouterr().out == UPGRADED
+
+    repository = SQLiteToolRepository(path)
+
+    for document in composition_documents():
+        (implementation,) = document.implementations
+
+        current = repository.get_implementation(implementation.id)
+
+        assert current == implementation
 
 
 def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
@@ -169,7 +272,7 @@ def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
 
     configure_database(database=path, monkeypatch=monkeypatch)
 
-    for document in composition_documents():
+    for document in bedrock_era_documents():
         source = tmp_path / f"{document.definition.name}.json"
         source.write_text(encode_tool_document(tracing_era_document(document)), encoding="utf-8")
 
@@ -193,7 +296,7 @@ def test_installing_over_tracing_era_tools_appends_the_bedrock_grants(
 
 
 def test_the_reconstructed_documents_are_the_ones_azathoth_1_0_shipped() -> None:
-    for document in composition_documents():
+    for document in bedrock_era_documents():
         (implementation,) = pre_grant_document(document).implementations
 
         assert (

@@ -133,3 +133,44 @@ def test_every_failing_data_tool_is_covered() -> None:
         "join_text",
         "render_template",
     }
+
+
+#
+# The composition tools report their child's last error line. A child whose
+# error is not ASCII, here argparse quoting a workflow ID the child cannot
+# parse, must reach the engine as UTF-8 even when the tool's own streams are
+# in a legacy encoding (ADR 0104 revisions 1.0.4 and 1.1.4).
+#
+CHILD_ERROR = "azathoth workflow invoke: error: argument WORKFLOW_ID: invalid UUID value: '灯台'"
+
+
+@pytest.mark.parametrize("encoding", LEGACY_ENCODINGS)
+def test_run_workflow_reports_its_childs_error_as_utf8(
+    tmp_path: Path,
+    encoding: str,
+) -> None:
+    completed = run_with_encoding(
+        tmp_path,
+        "run_workflow",
+        {"call": {"workflow_id": "灯台", "input": 1}},
+        encoding,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stderr.decode("utf-8") == CHILD_ERROR
+
+
+@pytest.mark.parametrize("encoding", LEGACY_ENCODINGS)
+def test_loop_workflow_reports_its_childs_error_as_utf8(
+    tmp_path: Path,
+    encoding: str,
+) -> None:
+    completed = run_with_encoding(
+        tmp_path,
+        "loop_workflow",
+        {"settings": {"workflow_id": "灯台", "max_iterations": 1}},
+        encoding,
+    )
+
+    assert completed.returncode == 1
+    assert completed.stderr.decode("utf-8") == f"Iteration 1: {CHILD_ERROR}"

@@ -184,29 +184,29 @@ azathoth run show <RUN_ID>
 The tool runs the child with its own Python interpreter
 (`python -m azathoth.cli`), so it does not depend on `azathoth` being on the
 `PATH`. Process tools see only the environment they grant themselves (ADR
-0099); the tool grants `AZATHOTH_DATABASE`, `OPENROUTER_API_KEY` and
-`AZATHOTH_WORKFLOW_DEPTH`, so the child uses the same database and provider
-as its parent. It also grants `AZATHOTH_OTEL` and `OTEL_*`, so with tracing
+0099); the tool grants `AZATHOTH_DATABASE` and `OPENROUTER_API_KEY`, so the
+child uses the same database and provider as its parent. It also grants `AZATHOTH_OTEL` and `OTEL_*`, so with tracing
 on, the child continues the parent's trace under the step that started it
 (ADR 0100), and `AZATHOTH_BEDROCK`, `AZATHOTH_BEDROCK_PRICING` and `AWS_*`,
 so the child runs Bedrock models as its parent does (ADR 0103).
 
 Two guards keep children bounded:
 
-- The tool passes `AZATHOTH_WORKFLOW_DEPTH`, plus one, to each child, and
-  refuses to go deeper than 8 levels:
+- Azathoth bounds nesting itself (ADR 0104). The step running the tool hands
+  it its lineage in `AZATHOTH_LINEAGE`, which the child inherits and records:
+  `invocation show` on the child names the parent's run and step. A child
+  more than 8 levels below the root is refused before anything is recorded,
+  and the tool reports why:
 
   ```text
-  Child workflow depth 9 exceeds the limit of 8.
+  Workflow <CHILD_WORKFLOW_ID> would run at depth 9, beyond the limit of 8 nested workflows.
   ```
 
 - The tool stops a child after 55 seconds, inside its own 60-second timeout,
   so a slow child is not left running after the tool itself is stopped.
 
-The depth guard belongs to this example tool, not to Azathoth. Recording a
-child's lineage and depth in its initial context is planned. A parent can
-already name its child itself, by binding the child's ID as a constant step
-input (ADR 0094), as the novel example does.
+A parent names its child itself, by binding the child's ID as a constant
+step input (ADR 0094), as the novel example does.
 
 ## Looping Over a Child Workflow
 
@@ -302,7 +302,7 @@ The loop is bounded three ways:
   ```
 
 - depth: loops can nest, and each level counts against the same 8-level
-  limit as `run_workflow`.
+  limit Azathoth applies to `run_workflow`'s children.
 
 Every iteration is a production invocation with its own run, so each one can
 be inspected, and the loop body can be benchmarked, optimized and promoted on

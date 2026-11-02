@@ -387,7 +387,6 @@ COMPOSITION_TOOLS = ("run_workflow", "loop_workflow")
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
     "OPENROUTER_API_KEY",
-    "AZATHOTH_WORKFLOW_DEPTH",
     "AZATHOTH_OTEL",
     "OTEL_*",
     "AZATHOTH_BEDROCK",
@@ -398,7 +397,7 @@ CHILD_GRANTS = (
 
 @pytest.mark.parametrize(
     ("name", "version"),
-    [("run_workflow", "1.0.3"), ("loop_workflow", "1.1.3")],
+    [("run_workflow", "1.0.4"), ("loop_workflow", "1.1.4")],
 )
 def test_the_standard_tools_grant_what_their_child_process_needs(
     name: str,

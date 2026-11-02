@@ -7,7 +7,17 @@ from uuid import UUID
 import pytest
 
 from azathoth.cli import main
+from azathoth.context import (
+    LineageRun,
+    LineageStep,
+    StepLineage,
+    WorkflowDepthError,
+    child_lineage,
+    decode_step_lineage,
+    encode_step_lineage,
+)
 from azathoth.tools import (
+    LINEAGE_ENVIRONMENT_VARIABLE,
     PROCESS_TOOL_RUNTIME,
     ToolDocument,
     decode_tool_document,
@@ -50,7 +60,7 @@ RUN_WORKFLOW_IMPLEMENTATION_ID = UUID("c1000000-0000-4000-8000-000000000011")
 
 PARENT_WORKFLOW_ID = UUID("a1000000-0000-4000-8000-000000000003")
 
-DEPTH_VARIABLE = "AZATHOTH_WORKFLOW_DEPTH"
+RETIRED_DEPTH_VARIABLE = "AZATHOTH_WORKFLOW_DEPTH"
 
 TOOL_FAILURE_PREFIX = f"Tool implementation {RUN_WORKFLOW_IMPLEMENTATION_ID} exited with status"
 
@@ -77,6 +87,28 @@ def read_parent_workflow() -> WorkflowSpecification:
     )
 
 
+def lineage_at_depth(
+    depth: int,
+) -> str:
+    """Return `AZATHOTH_LINEAGE` as a step of a run at the given depth hands it on."""
+
+    return encode_step_lineage(
+        StepLineage(
+            step=LineageStep(
+                workflow_id=UUID("f9000000-0000-4000-8000-000000000001"),
+                run_id=UUID("f9000000-0000-4000-8000-000000000002"),
+                step_id=UUID("f9000000-0000-4000-8000-000000000003"),
+                attempt=1,
+            ),
+            depth=depth,
+            root=LineageRun(
+                workflow_id=UUID("f9000000-0000-4000-8000-000000000001"),
+                run_id=UUID("f9000000-0000-4000-8000-000000000004"),
+            ),
+        )
+    )
+
+
 def child_call(
     workflow_id: UUID,
     workflow_input: object,
@@ -99,7 +131,7 @@ def configure_child_walkthrough(
     """Import every walkthrough document into an isolated database.
 
     The child runs as a real subprocess that cannot see this process's
-    monkeypatches, so the provider key and any inherited depth are removed
+    monkeypatches, so the provider key and any inherited lineage are removed
     from the environment it inherits.
     """
 
@@ -114,7 +146,7 @@ def configure_child_walkthrough(
     )
 
     monkeypatch.delenv(
-        DEPTH_VARIABLE,
+        LINEAGE_ENVIRONMENT_VARIABLE,
         raising=False,
     )
 
@@ -232,7 +264,7 @@ def test_child_workflow_walkthrough_reports_an_undeployed_child(
     assert " failed: The requested workflow is not deployed to production." in errors
 
 
-def test_run_workflow_tool_refuses_beyond_the_depth_limit(
+def test_a_child_beyond_the_depth_limit_is_refused_by_the_engine(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -241,7 +273,10 @@ def test_run_workflow_tool_refuses_beyond_the_depth_limit(
 
     run_cli(capsys, "workflow", "promote", str(CHILD_WORKFLOW_ID))
 
-    monkeypatch.setenv(DEPTH_VARIABLE, "8")
+    #
+    # The parent runs at depth 8, so its child would run at depth 9.
+    #
+    monkeypatch.setenv(LINEAGE_ENVIRONMENT_VARIABLE, lineage_at_depth(7))
 
     status, output, errors = run_parent(
         capsys,
@@ -250,29 +285,53 @@ def test_run_workflow_tool_refuses_beyond_the_depth_limit(
 
     assert status == 1
     assert output == ""
-    assert f"{TOOL_FAILURE_PREFIX} 2: Child workflow depth 9 exceeds the limit of 8." in errors
+    assert (
+        f"{TOOL_FAILURE_PREFIX} 1: Workflow {CHILD_WORKFLOW_ID} would run at depth 9, "
+        "beyond the limit of 8 nested workflows."
+    ) in errors
 
 
-@pytest.mark.parametrize(
-    ("starting_depth", "succeeds"),
-    [
-        pytest.param(6, True, id="grandchild-at-the-limit"),
-        pytest.param(7, False, id="grandchild-beyond-the-limit"),
-    ],
-)
-def test_run_workflow_tool_passes_its_depth_to_the_child(
+def test_the_retired_depth_variable_no_longer_limits_a_child(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    starting_depth: int,
+) -> None:
+    configure_child_walkthrough(monkeypatch, tmp_path, capsys)
+
+    run_cli(capsys, "workflow", "promote", str(CHILD_WORKFLOW_ID))
+
+    monkeypatch.setenv(RETIRED_DEPTH_VARIABLE, "8")
+
+    status, output, errors = run_parent(
+        capsys,
+        child_call(CHILD_WORKFLOW_ID, "two words"),
+    )
+
+    assert (status, output, errors) == (0, "2\n", "")
+
+
+@pytest.mark.parametrize(
+    ("parent_depth", "succeeds"),
+    [
+        pytest.param(5, True, id="grandchild-at-the-limit"),
+        pytest.param(6, False, id="grandchild-beyond-the-limit"),
+    ],
+)
+def test_a_child_hands_its_own_depth_to_its_children(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    parent_depth: int,
     succeeds: bool,
 ) -> None:
+    """The run started here is one level below `parent_depth`; its grandchild two below it."""
+
     configure_child_walkthrough(monkeypatch, tmp_path, capsys)
 
     run_cli(capsys, "workflow", "promote", str(CHILD_WORKFLOW_ID))
     run_cli(capsys, "workflow", "promote", str(PARENT_WORKFLOW_ID))
 
-    monkeypatch.setenv(DEPTH_VARIABLE, str(starting_depth))
+    monkeypatch.setenv(LINEAGE_ENVIRONMENT_VARIABLE, lineage_at_depth(parent_depth))
 
     status, output, errors = run_parent(
         capsys,
@@ -292,3 +351,13 @@ def test_run_workflow_tool_passes_its_depth_to_the_child(
         assert output == ""
         assert f"Child workflow {PARENT_WORKFLOW_ID} invocation " in errors
         assert " failed: Production workflow execution failed." in errors
+
+
+def test_the_examples_readme_quotes_the_engines_real_depth_refusal() -> None:
+    with pytest.raises(WorkflowDepthError) as error:
+        child_lineage(decode_step_lineage(lineage_at_depth(8)), workflow_id=CHILD_WORKFLOW_ID)
+
+    documented = str(error.value).replace(str(CHILD_WORKFLOW_ID), "<CHILD_WORKFLOW_ID>")
+    readme = PROJECT_ROOT / "examples" / "workflows" / "README.md"
+
+    assert f"```text\n  {documented}\n  ```" in readme.read_text(encoding="utf-8")

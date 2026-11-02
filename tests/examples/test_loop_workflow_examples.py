@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from azathoth.cli import main
 from azathoth.tools import (
+    LINEAGE_ENVIRONMENT_VARIABLE,
     PROCESS_TOOL_RUNTIME,
     decode_tool_document,
     encode_tool_document,
@@ -22,6 +23,7 @@ from azathoth.workflows import (
     decode_workflow_document,
     encode_workflow_document,
 )
+from tests.examples.test_run_workflow_examples import lineage_at_depth
 from tests.examples.test_word_count_benchmark_examples import (
     configure_walkthrough,
     run_cli,
@@ -53,7 +55,7 @@ LOOP_WORKFLOW_ID = UUID("a1000000-0000-4000-8000-000000000005")
 
 SEVEN_WORKFLOW_ID = UUID("d1000000-0000-4000-8000-000000000001")
 
-DEPTH_VARIABLE = "AZATHOTH_WORKFLOW_DEPTH"
+RETIRED_DEPTH_VARIABLE = "AZATHOTH_WORKFLOW_DEPTH"
 
 TOOL_FAILURE_PREFIX = f"Tool implementation {LOOP_IMPLEMENTATION_ID} exited with status"
 
@@ -151,7 +153,7 @@ def configure_loop_walkthrough(
     )
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv(DEPTH_VARIABLE, raising=False)
+    monkeypatch.delenv(LINEAGE_ENVIRONMENT_VARIABLE, raising=False)
 
     run_cli(capsys, "tool", "import", str(COUNTDOWN_TOOL_DOCUMENT))
     run_cli(capsys, "tool", "install-standard")
@@ -351,7 +353,7 @@ def test_loop_tool_example_is_version_1_1() -> None:
 
     assert document.definition.version == "1.1.0"
     assert document.implementations[0].tool_version == "1.1.0"
-    assert document.implementations[0].version == "1.1.3"
+    assert document.implementations[0].version == "1.1.4"
 
 
 def test_loop_workflow_example_requires_loop_tool_1_1() -> None:
@@ -482,19 +484,37 @@ def test_loop_rejects_settings_without_a_positive_iteration_limit(
     ) in errors
 
 
-def test_loop_refuses_beyond_the_depth_limit(
+def test_a_loop_child_beyond_the_depth_limit_is_refused_by_the_engine(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
 
-    monkeypatch.setenv(DEPTH_VARIABLE, "8")
+    #
+    # The loop runs at depth 8, so its first child would run at depth 9.
+    #
+    monkeypatch.setenv(LINEAGE_ENVIRONMENT_VARIABLE, lineage_at_depth(7))
 
     status, output, errors = run_loop(capsys)
 
     assert (status, output) == (1, "")
-    assert f"{TOOL_FAILURE_PREFIX} 2: Child workflow depth 9 exceeds the limit of 8." in errors
+    assert (
+        f"{TOOL_FAILURE_PREFIX} 1: Iteration 1: Workflow {COUNTDOWN_WORKFLOW_ID} would run at "
+        "depth 9, beyond the limit of 8 nested workflows."
+    ) in errors
+
+
+def test_the_retired_depth_variable_no_longer_limits_a_loop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_loop_walkthrough(monkeypatch, tmp_path, capsys)
+
+    monkeypatch.setenv(RETIRED_DEPTH_VARIABLE, "8")
+
+    assert run_loop(capsys) == (0, "[3, 2, 1]\n", "")
 
 
 def test_loop_runs_within_an_explicit_budget(

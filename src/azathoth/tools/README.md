@@ -1123,7 +1123,6 @@ standard composition tools do:
 "environment": [
   "AZATHOTH_DATABASE",
   "OPENROUTER_API_KEY",
-  "AZATHOTH_WORKFLOW_DEPTH",
   "AZATHOTH_OTEL",
   "OTEL_*",
   "AZATHOTH_BEDROCK",

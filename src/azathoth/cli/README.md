@@ -2943,7 +2943,7 @@ Runtime: process
 Entrypoint: run
 Command: python
 Timeout: 30 seconds
-Environment: AZATHOTH_DATABASE, OPENROUTER_API_KEY, AZATHOTH_WORKFLOW_DEPTH
+Environment: AZATHOTH_DATABASE, OPENROUTER_API_KEY, AZATHOTH_OTEL
 ```
 
 A process tool sees only the platform's base variables and the ones it
