@@ -1020,7 +1020,8 @@ A process does not inherit Azathoth's environment (ADR 0099). It receives:
 - the platform's base variables, when Azathoth has them;
 - the variables its implementation grants itself;
 - `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the implementation declares a timeout;
-- `TRACEPARENT` and `TRACESTATE`, when its step is traced (ADR 0100).
+- `TRACEPARENT` and `TRACESTATE`, when its step is traced (ADR 0100);
+- `AZATHOTH_LINEAGE`, when it runs in a workflow step (ADR 0104).
 
 Nothing else reaches it, so a secret such as a provider key, a database path
 or a cloud credential never reaches a tool that did not ask for it.
@@ -1086,13 +1087,34 @@ sees neither. A child `azathoth` that sees them continues the trace under the
 step that started it. `process_tool_environment` takes the trace context of
 the active telemetry's current span, or the one passed as `trace_context`.
 
+A process run by a workflow step also sees that step's lineage (ADR 0104):
+the step attempt, its run's depth and its root run, as compact JSON:
+
+```text
+AZATHOTH_LINEAGE={"step":{"workflow_id":"<ID>","run_id":"<ID>","step_id":"<ID>","attempt":1},"depth":0,"root":{"workflow_id":"<ID>","run_id":"<ID>"}}
+```
+
+A child `azathoth` that sees it records where it was started from, one level
+deeper, and the engine refuses a child nested too deeply. Like the other
+managed variables it cannot be granted:
+
+```text
+AZATHOTH_LINEAGE is set by the engine from the running step and cannot be granted.
+```
+
+and a copy in Azathoth's own environment, which is how a child `azathoth`
+receives its parent's, never reaches a tool: each step hands on its own.
+`process_tool_environment` takes the running step's lineage, or the one passed
+as `lineage`.
+
 | Managed variable | Set when |
 | --- | --- |
 | `AZATHOTH_TOOL_TIMEOUT_SECONDS` | The implementation declares `timeout_seconds` |
 | `TRACEPARENT` | The process runs in a traced step |
 | `TRACESTATE` | The process runs in a traced step whose trace has state |
+| `AZATHOTH_LINEAGE` | The process runs in a workflow step |
 
-`MANAGED_ENVIRONMENT_VARIABLES` names all three.
+`MANAGED_ENVIRONMENT_VARIABLES` names all four.
 
 A tool that runs `azathoth` itself grants what that invocation needs, as the
 standard composition tools do:

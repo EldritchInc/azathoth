@@ -76,7 +76,7 @@ def telemetry() -> Iterator[RecordingTelemetry]:
 # The managed variables
 
 
-def test_the_engine_manages_the_timeout_and_the_trace_context() -> None:
+def test_the_engine_manages_the_timeout_the_trace_context_and_the_lineage() -> None:
     assert TRACEPARENT_ENVIRONMENT_VARIABLE == "TRACEPARENT"
     assert TRACESTATE_ENVIRONMENT_VARIABLE == "TRACESTATE"
     assert TRACE_CONTEXT_ENVIRONMENT_VARIABLES == ("TRACEPARENT", "TRACESTATE")
@@ -84,6 +84,7 @@ def test_the_engine_manages_the_timeout_and_the_trace_context() -> None:
         PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
         "TRACEPARENT",
         "TRACESTATE",
+        "AZATHOTH_LINEAGE",
     )
 
 

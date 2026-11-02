@@ -42,7 +42,9 @@ class ProcessToolExecutor:
 
     While its step is traced, it also receives that step's W3C trace
     context, `TRACEPARENT` and, when there is one, `TRACESTATE`, so a child
-    `azathoth` continues the trace under the step (ADR 0100).
+    `azathoth` continues the trace under the step (ADR 0100). While it runs
+    in a step, it receives the step's lineage as `AZATHOTH_LINEAGE`, so a
+    child `azathoth` records where it was started from (ADR 0104).
     """
 
     async def execute(
