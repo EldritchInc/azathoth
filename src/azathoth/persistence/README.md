@@ -158,8 +158,16 @@ specification, which are numbered in order:
 
 | Database | A locked transaction |
 | --- | --- |
-| SQLite | `BEGIN IMMEDIATE` |
+| SQLite | `BEGIN IMMEDIATE`, as every SQLite transaction is |
 | PostgreSQL | `LOCK TABLE … IN EXCLUSIVE MODE`, which never blocks readers |
+
+Every SQLite transaction begins immediately, taking the file's write lock,
+and waits up to 30 seconds for another process's transaction to commit. A
+transaction that began deferred and then wrote would be refused at once,
+without waiting, whenever another process was writing the file, so the
+processes that share one, such as the children `map_workflow` runs side by
+side (ADR 0106), would fail each other. Taking the lock first makes them
+take turns.
 
 `Session.execute` returns the rows a statement changed; `fetchone` and
 `fetchall` return rows of plain values.

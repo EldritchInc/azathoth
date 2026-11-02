@@ -117,6 +117,7 @@ LINEAGE_ERA_IMPLEMENTATION_DIGESTS = {
 UPGRADED = (
     "Installed tool run_workflow@1.0.0 revision 2.\n"
     "Installed tool loop_workflow@1.1.0 revision 2.\n"
+    "Installed tool map_workflow@1.0.0 revision 1.\n"
     "Installed tool json_select@1.0.0 revision 1.\n"
     "Installed tool json_object@1.0.0 revision 1.\n"
     "Installed tool json_merge@1.0.0 revision 1.\n"
@@ -362,6 +363,7 @@ def test_installing_again_after_the_upgrade_writes_nothing(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 2).\n"
         "Tool loop_workflow@1.1.0 is already installed (revision 2).\n"
+        "Tool map_workflow@1.0.0 is already installed (revision 1).\n"
         "Tool json_select@1.0.0 is already installed (revision 1).\n"
         "Tool json_object@1.0.0 is already installed (revision 1).\n"
         "Tool json_merge@1.0.0 is already installed (revision 1).\n"

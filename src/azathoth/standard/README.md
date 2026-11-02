@@ -13,6 +13,7 @@ steps:
 | ----------------- | ------- | -------------- | ------------------------------------------- |
 | `run_workflow`    | 1.0.0   | 1.0.5          | Run a child workflow once (ADR 0084).       |
 | `loop_workflow`   | 1.1.0   | 1.1.5          | Run a child workflow repeatedly (ADR 0090). |
+| `map_workflow`    | 1.0.0   | 1.0.0          | Run a child workflow per item (ADR 0106).   |
 | `json_select`     | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
 | `json_object`     | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
 | `json_merge`      | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
@@ -32,8 +33,8 @@ for document in standard_tool_documents():
 
 ## The Composition Tools
 
-`run_workflow` and `loop_workflow` run `azathoth workflow invoke` in a child
-process, so both grant themselves the variables it needs (ADR 0099), the
+`run_workflow`, `loop_workflow` and `map_workflow` run
+`azathoth workflow invoke` in a child process, so each grants itself the variables it needs (ADR 0099), the
 tracing configuration it needs to continue a trace (ADR 0100), and the
 Bedrock configuration and AWS credentials it needs to run Bedrock models
 (ADR 0103):
@@ -57,6 +58,80 @@ they pass on too, so each child records the step and run that started it,
 and the engine refuses one nested more than 8 levels deep (ADR 0104). The
 tools count no depth of their own. They write their errors, including the
 child's last error line, as UTF-8 on every platform.
+
+Each child is invoked under the idempotency key of the step attempt that
+starts it (ADR 0105), with the iteration or the item's index appended for a
+loop or a map, so a parent that is resumed reuses the children it already
+ran, and waits for one that another process still runs.
+
+### map_workflow
+
+`map_workflow` invokes one deployed child workflow once per item of a list,
+at most `max_concurrency` at a time, and returns the results in item order
+(ADR 0106):
+
+```json
+{
+  "settings": {
+    "workflow_id": "<WORKFLOW_ID>",
+    "max_items": 50,
+    "max_concurrency": 4
+  },
+  "items": ["first text", "second text"]
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `workflow_id` | required | The deployed child to invoke for each item. |
+| `max_items` | required | The most items the map accepts; a longer list is refused, never cut short. |
+| `max_concurrency` | 4 | How many children run at once, from 1 to 16. |
+| `child_timeout_seconds` | 600 | How long one item's child may take. |
+| `budget_seconds` | 7140 | How long the whole map may take, within the tool's timeout less 60 seconds (ADR 0093). |
+
+Each child receives `{"item": <ITEM>, "index": <INDEX>}`, its index counted
+from 0, and its whole emitted result is collected, as `run_workflow` returns
+it:
+
+```json
+{"results": [{"result": 2}, {"result": 2}], "count": 2}
+```
+
+An empty list invokes nothing. Every item runs to its end: one that fails
+never cancels another, and the map fails once all have ended, naming the
+first failing item by index, and how many failed:
+
+```text
+Item <INDEX> of <COUNT>: child workflow <WORKFLOW_ID> invocation <INVOCATION_ID> failed: <MESSAGE> (<FAILED> of <COUNT> items failed).
+Item <INDEX> of <COUNT>: child workflow <WORKFLOW_ID> timed out after <SECONDS> seconds. (<FAILED> of <COUNT> items failed).
+```
+
+A map that runs out of its budget stops waiting, and leaves the children
+still running to finish on their own runs, under their keys:
+
+```text
+Map over child workflow <WORKFLOW_ID> ran out of time after <FINISHED> of <COUNT> items finished.
+```
+
+Settings it cannot use are refused before any child runs:
+
+```text
+Map settings must name the child workflow_id.
+Map settings must set max_items to a positive integer.
+Map settings must set max_concurrency to an integer from 1 to 16.
+Map settings must set child_timeout_seconds to a positive number.
+Map settings must set budget_seconds to a positive number.
+Map budget of <SECONDS> seconds exceeds the tool's timeout of <TIMEOUT> seconds less a 60-second margin.
+Map of <COUNT> items exceeds its max_items of <MAX_ITEMS>.
+```
+
+Each item's child runs under the key
+`azathoth:<RUN_ID>:<STEP_ID>:<ATTEMPT>:<INDEX>`. A map whose parent is
+resumed replays the items that finished, resumes the ones that were
+running, waits for the ones another process still runs, and runs the rest,
+so every item runs once. A retried attempt runs every item again, under new
+keys. Children of a map write to one database at once; on SQLite they take
+turns (see the persistence README).
 
 ## The Data-Shaping Tools
 
@@ -402,6 +477,7 @@ new in 1.1:
 ```text
 Installed tool run_workflow@1.0.0 revision 2.
 Installed tool loop_workflow@1.1.0 revision 2.
+Installed tool map_workflow@1.0.0 revision 1.
 Installed tool json_select@1.0.0 revision 1.
 Installed tool json_object@1.0.0 revision 1.
 Installed tool json_merge@1.0.0 revision 1.

@@ -24,6 +24,7 @@ OTHER_TOOL_ID = UUID("c9000000-0000-4000-8000-000000000001")
 INSTALLED = (
     "Installed tool run_workflow@1.0.0 revision 1.\n"
     "Installed tool loop_workflow@1.1.0 revision 1.\n"
+    "Installed tool map_workflow@1.0.0 revision 1.\n"
     "Installed tool json_select@1.0.0 revision 1.\n"
     "Installed tool json_object@1.0.0 revision 1.\n"
     "Installed tool json_merge@1.0.0 revision 1.\n"
@@ -36,6 +37,7 @@ INSTALLED = (
 ALREADY_INSTALLED = (
     "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
     "Tool loop_workflow@1.1.0 is already installed (revision 1).\n"
+    "Tool map_workflow@1.0.0 is already installed (revision 1).\n"
     "Tool json_select@1.0.0 is already installed (revision 1).\n"
     "Tool json_object@1.0.0 is already installed (revision 1).\n"
     "Tool json_merge@1.0.0 is already installed (revision 1).\n"
@@ -183,6 +185,7 @@ def test_installing_again_writes_nothing(
     assert revision_numbers(database) == [
         ("run_workflow", 1),
         ("loop_workflow", 1),
+        ("map_workflow", 1),
         ("json_select", 1),
         ("json_object", 1),
         ("json_merge", 1),
@@ -209,6 +212,7 @@ def test_install_skips_a_tool_already_imported_from_the_same_document(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
         "Installed tool loop_workflow@1.1.0 revision 1.\n"
+        "Installed tool map_workflow@1.0.0 revision 1.\n"
         "Installed tool json_select@1.0.0 revision 1.\n"
         "Installed tool json_object@1.0.0 revision 1.\n"
         "Installed tool json_merge@1.0.0 revision 1.\n"
@@ -235,6 +239,7 @@ def test_install_appends_a_revision_over_a_modified_copy(
     assert capsys.readouterr().out == (
         "Installed tool run_workflow@1.0.0 revision 1.\n"
         "Installed tool loop_workflow@1.1.0 revision 2.\n"
+        "Installed tool map_workflow@1.0.0 revision 1.\n"
         "Installed tool json_select@1.0.0 revision 1.\n"
         "Installed tool json_object@1.0.0 revision 1.\n"
         "Installed tool json_merge@1.0.0 revision 1.\n"
@@ -274,6 +279,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
     assert capsys.readouterr().out == (
         "Tool run_workflow@1.0.0 is already installed (revision 1).\n"
         "Installed tool loop_workflow@1.1.0 revision 3 (identical to revision 1).\n"
+        "Tool map_workflow@1.0.0 is already installed (revision 1).\n"
         "Tool json_select@1.0.0 is already installed (revision 1).\n"
         "Tool json_object@1.0.0 is already installed (revision 1).\n"
         "Tool json_merge@1.0.0 is already installed (revision 1).\n"
@@ -287,6 +293,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
         ("loop_workflow", 1),
         ("loop_workflow", 2),
         ("loop_workflow", 3),
+        ("map_workflow", 1),
         ("json_select", 1),
         ("json_object", 1),
         ("json_merge", 1),
@@ -343,6 +350,7 @@ def test_install_stops_at_a_different_tool_that_holds_a_standard_tool_id(
     assert captured.out == (
         "Installed tool run_workflow@1.0.0 revision 1.\n"
         "Installed tool loop_workflow@1.1.0 revision 1.\n"
+        "Installed tool map_workflow@1.0.0 revision 1.\n"
     )
     assert captured.err == (
         f"Tool {select.definition.id} is named 'countdown_step'; "
@@ -351,6 +359,7 @@ def test_install_stops_at_a_different_tool_that_holds_a_standard_tool_id(
     assert revision_numbers(database) == [
         ("run_workflow", 1),
         ("loop_workflow", 1),
+        ("map_workflow", 1),
         ("countdown_step", 1),
     ]
 

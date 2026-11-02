@@ -10,6 +10,7 @@ from azathoth.tools import (
 STANDARD_TOOL_FILES = (
     "run-workflow.json",
     "loop-workflow.json",
+    "map-workflow.json",
     "json-select.json",
     "json-object.json",
     "json-merge.json",
