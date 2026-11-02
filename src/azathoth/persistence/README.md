@@ -72,9 +72,20 @@ Database <URL> has schema version <FOUND>, newer than the version <EXPECTED> thi
 The version is `SCHEMA_VERSION`, kept in one row of the `azathoth_schema`
 table.
 
+`init` upgrades a database of an earlier version: it creates the tables that
+version lacks, keeps every row it holds, records the new version, and marks
+the database `upgraded to schema version <VERSION>`. It never initializes
+over a newer schema. A version only adds tables:
+
+| Version | Adds |
+| --- | --- |
+| `1` | The tables of Azathoth 1.1. |
+| `2` | `run_journal`, `run_leases` and `run_children`, which record a run while it executes so it can be resumed (ADR 0105). |
+
 An SQLite file needs no `init` to be used: each repository creates its
-tables when it opens the file, and upgrades a file from before 1.1 in place,
-as it always has. `init` still installs the standard tools into it.
+tables when it opens the file, so a file of an earlier version gains the
+tables it lacks when they are first used, and a file from before 1.1 is
+upgraded in place, as it always has been. `init` still installs the standard tools into it.
 
 ## Tables
 
@@ -106,6 +117,9 @@ as it always has. `init` still installs the standard tools into it.
 | `model_portfolio_entries` | `azathoth.providers` |
 | `provider_model_observations` | `azathoth.providers` |
 | `content_blobs` | `azathoth.inputs` |
+| `run_journal` | `azathoth.workflows` |
+| `run_leases` | `azathoth.workflows` |
+| `run_children` | `azathoth.workflows` |
 
 Documents and evidence stay JSON text, never `JSONB`, so what Azathoth reads
 back is byte for byte what it wrote, and digests over it hold in either

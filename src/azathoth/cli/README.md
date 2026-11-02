@@ -358,6 +358,21 @@ It is the only command that creates a PostgreSQL schema. Several processes
 may run it at once: they wait for one another, and all but the first report
 the database as `existing`.
 
+It is also the only command that upgrades one. After Azathoth is upgraded to
+a newer schema version, every other command refuses the database until
+`init` runs once:
+
+```text
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 2; run azathoth init.
+```
+
+`init` then adds the tables the database lacks, keeps everything it holds,
+and marks it upgraded:
+
+```text
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 2)
+```
+
 `init` stops at the database and its tools. It needs no provider key.
 Authorizing models needs provider credentials and the models they make
 available, so `model authorize` stays a separate step.

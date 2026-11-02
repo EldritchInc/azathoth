@@ -48,6 +48,7 @@ from azathoth.tools import TOOL_TABLES, SQLiteToolRepository, SqlToolRepository,
 from azathoth.workflows import (
     PRODUCTION_INVOCATION_RUN_TABLES,
     PRODUCTION_INVOCATION_TABLES,
+    RUN_PROGRESS_TABLES,
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
     WORKFLOW_EXPERIMENT_TABLES,
     WORKFLOW_PRODUCTION_REVISION_TABLES,
@@ -107,11 +108,13 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *MODEL_PORTFOLIO_TABLES,
     *PROVIDER_MODEL_OBSERVATION_TABLES,
     *CONTENT_TABLES,
+    *RUN_PROGRESS_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 
 Production invocations come before their results, whose foreign key needs
-them.
+them. The tables a version added come after every table of the versions
+before it.
 """
 
 

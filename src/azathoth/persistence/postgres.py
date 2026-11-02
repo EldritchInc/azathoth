@@ -328,7 +328,9 @@ class PostgresDatabase:
         """Create the schema, under an advisory lock, and record its version.
 
         Several processes may initialize at once: each waits for the lock,
-        and the later ones find the schema already there.
+        and the later ones find the schema already there. A schema of an
+        earlier version gains the tables it lacks, and is then recorded as
+        this version.
 
         Raises:
             DatabaseSchemaTooNewError: The schema is newer than this Azathoth's.
@@ -370,7 +372,13 @@ class PostgresDatabase:
 
         self._checked = True
 
-        if version is None or missing:
+        if version is None:
+            return InitializationOutcome.CREATED
+
+        if version < SCHEMA_VERSION:
+            return InitializationOutcome.UPGRADED
+
+        if missing:
             return InitializationOutcome.CREATED
 
         return InitializationOutcome.CURRENT

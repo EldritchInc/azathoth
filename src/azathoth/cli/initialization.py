@@ -2,10 +2,13 @@
 
 import sqlite3
 import sys
+from collections.abc import Mapping
+from typing import Final
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.tools import install_standard_tools
 from azathoth.persistence import (
+    SCHEMA_VERSION,
     DatabaseSchemaError,
     DatabaseUnavailableError,
     InitializationOutcome,
@@ -13,6 +16,13 @@ from azathoth.persistence import (
     SQLiteLocation,
 )
 from azathoth.persistence.repositories import SCHEMA_TABLES, postgres_database
+
+POSTGRES_OUTCOME_MARKS: Final[Mapping[InitializationOutcome, str]] = {
+    InitializationOutcome.CREATED: "created",
+    InitializationOutcome.UPGRADED: f"upgraded to schema version {SCHEMA_VERSION}",
+    InitializationOutcome.CURRENT: "existing",
+}
+"""How `init` marks a PostgreSQL database, by what initializing it did."""
 
 
 def initialize_database() -> int:
@@ -77,7 +87,7 @@ def _initialize_sqlite(
 def _initialize_postgres(
     location: PostgresLocation,
 ) -> int:
-    """Create or update a PostgreSQL schema, and report whether it existed."""
+    """Create or upgrade a PostgreSQL schema, and report what initializing it did."""
 
     try:
         outcome = postgres_database(location).initialize(SCHEMA_TABLES)
@@ -96,13 +106,12 @@ def _initialize_postgres(
 
         return 1
 
-    created = outcome is InitializationOutcome.CREATED
-
-    print(f"Database: {location.display()} ({'created' if created else 'existing'})")
+    print(f"Database: {location.display()} ({POSTGRES_OUTCOME_MARKS[outcome]})")
 
     return 0
 
 
 __all__ = [
+    "POSTGRES_OUTCOME_MARKS",
     "initialize_database",
 ]

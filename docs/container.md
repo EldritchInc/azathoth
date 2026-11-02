@@ -278,7 +278,9 @@ docker run --rm azathoth --version
 ## Upgrading and Cleaning Up
 
 To upgrade, pull the new version, then run `init` on your volume once, so it
-gets any new standard tools:
+gets any new standard tools. With a PostgreSQL database, run it once against
+the database instead, from any one container, before the others use it: it
+upgrades the schema if the new version needs a newer one.
 
 ```bash
 IMAGE=ghcr.io/eldritchinc/azathoth:<VERSION>

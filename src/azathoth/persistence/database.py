@@ -12,8 +12,11 @@ from azathoth.persistence.location import DatabaseLocation
 SCHEMA_TABLE: Final = "azathoth_schema"
 """The table in which a PostgreSQL database records its schema version."""
 
-SCHEMA_VERSION: Final = 1
-"""The schema version this Azathoth uses."""
+SCHEMA_VERSION: Final = 2
+"""The schema version this Azathoth uses.
+
+Version 2 adds the tables that record a run while it executes (ADR 0105).
+"""
 
 Parameter = str | int | float | bytes | None
 """A value bound to a statement's `?`."""
@@ -39,6 +42,7 @@ class InitializationOutcome(StrEnum):
     """What initializing a database did."""
 
     CREATED = "created"
+    UPGRADED = "upgraded"
     CURRENT = "current"
 
 

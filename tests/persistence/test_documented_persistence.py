@@ -5,17 +5,21 @@ from pathlib import Path
 
 import pytest
 
+from azathoth.cli.initialization import POSTGRES_OUTCOME_MARKS
 from azathoth.persistence import (
     MISSING_DRIVER_MESSAGE,
     SCHEMA_TABLE,
+    SCHEMA_VERSION,
     DatabaseNotInitializedError,
     DatabaseSchemaOutdatedError,
     DatabaseSchemaTooNewError,
+    InitializationOutcome,
     PostgresLocation,
     redact_url,
 )
 from azathoth.persistence.dialect import TOKENS, Dialect
 from azathoth.persistence.repositories import SCHEMA_TABLES
+from tests.persistence.test_schema_versions import VERSION_2_TABLE_NAMES
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -29,6 +33,13 @@ POSTGRES_GUIDES = (
     PROJECT_ROOT / "docs" / "install.md",
     PROJECT_ROOT / "docs" / "container.md",
 )
+
+UPGRADE_GUIDES = (
+    CLI_README,
+    PROJECT_ROOT / "docs" / "install.md",
+)
+
+GUIDE_URL = PostgresLocation("postgresql://azathoth@db.example.com:5432/azathoth")
 
 POSTGRES_URL = re.compile(r"postgres(?:ql)?://[^\s\"'`)]+")
 
@@ -125,3 +136,40 @@ def test_every_shown_database_is_the_redacted_url_the_guide_sets(
     configured = {redact_url(url) for url in POSTGRES_URL.findall(text) if "<PASSWORD>" in url}
 
     assert shown <= configured
+
+
+def test_the_version_table_names_every_version_and_what_it_adds() -> None:
+    documented = rows(section(PERSISTENCE_README, "# The Schema"))
+
+    assert [row[0] for row in documented] == [
+        str(version) for version in range(1, SCHEMA_VERSION + 1)
+    ]
+
+    (line,) = (
+        line
+        for line in section(PERSISTENCE_README, "# The Schema").splitlines()
+        if line.startswith("| `2` |")
+    )
+    added = re.findall(r"`([a-z_]+)`", line.split("|")[2])
+
+    assert tuple(added) == VERSION_2_TABLE_NAMES
+
+
+@pytest.mark.parametrize("guide", UPGRADE_GUIDES)
+def test_the_upgrade_is_quoted_exactly(
+    guide: Path,
+) -> None:
+    text = guide.read_text(encoding="utf-8")
+    refusal = DatabaseSchemaOutdatedError(GUIDE_URL, found=1, expected=SCHEMA_VERSION)
+    upgraded = POSTGRES_OUTCOME_MARKS[InitializationOutcome.UPGRADED]
+
+    assert f"```text\n{refusal}\n```" in text
+    assert f"```text\nDatabase: {GUIDE_URL.display()} ({upgraded})\n" in text
+
+
+def test_the_persistence_readme_names_the_upgraded_mark() -> None:
+    marker = POSTGRES_OUTCOME_MARKS[InitializationOutcome.UPGRADED].replace(
+        str(SCHEMA_VERSION), "<VERSION>"
+    )
+
+    assert f"`{marker}`" in PERSISTENCE_README.read_text(encoding="utf-8")

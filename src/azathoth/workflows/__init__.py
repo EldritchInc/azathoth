@@ -251,6 +251,12 @@ from azathoth.workflows.run_failure import (
     RUN_FAILURE_EVALUATOR_VERSION,
     evaluate_failed_run,
 )
+from azathoth.workflows.run_progress_tables import (
+    RUN_CHILD_TABLES,
+    RUN_JOURNAL_TABLES,
+    RUN_LEASE_TABLES,
+    RUN_PROGRESS_TABLES,
+)
 from azathoth.workflows.run_repository import WorkflowRunRepository
 from azathoth.workflows.runner import (
     WorkflowRunner,
@@ -377,6 +383,10 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "PRODUCTION_INVOCATION_RUN_TABLES",
+    "RUN_CHILD_TABLES",
+    "RUN_JOURNAL_TABLES",
+    "RUN_LEASE_TABLES",
+    "RUN_PROGRESS_TABLES",
     "PRODUCTION_INVOCATION_TABLES",
     "SqlProductionInvocationRepository",
     "SqlProductionInvocationRunRepository",
