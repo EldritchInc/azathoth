@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000006",
+    "name": "count words in one mapped item",
+    "description": "Count the words of the item a map hands this workflow: select the item from the map's {\"item\", \"index\"} input, then count it with the process tool.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000061",
+      "specification": {
+        "requirement": {
+          "name": "json_select",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "path",
+          "source": {
+            "value": [
+              "item"
+            ]
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "path": [
+            "value"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000062",
+      "specification": {
+        "requirement": {
+          "name": "word_count_process",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "a1000000-0000-4000-8000-000000000061"
+      ],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}

@@ -35,6 +35,10 @@ PROBE_SOURCE = (
     "item = request['item']\n"
     "index = request['index']\n"
     "probe = item.get('probe')\n"
+    "tally = item.get('tally')\n"
+    "if tally:\n"
+    "    with Path(tally, f'{index}.tally').open('a') as runs:\n"
+    "        runs.write('ran\\n')\n"
     "if probe:\n"
     "    Path(probe, f'{index}.start').write_text(repr(time.time()))\n"
     "time.sleep(item.get('sleep', 0))\n"
@@ -45,7 +49,11 @@ PROBE_SOURCE = (
     "    sys.exit(1)\n"
     "json.dump({'echo': {'value': item.get('value'), 'index': index}}, sys.stdout)\n"
 )
-"""Echo the item and its index, after sleeping, failing or recording as the item asks."""
+"""Echo the item and its index, after sleeping, failing or recording as the item asks.
+
+A `tally` directory gets one line per execution of the item, so a test can
+prove an item ran exactly once.
+"""
 
 
 def probe_tool() -> dict[str, object]:
@@ -180,8 +188,7 @@ def import_document(
     run_cli(capsys, kind, "import", str(path))
 
 
-@pytest.fixture
-def database(
+def deploy_probe(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -199,6 +206,17 @@ def database(
     run_cli(capsys, "workflow", "promote", CHILD_WORKFLOW_ID)
 
     return path
+
+
+@pytest.fixture
+def database(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> Path:
+    """Return a fresh database with the probe child deployed."""
+
+    return deploy_probe(monkeypatch, tmp_path, capsys)
 
 
 def settings(

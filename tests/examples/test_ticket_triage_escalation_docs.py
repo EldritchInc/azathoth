@@ -84,7 +84,7 @@ def test_the_documented_condition_is_the_workflows_condition() -> None:
     ("path", "heading"),
     [
         (TRIAGE_README, "## Escalating When Unsure"),
-        (EXAMPLES_GUIDE, "## 5. Ticket Triage: Routing"),
+        (EXAMPLES_GUIDE, "## 6. Ticket Triage: Routing"),
     ],
 )
 def test_the_documented_comparison_names_both_classifiers_and_the_benchmark(

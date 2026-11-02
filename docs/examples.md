@@ -24,7 +24,7 @@ You need:
 - the repository cloned, with your terminal inside it (see
   [Get the Examples](install.md#6-get-the-examples)).
 
-Examples 1, 3 and 4 need nothing else. The others call language models, so
+Examples 1, 3, 4 and 5 need nothing else. The others call language models, so
 they need an OpenRouter key and at least one authorized model (see
 [Connecting OpenRouter](openrouter.md)). Their benchmarks with semantic
 cases also need a judge.
@@ -50,8 +50,8 @@ azathoth init
 azathoth init
 ```
 
-Examples 3, 4 and 8 compose workflows with `run_workflow` and
-`loop_workflow`, which ship with Azathoth. Each of them runs
+Examples 3, 4, 5 and 9 compose workflows with `run_workflow`,
+`loop_workflow` and `map_workflow`, which ship with Azathoth. Each of them runs
 `azathoth tool install-standard` too, which is safe to repeat: a tool that is
 already installed is left alone.
 
@@ -67,10 +67,11 @@ everything it needs, even when an earlier example already did.
 | 2 | Classify sentiment | The whole lifecycle: run, benchmark, optimize, promote, invoke | Yes | No | Only for the semantic benchmark |
 | 3 | Child workflow | One workflow calling another | No | The child | — |
 | 4 | Countdown loop | Repeating a child workflow | No | The loop body | — |
-| 5 | Ticket triage | Conditional routing, a cheaper classifier, escalating when unsure | Yes | No | Only for the triage benchmark |
-| 6 | Workflow writer | JSON replies, a validator tool, one repair pass | Yes | No | Yes |
-| 7 | Code review | Concurrent reviewers, a merge done by code | Yes | No | Yes |
-| 8 | Novel | Nested loops, conditional revision, long runs | Yes, including a 200,000-token context window | Three loop bodies | Yes |
+| 5 | Word count map | Running a child once per item, several at a time | No | The child | — |
+| 6 | Ticket triage | Conditional routing, a cheaper classifier, escalating when unsure | Yes | No | Only for the triage benchmark |
+| 7 | Workflow writer | JSON replies, a validator tool, one repair pass | Yes | No | Yes |
+| 8 | Code review | Concurrent reviewers, a merge done by code | Yes | No | Yes |
+| 9 | Novel | Nested loops, conditional revision, long runs | Yes, including a 200,000-token context window | Three loop bodies | Yes |
 
 `workflow run` runs the workflow as it is configured right now.
 `workflow invoke` runs what was promoted to production. A workflow that calls
@@ -287,7 +288,54 @@ A loop is bounded three ways:
 Every iteration is its own production invocation, so it can be inspected on
 its own.
 
-## 5. Ticket Triage: Routing
+## 5. A Map
+
+To do the same work for every item of a list, the `map_workflow` tool invokes
+a child workflow once per item, up to `max_concurrency` at a time, and
+returns the results in the list's order. `count-words-in-item.json` is the
+child: it picks the item out of the `{"item", "index"}` input every mapped
+child receives, with `json_select`, and counts its words. `map-word-count.json`
+binds the map's settings, the child, a `max_items` of 100 and four at a time,
+as a constant, so the caller supplies only the list.
+
+```bash
+azathoth tool import examples/tools/word-count-process.json
+azathoth tool install-standard
+azathoth workflow import examples/workflows/count-words-in-item.json
+azathoth workflow import examples/workflows/map-word-count.json
+azathoth workflow promote a1000000-0000-4000-8000-000000000006
+azathoth workflow run a1000000-0000-4000-8000-000000000007 --input '["the old ones wait", "and dream", "in sunken cities"]' --output result
+```
+
+```powershell
+azathoth tool import examples/tools/word-count-process.json
+azathoth tool install-standard
+azathoth workflow import examples/workflows/count-words-in-item.json
+azathoth workflow import examples/workflows/map-word-count.json
+azathoth workflow promote a1000000-0000-4000-8000-000000000006
+azathoth workflow run a1000000-0000-4000-8000-000000000007 --input '["the old ones wait", "and dream", "in sunken cities"]' --output result
+```
+
+It prints `[{"result": 4}, {"result": 2}, {"result": 3}]`: each child's whole
+result, in the list's order, whichever child finished first.
+
+Every item is its own production invocation, and `run children` lists them
+all under the map's run:
+
+```bash
+azathoth run children <RUN_ID>
+```
+
+```powershell
+azathoth run children <RUN_ID>
+```
+
+A list longer than `max_items` is refused before anything runs. When an item
+fails, the others still run, and the map fails naming the first that
+failed. If the map is stopped halfway, `run resume <RUN_ID>` finishes it,
+and only the items that had not finished run again.
+
+## 6. Ticket Triage: Routing
 
 `triage-ticket.json` classifies a support ticket and sends it to one of four
 specialists, chosen by conditions on the category. Then it checks the reply
@@ -355,7 +403,7 @@ azathoth benchmark run f1000000-0000-4000-8000-000000000060 --workflow f1000000-
 
 More detail: [Ticket Triage Example](../examples/ticket-triage/README.md).
 
-## 6. Workflow Writer: Workflows That Write Workflows
+## 7. Workflow Writer: Workflows That Write Workflows
 
 `write-workflow.json` turns a plain-English request into an Azathoth workflow
 document. Its prompts reply in JSON. A validator tool checks the draft with
@@ -404,7 +452,7 @@ azathoth benchmark run a2000000-0000-4000-8000-000000000030 --workflow a2000000-
 
 More detail: [Workflow Writer Example](../examples/workflow-writer/README.md).
 
-## 7. Code Review: Concurrent Reviewers
+## 8. Code Review: Concurrent Reviewers
 
 `review-change.json` reviews a code change with three reviewers at once, for
 security, correctness and readability. A Python tool merges their findings
@@ -464,7 +512,7 @@ recorded result rather than reviewing the change twice. See
 
 More detail: [Code Review Example](../examples/code-review/README.md).
 
-## 8. Novel: Loops Inside Loops
+## 9. Novel: Loops Inside Loops
 
 `write-novel.json` writes a novel from an idea. It plans the story, then
 writes the chapters one at a time in a loop. Each chapter has its own editing

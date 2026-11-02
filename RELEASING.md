@@ -287,6 +287,8 @@ azathoth workflow import examples/workflows/word-count-messages.json
 azathoth workflow import examples/workflows/count-words-in-child.json
 azathoth workflow import examples/workflows/countdown.json
 azathoth workflow import examples/workflows/loop-countdown.json
+azathoth workflow import examples/workflows/count-words-in-item.json
+azathoth workflow import examples/workflows/map-word-count.json
 
 azathoth tool verify 55555555-5555-5555-5555-555555555555 --version 1.0.0
 
@@ -297,17 +299,21 @@ azathoth workflow run a1000000-0000-4000-8000-000000000003 --input '{"workflow_i
 
 azathoth workflow promote a1000000-0000-4000-8000-000000000004
 azathoth workflow run a1000000-0000-4000-8000-000000000005 --input '{"remaining": 3}' --output result
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000006
+azathoth workflow run a1000000-0000-4000-8000-000000000007 --input '["the old ones wait", "and dream", "in sunken cities"]' --output result
 ```
 
-The three runs must print exactly `8`, `4` and `[3, 2, 1]`, and the tool's
-test cases must pass. `tool install-standard` proves that the standard tools
-ship in the installed package, and the child and loop runs prove that the
+The four runs must print exactly `8`, `4`, `[3, 2, 1]` and
+`[{"result": 4}, {"result": 2}, {"result": 3}]`, and the tool's test cases
+must pass. `tool install-standard` proves that the standard tools ship in
+the installed package, and the child, loop and map runs prove that the
 process tools find that package through the venv's `python`.
 
 ### 4. Run the model-backed examples
 
 Set the key (see [Connecting OpenRouter](docs/openrouter.md)), authorize
-models and add a judge. Then work through examples 2 and 5 to 7 of the
+models and add a judge. Then work through examples 2 and 6 to 8 of the
 [Examples Tour](docs/examples.md) in order: classify sentiment, ticket triage,
 workflow writer and code review. Each must complete:
 
@@ -321,7 +327,7 @@ workflow writer and code review. Each must complete:
 - code review approves the pure rename with no findings;
 - each benchmark with semantic cases runs with the judge.
 
-The novel (example 8) is optional because of its cost. When it is run, a
+The novel (example 9) is optional because of its cost. When it is run, a
 three-chapter book is enough.
 
 ### 5. Clean up

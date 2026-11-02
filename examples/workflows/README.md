@@ -309,6 +309,56 @@ be inspected, and the loop body can be benchmarked, optimized and promoted on
 its own. Like `run_workflow`, the loop runs children with its own Python
 interpreter, so Azathoth's environment must be the one that is active.
 
+## Mapping a Child Workflow Over a List
+
+To do the same work for every item of a list, `map_workflow`, from the
+standard tool library, invokes a child workflow once per item, up to
+`max_concurrency` at a time, and returns the results in the list's order
+(ADR 0106). Each child receives its item and the item's index, counted from
+0, and the map collects each child's whole result:
+
+```text
+child input   {"item": <item>, "index": <i>}
+map result    {"results": [<child result>, ...], "count": <n>}
+```
+
+`count-words-in-item.json` is a child built for a map. Its first step selects
+the item with `json_select`, and its second counts the item's words with the
+process tool. `map-word-count.json` maps it over the list it is given. Its
+settings are a constant step input:
+
+```json
+{"name": "settings", "source": {"value": {"workflow_id": "a1000000-0000-4000-8000-000000000006", "max_items": 100, "max_concurrency": 4}}}
+```
+
+Import the process tool, install the standard tools, import the workflows,
+promote the child, then run the map:
+
+```bash
+azathoth tool import examples/tools/word-count-process.json
+azathoth tool install-standard
+
+azathoth workflow import examples/workflows/count-words-in-item.json
+azathoth workflow import examples/workflows/map-word-count.json
+
+azathoth workflow promote a1000000-0000-4000-8000-000000000006
+
+azathoth workflow run a1000000-0000-4000-8000-000000000007 \
+    --input '["the old ones wait", "and dream", "in sunken cities"]' \
+    --output result
+```
+
+```text
+[{"result": 4}, {"result": 2}, {"result": 3}]
+```
+
+`max_items` is required: a longer list is refused before any child runs,
+never cut short. Every item runs to its end, so a failing item never cancels
+the others, and the map then fails naming the first failing item and how many
+failed. Each item's child runs under its own idempotency key, so a map whose
+run is resumed with `run resume` reuses every item that finished. The
+standard tools README describes every setting and message.
+
 ## JSON Document Format
 
 Workflow JSON files use the canonical serialized representation of
