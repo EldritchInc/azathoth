@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import get_args
 from uuid import UUID
 
 import pytest
@@ -237,9 +238,19 @@ WORKFLOWS_README = Path(__file__).parents[2] / "src" / "azathoth" / "workflows" 
 def test_the_readme_names_every_entry_type_in_order() -> None:
     text = WORKFLOWS_README.read_text(encoding="utf-8")
     section = text[text.index("### The Run Journal") :]
+    section = section[: section.index("\n### ", 1)]
     documented = [line.split("`")[1] for line in section.splitlines() if line.startswith("| `")]
+    (union, _) = get_args(RunJournalEvent)
 
-    assert documented == [event.type for event in EVENTS]
+    assert documented == [kind.model_fields["type"].default for kind in get_args(union)]
+    assert documented == [
+        "run.started",
+        "attempt.started",
+        "attempt.finished",
+        "layer.committed",
+        "run.resumed",
+        "run.finished",
+    ]
 
 
 def test_the_readme_quotes_the_real_collision() -> None:

@@ -126,6 +126,7 @@ from azathoth.providers import (
     BedrockUnavailableError,
     ModelDiscoveryError,
 )
+from azathoth.workflows import RunJournalError, RunLeaseError, RunResumeError
 
 
 def main(
@@ -136,7 +137,8 @@ def main(
     Output is always written as UTF-8, whatever the platform's code page.
     A PostgreSQL database that cannot be used here, Bedrock configuration
     that cannot be used, a provider whose models cannot be discovered,
-    lineage that is not valid and a child nested too deeply are each
+    lineage that is not valid, a child nested too deeply, and a run that
+    could not be journaled, lost its lease or cannot be resumed are each
     reported on stderr in one line, and the command exits with status 1.
 
     A command stopped by Ctrl-C prints `Interrupted.` and exits with 130;
@@ -178,6 +180,9 @@ def main(
         ModelDiscoveryError,
         LineageError,
         WorkflowDepthError,
+        RunJournalError,
+        RunLeaseError,
+        RunResumeError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -187,7 +192,8 @@ def main(
         # extra, its region or a usable pricing document, or any provider
         # whose models cannot be discovered (ADR 0103). So does a child
         # whose lineage is not valid, or that would be nested too deeply
-        # (ADR 0104).
+        # (ADR 0104). So does a run that could not be journaled, lost its
+        # lease, or cannot be resumed (ADR 0105): it stays unfinished.
         #
         print(
             str(exc),

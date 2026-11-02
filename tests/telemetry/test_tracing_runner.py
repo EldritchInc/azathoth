@@ -19,6 +19,7 @@ from azathoth.workflows import (
 )
 from tests.telemetry.fakes import RecordingTelemetry
 from tests.telemetry.test_runs import TracingExecutor
+from tests.workflows.test_run_resume import Crash, CrashingJournal
 from tests.workflows.test_runner_journal import (
     FIRST_STEP_ID,
     FlakyStrategy,
@@ -195,3 +196,22 @@ def test_either_runner_journals_each_run_under_its_invocation(
 
         assert rebuilt(entries) == run
         assert {entry.invocation_id for entry in entries} == {INVOCATION_ID}
+
+
+def test_a_traced_resume_is_traced_as_a_run_of_its_workflow() -> None:
+    telemetry = RecordingTelemetry()
+    journal = CrashingJournal()
+    journal.crash("attempt.finished")
+    workflow = candidate(step(FIRST_STEP_ID, FlakyStrategy()))
+
+    with pytest.raises(Crash):
+        asyncio.run(WorkflowRunner(journal=journal).run(workflow, Context()))
+
+    (run_id,) = journal.run_ids
+
+    run = asyncio.run(tracing_runner(telemetry, journal=journal).resume(workflow, run_id=run_id))
+
+    (run_span,) = telemetry.named("azathoth.run")
+
+    assert run.id == run_id
+    assert run_span.attributes["azathoth.run.id"] == str(run_id)

@@ -285,6 +285,26 @@ class TracingWorkflowRunner(WorkflowRunner):
 
         return run
 
+    async def resume(
+        self,
+        workflow: WorkflowCandidate,
+        *,
+        run_id: UUID,
+        invocation_id: UUID | None = None,
+    ) -> WorkflowRun:
+        """Resume and trace an unfinished run, returning completed failure evidence (ADR 0105)."""
+
+        with traced_run(self._telemetry, workflow_id=workflow.metadata.id) as trace:
+            run = await self._traced_runner(trace).resume(
+                workflow,
+                run_id=run_id,
+                invocation_id=invocation_id,
+            )
+
+            trace.record(run)
+
+        return run
+
     async def run_recording_failures(
         self,
         workflow: WorkflowCandidate,

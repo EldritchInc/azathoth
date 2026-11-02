@@ -257,6 +257,7 @@ from azathoth.workflows.run_journal import (
     JournalAttemptStarted,
     JournalLayerCommitted,
     JournalRunFinished,
+    JournalRunResumed,
     JournalRunStarted,
     RunJournalEntry,
     RunJournalError,
@@ -285,7 +286,15 @@ from azathoth.workflows.run_progress_tables import (
     RUN_PROGRESS_TABLES,
 )
 from azathoth.workflows.run_repository import WorkflowRunRepository
+from azathoth.workflows.run_resume import (
+    RunResumeError,
+    RunResumePoint,
+    finished_run,
+    journal_resumes,
+    resume_point,
+)
 from azathoth.workflows.runner import (
+    RecordedStepFailure,
     WorkflowRunner,
 )
 from azathoth.workflows.scorecard import (
@@ -421,6 +430,13 @@ __all__ = [
     "JournalAttemptStarted",
     "JournalLayerCommitted",
     "JournalRunFinished",
+    "JournalRunResumed",
+    "RecordedStepFailure",
+    "RunResumeError",
+    "RunResumePoint",
+    "finished_run",
+    "journal_resumes",
+    "resume_point",
     "JournalRunStarted",
     "RunJournalEntry",
     "RunJournalError",

@@ -375,6 +375,7 @@ invocation it executes, if any:
 | `attempt.started` | Before each attempt of a step executes. |
 | `attempt.finished` | After each attempt, with the whole `WorkflowStepAttempt`. |
 | `layer.committed` | Once a layer commits: its step runs, the events it added to the run's context, and every step blocked so far. |
+| `run.resumed` | Each time a process resumes the run. |
 | `run.finished` | When the run ends: when, and whether and where it halted. |
 
 So the journal of a finished run holds the whole run: its steps are the
@@ -429,6 +430,58 @@ A renewal that fails for another reason, such as a database that is briefly
 unreachable, is tried again at the next interval; only a lease that lapses
 meanwhile is lost. A lease that cannot be released when the run ends costs
 the run nothing: it lapses on its own.
+
+### Resuming a Run
+
+`WorkflowRunner.resume(workflow, run_id=...)` resumes a run that stopped
+before it finished (ADR 0105), with the workflow it started from. The run
+keeps its ID, its initial context, its start and the invocation it executes,
+and its journal records `run.resumed`, then continues where it stopped:
+
+- every layer it committed is kept as it was: its steps are reused and the
+  events it added are replayed into the run's context;
+- in the layer it was executing, a step whose last finished attempt
+  succeeded is reused, with the context that attempt executed in; one whose
+  attempts failed is retried from its next attempt number, after that
+  attempt's delay, and one with no attempts left fails as they recorded, with
+  a `RecordedStepFailure`;
+- an attempt that started but never finished is executed again, under the
+  same number. Work in flight when the run stopped runs at least once, and may
+  run twice;
+- a run that halted on a layer it committed finishes halted, running nothing.
+
+A run whose journal records its finish is rebuilt by `finished_run` and
+returned as it finished; nothing executes and nothing is journaled. So a
+process that died after the run finished, but before the run was recorded,
+loses nothing.
+
+With leases, the resume acquires the run's lease first, and reads the journal
+again once it holds it: a run another process still holds is refused, and
+one whose process died is taken over once its lease lapses.
+`resume_point` reads where a run resumes, and `journal_resumes` counts how
+often it was resumed. A run that cannot be resumed with the workflow is
+refused with a `RunResumeError`, and nothing runs:
+
+```text
+Run <RUN_ID> has no journal to resume.
+Run <RUN_ID> has already finished.
+Run <RUN_ID>'s journal is missing position <POSITION>.
+Run <RUN_ID> executes workflow <WORKFLOW_ID>, not workflow <OTHER_WORKFLOW_ID>.
+Run <RUN_ID> started from revision <REVISION> of workflow <WORKFLOW_ID>, not revision <OTHER_REVISION>.
+Run <RUN_ID>'s journal does not match workflow <WORKFLOW_ID>: <DETAIL>.
+Run <RUN_ID> executes no invocation, not invocation <INVOCATION_ID>.
+```
+
+`execute_production_invocation` and `complete_production_invocation` take
+`resume_run_id` to resume an invocation's run instead of starting one. The
+state must be the one the run started from. A run already recorded, or
+already associated with the invocation, is not recorded again.
+
+A production run that stops unfinished, because its journal could not be
+recorded, its lease was lost, or it cannot be resumed, records no result:
+the error is raised, and the invocation stays incomplete, so it can be
+resumed. `workflow run`, `workflow invoke` and `job run` report it on
+stderr in one line and exit with status 1.
 
 ## Values and Data Flow
 

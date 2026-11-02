@@ -8,6 +8,7 @@ they happen:
   one with the whole `WorkflowStepAttempt`;
 - `layer.committed`: each dependency layer once it commits, with its step
   runs, the events it added to the run's context, and the steps it blocked;
+- `run.resumed`: each time another process resumed the run;
 - `run.finished`: when and how the run ended.
 
 The journal of a finished run holds everything its `WorkflowRun` does. The
@@ -80,6 +81,15 @@ class JournalLayerCommitted(BaseModel):
     blocked_step_ids: tuple[UUID, ...] = ()
 
 
+class JournalRunResumed(BaseModel):
+    """The run was resumed, by a process that found it unfinished."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["run.resumed"] = "run.resumed"
+    resumed_at: datetime
+
+
 class JournalRunFinished(BaseModel):
     """The run finished, halted or not."""
 
@@ -96,6 +106,7 @@ RunJournalEvent = Annotated[
     | JournalAttemptStarted
     | JournalAttemptFinished
     | JournalLayerCommitted
+    | JournalRunResumed
     | JournalRunFinished,
     Field(discriminator="type"),
 ]
@@ -323,6 +334,7 @@ __all__ = [
     "JournalAttemptStarted",
     "JournalLayerCommitted",
     "JournalRunFinished",
+    "JournalRunResumed",
     "JournalRunStarted",
     "RunJournalEntry",
     "RunJournalError",

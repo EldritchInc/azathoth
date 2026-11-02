@@ -6,9 +6,13 @@ from uuid import UUID
 
 import pytest
 
+from azathoth.cli import application, main
 from azathoth.persistence.repositories import open_repositories
 from azathoth.tools import LINEAGE_ENVIRONMENT_VARIABLE
 from azathoth.workflows import (
+    RunJournalError,
+    RunLeaseLostError,
+    RunResumeError,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowRunRepository,
@@ -173,3 +177,25 @@ def test_a_parent_and_the_child_its_tool_invokes_each_journal_their_own_run(
 
     assert journaled_run(walkthrough, parent) == parent
     assert journaled_run(walkthrough, child) == child
+
+
+@pytest.mark.parametrize(
+    "raised",
+    [
+        pytest.param(RunJournalError("Run 1 already records journal position 2."), id="journal"),
+        pytest.param(RunLeaseLostError.taken_over(UUID(int=1)), id="lost"),
+        pytest.param(RunResumeError(UUID(int=1), "Run 1 has no journal to resume."), id="resume"),
+    ],
+)
+def test_a_run_that_stops_unfinished_is_reported_in_one_line(
+    raised: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def stop(*_: object) -> int:
+        raise raised
+
+    monkeypatch.setattr(application, "_dispatch", stop)
+
+    assert main(["workflow", "list"]) == 1
+    assert capsys.readouterr().err == f"{raised}\n"
