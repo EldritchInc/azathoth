@@ -48,6 +48,20 @@ class RunResumeError(RuntimeError):
         self.run_id = run_id
 
 
+class RunFinishedError(RunResumeError):
+    """The run has already finished, so there is nothing to resume.
+
+    The process that ran it may not have recorded what it produced yet, so a
+    caller racing it looks again for the result rather than giving up.
+    """
+
+    def __init__(
+        self,
+        run_id: UUID,
+    ) -> None:
+        super().__init__(run_id, f"Run {run_id} has already finished.")
+
+
 @dataclass(frozen=True)
 class RunResumePoint:
     """Where an unfinished run resumes, and everything it keeps.
@@ -167,15 +181,16 @@ def resume_point(
     """Return where an unfinished run resumes with the given workflow.
 
     Raises:
-        RunResumeError: The journal is not whole, the run has finished, or
-            the journal does not match the workflow: another workflow, another
-            revision, or layers and steps the workflow does not have.
+        RunResumeError: The journal is not whole, or does not match the
+            workflow: another workflow, another revision, or layers and steps
+            the workflow does not have.
+        RunFinishedError: The run has finished.
     """
 
     started = run_started(run_id, entries)
 
     if isinstance(entries[-1].event, JournalRunFinished):
-        raise RunResumeError(run_id, f"Run {run_id} has already finished.")
+        raise RunFinishedError(run_id)
 
     workflow_id = workflow.metadata.id
 
@@ -282,6 +297,7 @@ def resume_point(
 
 
 __all__ = [
+    "RunFinishedError",
     "RunResumeError",
     "RunResumePoint",
     "finished_run",

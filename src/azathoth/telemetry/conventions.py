@@ -19,6 +19,9 @@ JOB_VERSION: Final = "azathoth.job.version"
 JOB_STATUS: Final = "azathoth.job.status"
 JOB_REPLAYED: Final = "azathoth.job.replayed"
 
+WORKER_MESSAGE_ID: Final = "azathoth.worker.message_id"
+"""The queue message a worker ran the job from (ADR 0107)."""
+
 INVOCATION_ID: Final = "azathoth.invocation.id"
 INVOCATION_OUTCOME: Final = "azathoth.invocation.outcome"
 
@@ -54,6 +57,7 @@ ATTRIBUTE_KEYS: Final = frozenset(
         JOB_VERSION,
         JOB_STATUS,
         JOB_REPLAYED,
+        WORKER_MESSAGE_ID,
         INVOCATION_ID,
         INVOCATION_OUTCOME,
         ERROR_CODE,

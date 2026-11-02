@@ -114,6 +114,18 @@ azathoth
 ├── job
 │   └── run <FILE | ->
 │
+├── worker
+│   ├── run
+│   │   ├── --queue-url <URL>
+│   │   ├── --result-queue-url <URL>
+│   │   ├── --wait-seconds <SECONDS>
+│   │   ├── --visibility-timeout-seconds <SECONDS>
+│   │   ├── --extend-every-seconds <SECONDS>
+│   │   └── --heartbeat-file <PATH>
+│   └── health
+│       ├── --heartbeat-file <PATH>
+│       └── --max-age-seconds <SECONDS>
+│
 ├── model
 │   ├── list
 │   ├── show <MODEL_IDENTIFIER>
@@ -438,8 +450,8 @@ AZATHOTH_BEDROCK_PRICING <PATH> is not a valid Bedrock pricing document: <REASON
 
 # Tracing
 
-`workflow run`, `workflow invoke` and `job run` are traced with
-OpenTelemetry when `AZATHOTH_OTEL` is set and the `otel` extra is installed
+`workflow run`, `workflow invoke`, `job run` and `worker run` are traced
+with OpenTelemetry when `AZATHOTH_OTEL` is set and the `otel` extra is installed
 (ADR 0100):
 
 ```bash
@@ -2741,7 +2753,9 @@ again. It reports the recorded invocation, with `"replayed": true`:
 - an invocation without a result that nothing runs any more, because the
   process running it was stopped, or killed and its lease has lapsed, is
   resumed where its run stopped (ADR 0105). Its result is reported as if it
-  had just run, with `"replayed": false`, and is replayed from then on.
+  had just run, with `"replayed": false`, and is replayed from then on;
+- an invocation that the process still running it finishes while the
+  request is being looked up replays the result that process recorded.
 
 Failures replay too: a key always reports the same outcome. Send a new key to
 try again.
@@ -2761,6 +2775,147 @@ invoked. A replay, a conflict or a rejection needs no credentials.
 
 `job run` streams no step records. A job is a request and a response; use
 `workflow invoke --output jsonl` to watch steps live.
+
+# Run a Worker
+
+`worker run` takes job requests from an Amazon SQS queue and runs them, one
+at a time, until it is stopped (ADR 0107). It needs the `worker` extra:
+
+```bash
+python -m pip install "azathoth-ai[worker]"
+azathoth worker run --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/azathoth-jobs
+```
+
+Without it, the worker runs nothing and says so:
+
+```text
+azathoth worker needs boto3, which is not installed; install azathoth-ai[worker].
+```
+
+Each message's body is exactly one job request, as `job run` reads it, and
+it is answered as `job run` answers it: a key it has seen replays, an
+interrupted invocation resumes, and anything else runs. The result settles
+the message:
+
+| Result | Message |
+| --- | --- |
+| `succeeded`, `failed`, `rejected` | Sent to the result queue, when there is one, then deleted. |
+| `incomplete` | Left on the queue. It comes back when its visibility timeout runs out, and is resumed once its run's lease has lapsed. |
+
+A worker that dies with a message leaves it to come back the same way, so
+another worker resumes its run from the journal (ADR 0105).
+
+The worker accepts no references in a request's `input`, so a message can
+never read the worker's own disk:
+
+```text
+Input file:///etc/hostname uses the 'file' scheme, which is not accepted here; no schemes are accepted.
+```
+
+`s3://` references from allow-listed buckets come next.
+
+## Worker Options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--queue-url` | required | The SQS queue job requests come from, standard or FIFO. |
+| `--result-queue-url` | none | A standard SQS queue every final result is sent to. |
+| `--wait-seconds` | 20 | How long one receive waits for a message, at most 20. |
+| `--visibility-timeout-seconds` | 120 | How long a received message stays hidden, at most 43200. |
+| `--extend-every-seconds` | 30 | How often a running job's message is hidden again. |
+| `--heartbeat-file` | none | A file to touch while the worker is alive. |
+
+Settings that are not valid are refused before anything is opened, one line
+per option:
+
+```text
+--wait-seconds: Input should be less than or equal to 20.
+A worker must extend a message's visibility more often than its visibility timeout of <SECONDS> seconds.
+```
+
+A result sent to the result queue is the one line `job run` prints, with the
+request's key in the `idempotency_key` message attribute. A FIFO result
+queue is refused:
+
+```text
+The result queue <URL> is a FIFO queue; the worker sends results to standard queues only.
+```
+
+The client uses AWS's own credential chain. The region is the one the queue
+URL names; a URL of another host, such as a local stand-in for SQS reached
+through `AWS_ENDPOINT_URL_SQS`, takes `AWS_REGION`:
+
+```text
+Cannot tell the AWS region of queue <URL>; set AWS_REGION.
+```
+
+The worker needs `sqs:ReceiveMessage`, `sqs:DeleteMessage` and
+`sqs:ChangeMessageVisibility` on its queue, and `sqs:SendMessage` on the
+result queue.
+
+## Worker Output
+
+Each settled message is one line of JSON on stdout:
+
+```json
+{"message_id": "059f36b4-87a3-44ab-83d2-661975830a7d", "idempotency_key": "order-4711-review", "status": "succeeded", "invocation_id": "5b0c2a52-0000-4000-8000-000000000001", "settled": "deleted"}
+```
+
+`settled` is `deleted`, `left` or `returned`. A message handed back has a
+`null` status and invocation.
+
+With tracing on, each job is traced as `job run` traces it, and its job span
+carries `azathoth.worker.message_id`.
+
+## Stopping a Worker
+
+The first Ctrl-C or SIGTERM drains the worker. It prints `Stopping.`, lets a
+receive in progress finish, stops the job running, which releases its run's
+lease, and makes its message visible again at once, so another worker
+resumes the run without waiting out the timeout. It then prints `Stopped.`
+and exits with 0. A drain takes at most one receive wait and the time a job
+takes to unwind, so give it more than 20 seconds before it is killed.
+
+A second signal stops it where it is: Ctrl-C exits with 130 and prints
+`Interrupted.`, SIGTERM exits with 143 and prints `Terminated.`. Its message
+comes back when its visibility timeout runs out.
+
+A queue that refuses a call, or a job that cannot run at all, as when the
+database is unreachable, stops the worker with status 1 and the reason on
+stderr. The message it was running stays on the queue:
+
+```text
+SQS ReceiveMessage failed on <URL>: <CODE>: <MESSAGE>
+Message <MESSAGE_ID> stays on the queue; running it failed: <REASON>
+```
+
+A request that does not decode is not one of these: it is `rejected`, and
+deleted. A message that keeps stopping workers is the queue's to move aside:
+give the queue a dead-letter queue.
+
+## Worker Health
+
+With `--heartbeat-file`, the worker touches the file before every receive
+and after every extension. `worker health` exits with 0 when the file is
+younger than `--max-age-seconds` (90 by default), and 1 when it is not, so it
+serves as a container's health check:
+
+```bash
+azathoth worker health --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+```text
+The last heartbeat at /tmp/azathoth-heartbeat is 4 seconds old.
+The last heartbeat at /tmp/azathoth-heartbeat is 131 seconds old, older than 90 seconds.
+No heartbeat at /tmp/azathoth-heartbeat; the worker has not started, or cannot write it.
+```
+
+A heartbeat file the worker cannot write stops it before it receives
+anything:
+
+```text
+Cannot write the heartbeat file <PATH>: <REASON>.
+```
 
 # No Dedicated Rollback Command in V1
 
@@ -3848,8 +4003,8 @@ Cannot tell the media type of notes.log from its extension; give it with --media
 ```
 
 The CLI accepts only local files. Other schemes are for other entry points:
-the queue worker planned for 1.1 will accept `s3://` references from
-allow-listed buckets, and no `file://` references.
+the queue worker accepts no references yet, and never `file://` ones (see
+[Run a Worker](#run-a-worker)).
 
 # End-to-End From Checked-In Examples
 

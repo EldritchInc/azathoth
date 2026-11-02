@@ -281,7 +281,7 @@ def test_cli_help_lists_the_job_command(
         main(("--help",))
 
     assert raised.value.code == 0
-    assert ",init,job}" in capsys.readouterr().out
+    assert ",init,job,worker}" in capsys.readouterr().out
 
 
 def test_job_without_an_action_prints_help(

@@ -22,9 +22,9 @@ COPY src ./src
 RUN python -m build --wheel --outdir /dist
 
 #
-# Install it, with the otel, postgres and bedrock extras (ADR 0100, ADR 0102,
-# ADR 0103), into a venv that is first on PATH, so the standard tools' child workflows run
-# Azathoth's own Python.
+# Install it, with the otel, postgres, bedrock and worker extras (ADR 0100,
+# ADR 0102, ADR 0103, ADR 0107), into a venv that is first on PATH, so the
+# standard tools' child workflows run Azathoth's own Python.
 #
 FROM ${PYTHON_IMAGE}
 
@@ -56,7 +56,7 @@ COPY --from=builder /dist/ /tmp/dist/
 RUN python -m venv /opt/azathoth/venv \
     && set -- /tmp/dist/*.whl \
     && /opt/azathoth/venv/bin/python -m pip install --no-cache-dir --root-user-action=ignore \
-        "$1[otel,postgres,bedrock]" \
+        "$1[otel,postgres,bedrock,worker]" \
     && rm -rf /tmp/dist
 
 WORKDIR /var/lib/azathoth

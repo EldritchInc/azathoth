@@ -414,6 +414,32 @@ Azathoth runs its models through OpenRouter by default. To run them on
 Amazon Bedrock instead, or as well, with your AWS credentials, install the
 `bedrock` extra and follow [Connecting Amazon Bedrock](bedrock.md).
 
+## Optional: Running Jobs From a Queue
+
+Azathoth can take job requests from an Amazon SQS queue and run them, one at
+a time, with `azathoth worker run`. Most people don't need this; it is how
+Azathoth runs behind a queue on AWS, usually in a container (see
+[Running in a Container](container.md#8-run-a-worker)).
+
+The worker is an optional extra. Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[worker]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[worker]"
+```
+
+Without it, `azathoth worker run` runs nothing and says so:
+
+```text
+azathoth worker needs boto3, which is not installed; install azathoth-ai[worker].
+```
+
+The [CLI Reference](../src/azathoth/cli/README.md#run-a-worker) describes
+its options, its output, and how it stops.
+
 ## Optional: Tracing With OpenTelemetry
 
 Azathoth can send a trace of every workflow it runs to the tracing backend
@@ -461,8 +487,8 @@ export OTEL_TRACES_EXPORTER=console
 $env:OTEL_TRACES_EXPORTER = "console"
 ```
 
-`azathoth workflow run`, `azathoth workflow invoke` and `azathoth job run`
-are traced. Each workflow run is one trace, with a span for each step, its
+`azathoth workflow run`, `azathoth workflow invoke`, `azathoth job run` and
+`azathoth worker run` are traced. Each workflow run is one trace, with a span for each step, its
 model, tokens, cost, retries and confidence. A child workflow continues its
 parent's trace, under the step that started it. Spans never carry what a
 workflow read, wrote or said: no inputs, prompts, replies, outputs or error

@@ -29,6 +29,7 @@ from azathoth.cli.dispatching import (
     dispatch_model_command,
     dispatch_run_command,
     dispatch_tool_command,
+    dispatch_worker_command,
     dispatch_workflow_command,
 )
 from azathoth.cli.experiments import (
@@ -66,6 +67,7 @@ from azathoth.cli.parsing import (
     MODEL_COMMAND,
     RUN_COMMAND,
     TOOL_COMMAND,
+    WORKER_COMMAND,
     WORKFLOW_COMMAND,
     build_parser,
 )
@@ -109,6 +111,7 @@ from azathoth.cli.usage import (
     model_usage,
     tool_usage,
 )
+from azathoth.cli.worker import check_worker_health, run_worker
 from azathoth.cli.workflows import (
     export_workflow,
     import_workflow,
@@ -128,6 +131,7 @@ from azathoth.providers import (
     BedrockUnavailableError,
     ModelDiscoveryError,
 )
+from azathoth.worker import WorkerError
 from azathoth.workflows import RunJournalError, RunLeaseError, RunResumeError
 
 
@@ -146,6 +150,9 @@ def main(
     A command stopped by Ctrl-C prints `Interrupted.` and exits with 130;
     one stopped by SIGTERM prints `Terminated.` and exits with 143. Either
     unwinds first, so a run it was executing releases its lease (ADR 0105).
+    `worker run` handles its own signals, and drains on the first of them
+    (ADR 0107). A worker without its extra, whose queue cannot be used, or
+    whose heartbeat cannot be written is reported in one line, with status 1.
     """
 
     use_utf8_streams(
@@ -185,6 +192,7 @@ def main(
         RunJournalError,
         RunLeaseError,
         RunResumeError,
+        WorkerError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -195,7 +203,9 @@ def main(
         # whose models cannot be discovered (ADR 0103). So does a child
         # whose lineage is not valid, or that would be nested too deeply
         # (ADR 0104). So does a run that could not be journaled, lost its
-        # lease, or cannot be resumed (ADR 0105): it stays unfinished.
+        # lease, or cannot be resumed (ADR 0105): it stays unfinished. So
+        # does a worker without its extra, whose queue cannot be used, or
+        # whose heartbeat cannot be written (ADR 0107).
         #
         print(
             str(exc),
@@ -301,6 +311,13 @@ def _dispatch(
         return dispatch_job_command(
             arguments,
             run_job_request=run_job_request,
+        )
+
+    if command == WORKER_COMMAND:
+        return dispatch_worker_command(
+            arguments,
+            run_worker=run_worker,
+            check_worker_health=check_worker_health,
         )
 
     if command == MODEL_COMMAND:

@@ -65,6 +65,9 @@ postgres = [
 bedrock = [
     "boto3>=1.39,<2",
 ]
+worker = [
+    "boto3>=1.39,<2",
+]
 dev = [
     "boto3>=1.39,<2",
     "build",

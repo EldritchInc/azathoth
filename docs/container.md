@@ -7,7 +7,8 @@ version as the PyPI package:
 ghcr.io/eldritchinc/azathoth:1.1.0
 ```
 
-The image holds Azathoth, its standard tools and OpenTelemetry tracing. It
+The image holds Azathoth, its standard tools, OpenTelemetry tracing and the
+queue worker. It
 is what Azathoth's cloud deployment runs, and it runs anywhere Docker does,
 on Intel and ARM machines alike. You don't need Python on your machine to use
 it.
@@ -259,6 +260,66 @@ docker run --rm -e AZATHOTH_OTEL=1 -e OTEL_EXPORTER_OTLP_ENDPOINT=http://host.do
 ```powershell
 docker run --rm -e AZATHOTH_OTEL=1 -e OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318 -v azathoth-data:/var/lib/azathoth $IMAGE workflow run a1000000-0000-4000-8000-000000000001 --input '"the old ones wait"' --output result
 ```
+
+## 8. Run a Worker
+
+The image runs the queue worker, which takes job requests from an Amazon
+SQS queue and runs them one at a time (see
+[Run a Worker](../src/azathoth/cli/README.md#run-a-worker)). Give it AWS
+credentials as for Bedrock (step 4), a database every worker shares, and a
+heartbeat file in `/tmp`:
+
+```bash
+QUEUE=https://sqs.us-east-1.amazonaws.com/123456789012/azathoth-jobs
+docker run --rm --read-only --tmpfs /tmp -e OPENROUTER_API_KEY -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_DATABASE $IMAGE worker run --queue-url $QUEUE --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+```powershell
+$QUEUE = "https://sqs.us-east-1.amazonaws.com/123456789012/azathoth-jobs"
+docker run --rm --read-only --tmpfs /tmp -e OPENROUTER_API_KEY -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_DATABASE $IMAGE worker run --queue-url $QUEUE --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+Each settled message is one line of JSON on stdout. Several workers share
+a queue only through a database they all reach, so `AZATHOTH_DATABASE`
+names PostgreSQL (step 2); workers on one SQLite file each wait their turn
+for it.
+
+`docker stop` sends SIGTERM, and the worker drains: it hands the job it is
+running back to the queue for another worker to resume, and exits with 0.
+Docker waits 10 seconds by default before killing it, which can be less than
+a drain takes, so give it longer:
+
+```bash
+docker stop --time 60 <CONTAINER>
+```
+
+```powershell
+docker stop --time 60 <CONTAINER>
+```
+
+A health check runs `worker health` inside the container:
+
+```bash
+docker exec <CONTAINER> azathoth worker health --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+```powershell
+docker exec <CONTAINER> azathoth worker health --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+On Amazon ECS, the same command is the container's `healthCheck`, and a
+`stopTimeout` of 60 seconds gives a drain room:
+
+```json
+{
+  "command": ["worker", "run", "--queue-url", "https://sqs.us-east-1.amazonaws.com/123456789012/azathoth-jobs", "--heartbeat-file", "/tmp/azathoth-heartbeat"],
+  "healthCheck": {"command": ["CMD", "azathoth", "worker", "health", "--heartbeat-file", "/tmp/azathoth-heartbeat"]},
+  "stopTimeout": 60
+}
+```
+
+Give the queue a dead-letter queue, so a message that keeps stopping
+workers is moved aside rather than received forever.
 
 ## Building the Image Yourself
 
