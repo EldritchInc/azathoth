@@ -121,10 +121,11 @@ class Handler:
 
     async def __call__(
         self,
-        body: bytes,
+        message: QueueMessage,
     ) -> JobResult:
-        """Run one body, after the delay."""
+        """Run one message's body, after the delay."""
 
+        body = message.body
         self.ran.append(body)
         self.running += 1
         self.most_at_once = max(self.most_at_once, self.running)

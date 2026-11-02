@@ -69,11 +69,12 @@ OTEL_TRACES_EXPORTER=zipkin is not supported; supported exporters: otlp, console
 
 ## What Is Traced
 
-`workflow run`, `workflow invoke` and `job run` are traced. Benchmark runs
-and optimization are not traced in 1.1.
+`workflow run`, `workflow invoke`, `job run` and `worker run` are traced,
+`worker run` as one job trace per message. Benchmark runs and optimization
+are not traced in 1.1.
 
 ```text
-azathoth.job          job run
+azathoth.job          job run, and each message worker run takes
 └─ azathoth.invocation   workflow invoke, and the invocation a job starts
    └─ azathoth.run          every workflow run
       └─ azathoth.step         every step: executed, failed or skipped
@@ -111,6 +112,7 @@ Spans carry identifiers, statuses and measurements, and nothing else:
 | `azathoth.job.version` | job | The job's version, `1` |
 | `azathoth.job.status` | job | `succeeded`, `failed`, `rejected` or `incomplete` |
 | `azathoth.job.replayed` | job | Whether a recorded invocation was reported instead of a new one |
+| `azathoth.worker.message_id` | job | The queue message a worker ran the job from |
 | `azathoth.invocation.id` | job, invocation | The invocation, for `azathoth invocation show` |
 | `azathoth.invocation.outcome` | invocation | `succeeded`, or the error code |
 | `azathoth.error.code` | job, invocation | The error code of one that did not succeed |

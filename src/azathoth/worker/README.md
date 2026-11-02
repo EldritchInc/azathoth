@@ -9,10 +9,17 @@ from azathoth.worker import (
     JobQueue,
     QueueMessage,
     ResultQueue,
+    SqsJobQueue,
+    SqsResultQueue,
     Worker,
     WorkerSettings,
+    check_heartbeat,
 )
 ```
+
+`azathoth worker run` and `azathoth worker health` are its command-line
+entry points; the [CLI Reference](../cli/README.md#run-a-worker) describes
+them.
 
 ## Queues
 
@@ -35,10 +42,33 @@ A `ResultQueue` is sent every final result:
 
 Every method blocks, and the worker calls them from a thread.
 
+## SQS
+
+`SqsJobQueue(url)` and `SqsResultQueue(url)` are the queues on Amazon SQS.
+They need the `worker` extra, and import boto3 only when one is opened:
+
+```text
+azathoth worker needs boto3, which is not installed; install azathoth-ai[worker].
+```
+
+A receive long-polls for one message. A result is sent with its request's
+key in the `idempotency_key` string attribute, and a result queue must be a
+standard queue; the job queue may be standard or FIFO.
+
+The client uses AWS's own credential chain and standard retries. Its region
+is the one an SQS queue URL names, since that is where the queue lives; a
+URL of another host takes `AWS_REGION`, or the region boto3 finds, and boto3
+honors `AWS_ENDPOINT_URL_SQS` for a local stand-in. A call SQS refuses, or
+that never reached it, raises `QueueError` in one line:
+
+```text
+SQS <OPERATION> failed on <URL>: <CODE>: <MESSAGE>
+```
+
 ## Settling a Message
 
-`Worker(queue, handle)` runs each message's body with `handle`, which
-answers every request with a job result. Its result settles the message:
+`Worker(queue, handle)` runs each message with `handle`, which answers the
+job request its body carries with a job result. Its result settles the message:
 
 | Result | Message |
 | --- | --- |
@@ -109,3 +139,8 @@ A queue that fails also raises from `run`.
 
 `heartbeat` is called before every receive and after every extension, so a
 health check can tell a live worker from a stuck one.
+
+`HeartbeatFile(path).beat()` touches a file, and
+`check_heartbeat(path, max_age_seconds=...)` reads how long ago that was.
+A heartbeat is fresh for 90 seconds by default: a worker beats at least
+every 20 or 30 seconds, so that allows for two missed beats.

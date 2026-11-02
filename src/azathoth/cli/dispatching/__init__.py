@@ -11,6 +11,7 @@ from azathoth.cli.dispatching.judges import dispatch_judge_command
 from azathoth.cli.dispatching.models import dispatch_model_command
 from azathoth.cli.dispatching.runs import dispatch_run_command
 from azathoth.cli.dispatching.tools import dispatch_tool_command
+from azathoth.cli.dispatching.worker import dispatch_worker_command
 from azathoth.cli.dispatching.workflows import dispatch_workflow_command
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "dispatch_model_command",
     "dispatch_run_command",
     "dispatch_tool_command",
+    "dispatch_worker_command",
     "dispatch_workflow_command",
 ]

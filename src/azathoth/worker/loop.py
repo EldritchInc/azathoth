@@ -1,7 +1,7 @@
 """The queue worker's loop: receive, run, settle, extend, drain (ADR 0107).
 
-A worker takes one message at a time from a job queue, and runs its body as
-a job request with a handler, which answers every request with a job result
+A worker takes one message at a time from a job queue, and runs it with a
+handler, which answers the job request its body carries with a job result
 (ADR 0097). The result settles the message:
 
 - `succeeded`, `failed` and `rejected` are final: the result is sent to the
@@ -48,8 +48,8 @@ MAX_VISIBILITY_TIMEOUT_SECONDS: Final = 43200
 DEFAULT_EXTEND_EVERY_SECONDS: Final = 30
 """How often a running job's message has its visibility extended."""
 
-JobHandler = Callable[[bytes], Awaitable[JobResult]]
-"""Runs one message body as a job request, and returns its result."""
+JobHandler = Callable[[QueueMessage], Awaitable[JobResult]]
+"""Runs the job request one message carries, and returns its result."""
 
 
 class WorkerSettings(BaseModel):
@@ -166,7 +166,7 @@ class Worker:
 
         Args:
             queue: The queue job requests come from.
-            handle: Runs one message body as a job request.
+            handle: Runs the job request one message carries.
             settings: How to poll and extend; the defaults when omitted.
             results: Where every final result is sent, when given.
             log: Writes one settled message's line; stdout when omitted.
@@ -225,7 +225,7 @@ class Worker:
         if stop.is_set():
             return await self._hand_back(message, key)
 
-        job = asyncio.ensure_future(self._handle(message.body))
+        job = asyncio.ensure_future(self._handle(message))
         extensions: list[asyncio.Future[None]] = []
         extending = asyncio.create_task(self._extend(message, extensions))
         stopping = asyncio.create_task(stop.wait())

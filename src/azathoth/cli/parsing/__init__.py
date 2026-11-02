@@ -133,6 +133,20 @@ from azathoth.cli.parsing.tools import (
     TOOL_VERSIONS_ACTION,
     add_tool_parser,
 )
+from azathoth.cli.parsing.worker import (
+    WORKER_ACTION_ATTRIBUTE,
+    WORKER_COMMAND,
+    WORKER_EXTEND_EVERY_ATTRIBUTE,
+    WORKER_HEALTH_ACTION,
+    WORKER_HEARTBEAT_FILE_ATTRIBUTE,
+    WORKER_MAX_AGE_ATTRIBUTE,
+    WORKER_QUEUE_URL_ATTRIBUTE,
+    WORKER_RESULT_QUEUE_URL_ATTRIBUTE,
+    WORKER_RUN_ACTION,
+    WORKER_VISIBILITY_TIMEOUT_ATTRIBUTE,
+    WORKER_WAIT_SECONDS_ATTRIBUTE,
+    add_worker_parser,
+)
 from azathoth.cli.parsing.workflows import (
     GENERATIONS_ATTRIBUTE,
     TARGET_COST_ATTRIBUTE,
@@ -210,6 +224,7 @@ def build_parser() -> ArgumentParser:
 
     add_init_parser(commands)
     add_job_parser(commands)
+    add_worker_parser(commands)
 
     return parser
 
@@ -354,4 +369,16 @@ __all__ = [
     "add_invocation_parser",
     "add_judge_parser",
     "build_parser",
+    "WORKER_ACTION_ATTRIBUTE",
+    "WORKER_COMMAND",
+    "WORKER_EXTEND_EVERY_ATTRIBUTE",
+    "WORKER_HEALTH_ACTION",
+    "WORKER_HEARTBEAT_FILE_ATTRIBUTE",
+    "WORKER_MAX_AGE_ATTRIBUTE",
+    "WORKER_QUEUE_URL_ATTRIBUTE",
+    "WORKER_RESULT_QUEUE_URL_ATTRIBUTE",
+    "WORKER_RUN_ACTION",
+    "WORKER_VISIBILITY_TIMEOUT_ATTRIBUTE",
+    "WORKER_WAIT_SECONDS_ATTRIBUTE",
+    "add_worker_parser",
 ]
