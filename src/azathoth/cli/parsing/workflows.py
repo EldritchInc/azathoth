@@ -11,6 +11,7 @@ from azathoth.cli.output_format import (
     WorkflowOutputFormat,
 )
 from azathoth.cli.parsing.common import (
+    idempotency_key,
     json_value,
     media_type,
     positive_integer,
@@ -46,6 +47,8 @@ WORKFLOW_INPUT_FILE_ATTRIBUTE = "workflow_input_file"
 WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE = "workflow_input_media_type"
 WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
 WORKFLOW_OUTPUT_ATTRIBUTE = "workflow_output"
+
+WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE = "workflow_idempotency_key"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE = "workflow_specification_revision"
@@ -202,6 +205,18 @@ def add_workflow_parser(
     )
 
     _add_input_file_arguments(workflow_invoke_parser, workflow_invoke_input)
+
+    workflow_invoke_parser.add_argument(
+        "--idempotency-key",
+        dest=WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE,
+        type=idempotency_key,
+        default=None,
+        metavar="KEY",
+        help=(
+            "Record the invocation under this key, as job run does: the same request "
+            "again replays it, or resumes it if it was interrupted (ADR 0097, ADR 0105)."
+        ),
+    )
 
     _add_output_argument(workflow_invoke_parser)
 

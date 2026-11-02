@@ -4,6 +4,7 @@ psycopg is imported only when a PostgreSQL database is opened, and only with
 the `postgres` extra installed.
 """
 
+import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager, suppress
 from dataclasses import dataclass
@@ -179,6 +180,10 @@ class PostgresDatabase:
     The connection is opened when the database is first used. A connection
     found closed or broken, such as one the server dropped while it sat
     idle, is opened again before the next transaction begins.
+
+    Transactions on the one connection take turns: one begun in another
+    thread, such as a lease renewal (ADR 0105), waits for the one in
+    progress to commit or roll back.
     """
 
     def __init__(
@@ -193,6 +198,7 @@ class PostgresDatabase:
         self._driver = driver if driver is not None else psycopg_driver()
         self._connection: PostgresConnection | None = None
         self._checked = False
+        self._turns = threading.RLock()
 
     @property
     def dialect(
@@ -224,23 +230,24 @@ class PostgresDatabase:
         self,
         lock: str | None,
     ) -> Iterator[PostgresSession]:
-        connection = self._begin()
+        with self._turns:
+            connection = self._begin()
 
-        try:
-            session = PostgresSession(connection, self._driver)
+            try:
+                session = PostgresSession(connection, self._driver)
 
-            if lock is not None:
-                session.execute(f"LOCK TABLE {lock} IN EXCLUSIVE MODE")
+                if lock is not None:
+                    session.execute(f"LOCK TABLE {lock} IN EXCLUSIVE MODE")
 
-            yield session
-        except BaseException:
-            if not connection.closed and not connection.broken:
-                with suppress(Exception):
-                    connection.execute("ROLLBACK", ())
+                yield session
+            except BaseException:
+                if not connection.closed and not connection.broken:
+                    with suppress(Exception):
+                        connection.execute("ROLLBACK", ())
 
-            raise
+                raise
 
-        connection.execute("COMMIT", ())
+            connection.execute("COMMIT", ())
 
     def _begin(
         self,
@@ -328,7 +335,9 @@ class PostgresDatabase:
         """Create the schema, under an advisory lock, and record its version.
 
         Several processes may initialize at once: each waits for the lock,
-        and the later ones find the schema already there.
+        and the later ones find the schema already there. A schema of an
+        earlier version gains the tables it lacks, and is then recorded as
+        this version.
 
         Raises:
             DatabaseSchemaTooNewError: The schema is newer than this Azathoth's.
@@ -370,7 +379,13 @@ class PostgresDatabase:
 
         self._checked = True
 
-        if version is None or missing:
+        if version is None:
+            return InitializationOutcome.CREATED
+
+        if version < SCHEMA_VERSION:
+            return InitializationOutcome.UPGRADED
+
+        if missing:
             return InitializationOutcome.CREATED
 
         return InitializationOutcome.CURRENT
@@ -378,9 +393,10 @@ class PostgresDatabase:
     def close(
         self,
     ) -> None:
-        """Close the connection, if one is open."""
+        """Close the connection, if one is open, once no transaction is in progress."""
 
-        self._discard()
+        with self._turns:
+            self._discard()
 
 
 def _exists(

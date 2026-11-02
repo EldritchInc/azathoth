@@ -1,5 +1,7 @@
 """Execute and complete production workflow invocations."""
 
+from uuid import UUID
+
 from pydantic import JsonValue
 
 from azathoth.providers import (
@@ -40,7 +42,10 @@ from azathoth.workflows.references import (
     reference_producer_step_ids,
     resolve_named_value,
 )
+from azathoth.workflows.run_journal import RunJournalError
+from azathoth.workflows.run_lease import RunLeaseError
 from azathoth.workflows.run_repository import WorkflowRunRepository
+from azathoth.workflows.run_resume import RunResumeError
 from azathoth.workflows.runner import WorkflowRunner
 from azathoth.workflows.value import WorkflowValueReference
 
@@ -60,12 +65,28 @@ async def execute_production_invocation(
     invocation_run_repository: ProductionInvocationRunRepository,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    resume_run_id: UUID | None = None,
 ) -> WorkflowRun:
     """Execute one production invocation against current production state.
 
     A step failure never escapes as an exception: the completed run, failed or
     not, is persisted and associated with the invocation before it is
     returned, so every executed invocation leaves inspectable evidence.
+
+    The run names the invocation, so a runner that journals its runs records
+    which invocation each executes (ADR 0105).
+
+    With `resume_run_id`, the invocation's unfinished run is resumed from its
+    journal instead of starting a new one. The state must be the one the run
+    started from. A run already recorded, or already associated, is not
+    recorded again.
+
+    Raises:
+        RunResumeError: The run cannot be resumed with this state, or it
+            executes another invocation.
+        RunLeaseHeldError: Another process holds the run's live lease.
+        RunJournalError: The run's journal could not be recorded, or its
+            lease was lost. The invocation stays incomplete.
     """
 
     _validate_invocation_state(
@@ -81,21 +102,31 @@ async def execute_production_invocation(
         tool_implementation_resolver=tool_implementation_resolver,
     )
 
-    run = await runner.run_recording_failures(
-        candidate,
-        invocation.initial_context,
-    )
-
-    run_repository.save(
-        run,
-    )
-
-    invocation_run_repository.save(
-        ProductionInvocationRun(
+    if resume_run_id is None:
+        run = await runner.run_recording_failures(
+            candidate,
+            invocation.initial_context,
             invocation_id=invocation.id,
-            run_id=run.id,
         )
-    )
+    else:
+        run = await runner.resume(
+            candidate,
+            run_id=resume_run_id,
+            invocation_id=invocation.id,
+        )
+
+    if run_repository.get(run.id) is None:
+        run_repository.save(
+            run,
+        )
+
+    if invocation_run_repository.get(invocation.id) is None:
+        invocation_run_repository.save(
+            ProductionInvocationRun(
+                invocation_id=invocation.id,
+                run_id=run.id,
+            )
+        )
 
     return run
 
@@ -112,8 +143,22 @@ async def complete_production_invocation(
     invocation_run_repository: ProductionInvocationRunRepository,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    resume_run_id: UUID | None = None,
 ) -> ProductionInvocationResult:
-    """Execute one invocation and persist its caller-visible terminal result."""
+    """Execute one invocation and persist its caller-visible terminal result.
+
+    With `resume_run_id`, its unfinished run is resumed instead (ADR 0105).
+
+    A run that stops before it finishes, because its journal could not be
+    recorded or its lease was lost, or that cannot be resumed, records no
+    result: the error is raised, and the invocation stays incomplete, so it
+    can be resumed.
+
+    Raises:
+        RunResumeError: The run cannot be resumed with this state.
+        RunLeaseError: Another process holds the run's live lease.
+        RunJournalError: The run stopped before it finished.
+    """
 
     try:
         run = await execute_production_invocation(
@@ -126,6 +171,7 @@ async def complete_production_invocation(
             invocation_run_repository=invocation_run_repository,
             tool_resolver=tool_resolver,
             tool_implementation_resolver=tool_implementation_resolver,
+            resume_run_id=resume_run_id,
         )
 
         if run.failed:
@@ -172,6 +218,9 @@ async def complete_production_invocation(
             error_code=ProductionInvocationErrorCode.TOOL_UNAVAILABLE,
             message="A required production workflow capability is unavailable.",
         )
+
+    except (RunJournalError, RunLeaseError, RunResumeError):
+        raise
 
     except Exception:
         result = ProductionInvocationFailure(

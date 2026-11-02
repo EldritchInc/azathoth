@@ -353,7 +353,7 @@ def test_loop_tool_example_is_version_1_1() -> None:
 
     assert document.definition.version == "1.1.0"
     assert document.implementations[0].tool_version == "1.1.0"
-    assert document.implementations[0].version == "1.1.4"
+    assert document.implementations[0].version == "1.1.5"
 
 
 def test_loop_workflow_example_requires_loop_tool_1_1() -> None:

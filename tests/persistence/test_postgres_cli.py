@@ -17,8 +17,10 @@ import pytest
 from azathoth.cli import DATABASE_ENVIRONMENT_VARIABLE, main, run_job_request
 from azathoth.inputs import content_bytes_digest
 from azathoth.jobs import JobErrorCode, JobResult, JobStatus
-from azathoth.persistence import MISSING_DRIVER_MESSAGE, PostgresLocation
+from azathoth.persistence import MISSING_DRIVER_MESSAGE, PostgresDatabase, PostgresLocation
 from azathoth.persistence.repositories import close_postgres_databases, open_repositories
+from tests.persistence.test_schema_versions import initialize_version_1
+from tests.workflows.test_runner_journal import rebuilt
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -147,6 +149,34 @@ def test_init_creates_the_schema_then_finds_it(
     assert cli(capsys, "init") == (0, f"Database: {shown} (existing)\n{ALREADY_INSTALLED}", "")
 
 
+def test_init_upgrades_a_version_1_schema_that_other_commands_refuse(
+    database_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    shown = PostgresLocation(database_url).display()
+
+    database = PostgresDatabase(database_url)
+
+    try:
+        initialize_version_1(database)
+    finally:
+        database.close()
+
+    assert cli(capsys, "workflow", "list") == (
+        1,
+        "",
+        f"Database {shown} has schema version 1, but this Azathoth uses version 2; "
+        "run azathoth init.\n",
+    )
+    assert cli(capsys, "init") == (
+        0,
+        f"Database: {shown} (upgraded to schema version 2)\n{INSTALLED}",
+        "",
+    )
+    assert cli(capsys, "init") == (0, f"Database: {shown} (existing)\n{ALREADY_INSTALLED}", "")
+    assert cli(capsys, "workflow", "list")[0] == 0
+
+
 def test_without_the_extra_a_command_says_what_to_install(
     database_url: str,
     capsys: pytest.CaptureFixture[str],
@@ -212,11 +242,25 @@ def test_a_parent_workflow_runs_its_promoted_child_over_postgresql(
         repositories = open_repositories(database_url)
         runs = repositories.runs.runs()
         invocations = repositories.invocations.invocations()
+        journals = [repositories.run_journal.entries(run.id) for run in runs]
+        leases = [repositories.run_leases.get(run.id) for run in runs]
+        child_run_id = repositories.run_journal.invocation_run_id(invocations[0].id)
     finally:
         close_postgres_databases()
 
     assert [str(run.workflow.id) for run in runs] == [CHILD_WORKFLOW_ID, PARENT_WORKFLOW_ID]
     assert [str(invocation.workflow_id) for invocation in invocations] == [CHILD_WORKFLOW_ID]
+
+    #
+    # Both runs journaled while they executed, in the same database (ADR 0105).
+    #
+    assert [rebuilt(journal) for journal in journals] == list(runs)
+    assert child_run_id == runs[0].id
+
+    #
+    # Each run held its lease while it executed, and released it after.
+    #
+    assert leases == [None, None]
 
 
 def test_jobs_run_replay_and_conflict_over_postgresql(

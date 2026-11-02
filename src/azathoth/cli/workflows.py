@@ -1,7 +1,6 @@
 """Operational workflow commands for the Azathoth command-line application."""
 
 import asyncio
-import json
 import sys
 from uuid import UUID
 
@@ -24,6 +23,7 @@ from azathoth.cli.inputs import (
     WorkflowInputFile,
     resolve_input_file,
 )
+from azathoth.cli.keyed_invocation import invoke_with_key
 from azathoth.cli.lineage import parent_lineage
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.output_format import (
@@ -37,18 +37,16 @@ from azathoth.cli.promotion import (
     promote_configured_workflow,
 )
 from azathoth.cli.rendering import (
-    RESULT_RECORD_TYPE,
-    OutputRecord,
-    production_invocation_record,
-    render_production_invocation_result,
     render_workflow_optimization_session,
     render_workflow_promotion,
-    render_workflow_run,
-    workflow_run_record,
+)
+from azathoth.cli.reporting import (
+    report_configured_run,
+    report_invocation_result,
+    step_observer,
 )
 from azathoth.cli.step_output import (
     JsonLinesOutputWriter,
-    TextStepMessageWriter,
 )
 from azathoth.cli.tracing import run_traced
 from azathoth.cli.workflow_configuration import (
@@ -71,11 +69,9 @@ from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
-    ProductionInvocationFailure,
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
-    WorkflowRunObserver,
     WorkflowScoringPolicy,
 )
 
@@ -160,10 +156,13 @@ def _run_workflow(
                 context=configured_run_context(run_input, lineage=lineage),
                 runner=tracing_runner(
                     telemetry,
-                    observer=_step_observer(
+                    observer=step_observer(
                         output,
                         writer,
                     ),
+                    journal=repositories(configuration).run_journal,
+                    leases=repositories(configuration).run_leases,
+                    children=repositories(configuration).run_children,
                 ),
             )
         )
@@ -180,24 +179,19 @@ def _run_workflow(
 
     repositories(configuration).runs.save(run)
 
-    if output is WorkflowOutputFormat.TEXT:
-        print(render_workflow_run(run))
-
-        return 0 if run.succeeded else 1
-
-    specification = runtime.workflows.get(workflow_id)
-
-    assert specification is not None
-
-    record = workflow_run_record(
-        run,
-        result=specification.result,
-        steps=specification.steps,
+    #
+    # Only a record names the declared result, so text never reads the
+    # specification.
+    #
+    specification = (
+        None if output is WorkflowOutputFormat.TEXT else runtime.workflows.get(workflow_id)
     )
 
-    return _write_terminal_record(
-        record,
-        writer,
+    return report_configured_run(
+        run,
+        specification=specification,
+        output=output,
+        writer=writer,
     )
 
 
@@ -280,6 +274,7 @@ def invoke_workflow(
     workflow_id: UUID,
     payload: JsonValue | WorkflowInputFile,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
+    idempotency_key: str | None = None,
 ) -> int:
     """Invoke one active production workflow.
 
@@ -298,6 +293,10 @@ def invoke_workflow(
     was given in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or
     an invocation nested too deeply, raises before anything is resolved or
     recorded.
+
+    With an idempotency key, the invocation runs as `job run` runs a request
+    under that key (ADR 0097): the same request again replays its result, or
+    resumes it once nothing runs it (ADR 0105).
     """
 
     return run_traced(
@@ -306,6 +305,7 @@ def invoke_workflow(
             payload=payload,
             output=output,
             telemetry=telemetry,
+            idempotency_key=idempotency_key,
         )
     )
 
@@ -316,12 +316,24 @@ def _invoke_workflow(
     payload: JsonValue | WorkflowInputFile,
     output: WorkflowOutputFormat,
     telemetry: Telemetry,
+    idempotency_key: str | None = None,
 ) -> int:
     """Invoke one active production workflow, tracing it with the given telemetry."""
 
     lineage = parent_lineage(workflow_id)
 
     configuration = CliRuntimeConfiguration.from_environment()
+
+    if idempotency_key is not None:
+        return invoke_with_key(
+            workflow_id=workflow_id,
+            payload=payload,
+            idempotency_key=idempotency_key,
+            output=output,
+            telemetry=telemetry,
+            lineage=lineage,
+            configuration=configuration,
+        )
 
     invocation_input: JsonValue
     input_provenance: InputProvenance | None = None
@@ -360,92 +372,24 @@ def _invoke_workflow(
                 lineage=lineage,
                 runner=tracing_runner(
                     telemetry,
-                    observer=_step_observer(
+                    observer=step_observer(
                         output,
                         writer,
                     ),
+                    journal=repositories(configuration).run_journal,
+                    leases=repositories(configuration).run_leases,
+                    children=repositories(configuration).run_children,
                 ),
             )
         )
 
         trace.record(result)
 
-    if output is WorkflowOutputFormat.TEXT:
-        rendered = render_production_invocation_result(
-            result,
-        )
-
-        if isinstance(
-            result,
-            ProductionInvocationFailure,
-        ):
-            print(
-                rendered,
-                file=sys.stderr,
-            )
-
-            return 1
-
-        print(rendered)
-
-        return 0
-
-    return _write_terminal_record(
-        production_invocation_record(result),
-        writer,
+    return report_invocation_result(
+        result,
+        output=output,
+        writer=writer,
     )
-
-
-def _step_observer(
-    output: WorkflowOutputFormat,
-    writer: JsonLinesOutputWriter | None,
-) -> WorkflowRunObserver | None:
-    """Return the live step observer of one output format.
-
-    JSON Lines streams step records to stdout through the given writer, text
-    prints step messages to stderr, and result mode stays silent.
-    """
-
-    if output is WorkflowOutputFormat.JSONL:
-        return writer
-
-    if output is WorkflowOutputFormat.TEXT:
-        return TextStepMessageWriter(sys.stderr)
-
-    return None
-
-
-def _write_terminal_record(
-    record: OutputRecord,
-    writer: JsonLinesOutputWriter | None,
-) -> int:
-    """Write one terminal record in JSON Lines or result mode, returning the exit code.
-
-    With a writer the record ends the JSON Lines stream. Without one, a result
-    record prints only its value as JSON on stdout, and nothing when there is
-    no declared result; an error record prints its message on stderr.
-    """
-
-    succeeded = record["type"] == RESULT_RECORD_TYPE
-
-    if writer is not None:
-        writer.write(record)
-
-    elif not succeeded:
-        print(
-            record["message"],
-            file=sys.stderr,
-        )
-
-    elif "value" in record:
-        print(
-            json.dumps(
-                record["value"],
-                ensure_ascii=False,
-            )
-        )
-
-    return 0 if succeeded else 1
 
 
 def optimize_workflow(

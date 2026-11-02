@@ -75,12 +75,22 @@ from azathoth.cli.production_inspection import (
     show_invocation,
     show_workflow_production,
 )
+from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.runs import (
+    list_run_children,
     list_workflow_runs,
     record_run_feedback,
     show_run,
 )
 from azathoth.cli.streams import use_utf8_streams
+from azathoth.cli.termination import (
+    INTERRUPTED_MESSAGE,
+    INTERRUPTED_STATUS,
+    TERMINATED_MESSAGE,
+    TERMINATED_STATUS,
+    CommandTerminated,
+    terminating_on_sigterm,
+)
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
@@ -118,6 +128,7 @@ from azathoth.providers import (
     BedrockUnavailableError,
     ModelDiscoveryError,
 )
+from azathoth.workflows import RunJournalError, RunLeaseError, RunResumeError
 
 
 def main(
@@ -128,8 +139,13 @@ def main(
     Output is always written as UTF-8, whatever the platform's code page.
     A PostgreSQL database that cannot be used here, Bedrock configuration
     that cannot be used, a provider whose models cannot be discovered,
-    lineage that is not valid and a child nested too deeply are each
+    lineage that is not valid, a child nested too deeply, and a run that
+    could not be journaled, lost its lease or cannot be resumed are each
     reported on stderr in one line, and the command exits with status 1.
+
+    A command stopped by Ctrl-C prints `Interrupted.` and exits with 130;
+    one stopped by SIGTERM prints `Terminated.` and exits with 143. Either
+    unwinds first, so a run it was executing releases its lease (ADR 0105).
     """
 
     use_utf8_streams(
@@ -142,7 +158,22 @@ def main(
     arguments = parser.parse_args(argv)
 
     try:
-        result = _dispatch(arguments)
+        with terminating_on_sigterm():
+            result = _dispatch(arguments)
+    except KeyboardInterrupt:
+        print(
+            INTERRUPTED_MESSAGE,
+            file=sys.stderr,
+        )
+
+        return INTERRUPTED_STATUS
+    except CommandTerminated:
+        print(
+            TERMINATED_MESSAGE,
+            file=sys.stderr,
+        )
+
+        return TERMINATED_STATUS
     except (
         DatabaseUnavailableError,
         DatabaseSchemaError,
@@ -151,6 +182,9 @@ def main(
         ModelDiscoveryError,
         LineageError,
         WorkflowDepthError,
+        RunJournalError,
+        RunLeaseError,
+        RunResumeError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -160,7 +194,8 @@ def main(
         # extra, its region or a usable pricing document, or any provider
         # whose models cannot be discovered (ADR 0103). So does a child
         # whose lineage is not valid, or that would be nested too deeply
-        # (ADR 0104).
+        # (ADR 0104). So does a run that could not be journaled, lost its
+        # lease, or cannot be resumed (ADR 0105): it stays unfinished.
         #
         print(
             str(exc),
@@ -245,6 +280,8 @@ def _dispatch(
             arguments,
             record_run_feedback=record_run_feedback,
             show_run=show_run,
+            resume_run=resume_run,
+            list_run_children=list_run_children,
         )
 
     if command == EXPERIMENT_COMMAND:
@@ -257,6 +294,7 @@ def _dispatch(
         return dispatch_invocation_command(
             arguments,
             show_invocation=show_invocation,
+            resume_invocation=resume_invocation,
         )
 
     if command == JOB_COMMAND:

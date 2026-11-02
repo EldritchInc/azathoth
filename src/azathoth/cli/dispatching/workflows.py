@@ -25,6 +25,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_HISTORY_ACTION,
     WORKFLOW_HISTORY_LIMIT_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
+    WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE,
     WORKFLOW_IMPORT_ACTION,
     WORKFLOW_INPUT_ATTRIBUTE,
     WORKFLOW_INPUT_FILE_ATTRIBUTE,
@@ -281,6 +282,10 @@ def dispatch_workflow_command(
                 )
             ),
             output=_output_format(arguments),
+            idempotency_key=cast(
+                str | None,
+                getattr(arguments, WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE, None),
+            ),
         )
 
     if action == WORKFLOW_PROMOTE_ACTION:

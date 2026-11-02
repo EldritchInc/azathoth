@@ -127,3 +127,4 @@ requests that made it:
 - [ADR 0102: Keep Durable State in PostgreSQL](0102-keep-durable-state-in-postgresql.md)
 - [ADR 0103: Run Models on Amazon Bedrock](0103-run-models-on-amazon-bedrock.md)
 - [ADR 0104: Record Lineage in a Child's Initial Context](0104-record-lineage-in-a-childs-initial-context.md)
+- [ADR 0105: Resume Interrupted Runs From a Journal](0105-resume-interrupted-runs-from-a-journal.md)

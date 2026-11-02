@@ -6,7 +6,9 @@ tools stopped counting it and lost the `AZATHOTH_WORKFLOW_DEPTH` grant.
 
 Every earlier revision is reconstructed from the Bedrock-era documents, as
 they shipped, checked into `tests/fixtures/standard`, and each reconstruction
-is pinned by its content digest.
+is pinned by its content digest. With resume (ADR 0105) the tools give each
+child an idempotency key; the lineage-era documents they replace are checked
+in beside them.
 """
 
 import re
@@ -96,6 +98,22 @@ BEDROCK_ERA_IMPLEMENTATION_DIGESTS = {
     "loop_workflow": "430c1e814ecee9d078f8430f1a1316aa1c7adbcb6345c66e91dca715a2a1e9a7",
 }
 
+LINEAGE_ERA_DOCUMENTS = (
+    PROJECT_ROOT / "tests" / "fixtures" / "standard" / "run-workflow-1.0.4.json",
+    PROJECT_ROOT / "tests" / "fixtures" / "standard" / "loop-workflow-1.1.4.json",
+)
+
+LINEAGE_ERA_VERSIONS = {"run_workflow": "1.0.4", "loop_workflow": "1.1.4"}
+
+#
+# Implementation digests of the standard tools as they shipped with lineage
+# (ADR 0104), before resume. The checked-in documents must match them.
+#
+LINEAGE_ERA_IMPLEMENTATION_DIGESTS = {
+    "run_workflow": "1eea60cfebca47cd08b428cc1af10eed2023ac854cd22adedecddc4b4673185b",
+    "loop_workflow": "348ba93cb2b708d7e7b33a389a6e377702a80089d2916bcd5fef30bc6b4ab0d3",
+}
+
 UPGRADED = (
     "Installed tool run_workflow@1.0.0 revision 2.\n"
     "Installed tool loop_workflow@1.1.0 revision 2.\n"
@@ -124,6 +142,14 @@ def bedrock_era_documents() -> tuple[ToolDocument, ...]:
 
     return tuple(
         decode_tool_document(path.read_text(encoding="utf-8")) for path in BEDROCK_ERA_DOCUMENTS
+    )
+
+
+def lineage_era_documents() -> tuple[ToolDocument, ...]:
+    """Return the composition tools as they shipped with lineage, in installation order."""
+
+    return tuple(
+        decode_tool_document(path.read_text(encoding="utf-8")) for path in LINEAGE_ERA_DOCUMENTS
     )
 
 
@@ -372,3 +398,64 @@ def test_the_tools_readme_lists_the_real_base_environment(
     (row,) = re.findall(rf"^\| {re.escape(platform)} \| (.*) \|$", text, re.MULTILINE)
 
     assert tuple(re.findall(r"`([^`]+)`", row)) == variables
+
+
+def test_the_lineage_era_documents_are_the_ones_that_shipped_with_lineage() -> None:
+    documents = lineage_era_documents()
+
+    assert [document.definition.name for document in documents] == [
+        "run_workflow",
+        "loop_workflow",
+    ]
+
+    for document in documents:
+        (implementation,) = document.implementations
+
+        assert implementation.version == LINEAGE_ERA_VERSIONS[document.definition.name]
+        assert implementation.environment == CHILD_GRANTS
+        assert (
+            content_digest(implementation)
+            == LINEAGE_ERA_IMPLEMENTATION_DIGESTS[document.definition.name]
+        )
+
+
+def test_the_resume_revisions_keep_their_ids_grants_and_definitions() -> None:
+    for current, shipped in zip(composition_documents(), lineage_era_documents(), strict=True):
+        assert current.definition == shipped.definition
+
+        (implementation,) = current.implementations
+        (previous,) = shipped.implementations
+
+        assert implementation.id == previous.id
+        assert implementation.environment == previous.environment
+        assert implementation.timeout_seconds == previous.timeout_seconds
+        assert "--idempotency-key" in implementation.source
+        assert "--idempotency-key" not in previous.source
+
+
+def test_installing_over_lineage_era_tools_appends_the_resume_revisions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "azathoth.db"
+
+    configure_database(database=path, monkeypatch=monkeypatch)
+
+    for document in lineage_era_documents():
+        source = tmp_path / f"{document.definition.name}.json"
+        source.write_text(encode_tool_document(document), encoding="utf-8")
+
+        assert import_tool(source) == 0
+
+    capsys.readouterr()
+
+    assert install_standard_tools() == 0
+    assert capsys.readouterr().out == UPGRADED
+
+    repository = SQLiteToolRepository(path)
+
+    for document in composition_documents():
+        (implementation,) = document.implementations
+
+        assert repository.get_implementation(implementation.id) == implementation

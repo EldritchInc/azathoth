@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -13,6 +13,7 @@ from azathoth.context import (
     Context,
     ContextEvent,
     RunLineage,
+    lineage_of,
     run_lineage,
     running_step,
 )
@@ -45,6 +46,30 @@ from azathoth.workflows.references import (
     resolve_named_value,
 )
 from azathoth.workflows.retry import WorkflowRetryPolicy
+from azathoth.workflows.run_children import RunChild, RunChildRepository
+from azathoth.workflows.run_journal import (
+    JournalAttemptFinished,
+    JournalAttemptStarted,
+    JournalLayerCommitted,
+    JournalRunFinished,
+    JournalRunResumed,
+    JournalRunStarted,
+    RunJournalEntry,
+    RunJournalError,
+    RunJournalRepository,
+    RunJournalWriter,
+)
+from azathoth.workflows.run_lease import (
+    RunLeaseKeeper,
+    RunLeasePolicy,
+    RunLeaseRepository,
+)
+from azathoth.workflows.run_resume import (
+    RunResumeError,
+    RunResumePoint,
+    finished_run,
+    resume_point,
+)
 from azathoth.workflows.value import (
     WorkflowConstantValue,
     WorkflowContextReference,
@@ -96,6 +121,75 @@ class _WorkflowExecutionResult:
     error: Exception | None = None
 
 
+class RecordedStepFailure(Exception):
+    """A step failure read back from a run's journal, standing in for the original error.
+
+    A resumed run reuses the attempts its journal records, so a step whose
+    recorded attempts all failed fails again with what they recorded.
+    """
+
+    def __init__(
+        self,
+        attempt: WorkflowStepAttempt,
+    ) -> None:
+        failure = attempt.failure
+        super().__init__("" if failure is None else failure.message)
+        self.exception_type = None if failure is None else failure.exception_type
+
+
+def _require_invocation(
+    entries: Sequence[RunJournalEntry],
+    *,
+    run_id: UUID,
+    invocation_id: UUID | None,
+) -> None:
+    """Require a run's journal to record the invocation it is resumed for, if one is named.
+
+    Raises:
+        RunResumeError: The journal records another invocation, or none.
+    """
+
+    if invocation_id is None or not entries:
+        return
+
+    recorded = entries[0].invocation_id
+
+    if recorded != invocation_id:
+        executes = "no invocation" if recorded is None else f"invocation {recorded}"
+
+        raise RunResumeError(
+            run_id,
+            f"Run {run_id} executes {executes}, not invocation {invocation_id}.",
+        )
+
+
+def _first_exception(
+    group: BaseExceptionGroup[BaseException],
+) -> BaseException:
+    """Return the exception a layer's task group stopped for.
+
+    A journal entry that could not be recorded is preferred, so the run stops
+    with the journal's error rather than a sibling's cancellation.
+    """
+
+    leaves: list[BaseException] = []
+
+    def collect(error: BaseException) -> None:
+        if isinstance(error, BaseExceptionGroup):
+            for inner in error.exceptions:
+                collect(inner)
+        else:
+            leaves.append(error)
+
+    collect(group)
+
+    for leaf in leaves:
+        if isinstance(leaf, RunJournalError):
+            return leaf
+
+    return leaves[0]
+
+
 class WorkflowRunner:
     """Execute workflow candidates.
 
@@ -112,6 +206,21 @@ class WorkflowRunner:
     its lineage is current (ADR 0104): its run, its depth and its root, read
     from the lineage the initial context records, so anything the step starts
     as a child learns where it came from.
+
+    A runner given a journal repository records each run's journal while it
+    executes (ADR 0105): the run's start, each attempt's start and finish,
+    each layer's commit, and the run's finish. An entry that cannot be
+    recorded stops the run at once with that error, recording nothing more,
+    because a run whose journal is incomplete could not be resumed.
+
+    A runner given a lease repository too holds each run's lease while it
+    executes: acquired before the run's first entry, renewed from a thread
+    of its own, and released when the run ends, however it ends. Once the
+    lease is lost, the run stops before its next entry with the
+    `RunLeaseLostError`. A lease that cannot be released lapses on its own.
+
+    A runner given a child repository indexes each run started with lineage
+    under the run whose step started it, once, as the run starts.
     """
 
     def __init__(
@@ -120,10 +229,21 @@ class WorkflowRunner:
         executor: StrategyExecutor | None = None,
         sleep: RetrySleep | None = None,
         observer: WorkflowRunObserver | None = None,
+        journal: RunJournalRepository | None = None,
+        leases: RunLeaseRepository | None = None,
+        lease_policy: RunLeasePolicy | None = None,
+        children: RunChildRepository | None = None,
     ) -> None:
+        if leases is not None and journal is None:
+            raise ValueError("A runner that leases its runs must journal them.")
+
         self._executor = executor if executor is not None else StrategyExecutor()
         self._sleep: RetrySleep = sleep if sleep is not None else _sleep
         self._observer = observer
+        self._journal = journal
+        self._leases = leases
+        self._lease_policy = lease_policy if lease_policy is not None else RunLeasePolicy()
+        self._children = children
 
     def _notify(
         self,
@@ -445,6 +565,9 @@ class WorkflowRunner:
         step_id: UUID | None = None,
         confidence: str | None = None,
         lineage: RunLineage | None = None,
+        layer_index: int = 0,
+        journal: RunJournalWriter | None = None,
+        prior_attempts: tuple[WorkflowStepAttempt, ...] = (),
     ) -> tuple[
         ExecutionResult | None,
         tuple[WorkflowStepAttempt, ...],
@@ -467,20 +590,66 @@ class WorkflowRunner:
 
         With a run's lineage and a step, each attempt executes with that
         attempt's lineage current (ADR 0104).
+
+        With a journal and a step, each attempt's start and finish are
+        recorded outside the attempt, so an entry that cannot be recorded
+        stops the run instead of failing the attempt (ADR 0105).
+
+        A resumed step passes the attempts its journal recorded. One whose
+        last recorded attempt succeeded is not executed again; one whose
+        recorded attempts failed continues from the next attempt number,
+        after that attempt's delay, and fails as recorded once none remain.
         """
 
         if confidence is not None and step_id is None:
             raise ValueError("A step that declares a confidence must name its step.")
 
-        attempts: list[WorkflowStepAttempt] = []
+        attempts: list[WorkflowStepAttempt] = list(prior_attempts)
+
+        if prior_attempts:
+            last = prior_attempts[-1]
+
+            if last.execution is not None:
+                return (
+                    last.execution,
+                    prior_attempts,
+                    None,
+                )
+
+            if len(prior_attempts) >= retry_policy.max_attempts:
+                return (
+                    None,
+                    prior_attempts,
+                    RecordedStepFailure(last),
+                )
+
+            delay = retry_policy.delay_for_attempt(
+                len(prior_attempts) + 1,
+            )
+
+            if delay > 0:
+                await self._sleep(delay)
 
         for attempt_number in range(
-            1,
+            len(prior_attempts) + 1,
             retry_policy.max_attempts + 1,
         ):
             started_at = datetime.now(
                 tz=UTC,
             )
+
+            if journal is not None and step_id is not None:
+                journal.record(
+                    JournalAttemptStarted(
+                        step_id=step_id,
+                        layer_index=layer_index,
+                        attempt_number=attempt_number,
+                        started_at=started_at,
+                    )
+                )
+
+            execution: ExecutionResult | None = None
+            error: Exception | None = None
 
             try:
                 if lineage is not None and step_id is not None:
@@ -506,55 +675,62 @@ class WorkflowRunner:
                         output=execution.output,
                     )
 
-                completed_at = datetime.now(
-                    tz=UTC,
+            except Exception as caught:
+                error = caught
+
+            completed_at = datetime.now(
+                tz=UTC,
+            )
+
+            if error is None:
+                attempt = WorkflowStepAttempt(
+                    attempt_number=attempt_number,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    execution=execution,
+                )
+            else:
+                attempt = WorkflowStepAttempt(
+                    attempt_number=attempt_number,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    failure=WorkflowStepFailure(
+                        exception_type=type(error).__name__,
+                        message=str(error),
+                    ),
                 )
 
-                attempts.append(
-                    WorkflowStepAttempt(
-                        attempt_number=attempt_number,
-                        started_at=started_at,
-                        completed_at=completed_at,
-                        execution=execution,
+            attempts.append(attempt)
+
+            if journal is not None and step_id is not None:
+                journal.record(
+                    JournalAttemptFinished(
+                        step_id=step_id,
+                        layer_index=layer_index,
+                        attempt=attempt,
                     )
                 )
 
+            if error is None:
                 return (
                     execution,
                     tuple(attempts),
                     None,
                 )
 
-            except Exception as error:
-                completed_at = datetime.now(
-                    tz=UTC,
+            if attempt_number == retry_policy.max_attempts:
+                return (
+                    None,
+                    tuple(attempts),
+                    error,
                 )
 
-                attempts.append(
-                    WorkflowStepAttempt(
-                        attempt_number=attempt_number,
-                        started_at=started_at,
-                        completed_at=completed_at,
-                        failure=WorkflowStepFailure(
-                            exception_type=type(error).__name__,
-                            message=str(error),
-                        ),
-                    )
-                )
+            delay = retry_policy.delay_for_attempt(
+                attempt_number + 1,
+            )
 
-                if attempt_number == retry_policy.max_attempts:
-                    return (
-                        None,
-                        tuple(attempts),
-                        error,
-                    )
-
-                delay = retry_policy.delay_for_attempt(
-                    attempt_number + 1,
-                )
-
-                if delay > 0:
-                    await self._sleep(delay)
+            if delay > 0:
+                await self._sleep(delay)
 
         raise AssertionError("Workflow retry execution completed without producing an outcome.")
 
@@ -565,6 +741,8 @@ class WorkflowRunner:
         step_context: Context,
         layer_index: int,
         lineage: RunLineage | None = None,
+        journal: RunJournalWriter | None = None,
+        prior_attempts: tuple[WorkflowStepAttempt, ...] = (),
     ) -> _StepOutcome:
         """Execute one eligible step to retry exhaustion, reporting its progress live."""
 
@@ -583,6 +761,9 @@ class WorkflowRunner:
             step_id=step.id,
             confidence=step.confidence,
             lineage=lineage,
+            layer_index=layer_index,
+            journal=journal,
+            prior_attempts=prior_attempts,
         )
 
         if execution is None:
@@ -628,26 +809,39 @@ class WorkflowRunner:
         *,
         layer_index: int = 0,
         lineage: RunLineage | None = None,
+        journal: RunJournalWriter | None = None,
+        prior_attempts: Mapping[UUID, tuple[WorkflowStepAttempt, ...]] | None = None,
     ) -> tuple[_StepOutcome, ...]:
         """Execute eligible layer steps concurrently, returning outcomes in order.
 
         Every step runs to retry exhaustion. Step failures are captured as
         outcomes rather than raised, so one failing step never cancels its
         siblings. Each step reports its start and finish as they happen.
+
+        Raises:
+            RunJournalError: An entry of the run's journal could not be
+                recorded. The layer's other steps are cancelled.
         """
 
-        async with asyncio.TaskGroup() as group:
-            tasks = tuple(
-                group.create_task(
-                    self._execute_observed_step(
-                        step=step,
-                        step_context=step_context,
-                        layer_index=layer_index,
-                        lineage=lineage,
+        try:
+            async with asyncio.TaskGroup() as group:
+                tasks = tuple(
+                    group.create_task(
+                        self._execute_observed_step(
+                            step=step,
+                            step_context=step_context,
+                            layer_index=layer_index,
+                            lineage=lineage,
+                            journal=journal,
+                            prior_attempts=(
+                                () if prior_attempts is None else prior_attempts.get(step.id, ())
+                            ),
+                        )
                     )
+                    for step, step_context in eligible
                 )
-                for step, step_context in eligible
-            )
+        except BaseExceptionGroup as group_error:
+            raise _first_exception(group_error) from None
 
         return tuple(task.result() for task in tasks)
 
@@ -691,12 +885,19 @@ class WorkflowRunner:
         self,
         workflow: WorkflowCandidate,
         context: Context,
+        *,
+        invocation_id: UUID | None = None,
     ) -> WorkflowRun:
-        """Execute a workflow candidate and propagate FAIL_WORKFLOW failures."""
+        """Execute a workflow candidate and propagate FAIL_WORKFLOW failures.
+
+        A run that executes a production invocation names it, and its
+        journal records it on every entry.
+        """
 
         result = await self._run(
             workflow=workflow,
             context=context,
+            invocation_id=invocation_id,
         )
 
         if result.error is not None:
@@ -708,27 +909,133 @@ class WorkflowRunner:
         self,
         workflow: WorkflowCandidate,
         context: Context,
+        *,
+        invocation_id: UUID | None = None,
     ) -> WorkflowRun:
-        """Execute a workflow candidate and return completed failure evidence."""
+        """Execute a workflow candidate and return completed failure evidence.
+
+        A run that executes a production invocation names it, and its
+        journal records it on every entry.
+        """
 
         result = await self._run(
             workflow=workflow,
             context=context,
+            invocation_id=invocation_id,
         )
 
         return result.run
+
+    async def resume(
+        self,
+        workflow: WorkflowCandidate,
+        *,
+        run_id: UUID,
+        invocation_id: UUID | None = None,
+    ) -> WorkflowRun:
+        """Resume an unfinished run from its journal, and return completed failure evidence.
+
+        The run keeps its ID, its initial context, its start and the
+        invocation it executes. Its committed layers are reused, the layer it
+        was executing reuses the attempts its steps finished, and an attempt
+        that never finished is executed again under the same number. The
+        journal records `run.resumed`, then continues where it stopped.
+
+        A run whose journal already records its finish is rebuilt from the
+        journal and returned as it finished; nothing executes.
+
+        With leases, the run's lease is acquired first, and the journal is
+        read again once it is held, so two processes never resume one run.
+
+        A resume on behalf of a production invocation names it, and the run
+        must be the one its journal records for it.
+
+        Raises:
+            RunLeaseHeldError: Another process holds the run's live lease.
+            RunResumeError: The run cannot be resumed with this workflow.
+            RunJournalError: An entry could not be recorded, or the lease was
+                lost. The run stops there.
+        """
+
+        if self._journal is None:
+            raise ValueError("A runner resumes only the runs it journals.")
+
+        entries = self._journal.entries(run_id)
+
+        _require_invocation(entries, run_id=run_id, invocation_id=invocation_id)
+
+        finished = finished_run(entries)
+
+        if finished is not None:
+            return finished
+
+        keeper = (
+            RunLeaseKeeper(self._leases, run_id, policy=self._lease_policy)
+            if self._leases is not None
+            else None
+        )
+
+        if keeper is not None:
+            keeper.acquire()
+
+        try:
+            entries = self._journal.entries(run_id)
+            finished = finished_run(entries)
+
+            if finished is not None:
+                return finished
+
+            point = resume_point(entries, run_id=run_id, workflow=workflow)
+
+            lineage = run_lineage(
+                point.initial_context,
+                workflow_id=workflow.metadata.id,
+                run_id=run_id,
+            )
+
+            journal = RunJournalWriter(
+                self._journal,
+                run_id=run_id,
+                workflow_id=workflow.metadata.id,
+                invocation_id=point.invocation_id,
+                next_position=point.next_position,
+                fence=keeper.check if keeper is not None else None,
+            )
+
+            if keeper is not None:
+                keeper.start()
+
+            result = await self._execute_run(
+                workflow=workflow,
+                context=point.initial_context,
+                run_id=run_id,
+                lineage=lineage,
+                journal=journal,
+                resume=point,
+            )
+
+            return result.run
+        finally:
+            if keeper is not None:
+                keeper.stop()
+
+                with contextlib.suppress(Exception):
+                    keeper.release()
 
     async def _run(
         self,
         *,
         workflow: WorkflowCandidate,
         context: Context,
+        invocation_id: UUID | None = None,
     ) -> _WorkflowExecutionResult:
         """Execute a workflow candidate while preserving terminal failure evidence.
 
         Raises:
             LineageError: The initial context records lineage that is not
-                valid lineage. Nothing has run.
+                valid lineage. Nothing has run, and nothing is journaled.
+            RunJournalError: An entry of the run's journal could not be
+                recorded, or the run's lease was lost. The run stops there.
         """
 
         run_id = uuid4()
@@ -738,18 +1045,124 @@ class WorkflowRunner:
             run_id=run_id,
         )
 
-        started_at = datetime.now(
-            tz=UTC,
+        keeper = (
+            RunLeaseKeeper(self._leases, run_id, policy=self._lease_policy)
+            if self._leases is not None
+            else None
         )
 
-        current_context = context
-        completed_steps: list[WorkflowStepRun] = []
-        blocked_step_ids: set[UUID] = set()
+        journal = (
+            RunJournalWriter(
+                self._journal,
+                run_id=run_id,
+                workflow_id=workflow.metadata.id,
+                invocation_id=invocation_id,
+                fence=keeper.check if keeper is not None else None,
+            )
+            if self._journal is not None
+            else None
+        )
+
+        parent = lineage_of(context)
+
+        if self._children is not None and parent is not None:
+            self._children.record(
+                RunChild.of(
+                    parent,
+                    run_id=run_id,
+                    workflow_id=workflow.metadata.id,
+                    invocation_id=invocation_id,
+                    recorded_at=datetime.now(tz=UTC),
+                )
+            )
+
+        if keeper is None:
+            return await self._execute_run(
+                workflow=workflow,
+                context=context,
+                run_id=run_id,
+                lineage=lineage,
+                journal=journal,
+            )
+
+        keeper.acquire()
+        keeper.start()
+
+        try:
+            return await self._execute_run(
+                workflow=workflow,
+                context=context,
+                run_id=run_id,
+                lineage=lineage,
+                journal=journal,
+            )
+        finally:
+            keeper.stop()
+
+            with contextlib.suppress(Exception):
+                keeper.release()
+
+    async def _execute_run(
+        self,
+        *,
+        workflow: WorkflowCandidate,
+        context: Context,
+        run_id: UUID,
+        lineage: RunLineage,
+        journal: RunJournalWriter | None,
+        resume: RunResumePoint | None = None,
+    ) -> _WorkflowExecutionResult:
+        """Execute the run's layers in order, journaling them if there is a journal.
+
+        A resumed run starts from its resume point: its committed layers are
+        kept, and the first layer it did not commit reuses the attempts its
+        steps finished.
+        """
+
+        if resume is None:
+            started_at = datetime.now(
+                tz=UTC,
+            )
+
+            if journal is not None:
+                journal.record(
+                    JournalRunStarted(
+                        workflow=workflow.metadata,
+                        workflow_revision=workflow.revision,
+                        initial_context=context,
+                        started_at=started_at,
+                    )
+                )
+
+            current_context = context
+            completed_steps: list[WorkflowStepRun] = []
+            blocked_step_ids: set[UUID] = set()
+            first_layer = 0
+            prior_attempts: Mapping[UUID, tuple[WorkflowStepAttempt, ...]] = {}
+            halted = False
+            halting_step_id: UUID | None = None
+        else:
+            if journal is not None:
+                journal.record(JournalRunResumed(resumed_at=datetime.now(tz=UTC)))
+
+            started_at = resume.started_at
+            current_context = resume.context
+            completed_steps = list(resume.steps)
+            blocked_step_ids = set(resume.blocked_step_ids)
+            first_layer = resume.next_layer
+            prior_attempts = resume.attempts
+            halted = resume.halting_step_id is not None
+            halting_step_id = resume.halting_step_id
+
         terminal_error: Exception | None = None
-        halting_step_id: UUID | None = None
 
         for layer_index, layer in enumerate(workflow.execution_layers()):
+            if halted or layer_index < first_layer:
+                continue
+
+            layer_prior = prior_attempts if layer_index == first_layer else {}
             layer_context = current_context
+            committed_count = len(completed_steps)
             layer_results: list[_LayerStepResult] = []
             eligible: list[tuple[WorkflowCandidateStep, Context]] = []
 
@@ -803,6 +1216,22 @@ class WorkflowRunner:
                     continue
 
                 #
+                # A resumed step whose recorded attempt succeeded reuses it,
+                # with the very context that attempt executed in.
+                #
+                recorded = layer_prior.get(step.id, ())
+
+                if recorded and recorded[-1].execution is not None:
+                    eligible.append(
+                        (
+                            step,
+                            recorded[-1].execution.initial_context,
+                        )
+                    )
+
+                    continue
+
+                #
                 # An input without a value fails the step under its own
                 # policy. Resolution is deterministic, so it is never retried.
                 #
@@ -847,6 +1276,8 @@ class WorkflowRunner:
                 tuple(eligible),
                 layer_index=layer_index,
                 lineage=lineage,
+                journal=journal,
+                prior_attempts=layer_prior,
             )
 
             for (step, step_context), outcome in zip(
@@ -975,12 +1406,33 @@ class WorkflowRunner:
                     )
                 )
 
+            if journal is not None:
+                journal.record(
+                    JournalLayerCommitted(
+                        layer_index=layer_index,
+                        steps=tuple(completed_steps[committed_count:]),
+                        events=current_context.events[len(layer_context.events) :],
+                        blocked_step_ids=tuple(
+                            step.id for step in workflow.steps if step.id in blocked_step_ids
+                        ),
+                    )
+                )
+
             if terminal_error is not None:
                 break
 
         completed_at = datetime.now(
             tz=UTC,
         )
+
+        if journal is not None:
+            journal.record(
+                JournalRunFinished(
+                    completed_at=completed_at,
+                    halted=halted or terminal_error is not None,
+                    halting_step_id=halting_step_id,
+                )
+            )
 
         run = WorkflowRun(
             id=run_id,
@@ -991,7 +1443,7 @@ class WorkflowRunner:
             final_context=current_context,
             started_at=started_at,
             completed_at=completed_at,
-            halted=terminal_error is not None,
+            halted=halted or terminal_error is not None,
             halting_step_id=halting_step_id,
         )
 
@@ -999,3 +1451,10 @@ class WorkflowRunner:
             run=run,
             error=terminal_error,
         )
+
+
+__all__ = [
+    "RecordedStepFailure",
+    "RetrySleep",
+    "WorkflowRunner",
+]

@@ -27,7 +27,10 @@ def test_cli_workflow_invoke_dispatches_structured_input(
         workflow_id: UUID,
         payload: JsonValue,
         output: WorkflowOutputFormat,
+        idempotency_key: str | None = None,
     ) -> int:
+        assert idempotency_key is None
+
         assert output is WorkflowOutputFormat.JSONL
 
         received.append(
@@ -109,7 +112,10 @@ def test_cli_workflow_invoke_accepts_any_json_value(
         workflow_id: UUID,
         payload: JsonValue,
         output: WorkflowOutputFormat,
+        idempotency_key: str | None = None,
     ) -> int:
+        assert idempotency_key is None
+
         assert workflow_id == WORKFLOW_ID
 
         received.append(
@@ -146,7 +152,10 @@ def test_cli_workflow_invoke_propagates_command_status(
         workflow_id: UUID,
         payload: JsonValue,
         output: WorkflowOutputFormat,
+        idempotency_key: str | None = None,
     ) -> int:
+        assert idempotency_key is None
+
         assert workflow_id == WORKFLOW_ID
         assert payload == {}
 

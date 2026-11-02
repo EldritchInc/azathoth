@@ -33,11 +33,13 @@ from azathoth.jobs.envelope import (
 )
 from azathoth.jobs.service import (
     JobInvoker,
+    JobResumer,
     recorded_job_result,
     run_invoke_job,
     run_job,
     run_job_content,
     runtime_job_invoker,
+    runtime_job_resumer,
 )
 
 __all__ = [
@@ -54,6 +56,7 @@ __all__ = [
     "JobError",
     "JobErrorCode",
     "JobInvoker",
+    "JobResumer",
     "JobKind",
     "JobRequestError",
     "JobResult",
@@ -72,4 +75,5 @@ __all__ = [
     "run_job",
     "run_job_content",
     "runtime_job_invoker",
+    "runtime_job_resumer",
 ]

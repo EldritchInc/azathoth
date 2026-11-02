@@ -81,7 +81,8 @@ azathoth
 │   │   └── --experiment <EXPERIMENT_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
-│   │   └── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   └── --idempotency-key <KEY>
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
 │   │   └── --limit <COUNT>
@@ -94,6 +95,9 @@ azathoth
 │
 ├── run
 │   ├── show <RUN_ID>
+│   ├── children <RUN_ID>
+│   ├── resume <RUN_ID>
+│   │   └── --output <FORMAT>
 │   └── feedback <RUN_ID>
 │       ├── --good | --bad          (exactly one)
 │       ├── --reason <TEXT>         (required with --bad)
@@ -103,7 +107,9 @@ azathoth
 │   └── show <EXPERIMENT_ID>
 │
 ├── invocation
-│   └── show <INVOCATION_ID>
+│   ├── show <INVOCATION_ID>
+│   └── resume <INVOCATION_ID>
+│       └── --output <FORMAT>
 │
 ├── job
 │   └── run <FILE | ->
@@ -357,6 +363,21 @@ Installed tool render_template@1.0.0 revision 1.
 It is the only command that creates a PostgreSQL schema. Several processes
 may run it at once: they wait for one another, and all but the first report
 the database as `existing`.
+
+It is also the only command that upgrades one. After Azathoth is upgraded to
+a newer schema version, every other command refuses the database until
+`init` runs once:
+
+```text
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 2; run azathoth init.
+```
+
+`init` then adds the tables the database lacks, keeps everything it holds,
+and marks it upgraded:
+
+```text
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 2)
+```
 
 `init` stops at the database and its tools. It needs no provider key.
 Authorizing models needs provider credentials and the models they make
@@ -1127,6 +1148,66 @@ The tool that started the child reports that line as its step's failure, as
 it reports any child failure. `invocation show` and `run show` name a
 child's lineage.
 
+## Children Under a Key
+
+`workflow invoke` takes an idempotency key, and then runs the invocation
+exactly as [`job run`](#run-a-job) runs a request under that key (ADR 0097):
+
+```bash
+azathoth workflow invoke <WORKFLOW_ID> --input <JSON> --idempotency-key <KEY>
+```
+
+The same request under the same key replays the recorded result, without
+running anything, and reports it as the first invocation did. One that was
+interrupted is resumed, once nothing runs it any more (ADR 0105). A key used
+for another request, an invocation still running, and an input that cannot
+be resolved end the output with an error record, carrying the job error's
+`code` and `message`, or print the message on stderr in text, and exit with
+status 1.
+
+The standard composition tools, `run_workflow` 1.0.5 and `loop_workflow`
+1.1.5, invoke every child under the key of the step attempt that starts it,
+`azathoth:<RUN_ID>:<STEP_ID>:<ATTEMPT>`, and a loop under one key per
+iteration, `azathoth:<RUN_ID>:<STEP_ID>:<ATTEMPT>:<ITERATION>`. So a parent
+that is resumed reuses the children it already ran, and a loop resumed
+halfway replays its finished iterations instead of running them again. A
+retried attempt has a new number, and runs its children again. A child that
+another process still runs is waited for, until the tool's timeout.
+
+## The Children of a Run
+
+A child is indexed under the run whose step started it, as soon as it
+starts. List a run's children, oldest first, with:
+
+```bash
+azathoth run children <RUN_ID>
+```
+
+```text
+Child Run ID: <RUN_ID>
+Workflow ID: <WORKFLOW_ID>
+Invocation ID: <INVOCATION_ID>
+Parent Step ID: <STEP_ID> (attempt 1)
+Status: succeeded
+```
+
+Children are separated by a blank line. A child that started but is not
+recorded as finished is `unfinished`; one that ran no invocation names `no
+invocation`. It lists the children of a run that never finished too. A run
+that started none says so; one neither recorded nor journaled is not found,
+and exits with status 1:
+
+```text
+Run <RUN_ID> started no children.
+Run <RUN_ID> was not found.
+```
+
+`run show` names how many children a run started, after its lineage:
+
+```text
+Children: 2
+```
+
 # `workflow run` Is Development/Configured Execution
 
 `workflow run` does not mean:
@@ -1163,6 +1244,88 @@ declared result. With `--output text`, it exits 0 when the run succeeded.
 
 Configuration or candidate-generation failures are emitted to standard error
 and also return failure.
+
+# Runs Journaled and Leased While They Execute
+
+`workflow run`, `workflow invoke` and `job run` journal each run while it
+executes, and hold its lease until it ends (ADR 0105). The lease lasts 60
+seconds and is renewed every 15, so a command that is killed outright leaves
+a run whose lease lapses within a minute.
+
+A command stopped by Ctrl-C prints one line on stderr and exits with
+status 130:
+
+```text
+Interrupted.
+```
+
+One stopped by SIGTERM, as a container runtime or a process supervisor
+sends it, prints one line on stderr and exits with status 143:
+
+```text
+Terminated.
+```
+
+Either way the run stops where it is, releases its lease at once, and is not
+recorded as a finished run: its journal shows how far it got. Nothing is
+printed on stdout, and `job run` prints no envelope.
+
+# Resume an Interrupted Run
+
+A run that stopped before it finished resumes where it stopped, under the
+same run ID (ADR 0105). A configured run, one `workflow run` started,
+resumes with:
+
+```bash
+azathoth run resume <RUN_ID>
+```
+
+A production invocation, one `workflow invoke` or `job run` started, resumes
+with:
+
+```bash
+azathoth invocation resume <INVOCATION_ID>
+```
+
+Each takes `--output` and reports the finished run exactly as the command
+that started it would have, with the same exit status. A configured run
+resumes from the specification revision it started from, and an invocation
+from the production state that was active when it was created, so a newer
+import or promotion never changes a run halfway. The steps of every layer
+the run committed are reused, as are the attempts the interrupted layer
+finished; an attempt in flight when the run stopped runs again.
+
+`run show` does not show a run that never finished, because it is not
+recorded yet. It says how to resume it, and exits with status 1:
+
+```text
+Run <RUN_ID> has not finished; resume it with azathoth run resume <RUN_ID>.
+Run <RUN_ID> has not finished; resume it with azathoth invocation resume <INVOCATION_ID>.
+```
+
+Once finished, a run that was resumed names how often, after its lineage,
+in `run show` and `invocation show`:
+
+```text
+Resumed: 1 time
+```
+
+`invocation show` names an incomplete invocation's run as soon as it starts.
+
+Each refusal prints one line on stderr and exits with status 1, resuming
+nothing:
+
+```text
+Run <RUN_ID> has already finished.
+Run <RUN_ID> has no journal to resume.
+Run <RUN_ID> executes invocation <INVOCATION_ID>; resume it with azathoth invocation resume <INVOCATION_ID>.
+Run <RUN_ID> is still running (its lease expires at <TIME>).
+Invocation <INVOCATION_ID> has already completed.
+Invocation <INVOCATION_ID> was not found.
+```
+
+A run whose process was killed outright still holds its lease until it
+lapses, within a minute; resume it after that.
 
 # Configured Runs Are Persisted
 
@@ -2570,7 +2733,12 @@ A request sent again with the same key and the same content does not run
 again. It reports the recorded invocation, with `"replayed": true`:
 
 - a finished invocation replays as `succeeded` or `failed`;
-- an invocation without a result is `incomplete`.
+- an invocation without a result that another process still runs is
+  `incomplete`;
+- an invocation without a result that nothing runs any more, because the
+  process running it was stopped, or killed and its lease has lapsed, is
+  resumed where its run stopped (ADR 0105). Its result is reported as if it
+  had just run, with `"replayed": false`, and is replayed from then on.
 
 Failures replay too: a key always reports the same outcome. Send a new key to
 try again.

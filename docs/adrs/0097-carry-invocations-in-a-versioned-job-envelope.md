@@ -1,6 +1,6 @@
 # ADR 0097: Carry Invocations in a Versioned Job Envelope
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0105
 - Date: 2026-10-31
 - Decided in: #114
 

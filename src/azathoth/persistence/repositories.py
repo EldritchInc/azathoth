@@ -48,6 +48,7 @@ from azathoth.tools import TOOL_TABLES, SQLiteToolRepository, SqlToolRepository,
 from azathoth.workflows import (
     PRODUCTION_INVOCATION_RUN_TABLES,
     PRODUCTION_INVOCATION_TABLES,
+    RUN_PROGRESS_TABLES,
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
     WORKFLOW_EXPERIMENT_TABLES,
     WORKFLOW_PRODUCTION_REVISION_TABLES,
@@ -58,6 +59,9 @@ from azathoth.workflows import (
     WORKFLOW_SPECIFICATION_TABLES,
     ProductionInvocationRepository,
     ProductionInvocationRunRepository,
+    RunChildRepository,
+    RunJournalRepository,
+    RunLeaseRepository,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowBenchmarkExecutionRepository,
@@ -70,6 +74,9 @@ from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
     SqlProductionInvocationRepository,
     SqlProductionInvocationRunRepository,
+    SqlRunChildRepository,
+    SqlRunJournalRepository,
+    SqlRunLeaseRepository,
     SqlWorkflowBenchmarkExecutionRepository,
     SqlWorkflowExperimentRepository,
     SqlWorkflowProductionRevisionRepository,
@@ -107,11 +114,13 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *MODEL_PORTFOLIO_TABLES,
     *PROVIDER_MODEL_OBSERVATION_TABLES,
     *CONTENT_TABLES,
+    *RUN_PROGRESS_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 
 Production invocations come before their results, whose foreign key needs
-them.
+them. The tables a version added come after every table of the versions
+before it.
 """
 
 
@@ -274,6 +283,34 @@ class Repositories:
             if path is not None
             else SqlProductionInvocationRunRepository(self._database)
         )
+
+    @cached_property
+    def run_journal(
+        self,
+    ) -> RunJournalRepository:
+        """Return the journals of runs while they execute (ADR 0105).
+
+        Its tables are new in schema version 2, so one repository serves
+        either database: an SQLite file gains them when it is first opened.
+        """
+
+        return SqlRunJournalRepository(self._database)
+
+    @cached_property
+    def run_children(
+        self,
+    ) -> RunChildRepository:
+        """Return the index of the runs each step of another run started (ADR 0105)."""
+
+        return SqlRunChildRepository(self._database)
+
+    @cached_property
+    def run_leases(
+        self,
+    ) -> RunLeaseRepository:
+        """Return the leases on runs while they execute (ADR 0105)."""
+
+        return SqlRunLeaseRepository(self._database)
 
     @cached_property
     def tools(

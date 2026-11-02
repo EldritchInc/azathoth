@@ -207,6 +207,11 @@ from azathoth.workflows.production_model_resolution import (
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
 )
+from azathoth.workflows.production_resume import (
+    ProductionInvocationResumeError,
+    resume_production_invocation,
+    starting_production_state,
+)
 from azathoth.workflows.production_revision_repository import (
     WorkflowProductionRevisionRepository,
 )
@@ -242,6 +247,11 @@ from azathoth.workflows.revision import (
     WorkflowSpecificationRevision,
     earliest_identical_revision,
 )
+from azathoth.workflows.run_children import (
+    InMemoryRunChildRepository,
+    RunChild,
+    RunChildRepository,
+)
 from azathoth.workflows.run_evaluation import WorkflowRunEvaluation
 from azathoth.workflows.run_evaluation_repository import (
     WorkflowRunEvaluationRepository,
@@ -251,8 +261,51 @@ from azathoth.workflows.run_failure import (
     RUN_FAILURE_EVALUATOR_VERSION,
     evaluate_failed_run,
 )
+from azathoth.workflows.run_journal import (
+    InMemoryRunJournalRepository,
+    JournalAttemptFinished,
+    JournalAttemptStarted,
+    JournalLayerCommitted,
+    JournalRunFinished,
+    JournalRunResumed,
+    JournalRunStarted,
+    RunJournalEntry,
+    RunJournalError,
+    RunJournalEvent,
+    RunJournalPositionTakenError,
+    RunJournalRepository,
+    RunJournalWriter,
+)
+from azathoth.workflows.run_lease import (
+    LEASE_DURATION,
+    LEASE_RENEWAL_INTERVAL,
+    InMemoryRunLeaseRepository,
+    RunLease,
+    RunLeaseError,
+    RunLeaseHeldError,
+    RunLeaseKeeper,
+    RunLeaseLostError,
+    RunLeasePolicy,
+    RunLeaseRepository,
+    lease_holder,
+)
+from azathoth.workflows.run_progress_tables import (
+    RUN_CHILD_TABLES,
+    RUN_JOURNAL_TABLES,
+    RUN_LEASE_TABLES,
+    RUN_PROGRESS_TABLES,
+)
 from azathoth.workflows.run_repository import WorkflowRunRepository
+from azathoth.workflows.run_resume import (
+    RunResumeError,
+    RunResumePoint,
+    finished_run,
+    journal_resumes,
+    resume_point,
+    run_started,
+)
 from azathoth.workflows.runner import (
+    RecordedStepFailure,
     WorkflowRunner,
 )
 from azathoth.workflows.scorecard import (
@@ -295,10 +348,13 @@ from azathoth.workflows.sql_repository import (
     WORKFLOW_SPECIFICATION_TABLES,
     SqlWorkflowRepository,
 )
+from azathoth.workflows.sql_run_child_repository import SqlRunChildRepository
 from azathoth.workflows.sql_run_evaluation_repository import (
     WORKFLOW_RUN_EVALUATION_TABLES,
     SqlWorkflowRunEvaluationRepository,
 )
+from azathoth.workflows.sql_run_journal_repository import SqlRunJournalRepository
+from azathoth.workflows.sql_run_lease_repository import SqlRunLeaseRepository
 from azathoth.workflows.sql_run_repository import (
     WORKFLOW_RUN_TABLES,
     SqlWorkflowRunRepository,
@@ -377,6 +433,50 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "PRODUCTION_INVOCATION_RUN_TABLES",
+    "RUN_CHILD_TABLES",
+    "RUN_JOURNAL_TABLES",
+    "RUN_LEASE_TABLES",
+    "RUN_PROGRESS_TABLES",
+    "InMemoryRunJournalRepository",
+    "JournalAttemptFinished",
+    "JournalAttemptStarted",
+    "JournalLayerCommitted",
+    "JournalRunFinished",
+    "JournalRunResumed",
+    "RecordedStepFailure",
+    "RunResumeError",
+    "ProductionInvocationResumeError",
+    "resume_production_invocation",
+    "starting_production_state",
+    "RunResumePoint",
+    "finished_run",
+    "journal_resumes",
+    "resume_point",
+    "run_started",
+    "JournalRunStarted",
+    "RunJournalEntry",
+    "RunJournalError",
+    "RunJournalEvent",
+    "RunJournalPositionTakenError",
+    "RunJournalRepository",
+    "RunJournalWriter",
+    "SqlRunJournalRepository",
+    "InMemoryRunChildRepository",
+    "RunChild",
+    "RunChildRepository",
+    "SqlRunChildRepository",
+    "LEASE_DURATION",
+    "LEASE_RENEWAL_INTERVAL",
+    "InMemoryRunLeaseRepository",
+    "RunLease",
+    "RunLeaseError",
+    "RunLeaseHeldError",
+    "RunLeaseKeeper",
+    "RunLeaseLostError",
+    "RunLeasePolicy",
+    "RunLeaseRepository",
+    "SqlRunLeaseRepository",
+    "lease_holder",
     "PRODUCTION_INVOCATION_TABLES",
     "SqlProductionInvocationRepository",
     "SqlProductionInvocationRunRepository",

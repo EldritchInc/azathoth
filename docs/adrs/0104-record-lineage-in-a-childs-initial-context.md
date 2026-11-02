@@ -1,6 +1,6 @@
 # ADR 0104: Record Lineage in a Child's Initial Context
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0105
 - Date: 2026-11-01
 - Decided in: #122
 

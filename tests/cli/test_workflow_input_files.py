@@ -188,7 +188,10 @@ def test_invoke_dispatches_an_input_file_as_its_payload(
         workflow_id: UUID,
         payload: object,
         output: WorkflowOutputFormat,
+        idempotency_key: str | None = None,
     ) -> int:
+        assert idempotency_key is None
+
         received.append(payload)
 
         return 0
