@@ -3610,6 +3610,10 @@ exactly what production feeds it.
 Production invocations also keep their own `production.invocation.received`
 event, which invocation history reads.
 
+A child, started by a step of another run, records one more event last:
+`workflow.lineage.received`, naming its depth, its parent step and its root
+run (see [Child Lineage](#child-lineage)). A root records none.
+
 A workflow whose prompt is fixed text, such as
 `examples/workflows/simple-prompt.json`, ignores its input.
 
