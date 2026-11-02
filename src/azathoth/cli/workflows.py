@@ -24,6 +24,7 @@ from azathoth.cli.inputs import (
     WorkflowInputFile,
     resolve_input_file,
 )
+from azathoth.cli.lineage import parent_lineage
 from azathoth.cli.optimization import optimize_configured_workflow
 from azathoth.cli.output_format import (
     DEFAULT_WORKFLOW_OUTPUT_FORMAT,
@@ -105,6 +106,10 @@ def run_workflow(
     1 when it halted or did not produce its declared result.
 
     With tracing on, the run and its steps are traced (ADR 0100).
+
+    A run started by a step of another run records the lineage it was given
+    in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or a run
+    nested too deeply, raises before anything is resolved or recorded.
     """
 
     return run_traced(
@@ -125,6 +130,8 @@ def _run_workflow(
     telemetry: Telemetry,
 ) -> int:
     """Execute one configured workflow, tracing it with the given telemetry."""
+
+    lineage = parent_lineage(workflow_id)
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -150,7 +157,7 @@ def _run_workflow(
             execute_configured_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
-                context=configured_run_context(run_input),
+                context=configured_run_context(run_input, lineage=lineage),
                 runner=tracing_runner(
                     telemetry,
                     observer=_step_observer(
@@ -286,6 +293,11 @@ def invoke_workflow(
 
     With tracing on, the invocation, its run and their steps are traced
     (ADR 0100).
+
+    An invocation started by a step of another run records the lineage it
+    was given in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or
+    an invocation nested too deeply, raises before anything is resolved or
+    recorded.
     """
 
     return run_traced(
@@ -306,6 +318,8 @@ def _invoke_workflow(
     telemetry: Telemetry,
 ) -> int:
     """Invoke one active production workflow, tracing it with the given telemetry."""
+
+    lineage = parent_lineage(workflow_id)
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -343,6 +357,7 @@ def _invoke_workflow(
                 run_repository=repositories(configuration).runs,
                 invocation_run_repository=repositories(configuration).invocation_runs,
                 input_provenance=input_provenance,
+                lineage=lineage,
                 runner=tracing_runner(
                     telemetry,
                     observer=_step_observer(

@@ -1,6 +1,6 @@
 # ADR 0090: Loop by Invoking Child Workflows from a Tool
 
-- Status: Accepted; amended by ADR 0093, ADR 0094
+- Status: Accepted; amended by ADR 0093, ADR 0094, ADR 0104
 - Date: 2026-10-26
 - Decided in: #104
 

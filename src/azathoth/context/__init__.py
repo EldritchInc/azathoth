@@ -1,5 +1,46 @@
-"""Event-backed working context."""
+"""Event-backed working context, and the lineage a child run records in it."""
 
+from azathoth.context.lineage import (
+    LINEAGE_EVENT_TYPE,
+    LINEAGE_PRODUCER,
+    MAX_WORKFLOW_DEPTH,
+    LineageError,
+    LineageRun,
+    LineageStep,
+    RunLineage,
+    StepLineage,
+    WorkflowDepthError,
+    WorkflowLineage,
+    active_step_lineage,
+    child_lineage,
+    create_lineage_event,
+    decode_step_lineage,
+    encode_step_lineage,
+    lineage_of,
+    run_lineage,
+    running_step,
+)
 from azathoth.context.models import Context, ContextEvent
 
-__all__ = ["Context", "ContextEvent"]
+__all__ = [
+    "LINEAGE_EVENT_TYPE",
+    "LINEAGE_PRODUCER",
+    "MAX_WORKFLOW_DEPTH",
+    "Context",
+    "ContextEvent",
+    "LineageError",
+    "LineageRun",
+    "LineageStep",
+    "RunLineage",
+    "StepLineage",
+    "WorkflowDepthError",
+    "WorkflowLineage",
+    "active_step_lineage",
+    "child_lineage",
+    "create_lineage_event",
+    "decode_step_lineage",
+    "encode_step_lineage",
+    "lineage_of",
+    "run_lineage",
+    "running_step",
+]

@@ -4,9 +4,11 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import Final
 
+from azathoth.context import StepLineage, active_step_lineage, encode_step_lineage
 from azathoth.telemetry.api import active_telemetry
 from azathoth.tools.implementation import (
     ENVIRONMENT_PREFIX_WILDCARD,
+    LINEAGE_ENVIRONMENT_VARIABLE,
     MANAGED_ENVIRONMENT_VARIABLES,
     PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
     TRACE_CONTEXT_ENVIRONMENT_VARIABLES,
@@ -93,6 +95,7 @@ def process_tool_environment(
     *,
     windows: bool | None = None,
     trace_context: Mapping[str, str] | None = None,
+    lineage: StepLineage | None = None,
 ) -> dict[str, str]:
     """Return the environment one process implementation runs with.
 
@@ -102,10 +105,11 @@ def process_tool_environment(
     Windows, variable names match in any case.
 
     The engine then sets the variables it manages, which are never inherited
-    (ADR 0099, ADR 0100): `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the
-    implementation declares a timeout, and `TRACEPARENT` and `TRACESTATE`,
-    when a step is being traced. The trace context is the active telemetry's
-    current one, unless one is given.
+    (ADR 0099, ADR 0100, ADR 0104): `AZATHOTH_TOOL_TIMEOUT_SECONDS`, when the
+    implementation declares a timeout; `TRACEPARENT` and `TRACESTATE`, when a
+    step is being traced; and `AZATHOTH_LINEAGE`, when the process runs in a
+    step. The trace context is the active telemetry's current one, and the
+    lineage the running step's, unless one is given.
     """
 
     source = os.environ if environ is None else environ
@@ -135,6 +139,11 @@ def process_tool_environment(
 
         if value:
             environment[name] = value
+
+    step = active_step_lineage() if lineage is None else lineage
+
+    if step is not None:
+        environment[LINEAGE_ENVIRONMENT_VARIABLE] = encode_step_lineage(step)
 
     return environment
 

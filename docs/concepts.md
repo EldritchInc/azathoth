@@ -811,8 +811,11 @@ Larger behavior is built by composing workflows, not by adding control flow:
   done or a limit is reached (ADR 0090).
 
 Every child invocation is a production invocation with its own run, so each
-piece can be inspected, benchmarked, optimized and promoted on its own. Loops
-are bounded by an iteration limit, a time budget and an 8-level depth limit.
+piece can be inspected, benchmarked, optimized and promoted on its own. Each
+child also records its lineage in its initial context: its depth, the step
+and run that started it, and the root of its tree (ADR 0104). Loops are
+bounded by an iteration limit and a time budget, and every child by the
+engine's 8-level depth limit.
 The budget is a loop setting, bounded by the loop tool's own timeout, which
 Azathoth tells every process tool (ADR 0093).
 

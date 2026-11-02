@@ -1,6 +1,6 @@
 # ADR 0099: Give Process Tools Only the Environment They Declare
 
-- Status: Accepted; amended by ADR 0100
+- Status: Accepted; amended by ADR 0100, ADR 0104
 - Date: 2026-11-01
 - Decided in: #116
 

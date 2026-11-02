@@ -31,9 +31,13 @@ TRACE_CONTEXT_ENVIRONMENT_VARIABLES = (
 )
 """The variables carrying a step's trace context to a process tool."""
 
+LINEAGE_ENVIRONMENT_VARIABLE = "AZATHOTH_LINEAGE"
+"""The variable carrying the lineage of the step a process tool runs in (ADR 0104)."""
+
 MANAGED_ENVIRONMENT_VARIABLES = (
     PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE,
     *TRACE_CONTEXT_ENVIRONMENT_VARIABLES,
+    LINEAGE_ENVIRONMENT_VARIABLE,
 )
 """The variables the engine sets itself: never inherited, and never grantable."""
 
@@ -120,6 +124,12 @@ class ToolImplementation(BaseModel):
             if grant in TRACE_CONTEXT_ENVIRONMENT_VARIABLES:
                 raise ValueError(
                     f"{grant} is set by the engine from the active trace and cannot be granted."
+                )
+
+            if grant == LINEAGE_ENVIRONMENT_VARIABLE:
+                raise ValueError(
+                    f"{LINEAGE_ENVIRONMENT_VARIABLE} is set by the engine from the running "
+                    "step and cannot be granted."
                 )
 
         if len(set(self.environment)) != len(self.environment):

@@ -126,3 +126,4 @@ requests that made it:
 - [ADR 0101: Ship Azathoth as a Container Image](0101-ship-azathoth-as-a-container-image.md)
 - [ADR 0102: Keep Durable State in PostgreSQL](0102-keep-durable-state-in-postgresql.md)
 - [ADR 0103: Run Models on Amazon Bedrock](0103-run-models-on-amazon-bedrock.md)
+- [ADR 0104: Record Lineage in a Child's Initial Context](0104-record-lineage-in-a-childs-initial-context.md)

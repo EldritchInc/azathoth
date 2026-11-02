@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.context import WorkflowLineage
 from azathoth.inputs import InputProvenance
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -51,6 +52,7 @@ async def invoke_production_workflow(
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     input_provenance: InputProvenance | None = None,
     idempotency: InvocationIdempotency | None = None,
+    lineage: WorkflowLineage | None = None,
 ) -> ProductionInvocationResult:
     """Invoke one workflow against its active production state.
 
@@ -59,6 +61,9 @@ async def invoke_production_workflow(
 
     An invocation started through a job envelope passes its idempotency,
     which is recorded with the invocation before anything runs (ADR 0097).
+
+    An invocation started by a step of another run passes its lineage, which
+    the invocation records in its initial context (ADR 0104).
 
     Raises:
         IdempotencyKeyInUseError: The idempotency key is already recorded on
@@ -71,6 +76,7 @@ async def invoke_production_workflow(
         caller_metadata=caller_metadata,
         input_provenance=input_provenance,
         idempotency=idempotency,
+        lineage=lineage,
     )
 
     invocation_repository.save(

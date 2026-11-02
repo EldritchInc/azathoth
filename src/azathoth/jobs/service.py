@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.context import WorkflowLineage
 from azathoth.inputs import (
     ContentStore,
     InputPolicy,
@@ -75,8 +76,12 @@ def runtime_job_invoker(
     run_repository: WorkflowRunRepository,
     invocation_run_repository: ProductionInvocationRunRepository,
     runner: WorkflowRunner | None = None,
+    lineage: WorkflowLineage | None = None,
 ) -> JobInvoker:
     """Return an invoker that composes its runtime only when it invokes.
+
+    An entry point started by a step of another run binds that lineage, and
+    every invocation it makes records it (ADR 0104).
 
     `load_runtime` is called once, on the first invocation, so a job that is
     replayed, conflicts or is rejected never loads provider state or
@@ -117,6 +122,7 @@ def runtime_job_invoker(
             tool_implementation_resolver=runtime.tool_implementation_resolver,
             input_provenance=input_provenance,
             idempotency=idempotency,
+            lineage=lineage,
         )
 
     return invoke

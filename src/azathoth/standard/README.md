@@ -11,8 +11,8 @@ steps:
 
 | Tool              | Version | Implementation | Purpose                                     |
 | ----------------- | ------- | -------------- | ------------------------------------------- |
-| `run_workflow`    | 1.0.0   | 1.0.3          | Run a child workflow once (ADR 0084).       |
-| `loop_workflow`   | 1.1.0   | 1.1.3          | Run a child workflow repeatedly (ADR 0090). |
+| `run_workflow`    | 1.0.0   | 1.0.4          | Run a child workflow once (ADR 0084).       |
+| `loop_workflow`   | 1.1.0   | 1.1.4          | Run a child workflow repeatedly (ADR 0090). |
 | `json_select`     | 1.0.0   | 1.0.0          | Select one value from JSON by path.         |
 | `json_object`     | 1.0.0   | 1.0.0          | Build one object from a step's inputs.      |
 | `json_merge`      | 1.0.0   | 1.0.0          | Deep-merge one object into another.         |
@@ -42,7 +42,6 @@ Bedrock configuration and AWS credentials it needs to run Bedrock models
 "environment": [
   "AZATHOTH_DATABASE",
   "OPENROUTER_API_KEY",
-  "AZATHOTH_WORKFLOW_DEPTH",
   "AZATHOTH_OTEL",
   "OTEL_*",
   "AZATHOTH_BEDROCK",
@@ -53,7 +52,11 @@ Bedrock configuration and AWS credentials it needs to run Bedrock models
 
 No other variable outside the base environment reaches them. When their step
 is traced, the engine also gives them its `TRACEPARENT`, which they pass on
-to the child.
+to the child. It always gives them their step's `AZATHOTH_LINEAGE`, which
+they pass on too, so each child records the step and run that started it,
+and the engine refuses one nested more than 8 levels deep (ADR 0104). The
+tools count no depth of their own. They write their errors, including the
+child's last error line, as UTF-8 on every platform.
 
 ## The Data-Shaping Tools
 
@@ -369,7 +372,7 @@ version with a new implementation ID, because an implementation ID belongs to
 one tool version only, and workflows keep requiring the exact versions they
 name.
 
-There has been one exception, made three times in 1.1. When process tools stopped
+There has been one exception, made four times in 1.1. When process tools stopped
 inheriting Azathoth's environment (ADR 0099), `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` gained their grants as the next revision of the same
 versions, implementations 1.0.1 and 1.1.1, because without grants no
@@ -378,7 +381,12 @@ they gained `AZATHOTH_OTEL` and `OTEL_*` the same way, as implementations
 1.0.2 and 1.1.2, so a child continues its parent's trace. When Bedrock
 arrived (ADR 0103), they gained `AZATHOTH_BEDROCK`, `AZATHOTH_BEDROCK_PRICING`
 and `AWS_*` the same way, as implementations 1.0.3 and 1.1.3, so a child
-runs Bedrock models with its parent's region, prices and credentials.
+runs Bedrock models with its parent's region, prices and credentials. When
+the engine took over bounding depth (ADR 0104), they lost their own depth
+counter and the `AZATHOTH_WORKFLOW_DEPTH` grant the same way, as
+implementations 1.0.4 and 1.1.4, which also write their errors as UTF-8.
+Implementations 1.0.3 and 1.1.3 still run: they count depth themselves, and
+the engine's limit applies to their children too.
 
 A database that installed the library from Azathoth 1.0 runs
 `azathoth tool install-standard`, or `azathoth init`, once to pick up the
@@ -397,9 +405,8 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 ```
 
-A database that already holds implementations 1.0.1 and 1.1.1 gets 1.0.3 and
-1.1.3 as revision 3 the same way, and one that holds 1.0.2 and 1.1.2 gets
-them as revision 4.
+A database that already holds a later revision, 1.0.1 to 1.0.3 and 1.1.1 to
+1.1.3, gets 1.0.4 and 1.1.4 as the next revision of each the same way.
 
 A tool belongs here when it is pure Python, deterministic, works on Windows,
 needs no network, and has no side effects outside its inputs. The

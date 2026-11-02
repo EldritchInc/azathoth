@@ -8,6 +8,7 @@ from typing import BinaryIO
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.inputs import CLI_INPUT_POLICY
+from azathoth.cli.lineage import parent_lineage
 from azathoth.cli.parsing.jobs import STANDARD_INPUT_REQUEST
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering.jobs import render_job_result
@@ -50,6 +51,11 @@ def run_job_request(
     steps are traced (ADR 0100). Tracing that cannot be configured prints
     its reason on stderr, prints no envelope and returns 1, before the
     request is even read.
+
+    A job started by a step of another run records the lineage it was given
+    in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or a job
+    nested too deeply, raises once the request is decoded, before anything is
+    replayed, resolved or recorded, and no envelope is printed.
     """
 
     return run_traced(
@@ -113,6 +119,8 @@ def _run(
             idempotency_key=exc.idempotency_key,
         )
 
+    lineage = parent_lineage(request.workflow_id)
+
     configuration = CliRuntimeConfiguration.from_environment()
 
     invocation_repository = repositories(configuration).invocations
@@ -131,6 +139,7 @@ def _run(
                     run_repository=repositories(configuration).runs,
                     invocation_run_repository=repositories(configuration).invocation_runs,
                     runner=tracing_runner(telemetry),
+                    lineage=lineage,
                 ),
             ),
         )
