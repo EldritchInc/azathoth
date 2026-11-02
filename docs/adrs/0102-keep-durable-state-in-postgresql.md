@@ -1,6 +1,6 @@
 # ADR 0102: Keep Durable State in PostgreSQL
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0105
 - Date: 2026-11-01
 - Decided in: #119
 

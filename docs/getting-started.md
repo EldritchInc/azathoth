@@ -364,6 +364,22 @@ azathoth workflow invocations 5e2e0b6a-3c1d-4b7e-9f20-000000000001
 azathoth invocation show <INVOCATION_ID>
 ```
 
+If a run or an invocation is ever stopped halfway, by Ctrl-C or a machine
+going away, it is not lost: it resumes where it stopped, under the same ID,
+reusing every step it had finished:
+
+```bash
+azathoth run resume <RUN_ID>
+azathoth invocation resume <INVOCATION_ID>
+```
+
+```powershell
+azathoth run resume <RUN_ID>
+azathoth invocation resume <INVOCATION_ID>
+```
+
+`run show <RUN_ID>` says which of the two a run that never finished needs.
+
 ## 8. Clean Up
 
 Everything this guide created lives in its database. Delete it, and remove

@@ -17,6 +17,7 @@ from azathoth.workflows import (
     JournalLayerCommitted,
     JournalRunStarted,
     RunJournalEntry,
+    RunLease,
     RunLeaseHeldError,
     RunResumeError,
     WorkflowCandidate,
@@ -711,3 +712,37 @@ def test_the_readme_quotes_the_real_refusals() -> None:
         )
 
         assert f"\n{documented}\n" in text, documented
+
+
+ADR = Path(__file__).parents[2] / "docs" / "adrs" / "0105-resume-interrupted-runs-from-a-journal.md"
+
+
+def test_the_adr_names_every_journal_entry_in_order() -> None:
+    text = ADR.read_text(encoding="utf-8")
+    section = text[text.index("### The journal") : text.index("### Schema version 2")]
+    documented = [line.split("`")[1] for line in section.splitlines() if line.startswith("| `")]
+
+    assert documented == [
+        "run.started",
+        "attempt.started",
+        "attempt.finished",
+        "layer.committed",
+        "run.resumed",
+        "run.finished",
+    ]
+
+
+def test_the_adr_quotes_the_real_lease_refusal() -> None:
+    lease = RunLease(
+        run_id=UUID(int=1),
+        holder="holder",
+        acquired_at=datetime(2026, 11, 1, tzinfo=UTC),
+        expires_at=datetime(2026, 11, 1, 0, 1, tzinfo=UTC),
+    )
+    documented = (
+        str(RunLeaseHeldError(lease))
+        .replace(str(UUID(int=1)), "<RUN_ID>")
+        .replace("2026-11-01T00:01:00+00:00", "<TIME>")
+    )
+
+    assert f"```text\n{documented}\n```" in ADR.read_text(encoding="utf-8")

@@ -823,6 +823,26 @@ There is no loop construct in the engine. Keeping the graph acyclic keeps
 run records, conditions, benchmarks and optimization simple, and repetition
 lives in a tool.
 
+## Resuming Interrupted Runs
+
+A run is journaled while it executes: each attempt as it starts and
+finishes, each layer as it commits. One process holds a run at a time, under
+a lease it keeps renewing. A run whose process stopped, from Ctrl-C, SIGTERM,
+a crash or a lost machine, resumes where it stopped, under the same run ID
+(ADR 0105):
+
+```bash
+azathoth run resume <RUN_ID>
+azathoth invocation resume <INVOCATION_ID>
+```
+
+Committed layers and finished attempts are reused, and only the attempt in
+flight runs again. The composition tools invoke every child under a key of
+the step attempt, and every loop iteration under its own, so a resumed
+parent reuses the children it already ran: a loop resumed halfway carries on
+from where it was. `job run` resumes an interrupted invocation under its key
+by itself. `run children <RUN_ID>` lists what a run's steps started.
+
 ## Benchmarks and Judges
 
 A benchmark case pairs an input with an expected outcome and a comparison:
