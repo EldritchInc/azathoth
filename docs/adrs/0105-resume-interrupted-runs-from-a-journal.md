@@ -1,6 +1,6 @@
 # ADR 0105: Resume Interrupted Runs From a Journal
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0107
 - Date: 2026-11-01
 - Decided in: #123
 

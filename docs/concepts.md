@@ -846,6 +846,22 @@ parent reuses the children it already ran: a loop or a map resumed halfway
 carries on from where it was. `job run` resumes an interrupted invocation under its key
 by itself. `run children <RUN_ID>` lists what a run's steps started.
 
+## Running Jobs From a Queue
+
+`azathoth worker run` takes job requests from an Amazon SQS queue and runs
+them one at a time, as `job run` would (ADR 0107):
+
+```bash
+azathoth worker run --queue-url <QUEUE_URL>
+```
+
+A message is deleted once its job's result is final, and left to come back
+while another process still holds its run. A worker stopped with SIGTERM
+hands its job back to the queue at once, and a worker that dies leaves it to
+come back on its own; either way the next worker resumes the run from its
+journal. A deployment scales by running more workers over one queue and one
+PostgreSQL database.
+
 ## Benchmarks and Judges
 
 A benchmark case pairs an input with an expected outcome and a comparison:
@@ -1073,6 +1089,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.context`](../src/azathoth/context/README.md) | Immutable event-backed working context |
 | [`azathoth.inputs`](../src/azathoth/inputs/README.md) | External inputs as values or references, media types, resolution and the content store |
 | [`azathoth.jobs`](../src/azathoth/jobs/README.md) | The versioned job envelope: one request and one result per invocation |
+| [`azathoth.worker`](../src/azathoth/worker/README.md) | The queue worker: job requests from SQS, settled by their results |
 | [`azathoth.goals`](../src/azathoth/goals/README.md) | Durable objective intent |
 | [`azathoth.strategies`](../src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
 | [`azathoth.execution`](../src/azathoth/execution/README.md) | Strategy execution evidence |

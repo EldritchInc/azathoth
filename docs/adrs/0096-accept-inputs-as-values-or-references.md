@@ -1,6 +1,6 @@
 # ADR 0096: Accept Inputs as Values or References
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0107
 - Date: 2026-10-31
 - Decided in: #113
 

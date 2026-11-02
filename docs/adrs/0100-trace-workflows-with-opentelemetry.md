@@ -1,6 +1,6 @@
 # ADR 0100: Trace Workflows With OpenTelemetry
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0107
 - Date: 2026-11-01
 - Decided in: #117
 

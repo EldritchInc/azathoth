@@ -183,8 +183,8 @@ Transactions on the connection take turns: one begun in another thread, such
 as a run's lease renewal (ADR 0105), waits until the one in progress commits
 or rolls back.
 
-A process with many connections to many databases, such as a queue worker,
-needs a pool; ADR 0107 adds one.
+There is no pool. The queue worker runs one job at a time, so one connection
+serves it, and a deployment scales by running more workers (ADR 0107).
 
 # Opening the Repositories
 
