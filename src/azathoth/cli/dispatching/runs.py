@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     RUN_ACTION_ATTRIBUTE,
     RUN_FEEDBACK_ACTION,
@@ -14,12 +15,15 @@ from azathoth.cli.parsing import (
     RUN_FEEDBACK_DISPOSITION_ATTRIBUTE,
     RUN_FEEDBACK_REASON_ATTRIBUTE,
     RUN_ID_ATTRIBUTE,
+    RUN_OUTPUT_ATTRIBUTE,
+    RUN_RESUME_ACTION,
     RUN_SHOW_ACTION,
 )
 from azathoth.workflows import WorkflowRunFeedbackDisposition
 
 RunFeedbackHandler = Callable[..., int]
 RunIdentifierHandler = Callable[[UUID], int]
+RunResumeHandler = Callable[..., int]
 
 
 def dispatch_run_command(
@@ -27,6 +31,7 @@ def dispatch_run_command(
     *,
     record_run_feedback: RunFeedbackHandler,
     show_run: RunIdentifierHandler,
+    resume_run: RunResumeHandler,
 ) -> int | None:
     """Dispatch one parsed run command."""
 
@@ -48,6 +53,12 @@ def dispatch_run_command(
                     RUN_ID_ATTRIBUTE,
                 ),
             )
+        )
+
+    if action == RUN_RESUME_ACTION:
+        return resume_run(
+            cast(UUID, getattr(arguments, RUN_ID_ATTRIBUTE)),
+            output=WorkflowOutputFormat(cast(str, getattr(arguments, RUN_OUTPUT_ATTRIBUTE))),
         )
 
     if action == RUN_FEEDBACK_ACTION:

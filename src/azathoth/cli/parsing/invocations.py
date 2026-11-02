@@ -5,13 +5,18 @@ from __future__ import annotations
 from argparse import ArgumentParser, _SubParsersAction
 from uuid import UUID
 
+from azathoth.cli.output_format import DEFAULT_WORKFLOW_OUTPUT_FORMAT, WorkflowOutputFormat
+
 INVOCATION_COMMAND = "invocation"
 
 INVOCATION_ACTION_ATTRIBUTE = "invocation_action"
 
+INVOCATION_RESUME_ACTION = "resume"
 INVOCATION_SHOW_ACTION = "show"
 
 INVOCATION_ID_ATTRIBUTE = "invocation_id"
+
+INVOCATION_OUTPUT_ATTRIBUTE = "invocation_output"
 
 
 def add_invocation_parser(
@@ -21,7 +26,7 @@ def add_invocation_parser(
 
     invocation_parser = commands.add_parser(
         INVOCATION_COMMAND,
-        help="Inspect persisted production invocations.",
+        help="Inspect and resume production invocations.",
     )
 
     invocation_actions = invocation_parser.add_subparsers(
@@ -38,4 +43,28 @@ def add_invocation_parser(
         type=UUID,
         metavar="INVOCATION_ID",
         help="Production invocation UUID to inspect.",
+    )
+
+    invocation_resume_parser = invocation_actions.add_parser(
+        INVOCATION_RESUME_ACTION,
+        help="Resume an incomplete production invocation where its run stopped.",
+    )
+
+    invocation_resume_parser.add_argument(
+        INVOCATION_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="INVOCATION_ID",
+        help="Production invocation UUID to resume.",
+    )
+
+    invocation_resume_parser.add_argument(
+        "--output",
+        dest=INVOCATION_OUTPUT_ATTRIBUTE,
+        choices=tuple(output_format.value for output_format in WorkflowOutputFormat),
+        default=DEFAULT_WORKFLOW_OUTPUT_FORMAT.value,
+        help=(
+            "Output format: jsonl streams step records and a terminal record "
+            "(default), text prints the human-readable report, result prints "
+            "only the result as JSON."
+        ),
     )

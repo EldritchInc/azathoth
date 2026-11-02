@@ -72,11 +72,14 @@ from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
     ProductionInvocationFailure,
+    ProductionInvocationResult,
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
+    WorkflowRun,
     WorkflowRunObserver,
     WorkflowScoringPolicy,
+    WorkflowSpecification,
 )
 
 
@@ -160,7 +163,7 @@ def _run_workflow(
                 context=configured_run_context(run_input, lineage=lineage),
                 runner=tracing_runner(
                     telemetry,
-                    observer=_step_observer(
+                    observer=step_observer(
                         output,
                         writer,
                     ),
@@ -182,14 +185,44 @@ def _run_workflow(
 
     repositories(configuration).runs.save(run)
 
+    #
+    # Only a record names the declared result, so text never reads the
+    # specification.
+    #
+    specification = (
+        None if output is WorkflowOutputFormat.TEXT else runtime.workflows.get(workflow_id)
+    )
+
+    return report_configured_run(
+        run,
+        specification=specification,
+        output=output,
+        writer=writer,
+    )
+
+
+def report_configured_run(
+    run: WorkflowRun,
+    *,
+    specification: WorkflowSpecification | None,
+    output: WorkflowOutputFormat,
+    writer: JsonLinesOutputWriter | None,
+    resumes: int = 0,
+) -> int:
+    """Print a finished configured run in its output format, returning the exit code.
+
+    Text renders the run, naming how often it was resumed, and exits 0 when
+    it succeeded. JSON Lines and result mode end with its result record, as
+    the specification it executed declares it.
+    """
+
     if output is WorkflowOutputFormat.TEXT:
-        print(render_workflow_run(run))
+        print(render_workflow_run(run, resumes=resumes))
 
         return 0 if run.succeeded else 1
 
-    specification = runtime.workflows.get(workflow_id)
-
-    assert specification is not None
+    if specification is None:
+        raise ValueError("A run reported as a record needs the specification it executed.")
 
     record = workflow_run_record(
         run,
@@ -362,7 +395,7 @@ def _invoke_workflow(
                 lineage=lineage,
                 runner=tracing_runner(
                     telemetry,
-                    observer=_step_observer(
+                    observer=step_observer(
                         output,
                         writer,
                     ),
@@ -373,6 +406,25 @@ def _invoke_workflow(
         )
 
         trace.record(result)
+
+    return report_invocation_result(
+        result,
+        output=output,
+        writer=writer,
+    )
+
+
+def report_invocation_result(
+    result: ProductionInvocationResult,
+    *,
+    output: WorkflowOutputFormat,
+    writer: JsonLinesOutputWriter | None,
+) -> int:
+    """Print an invocation's terminal result in its output format, returning the exit code.
+
+    Text prints a success on stdout and a failure on stderr; JSON Lines and
+    result mode end with its record. A failure exits 1.
+    """
 
     if output is WorkflowOutputFormat.TEXT:
         rendered = render_production_invocation_result(
@@ -400,7 +452,7 @@ def _invoke_workflow(
     )
 
 
-def _step_observer(
+def step_observer(
     output: WorkflowOutputFormat,
     writer: JsonLinesOutputWriter | None,
 ) -> WorkflowRunObserver | None:

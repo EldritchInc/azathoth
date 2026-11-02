@@ -14,6 +14,7 @@ from azathoth.cli.rendering import (
 from azathoth.workflows import (
     ProductionInvocationResult,
     active_production_revision,
+    journal_resumes,
 )
 
 
@@ -176,7 +177,11 @@ def list_workflow_invocations(
 def show_invocation(
     invocation_id: UUID,
 ) -> int:
-    """Show one production invocation with its input, outcome, and run."""
+    """Show one production invocation with its input, outcome, and run.
+
+    An incomplete invocation names the run its journal records, and an
+    invocation whose run was resumed names how often (ADR 0105).
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -193,12 +198,22 @@ def show_invocation(
         return 1
 
     association = repositories(configuration).invocation_runs.get(invocation_id)
+    journal = repositories(configuration).run_journal
+
+    #
+    # A run that never finished is not associated yet, but its journal
+    # names it (ADR 0105).
+    #
+    run_id = (
+        association.run_id if association is not None else journal.invocation_run_id(invocation_id)
+    )
 
     print(
         render_production_invocation(
             invocation,
             result=invocation_repository.result(invocation_id),
-            run_id=association.run_id if association is not None else None,
+            run_id=run_id,
+            resumes=0 if run_id is None else journal_resumes(journal.entries(run_id)),
         )
     )
 

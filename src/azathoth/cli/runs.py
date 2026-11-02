@@ -10,6 +10,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     WorkflowRunSource,
+    render_unfinished_run,
     render_workflow_run,
     render_workflow_run_evaluations,
     render_workflow_run_feedback,
@@ -18,6 +19,7 @@ from azathoth.cli.rendering import (
 from azathoth.workflows import (
     WorkflowRunFeedback,
     WorkflowRunFeedbackDisposition,
+    journal_resumes,
 )
 
 
@@ -85,15 +87,20 @@ def show_run(
 
     Evaluator judgments follow the run evidence and precede human feedback,
     each in the order it was recorded.
+
+    A run that was resumed names how often (ADR 0105). One that journaled
+    but never finished is not recorded yet, so it is not shown; the command
+    says how to resume it instead.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
     run = repositories(configuration).runs.get(run_id)
+    entries = repositories(configuration).run_journal.entries(run_id)
 
     if run is None:
         print(
-            f"Run {run_id} was not found.",
+            render_unfinished_run(run_id, entries) if entries else f"Run {run_id} was not found.",
             file=sys.stderr,
         )
 
@@ -106,7 +113,7 @@ def show_run(
     print(
         "\n\n".join(
             (
-                render_workflow_run(run),
+                render_workflow_run(run, resumes=journal_resumes(entries)),
                 render_workflow_run_evaluations(evaluations),
                 render_workflow_run_feedback(feedback),
             )

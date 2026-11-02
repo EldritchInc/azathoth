@@ -26,6 +26,7 @@ from azathoth.jobs.envelope import (
     JobError,
     JobErrorCode,
     JobResult,
+    JobStatus,
     incomplete_job_result,
     job_result_from_invocation,
     rejected_job_result,
@@ -37,9 +38,13 @@ from azathoth.workflows import (
     ProductionInvocationRepository,
     ProductionInvocationResult,
     ProductionInvocationRunRepository,
+    RunJournalRepository,
+    RunLeaseHeldError,
+    WorkflowProductionRevisionRepository,
     WorkflowRunner,
     WorkflowRunRepository,
     invoke_production_workflow,
+    resume_production_invocation,
 )
 
 
@@ -67,6 +72,71 @@ class JobInvoker(Protocol):
         """Invoke one workflow and return its terminal result."""
 
         ...
+
+
+class JobResumer(Protocol):
+    """Resume one incomplete invocation a job request started earlier (ADR 0105).
+
+    It raises `RunLeaseHeldError` when another process still holds the
+    invocation's run.
+    """
+
+    async def __call__(
+        self,
+        invocation_id: UUID,
+    ) -> ProductionInvocationResult:
+        """Resume the invocation and return its terminal result."""
+
+        ...
+
+
+def runtime_job_resumer(
+    load_runtime: Callable[[], AzathothRuntime],
+    *,
+    invocation_repository: ProductionInvocationRepository,
+    run_repository: WorkflowRunRepository,
+    invocation_run_repository: ProductionInvocationRunRepository,
+    revision_repository: WorkflowProductionRevisionRepository,
+    journal: RunJournalRepository,
+    runner: WorkflowRunner,
+) -> JobResumer:
+    """Return a resumer that composes its runtime only when it resumes.
+
+    The invocation resumes from the production state it started from, and
+    its run from its journal, under the same run ID.
+    """
+
+    runtimes: list[AzathothRuntime] = []
+
+    async def resume(
+        invocation_id: UUID,
+    ) -> ProductionInvocationResult:
+        invocation = invocation_repository.get(invocation_id)
+
+        if invocation is None:
+            raise ValueError(f"Invocation {invocation_id} was not found.")
+
+        if not runtimes:
+            runtimes.append(await asyncio.to_thread(load_runtime))
+
+        runtime = runtimes[0]
+
+        return await resume_production_invocation(
+            invocation=invocation,
+            revisions=revision_repository.revisions_for_workflow(invocation.workflow_id),
+            current_state=runtime.production_state(invocation.workflow_id),
+            catalog=runtime.models,
+            registry=runtime.language_models,
+            runner=runner,
+            journal=journal,
+            run_repository=run_repository,
+            invocation_repository=invocation_repository,
+            invocation_run_repository=invocation_run_repository,
+            tool_resolver=runtime.tool_resolver,
+            tool_implementation_resolver=runtime.tool_implementation_resolver,
+        )
+
+    return resume
 
 
 def runtime_job_invoker(
@@ -135,6 +205,7 @@ async def run_invoke_job(
     store: ContentStore,
     invocation_repository: ProductionInvocationRepository,
     invoke: JobInvoker,
+    resume: JobResumer | None = None,
 ) -> JobResult:
     """Run one decoded invoke job request.
 
@@ -144,6 +215,9 @@ async def run_invoke_job(
        same digest replays its invocation, as `succeeded` or `failed`, or
        `incomplete` when it has no result; a key recorded with a different
        digest is an `idempotency_conflict`. Nothing is resolved or run.
+       With a resumer, an incomplete invocation whose run no process holds
+       is resumed instead, and its result is reported as if it had just run
+       (ADR 0105); one still held is reported `incomplete`, as before.
     2. The input is resolved under the entry point's policy. A failure is
        rejected as `invalid_input`, and records nothing.
     3. The workflow is invoked with the key and digest. Should another
@@ -161,7 +235,22 @@ async def run_invoke_job(
     )
 
     if recorded is not None:
-        return recorded
+        if (
+            resume is None
+            or recorded.status is not JobStatus.INCOMPLETE
+            or recorded.invocation_id is None
+        ):
+            return recorded
+
+        try:
+            resumed = await resume(recorded.invocation_id)
+        except RunLeaseHeldError:
+            return recorded
+
+        return job_result_from_invocation(
+            resumed,
+            idempotency_key=key,
+        )
 
     try:
         resolved = resolve_input(
@@ -214,6 +303,7 @@ async def run_job(
     store: ContentStore,
     invocation_repository: ProductionInvocationRepository,
     invoke: JobInvoker,
+    resume: JobResumer | None = None,
 ) -> JobResult:
     """Decode and run one job request given as JSON data.
 
@@ -235,6 +325,7 @@ async def run_job(
         store=store,
         invocation_repository=invocation_repository,
         invoke=invoke,
+        resume=resume,
     )
 
 
@@ -245,6 +336,7 @@ async def run_job_content(
     store: ContentStore,
     invocation_repository: ProductionInvocationRepository,
     invoke: JobInvoker,
+    resume: JobResumer | None = None,
 ) -> JobResult:
     """Parse and run one job request given as JSON text or bytes.
 
@@ -266,6 +358,7 @@ async def run_job_content(
         store=store,
         invocation_repository=invocation_repository,
         invoke=invoke,
+        resume=resume,
     )
 
 
@@ -316,9 +409,11 @@ def recorded_job_result(
 
 __all__ = [
     "JobInvoker",
+    "JobResumer",
     "recorded_job_result",
     "run_invoke_job",
     "run_job",
     "run_job_content",
     "runtime_job_invoker",
+    "runtime_job_resumer",
 ]

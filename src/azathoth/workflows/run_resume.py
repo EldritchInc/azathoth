@@ -81,11 +81,11 @@ def _revision(
     return "no revision" if revision is None else f"revision {revision}"
 
 
-def _started(
+def run_started(
     run_id: UUID,
     entries: Sequence[RunJournalEntry],
 ) -> JournalRunStarted:
-    """Return the run's start, checking its journal is whole and numbered from 1.
+    """Return how a run started, checking its journal is whole and numbered from 1.
 
     Raises:
         RunResumeError: The journal is empty, has a gap, or does not begin
@@ -123,7 +123,7 @@ def finished_run(
         return None
 
     run_id = entries[0].run_id
-    started = _started(run_id, entries)
+    started = run_started(run_id, entries)
     finished = entries[-1].event
 
     if not isinstance(finished, JournalRunFinished):
@@ -172,7 +172,7 @@ def resume_point(
             revision, or layers and steps the workflow does not have.
     """
 
-    started = _started(run_id, entries)
+    started = run_started(run_id, entries)
 
     if isinstance(entries[-1].event, JournalRunFinished):
         raise RunResumeError(run_id, f"Run {run_id} has already finished.")
@@ -287,4 +287,5 @@ __all__ = [
     "finished_run",
     "journal_resumes",
     "resume_point",
+    "run_started",
 ]

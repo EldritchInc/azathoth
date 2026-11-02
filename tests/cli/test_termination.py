@@ -151,8 +151,18 @@ def test_the_cli_readme_quotes_the_statuses_and_messages() -> None:
 # A real command, stopped while its run executes
 
 
-def sleep_tool() -> dict[str, object]:
-    """Return a process tool that sleeps far longer than any test waits."""
+SLEEP_SOURCE = (
+    "import json\nimport sys\nimport time\n\n"
+    "inputs = json.load(sys.stdin)\ntime.sleep(60)\n"
+    "json.dump({'text': inputs['text']}, sys.stdout)\n"
+)
+"""A tool that sleeps far longer than any test waits."""
+
+
+def sleep_tool(
+    source: str = SLEEP_SOURCE,
+) -> dict[str, object]:
+    """Return a process tool that runs the given source, by default sleeping a minute."""
 
     return {
         "definition": {
@@ -183,11 +193,7 @@ def sleep_tool() -> dict[str, object]:
                 "version": "1.0.0",
                 "runtime": "process",
                 "entrypoint": "run",
-                "source": (
-                    "import json\nimport sys\nimport time\n\n"
-                    "inputs = json.load(sys.stdin)\ntime.sleep(60)\n"
-                    "json.dump({'text': inputs['text']}, sys.stdout)\n"
-                ),
+                "source": source,
                 "command": ["python"],
                 "timeout_seconds": 120.0,
             }

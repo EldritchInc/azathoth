@@ -46,6 +46,7 @@ from azathoth.cli.rendering.production import (
 from azathoth.cli.rendering.promotions import (
     render_workflow_promotion,
 )
+from azathoth.cli.rendering.resumes import render_resume_lines, render_unfinished_run
 from azathoth.cli.rendering.run_summaries import (
     WorkflowRunSource,
     render_workflow_run_summaries,
@@ -83,6 +84,8 @@ __all__ = [
     "render_workflow_production",
     "render_workflow_promotion",
     "render_workflow_revision_summaries",
+    "render_resume_lines",
+    "render_unfinished_run",
     "render_workflow_run",
     "render_workflow_run_evaluations",
     "render_workflow_run_feedback",

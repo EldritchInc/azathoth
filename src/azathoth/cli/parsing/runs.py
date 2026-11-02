@@ -5,6 +5,7 @@ from __future__ import annotations
 from argparse import ArgumentParser, _SubParsersAction
 from uuid import UUID
 
+from azathoth.cli.output_format import DEFAULT_WORKFLOW_OUTPUT_FORMAT, WorkflowOutputFormat
 from azathoth.cli.parsing.common import json_value
 
 RUN_COMMAND = "run"
@@ -12,12 +13,14 @@ RUN_COMMAND = "run"
 RUN_ACTION_ATTRIBUTE = "run_action"
 
 RUN_FEEDBACK_ACTION = "feedback"
+RUN_RESUME_ACTION = "resume"
 RUN_SHOW_ACTION = "show"
 
 RUN_ID_ATTRIBUTE = "run_id"
 RUN_FEEDBACK_CORRECTED_OUTPUT_ATTRIBUTE = "run_feedback_corrected_output"
 RUN_FEEDBACK_DISPOSITION_ATTRIBUTE = "run_feedback_disposition"
 RUN_FEEDBACK_REASON_ATTRIBUTE = "run_feedback_reason"
+RUN_OUTPUT_ATTRIBUTE = "run_output"
 
 RUN_FEEDBACK_GOOD = "good"
 RUN_FEEDBACK_BAD = "bad"
@@ -30,7 +33,7 @@ def add_run_parser(
 
     run_parser = commands.add_parser(
         RUN_COMMAND,
-        help="Inspect and judge persisted workflow runs.",
+        help="Inspect, judge and resume workflow runs.",
     )
 
     run_actions = run_parser.add_subparsers(
@@ -47,6 +50,30 @@ def add_run_parser(
         type=UUID,
         metavar="RUN_ID",
         help="Workflow run UUID to inspect.",
+    )
+
+    run_resume_parser = run_actions.add_parser(
+        RUN_RESUME_ACTION,
+        help="Resume an interrupted configured run where it stopped.",
+    )
+
+    run_resume_parser.add_argument(
+        RUN_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="RUN_ID",
+        help="Workflow run UUID to resume.",
+    )
+
+    run_resume_parser.add_argument(
+        "--output",
+        dest=RUN_OUTPUT_ATTRIBUTE,
+        choices=tuple(output_format.value for output_format in WorkflowOutputFormat),
+        default=DEFAULT_WORKFLOW_OUTPUT_FORMAT.value,
+        help=(
+            "Output format: jsonl streams step records and a terminal record "
+            "(default), text prints the human-readable report, result prints "
+            "only the result as JSON."
+        ),
     )
 
     run_feedback_parser = run_actions.add_parser(

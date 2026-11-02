@@ -23,6 +23,7 @@ from azathoth.jobs import (
     rejected_job_result,
     run_invoke_job,
     runtime_job_invoker,
+    runtime_job_resumer,
 )
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job, traced_job_invoker
@@ -56,6 +57,10 @@ def run_job_request(
     in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or a job
     nested too deeply, raises once the request is decoded, before anything is
     replayed, resolved or recorded, and no envelope is printed.
+
+    A request whose key names an incomplete invocation resumes it once no
+    process holds its run (ADR 0105), and prints its result as if it had
+    just run; one still running prints the `incomplete` envelope.
     """
 
     return run_traced(
@@ -123,28 +128,39 @@ def _run(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    invocation_repository = repositories(configuration).invocations
+    stores = repositories(configuration)
+    invocation_repository = stores.invocations
+    runner = tracing_runner(
+        telemetry,
+        journal=stores.run_journal,
+        leases=stores.run_leases,
+    )
 
     return asyncio.run(
         run_invoke_job(
             request,
             policy=CLI_INPUT_POLICY,
-            store=repositories(configuration).content,
+            store=stores.content,
             invocation_repository=invocation_repository,
             invoke=traced_job_invoker(
                 telemetry,
                 runtime_job_invoker(
                     lambda: load_runtime(configuration),
                     invocation_repository=invocation_repository,
-                    run_repository=repositories(configuration).runs,
-                    invocation_run_repository=repositories(configuration).invocation_runs,
-                    runner=tracing_runner(
-                        telemetry,
-                        journal=repositories(configuration).run_journal,
-                        leases=repositories(configuration).run_leases,
-                    ),
+                    run_repository=stores.runs,
+                    invocation_run_repository=stores.invocation_runs,
+                    runner=runner,
                     lineage=lineage,
                 ),
+            ),
+            resume=runtime_job_resumer(
+                lambda: load_runtime(configuration),
+                invocation_repository=invocation_repository,
+                run_repository=stores.runs,
+                invocation_run_repository=stores.invocation_runs,
+                revision_repository=stores.production_revisions,
+                journal=stores.run_journal,
+                runner=runner,
             ),
         )
     )

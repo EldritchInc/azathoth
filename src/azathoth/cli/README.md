@@ -94,6 +94,8 @@ azathoth
 │
 ├── run
 │   ├── show <RUN_ID>
+│   ├── resume <RUN_ID>
+│   │   └── --output <FORMAT>
 │   └── feedback <RUN_ID>
 │       ├── --good | --bad          (exactly one)
 │       ├── --reason <TEXT>         (required with --bad)
@@ -103,7 +105,9 @@ azathoth
 │   └── show <EXPERIMENT_ID>
 │
 ├── invocation
-│   └── show <INVOCATION_ID>
+│   ├── show <INVOCATION_ID>
+│   └── resume <INVOCATION_ID>
+│       └── --output <FORMAT>
 │
 ├── job
 │   └── run <FILE | ->
@@ -1203,6 +1207,63 @@ Terminated.
 Either way the run stops where it is, releases its lease at once, and is not
 recorded as a finished run: its journal shows how far it got. Nothing is
 printed on stdout, and `job run` prints no envelope.
+
+# Resume an Interrupted Run
+
+A run that stopped before it finished resumes where it stopped, under the
+same run ID (ADR 0105). A configured run, one `workflow run` started,
+resumes with:
+
+```bash
+azathoth run resume <RUN_ID>
+```
+
+A production invocation, one `workflow invoke` or `job run` started, resumes
+with:
+
+```bash
+azathoth invocation resume <INVOCATION_ID>
+```
+
+Each takes `--output` and reports the finished run exactly as the command
+that started it would have, with the same exit status. A configured run
+resumes from the specification revision it started from, and an invocation
+from the production state that was active when it was created, so a newer
+import or promotion never changes a run halfway. The steps of every layer
+the run committed are reused, as are the attempts the interrupted layer
+finished; an attempt in flight when the run stopped runs again.
+
+`run show` does not show a run that never finished, because it is not
+recorded yet. It says how to resume it, and exits with status 1:
+
+```text
+Run <RUN_ID> has not finished; resume it with azathoth run resume <RUN_ID>.
+Run <RUN_ID> has not finished; resume it with azathoth invocation resume <INVOCATION_ID>.
+```
+
+Once finished, a run that was resumed names how often, after its lineage,
+in `run show` and `invocation show`:
+
+```text
+Resumed: 1 time
+```
+
+`invocation show` names an incomplete invocation's run as soon as it starts.
+
+Each refusal prints one line on stderr and exits with status 1, resuming
+nothing:
+
+```text
+Run <RUN_ID> has already finished.
+Run <RUN_ID> has no journal to resume.
+Run <RUN_ID> executes invocation <INVOCATION_ID>; resume it with azathoth invocation resume <INVOCATION_ID>.
+Run <RUN_ID> is still running (its lease expires at <TIME>).
+Invocation <INVOCATION_ID> has already completed.
+Invocation <INVOCATION_ID> was not found.
+```
+
+A run whose process was killed outright still holds its lease until it
+lapses, within a minute; resume it after that.
 
 # Configured Runs Are Persisted
 
@@ -2610,7 +2671,12 @@ A request sent again with the same key and the same content does not run
 again. It reports the recorded invocation, with `"replayed": true`:
 
 - a finished invocation replays as `succeeded` or `failed`;
-- an invocation without a result is `incomplete`.
+- an invocation without a result that another process still runs is
+  `incomplete`;
+- an invocation without a result that nothing runs any more, because the
+  process running it was stopped, or killed and its lease has lapsed, is
+  resumed where its run stopped (ADR 0105). Its result is reported as if it
+  had just run, with `"replayed": false`, and is replayed from then on.
 
 Failures replay too: a key always reports the same outcome. Send a new key to
 try again.

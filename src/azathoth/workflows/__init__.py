@@ -207,6 +207,11 @@ from azathoth.workflows.production_model_resolution import (
 from azathoth.workflows.production_repository import (
     WorkflowProductionStateRepository,
 )
+from azathoth.workflows.production_resume import (
+    ProductionInvocationResumeError,
+    resume_production_invocation,
+    starting_production_state,
+)
 from azathoth.workflows.production_revision_repository import (
     WorkflowProductionRevisionRepository,
 )
@@ -292,6 +297,7 @@ from azathoth.workflows.run_resume import (
     finished_run,
     journal_resumes,
     resume_point,
+    run_started,
 )
 from azathoth.workflows.runner import (
     RecordedStepFailure,
@@ -433,10 +439,14 @@ __all__ = [
     "JournalRunResumed",
     "RecordedStepFailure",
     "RunResumeError",
+    "ProductionInvocationResumeError",
+    "resume_production_invocation",
+    "starting_production_state",
     "RunResumePoint",
     "finished_run",
     "journal_resumes",
     "resume_point",
+    "run_started",
     "JournalRunStarted",
     "RunJournalEntry",
     "RunJournalError",
