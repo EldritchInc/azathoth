@@ -2753,7 +2753,9 @@ again. It reports the recorded invocation, with `"replayed": true`:
 - an invocation without a result that nothing runs any more, because the
   process running it was stopped, or killed and its lease has lapsed, is
   resumed where its run stopped (ADR 0105). Its result is reported as if it
-  had just run, with `"replayed": false`, and is replayed from then on.
+  had just run, with `"replayed": false`, and is replayed from then on;
+- an invocation that the process still running it finishes while the
+  request is being looked up replays the result that process recorded.
 
 Failures replay too: a key always reports the same outcome. Send a new key to
 try again.

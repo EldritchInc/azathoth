@@ -37,7 +37,9 @@ from azathoth.workflows import (
     InvocationIdempotency,
     ProductionInvocationRepository,
     ProductionInvocationResult,
+    ProductionInvocationResumeError,
     ProductionInvocationRunRepository,
+    RunFinishedError,
     RunJournalRepository,
     RunLeaseHeldError,
     WorkflowProductionRevisionRepository,
@@ -217,7 +219,9 @@ async def run_invoke_job(
        digest is an `idempotency_conflict`. Nothing is resolved or run.
        With a resumer, an incomplete invocation whose run no process holds
        is resumed instead, and its result is reported as if it had just run
-       (ADR 0105); one still held is reported `incomplete`, as before.
+       (ADR 0105); one still held is reported `incomplete`, as before. One
+       the process running it finished after the key was looked up replays
+       the result it recorded, or is `incomplete` until that result lands.
     2. The input is resolved under the entry point's policy. A failure is
        rejected as `invalid_input`, and records nothing.
     3. The workflow is invoked with the key and digest. Should another
@@ -246,6 +250,27 @@ async def run_invoke_job(
             resumed = await resume(recorded.invocation_id)
         except RunLeaseHeldError:
             return recorded
+        except (ProductionInvocationResumeError, RunFinishedError) as exc:
+            #
+            # The process still running the invocation, a child left
+            # behind when its parent was killed, finished it between the
+            # key's lookup and the resume. Replay what it recorded; a run
+            # that finished but has yet to record its result is still
+            # incomplete for an instant. Anything else stops the job.
+            #
+            raced = recorded_job_result(
+                key,
+                request_digest=digest,
+                invocation_repository=invocation_repository,
+            )
+
+            if raced is not None and raced.status is not JobStatus.INCOMPLETE:
+                return raced
+
+            if isinstance(exc, RunFinishedError):
+                return recorded
+
+            raise
 
         return job_result_from_invocation(
             resumed,

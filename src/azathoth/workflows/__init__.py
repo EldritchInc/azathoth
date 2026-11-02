@@ -297,6 +297,7 @@ from azathoth.workflows.run_progress_tables import (
 )
 from azathoth.workflows.run_repository import WorkflowRunRepository
 from azathoth.workflows.run_resume import (
+    RunFinishedError,
     RunResumeError,
     RunResumePoint,
     finished_run,
@@ -444,6 +445,7 @@ __all__ = [
     "JournalRunFinished",
     "JournalRunResumed",
     "RecordedStepFailure",
+    "RunFinishedError",
     "RunResumeError",
     "ProductionInvocationResumeError",
     "resume_production_invocation",
