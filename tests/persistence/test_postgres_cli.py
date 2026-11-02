@@ -20,6 +20,7 @@ from azathoth.jobs import JobErrorCode, JobResult, JobStatus
 from azathoth.persistence import MISSING_DRIVER_MESSAGE, PostgresDatabase, PostgresLocation
 from azathoth.persistence.repositories import close_postgres_databases, open_repositories
 from tests.persistence.test_schema_versions import initialize_version_1
+from tests.workflows.test_runner_journal import rebuilt
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -241,11 +242,19 @@ def test_a_parent_workflow_runs_its_promoted_child_over_postgresql(
         repositories = open_repositories(database_url)
         runs = repositories.runs.runs()
         invocations = repositories.invocations.invocations()
+        journals = [repositories.run_journal.entries(run.id) for run in runs]
+        child_run_id = repositories.run_journal.invocation_run_id(invocations[0].id)
     finally:
         close_postgres_databases()
 
     assert [str(run.workflow.id) for run in runs] == [CHILD_WORKFLOW_ID, PARENT_WORKFLOW_ID]
     assert [str(invocation.workflow_id) for invocation in invocations] == [CHILD_WORKFLOW_ID]
+
+    #
+    # Both runs journaled while they executed, in the same database (ADR 0105).
+    #
+    assert [rebuilt(journal) for journal in journals] == list(runs)
+    assert child_run_id == runs[0].id
 
 
 def test_jobs_run_replay_and_conflict_over_postgresql(

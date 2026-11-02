@@ -34,6 +34,7 @@ from azathoth.workflows import (
     WorkflowStepStatus,
     combine_observers,
 )
+from azathoth.workflows.run_journal import RunJournalRepository
 from azathoth.workflows.runner import RetrySleep
 
 RUN_FAILED_ERROR_TYPE = "WorkflowRunFailed"
@@ -218,9 +219,9 @@ def traced_run(
 class TracingWorkflowRunner(WorkflowRunner):
     """A workflow runner that traces every run it executes, and its steps.
 
-    Each run is executed by a plain runner with the same executor and retry
-    sleep, observed by both this runner's own observer and the run's
-    tracing observer, so concurrent runs never share a trace.
+    Each run is executed by a plain runner with the same executor, retry
+    sleep and journal, observed by both this runner's own observer and the
+    run's tracing observer, so concurrent runs never share a trace.
     """
 
     def __init__(
@@ -230,11 +231,13 @@ class TracingWorkflowRunner(WorkflowRunner):
         executor: StrategyExecutor | None = None,
         sleep: RetrySleep | None = None,
         observer: WorkflowRunObserver | None = None,
+        journal: RunJournalRepository | None = None,
     ) -> None:
         super().__init__(
             executor=executor,
             sleep=sleep,
             observer=observer,
+            journal=journal,
         )
 
         self._telemetry = telemetry
@@ -249,12 +252,15 @@ class TracingWorkflowRunner(WorkflowRunner):
             executor=self._executor,
             sleep=self._sleep,
             observer=combine_observers(trace.observer, self._observer),
+            journal=self._journal,
         )
 
     async def run(
         self,
         workflow: WorkflowCandidate,
         context: Context,
+        *,
+        invocation_id: UUID | None = None,
     ) -> WorkflowRun:
         """Execute and trace a workflow candidate, propagating FAIL_WORKFLOW failures.
 
@@ -262,7 +268,11 @@ class TracingWorkflowRunner(WorkflowRunner):
         """
 
         with traced_run(self._telemetry, workflow_id=workflow.metadata.id) as trace:
-            run = await self._traced_runner(trace).run(workflow, context)
+            run = await self._traced_runner(trace).run(
+                workflow,
+                context,
+                invocation_id=invocation_id,
+            )
 
             trace.record(run)
 
@@ -272,11 +282,17 @@ class TracingWorkflowRunner(WorkflowRunner):
         self,
         workflow: WorkflowCandidate,
         context: Context,
+        *,
+        invocation_id: UUID | None = None,
     ) -> WorkflowRun:
         """Execute and trace a workflow candidate, returning completed failure evidence."""
 
         with traced_run(self._telemetry, workflow_id=workflow.metadata.id) as trace:
-            run = await self._traced_runner(trace).run_recording_failures(workflow, context)
+            run = await self._traced_runner(trace).run_recording_failures(
+                workflow,
+                context,
+                invocation_id=invocation_id,
+            )
 
             trace.record(run)
 
@@ -287,13 +303,17 @@ def tracing_runner(
     telemetry: Telemetry,
     *,
     observer: WorkflowRunObserver | None = None,
+    journal: RunJournalRepository | None = None,
 ) -> WorkflowRunner:
-    """Return a runner that traces its runs when telemetry is on, and a plain one otherwise."""
+    """Return a runner that traces its runs when telemetry is on, and a plain one otherwise.
+
+    Either records each run's journal in the given repository (ADR 0105).
+    """
 
     if not telemetry.enabled:
-        return WorkflowRunner(observer=observer)
+        return WorkflowRunner(observer=observer, journal=journal)
 
-    return TracingWorkflowRunner(telemetry, observer=observer)
+    return TracingWorkflowRunner(telemetry, observer=observer, journal=journal)
 
 
 __all__ = [

@@ -59,6 +59,7 @@ from azathoth.workflows import (
     WORKFLOW_SPECIFICATION_TABLES,
     ProductionInvocationRepository,
     ProductionInvocationRunRepository,
+    RunJournalRepository,
     SQLiteProductionInvocationRepository,
     SQLiteProductionInvocationRunRepository,
     SQLiteWorkflowBenchmarkExecutionRepository,
@@ -71,6 +72,7 @@ from azathoth.workflows import (
     SQLiteWorkflowRunRepository,
     SqlProductionInvocationRepository,
     SqlProductionInvocationRunRepository,
+    SqlRunJournalRepository,
     SqlWorkflowBenchmarkExecutionRepository,
     SqlWorkflowExperimentRepository,
     SqlWorkflowProductionRevisionRepository,
@@ -277,6 +279,18 @@ class Repositories:
             if path is not None
             else SqlProductionInvocationRunRepository(self._database)
         )
+
+    @cached_property
+    def run_journal(
+        self,
+    ) -> RunJournalRepository:
+        """Return the journals of runs while they execute (ADR 0105).
+
+        Its tables are new in schema version 2, so one repository serves
+        either database: an SQLite file gains them when it is first opened.
+        """
+
+        return SqlRunJournalRepository(self._database)
 
     @cached_property
     def tools(

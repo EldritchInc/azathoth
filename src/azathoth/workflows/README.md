@@ -359,6 +359,43 @@ was started. The context README describes the lineage model.
 Lineage in the initial context that is not valid lineage stops the run
 before any step executes, with the `LineageError`.
 
+### The Run Journal
+
+A runner given a `RunJournalRepository` journals each run while it executes
+(ADR 0105), so a run that is interrupted leaves a record of how far it got.
+The recorded `WorkflowRun` is unchanged; the journal is written beside it.
+
+A run's journal is append-only and numbered from 1. Its entries are
+`RunJournalEntry`s, each naming the run, its workflow and the production
+invocation it executes, if any:
+
+| Entry | Recorded |
+| --- | --- |
+| `run.started` | Once the run's lineage is read: the workflow, its revision and the initial context. |
+| `attempt.started` | Before each attempt of a step executes. |
+| `attempt.finished` | After each attempt, with the whole `WorkflowStepAttempt`. |
+| `layer.committed` | Once a layer commits: its step runs, the events it added to the run's context, and every step blocked so far. |
+| `run.finished` | When the run ends: when, and whether and where it halted. |
+
+So the journal of a finished run holds the whole run: its steps are the
+layers' steps, and its final context is its initial context followed by the
+layers' events.
+
+A run is journaled only when it is given a repository. `workflow run`,
+`workflow invoke` and `job run` give one; benchmarks and optimization do not.
+`run_recording_failures` and `run` take the invocation's ID as
+`invocation_id`, and `invocation_run_id` finds the run that journaled it.
+
+Each entry is recorded outside the attempt it describes, so an entry that
+cannot be recorded never fails or retries a step: it stops the run at once,
+with its error, cancelling the layer's other steps, and nothing more is
+journaled. A `RunJournalWriter` numbers the entries; two writers of the same
+run collide at the first position they share:
+
+```text
+Run <RUN_ID> already records journal position <POSITION>.
+```
+
 ## Values and Data Flow
 
 Workflow data flow is explicit.
@@ -1142,6 +1179,7 @@ Durable repositories include contracts for:
 - immutable production revisions
 - production invocations
 - invocation/run associations
+- run journals
 
 Both deterministic in-memory implementations and SQLite implementations are
 provided for the relevant repository contracts.

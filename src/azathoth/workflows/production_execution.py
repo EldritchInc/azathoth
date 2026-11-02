@@ -66,6 +66,9 @@ async def execute_production_invocation(
     A step failure never escapes as an exception: the completed run, failed or
     not, is persisted and associated with the invocation before it is
     returned, so every executed invocation leaves inspectable evidence.
+
+    The run names the invocation, so a runner that journals its runs records
+    which invocation each executes (ADR 0105).
     """
 
     _validate_invocation_state(
@@ -84,6 +87,7 @@ async def execute_production_invocation(
     run = await runner.run_recording_failures(
         candidate,
         invocation.initial_context,
+        invocation_id=invocation.id,
     )
 
     run_repository.save(

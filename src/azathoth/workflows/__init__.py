@@ -251,6 +251,20 @@ from azathoth.workflows.run_failure import (
     RUN_FAILURE_EVALUATOR_VERSION,
     evaluate_failed_run,
 )
+from azathoth.workflows.run_journal import (
+    InMemoryRunJournalRepository,
+    JournalAttemptFinished,
+    JournalAttemptStarted,
+    JournalLayerCommitted,
+    JournalRunFinished,
+    JournalRunStarted,
+    RunJournalEntry,
+    RunJournalError,
+    RunJournalEvent,
+    RunJournalPositionTakenError,
+    RunJournalRepository,
+    RunJournalWriter,
+)
 from azathoth.workflows.run_progress_tables import (
     RUN_CHILD_TABLES,
     RUN_JOURNAL_TABLES,
@@ -305,6 +319,7 @@ from azathoth.workflows.sql_run_evaluation_repository import (
     WORKFLOW_RUN_EVALUATION_TABLES,
     SqlWorkflowRunEvaluationRepository,
 )
+from azathoth.workflows.sql_run_journal_repository import SqlRunJournalRepository
 from azathoth.workflows.sql_run_repository import (
     WORKFLOW_RUN_TABLES,
     SqlWorkflowRunRepository,
@@ -387,6 +402,19 @@ __all__ = [
     "RUN_JOURNAL_TABLES",
     "RUN_LEASE_TABLES",
     "RUN_PROGRESS_TABLES",
+    "InMemoryRunJournalRepository",
+    "JournalAttemptFinished",
+    "JournalAttemptStarted",
+    "JournalLayerCommitted",
+    "JournalRunFinished",
+    "JournalRunStarted",
+    "RunJournalEntry",
+    "RunJournalError",
+    "RunJournalEvent",
+    "RunJournalPositionTakenError",
+    "RunJournalRepository",
+    "RunJournalWriter",
+    "SqlRunJournalRepository",
     "PRODUCTION_INVOCATION_TABLES",
     "SqlProductionInvocationRepository",
     "SqlProductionInvocationRunRepository",

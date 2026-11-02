@@ -164,6 +164,7 @@ def _run_workflow(
                         output,
                         writer,
                     ),
+                    journal=repositories(configuration).run_journal,
                 ),
             )
         )
@@ -364,6 +365,7 @@ def _invoke_workflow(
                         output,
                         writer,
                     ),
+                    journal=repositories(configuration).run_journal,
                 ),
             )
         )

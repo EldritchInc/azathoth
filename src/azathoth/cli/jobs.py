@@ -138,7 +138,10 @@ def _run(
                     invocation_repository=invocation_repository,
                     run_repository=repositories(configuration).runs,
                     invocation_run_repository=repositories(configuration).invocation_runs,
-                    runner=tracing_runner(telemetry),
+                    runner=tracing_runner(
+                        telemetry,
+                        journal=repositories(configuration).run_journal,
+                    ),
                     lineage=lineage,
                 ),
             ),

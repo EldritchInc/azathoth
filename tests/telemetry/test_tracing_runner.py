@@ -1,6 +1,7 @@
 """Tests for the runner that traces every run it executes (ADR 0100)."""
 
 import asyncio
+from uuid import UUID
 
 import pytest
 from pydantic import JsonValue
@@ -10,6 +11,7 @@ from azathoth.telemetry import NO_TELEMETRY
 from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import TracingWorkflowRunner, tracing_runner
 from azathoth.workflows import (
+    InMemoryRunJournalRepository,
     WorkflowRun,
     WorkflowRunEvent,
     WorkflowRunner,
@@ -17,6 +19,13 @@ from azathoth.workflows import (
 )
 from tests.telemetry.fakes import RecordingTelemetry
 from tests.telemetry.test_runs import TracingExecutor
+from tests.workflows.test_runner_journal import (
+    FIRST_STEP_ID,
+    FlakyStrategy,
+    candidate,
+    rebuilt,
+    step,
+)
 from tests.workflows.test_step_confidence_execution import (
     WORKFLOW_ID,
     classifier_step,
@@ -155,3 +164,34 @@ def test_a_run_inside_an_invocation_is_traced_under_it() -> None:
     assert invocation.name == "azathoth.invocation"
     assert run.parent is invocation
     assert step.parent is run
+
+
+# Journaling (ADR 0105)
+
+
+INVOCATION_ID = UUID("c1300000-0000-4000-8000-000000000001")
+
+
+@pytest.mark.parametrize("traced", [False, True], ids=["plain", "traced"])
+def test_either_runner_journals_each_run_under_its_invocation(
+    traced: bool,
+) -> None:
+    journal = InMemoryRunJournalRepository()
+
+    runner = tracing_runner(RecordingTelemetry() if traced else NO_TELEMETRY, journal=journal)
+
+    assert isinstance(runner, TracingWorkflowRunner) is traced
+
+    for run_method in (runner.run, runner.run_recording_failures):
+        run = asyncio.run(
+            run_method(
+                candidate(step(FIRST_STEP_ID, FlakyStrategy())),
+                Context(),
+                invocation_id=INVOCATION_ID,
+            )
+        )
+
+        entries = journal.entries(run.id)
+
+        assert rebuilt(entries) == run
+        assert {entry.invocation_id for entry in entries} == {INVOCATION_ID}
