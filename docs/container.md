@@ -345,6 +345,8 @@ On Amazon ECS, the same command is the container's `healthCheck`, and a
 
 Give the queue a dead-letter queue, so a message that keeps stopping
 workers is moved aside rather than received forever.
+[Running on AWS](aws.md) deploys all of this, the queues, the dead-letter
+queue, the service and its IAM, from one template.
 
 ## Building the Image Yourself
 

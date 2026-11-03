@@ -506,6 +506,24 @@ python -m pytest tests/providers/test_bedrock_live.py -ra
 Live verification tests provider compatibility. It does not replace
 deterministic release validation.
 
+## AWS Deployment Check
+
+A release that changes `deploy/aws/azathoth.yaml`, the worker or the image is
+deployed once to a sandbox AWS account first, as
+[Release Validation](docs/release-validation.md#9-the-aws-deployment)
+requires. Validate the template:
+
+```bash
+aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml
+```
+
+```powershell
+aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml
+```
+
+Then follow [Running on AWS](docs/aws.md) to its seventh step with the
+release's image, stop one worker mid-job, and tear the stack down.
+
 ## Release Principle
 
 Azathoth keeps release authority explicit:

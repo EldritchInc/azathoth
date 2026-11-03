@@ -81,6 +81,7 @@ benchmarked, optimized, promoted and invoked in production, follow
 | --- | --- |
 | [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md) | Python, a venv, `pip install`, checking it works, on macOS and Windows; optionally PostgreSQL and tracing |
 | [Running in a Container](https://github.com/EldritchInc/azathoth/blob/main/docs/container.md) | The container image: a database volume or PostgreSQL, keys, jobs over stdin, a read-only root |
+| [Running on AWS](https://github.com/EldritchInc/azathoth/blob/main/docs/aws.md) | Queue workers on Fargate behind SQS, from one CloudFormation template |
 | [Connecting OpenRouter](https://github.com/EldritchInc/azathoth/blob/main/docs/openrouter.md) | An API key, finding and authorizing models, adding judges |
 | [Connecting Amazon Bedrock](https://github.com/EldritchInc/azathoth/blob/main/docs/bedrock.md) | AWS credentials, the IAM policy, pricing Bedrock models and authorizing them |
 | [Getting Started](https://github.com/EldritchInc/azathoth/blob/main/docs/getting-started.md) | One workflow from import to production |

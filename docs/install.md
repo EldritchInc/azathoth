@@ -419,7 +419,8 @@ Amazon Bedrock instead, or as well, with your AWS credentials, install the
 Azathoth can take job requests from an Amazon SQS queue and run them, one at
 a time, with `azathoth worker run`. Most people don't need this; it is how
 Azathoth runs behind a queue on AWS, usually in a container (see
-[Running in a Container](container.md#8-run-a-worker)).
+[Running in a Container](container.md#8-run-a-worker), and
+[Running on AWS](aws.md) for a whole deployment).
 
 The worker is an optional extra. Install it into the same venv:
 

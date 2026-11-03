@@ -346,6 +346,24 @@ Every Bedrock test outside them runs against a fake client, so a release
 that changes how Azathoth calls Bedrock is worth one live run against a real
 region (ADR 0103).
 
+## 9. The AWS Deployment
+
+The CloudFormation template is tested by reading it, and the worker's SQS
+and S3 calls against botocore's `Stubber`: nothing in the repository reaches
+AWS (ADR 0109). So a release that changes the template, the worker or the
+image is deployed once, by hand, to a sandbox account, before it ships:
+
+1. `aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml`
+   passes;
+2. [Running on AWS](aws.md) is followed from step 1 to step 7, with the
+   release's image, and the result queue returns the result step 7 shows;
+3. one worker is stopped with `aws ecs stop-task` while a job runs, and the
+   job's result still arrives once, from another worker;
+4. the stack is torn down as the guide says.
+
+This is the first place the worker meets real SQS and S3; it is a release
+gate, not an optional check.
+
 ## Release Candidate Checklist
 
 ```text
@@ -357,6 +375,7 @@ region (ADR 0103).
 [ ] the pre-release examples run passed on macOS from the locally built wheel
 [ ] CI's container job is green, and make container-test passed locally
 [ ] CI's postgres job is green, and make postgres-test passed locally
+[ ] the AWS stack validated and passed the sandbox deployment of section 9
 [ ] the TestPyPI trial published, installed and passed the provider-free examples
 [ ] no credentials are committed
 [ ] live verification, if done, was done after the deterministic gate
