@@ -1,6 +1,6 @@
 # ADR 0107: Run Jobs From a Queue
 
-- Status: Accepted; amended by ADR 0108
+- Status: Accepted; amended by ADR 0108, ADR 0109
 - Date: 2026-11-02
 - Decided in: #125
 

@@ -1,6 +1,6 @@
 # ADR 0101: Ship Azathoth as a Container Image
 
-- Status: Accepted; amended by ADR 0107
+- Status: Accepted; amended by ADR 0107, ADR 0109
 - Date: 2026-11-01
 - Decided in: #118
 

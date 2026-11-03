@@ -869,6 +869,11 @@ come back on its own; either way the next worker resumes the run from its
 journal. A deployment scales by running more workers over one queue and one
 PostgreSQL database.
 
+One CloudFormation template deploys them on AWS Fargate, with the queues, a
+dead-letter queue, a content bucket, scaling on the backlog and IAM that
+grants exactly the calls the workers make (ADR 0109). See
+[Running on AWS](aws.md).
+
 ## Benchmarks and Judges
 
 A benchmark case pairs an input with an expected outcome and a comparison:

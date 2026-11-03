@@ -1,6 +1,6 @@
 # ADR 0103: Run Models on Amazon Bedrock
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0109
 - Date: 2026-11-01
 - Decided in: #120
 

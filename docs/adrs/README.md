@@ -131,3 +131,4 @@ requests that made it:
 - [ADR 0106: Map a Child Workflow Over a List](0106-map-a-child-workflow-over-a-list.md)
 - [ADR 0107: Run Jobs From a Queue](0107-run-jobs-from-a-queue.md)
 - [ADR 0108: Read Inputs From S3](0108-read-inputs-from-s3.md)
+- [ADR 0109: Deploy on AWS](0109-deploy-on-aws.md)
