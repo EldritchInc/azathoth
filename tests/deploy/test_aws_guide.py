@@ -27,6 +27,14 @@ EXAMPLE_REQUEST = PROJECT_ROOT / "deploy" / "aws" / "example-request.json"
 
 WORKFLOW_DOCUMENT = PROJECT_ROOT / "examples" / "workflows" / "redundant-word-count.json"
 
+LARGE_FILE = PROJECT_ROOT / "examples" / "large-file"
+
+LARGE_FILE_DOCUMENTS = (
+    LARGE_FILE / "tools" / "sum-results.json",
+    LARGE_FILE / "workflows" / "count-words-in-chunk.json",
+    LARGE_FILE / "workflows" / "count-words-in-large-file.json",
+)
+
 TOOL_DOCUMENTS = (
     PROJECT_ROOT / "examples" / "tools" / "word-count.json",
     PROJECT_ROOT / "examples" / "tools" / "word-count-process.json",
@@ -56,7 +64,7 @@ def overridden_parameters(
 
 
 def test_every_deploy_names_the_template_and_acknowledges_its_roles() -> None:
-    assert len(deploy_lines()) == 6
+    assert len(deploy_lines()) == 8
 
     for line in deploy_lines():
         assert "--template-file deploy/aws/azathoth.yaml" in line
@@ -173,3 +181,39 @@ def test_the_readme_and_the_guides_link_the_aws_guide() -> None:
 
     for guide in ("install.md", "container.md"):
         assert "](aws.md)" in (PROJECT_ROOT / "docs" / guide).read_text(encoding="utf-8")
+
+
+def test_the_data_deploy_grants_the_bucket_and_prefix_the_large_file_example_uses() -> None:
+    (line, _) = [line for line in deploy_lines() if "DataBucket=" in line]
+    overrides = dict(
+        assignment.split("=", 1) for assignment in line.split("--parameter-overrides ")[1].split()
+    )
+    granted = f"s3://{overrides['DataBucket']}/{overrides['DataPrefix']}"
+    parent = json.loads((LARGE_FILE_DOCUMENTS[2]).read_text(encoding="utf-8"))
+    (split,) = (
+        step
+        for step in parent["steps"]
+        if step["specification"]["requirement"]["name"] == "split_s3_object"
+    )
+    (settings,) = (binding for binding in split["inputs"] if binding["name"] == "settings")
+    request = json.loads((LARGE_FILE / "request.json").read_text(encoding="utf-8"))
+    source = request["input"]["value"]
+
+    assert settings["source"]["value"]["destination_prefix"].startswith(granted)
+    assert source.startswith(granted)
+    assert f"aws s3 cp book.txt {source}" in text()
+
+
+def test_the_guide_deploys_the_large_file_example_and_sends_its_request() -> None:
+    for path in LARGE_FILE_DOCUMENTS:
+        relative = path.relative_to(PROJECT_ROOT).as_posix()
+        kind = "tool" if "/tools/" in relative else "workflow"
+
+        assert text().count(f"azathoth {kind} import {relative}\n") == 2
+
+    for path in LARGE_FILE_DOCUMENTS[1:]:
+        workflow_id = json.loads(path.read_text(encoding="utf-8"))["metadata"]["id"]
+
+        assert text().count(f"azathoth workflow promote {workflow_id}\n") == 2
+
+    assert text().count("--message-body file://examples/large-file/request.json") == 2

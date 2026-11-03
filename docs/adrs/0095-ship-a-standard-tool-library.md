@@ -1,6 +1,6 @@
 # ADR 0095: Ship a Standard Tool Library
 
-- Status: Accepted; amended by ADR 0099, ADR 0106
+- Status: Accepted; amended by ADR 0099, ADR 0106, ADR 0110
 - Date: 2026-10-31
 - Decided in: #112
 
@@ -59,9 +59,11 @@ never changes what an existing workflow runs.
 
 A tool belongs in the standard library when it is pure Python,
 deterministic, works on Windows, needs no network, and has no side effects
-outside its inputs. The composition tools are the one exception: they run
+outside its inputs. The composition tools are one exception: they run
 Azathoth itself, and their side effects are Azathoth's own recorded
-invocations and runs.
+invocations and runs. The S3 tools are the other (ADR 0110): they reach S3,
+and the split writes objects, but only under the prefix it is given and the
+folder of its own step attempt.
 
 ## Consequences
 

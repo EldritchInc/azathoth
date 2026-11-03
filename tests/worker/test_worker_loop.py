@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-import time
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,6 +33,7 @@ from azathoth.worker import (
     encode_job_result,
 )
 from tests.worker.queues import MemoryQueue, MemoryResults, results_of
+from tests.worker.ticks import Ticks, until
 
 INVOCATION_ID = UUID("e7000000-0000-4000-8000-000000000001")
 
@@ -108,23 +109,28 @@ class Handler:
     """A job handler answering each body with a prepared result.
 
     It records every body it ran, how many ran at once, and every run that
-    was cancelled, as a real run releases its lease when it is.
+    was cancelled, as a real run releases its lease when it is. A handler
+    that holds runs until `release` is set, so a test decides when its job
+    ends; `finished` is set once a run has ended, however it ended.
     """
 
     answers: dict[bytes, JobResult] = field(default_factory=dict)
     delay: float = 0.0
+    hold: bool = False
     error: Exception | None = None
     ran: list[bytes] = field(default_factory=list)
     cancelled: list[bytes] = field(default_factory=list)
     running: int = 0
     most_at_once: int = 0
     started: asyncio.Event = field(default_factory=asyncio.Event)
+    release: asyncio.Event = field(default_factory=asyncio.Event)
+    finished: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def __call__(
         self,
         message: QueueMessage,
     ) -> JobResult:
-        """Run one message's body, after the delay."""
+        """Run one message's body, once released and after the delay."""
 
         body = message.body
         self.ran.append(body)
@@ -133,6 +139,9 @@ class Handler:
         self.started.set()
 
         try:
+            if self.hold:
+                await self.release.wait()
+
             await asyncio.sleep(self.delay)
 
             if self.error is not None:
@@ -144,6 +153,7 @@ class Handler:
             raise
         finally:
             self.running -= 1
+            self.finished.set()
 
 
 @dataclass
@@ -157,6 +167,7 @@ class Harness:
     lines: list[str]
     reports: list[str]
     heartbeats: list[int]
+    ticks: Ticks
 
     def settled(self) -> list[dict[str, object]]:
         """Return every log line the worker wrote, decoded."""
@@ -170,13 +181,14 @@ def harness(
     settings: WorkerSettings = FAST,
     with_results: bool = True,
 ) -> Harness:
-    """Build a worker over an empty in-memory queue."""
+    """Build a worker over an empty in-memory queue, extending only on a tick."""
 
     queue = MemoryQueue()
     results = MemoryResults(queue) if with_results else None
     lines: list[str] = []
     reports: list[str] = []
     heartbeats: list[int] = []
+    ticks = Ticks()
 
     worker = Worker(
         queue,
@@ -186,9 +198,10 @@ def harness(
         log=lines.append,
         report=reports.append,
         heartbeat=lambda: heartbeats.append(len(queue.calls)),
+        sleep=ticks.sleep,
     )
 
-    return Harness(queue, handler, results, worker, lines, reports, heartbeats)
+    return Harness(queue, handler, results, worker, lines, reports, heartbeats, ticks)
 
 
 async def run_until(
@@ -202,15 +215,20 @@ async def run_until(
 
     stop = stop if stop is not None else asyncio.Event()
     task = asyncio.create_task(worker.run(stop))
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
 
-    while not done():
-        if task.done():
-            break
+    await finish(task, stop, done, timeout=timeout)
 
-        assert loop.time() < deadline, "the worker never reached the condition"
-        await asyncio.sleep(0.01)
+
+async def finish(
+    task: "asyncio.Task[None]",
+    stop: asyncio.Event,
+    done: Callable[[], bool],
+    *,
+    timeout: float = 10.0,
+) -> None:
+    """Wait for a running worker to reach a condition, then stop it and wait for it."""
+
+    await until(lambda: task.done() or done(), timeout=timeout)
 
     stop.set()
     await asyncio.wait_for(task, timeout)
@@ -436,15 +454,28 @@ def test_every_receive_uses_the_settings_and_follows_a_heartbeat() -> None:
 def test_visibility_is_extended_while_a_job_runs() -> None:
     async def scenario() -> None:
         body = request("order-9")
-        setup = harness(Handler({body: succeeded("order-9")}, delay=0.4))
+        setup = harness(Handler({body: succeeded("order-9")}, hold=True))
         setup.queue.put("m-9", body)
+        stop = asyncio.Event()
+        task = asyncio.create_task(setup.worker.run(stop))
 
-        await run_until(setup.worker, lambda: setup.queue.find("m-9").deleted)
+        await until(setup.handler.started.is_set)
 
-        extensions = setup.queue.visibility_changes("m-9")
+        for _ in range(3):
+            await setup.ticks.tick()
+            await until(setup.ticks.waiting)
 
-        assert len(extensions) >= 3
-        assert set(extensions) == {5}
+        setup.handler.release.set()
+        await finish(task, stop, lambda: setup.queue.find("m-9").deleted)
+
+        assert setup.queue.visibility_changes("m-9") == [5, 5, 5]
+
+        #
+        # The worker waits its settings' interval before every extension,
+        # and its fourth wait ends with the job.
+        #
+        assert setup.ticks.requested == [0.05] * 4
+        assert setup.ticks.cancelled == 1
 
         #
         # Every extension is followed by a heartbeat.
@@ -461,13 +492,49 @@ def test_visibility_is_extended_while_a_job_runs() -> None:
 def test_visibility_is_not_extended_once_the_job_finishes() -> None:
     async def scenario() -> None:
         body = request("order-10")
-        setup = harness(Handler({body: succeeded("order-10")}))
+        setup = harness(Handler({body: succeeded("order-10")}, hold=True))
         setup.queue.put("m-10", body)
+        stop = asyncio.Event()
+        task = asyncio.create_task(setup.worker.run(stop))
 
-        await run_until(setup.worker, lambda: setup.queue.find("m-10").deleted)
-        await asyncio.sleep(0.2)
+        await until(setup.ticks.waiting)
+
+        setup.handler.release.set()
+        await finish(task, stop, lambda: setup.queue.find("m-10").deleted)
 
         assert setup.queue.visibility_changes("m-10") == []
+        assert setup.ticks.cancelled == 1
+        assert not setup.ticks.waiting()
+
+    asyncio.run(scenario())
+
+
+def test_without_a_sleep_given_the_worker_extends_on_real_time() -> None:
+    async def scenario() -> None:
+        body = request("order-19")
+        queue = MemoryQueue()
+        queue.put("m-19", body)
+        handler = Handler({body: succeeded("order-19")}, hold=True)
+        worker = Worker(
+            queue,
+            handler,
+            settings=WorkerSettings(
+                wait_seconds=0, visibility_timeout_seconds=5, extend_every_seconds=0.01
+            ),
+            log=lambda line: None,
+            report=lambda line: None,
+        )
+
+        (message,) = (queued.message for queued in queue.messages)
+        processing = asyncio.create_task(worker.process(message, asyncio.Event()))
+
+        await until(lambda: bool(queue.visibility_changes("m-19")))
+
+        handler.release.set()
+        settled = await asyncio.wait_for(processing, 10)
+
+        assert settled.settled is Settlement.DELETED
+        assert set(queue.visibility_changes("m-19")) == {5}
 
     asyncio.run(scenario())
 
@@ -475,16 +542,26 @@ def test_visibility_is_not_extended_once_the_job_finishes() -> None:
 def test_an_extension_that_lands_as_its_job_finishes_is_still_followed_by_a_heartbeat() -> None:
     async def scenario() -> None:
         body = request("order-17")
-
-        #
-        # The first extension is sent 0.05 seconds in and lands 0.3 later;
-        # the job finishes at 0.15, while it is still on its way.
-        #
-        setup = harness(Handler({body: succeeded("order-17")}, delay=0.15))
-        setup.queue.extension_delay = 0.3
+        setup = harness(Handler({body: succeeded("order-17")}, hold=True))
+        gate = threading.Event()
+        setup.queue.extension_gate = gate
         setup.queue.put("m-17", body)
+        stop = asyncio.Event()
+        task = asyncio.create_task(setup.worker.run(stop))
 
-        await run_until(setup.worker, lambda: setup.queue.find("m-17").deleted)
+        #
+        # The extension is sent, and held on its way while the job finishes.
+        #
+        await setup.ticks.tick()
+        await until(setup.queue.extension_arrived.is_set)
+
+        setup.handler.release.set()
+        await until(setup.handler.finished.is_set)
+
+        assert setup.queue.visibility_changes("m-17") == []
+
+        gate.set()
+        await finish(task, stop, lambda: setup.queue.find("m-17").deleted)
 
         (extended,) = [
             index for index, call in enumerate(setup.queue.calls) if call[0] == "visibility"
@@ -501,34 +578,37 @@ def test_a_heartbeat_that_fails_during_a_job_is_reported_and_the_job_still_settl
         body = request("order-18")
         queue = MemoryQueue()
         queue.put("m-18", body)
+        handler = Handler({body: succeeded("order-18")}, hold=True)
+        ticks = Ticks()
         reports: list[str] = []
-        beats: list[int] = []
 
         def heartbeat() -> None:
-            """Beat before the first receive, then fail, as a full disk would."""
+            """Fail, as a full disk would."""
 
-            beats.append(len(queue.calls))
-
-            if len(beats) > 1:
-                raise HeartbeatError(
-                    "Cannot write the heartbeat file beat: No space left on device."
-                )
+            raise HeartbeatError("Cannot write the heartbeat file beat: No space left on device.")
 
         worker = Worker(
             queue,
-            Handler({body: succeeded("order-18")}, delay=0.2),
+            handler,
             settings=FAST,
             log=lambda line: None,
             report=reports.append,
             heartbeat=heartbeat,
+            sleep=ticks.sleep,
         )
 
         (message,) = (queued.message for queued in queue.messages)
-        settled = await worker.process(message, asyncio.Event())
+        processing = asyncio.create_task(worker.process(message, asyncio.Event()))
+
+        await ticks.tick()
+        await until(lambda: bool(reports))
+
+        handler.release.set()
+        settled = await asyncio.wait_for(processing, 10)
 
         assert settled.settled is Settlement.DELETED
-        assert reports
-        assert set(reports) == {"Cannot write the heartbeat file beat: No space left on device."}
+        assert reports == ["Cannot write the heartbeat file beat: No space left on device."]
+        assert queue.visibility_changes("m-18") == [5]
 
     asyncio.run(scenario())
 
@@ -536,11 +616,17 @@ def test_a_heartbeat_that_fails_during_a_job_is_reported_and_the_job_still_settl
 def test_a_failed_extension_is_reported_and_the_job_still_settles() -> None:
     async def scenario() -> None:
         body = request("order-11")
-        setup = harness(Handler({body: succeeded("order-11")}, delay=0.3))
+        setup = harness(Handler({body: succeeded("order-11")}, hold=True))
         setup.queue.fail_visibility = True
         setup.queue.put("m-11", body)
+        stop = asyncio.Event()
+        task = asyncio.create_task(setup.worker.run(stop))
 
-        await run_until(setup.worker, lambda: setup.queue.find("m-11").deleted)
+        await setup.ticks.tick()
+        await until(lambda: bool(setup.reports))
+
+        setup.handler.release.set()
+        await finish(task, stop, lambda: setup.queue.find("m-11").deleted)
 
         assert setup.reports == [
             "Could not extend the visibility of message m-11: The receipt handle has expired."
@@ -550,6 +636,11 @@ def test_a_failed_extension_is_reported_and_the_job_still_settles() -> None:
             {"m-11": "<MESSAGE_ID>", "The receipt handle has expired.": "<REASON>"},
         )
         assert setup.queue.visibility_changes("m-11") == [5]
+
+        #
+        # A refused extension ends the extensions: the worker waits no more.
+        #
+        assert setup.ticks.requested == [0.05]
         assert setup.settled() == [settled_line("m-11", "order-11", "succeeded", "deleted")]
 
     asyncio.run(scenario())
@@ -561,7 +652,7 @@ def test_a_failed_extension_is_reported_and_the_job_still_settles() -> None:
 def test_a_stop_cancels_the_running_job_and_hands_its_message_back_at_once() -> None:
     async def scenario() -> None:
         body = request("order-12")
-        setup = harness(Handler({body: succeeded("order-12")}, delay=30))
+        setup = harness(Handler({body: succeeded("order-12")}, hold=True))
         setup.queue.put("m-12", body)
         stop = asyncio.Event()
 
@@ -571,7 +662,7 @@ def test_a_stop_cancels_the_running_job_and_hands_its_message_back_at_once() -> 
 
         assert setup.handler.cancelled == [body]
         assert not queued.deleted
-        assert setup.queue.visibility_changes("m-12")[-1] == 0
+        assert setup.queue.visibility_changes("m-12") == [0]
         assert setup.results is not None
         assert setup.results.sent == []
         assert setup.settled() == [
@@ -584,26 +675,25 @@ def test_a_stop_cancels_the_running_job_and_hands_its_message_back_at_once() -> 
 def test_an_extension_already_sent_finishes_before_the_message_is_handed_back() -> None:
     async def scenario() -> None:
         body = request("order-16")
-        setup = harness(Handler({body: succeeded("order-16")}, delay=30))
-        setup.queue.extension_delay = 0.3
+        setup = harness(Handler({body: succeeded("order-16")}, hold=True))
+        gate = threading.Event()
+        setup.queue.extension_gate = gate
         setup.queue.put("m-16", body)
         stop = asyncio.Event()
-
-        #
-        # The first extension is sent 0.05 seconds in and takes 0.3 to
-        # arrive, so a stop 0.15 seconds in lands while it is on its way.
-        #
-        loop = asyncio.get_running_loop()
         task = asyncio.create_task(setup.worker.run(stop))
-        await setup.handler.started.wait()
-        began = loop.time()
 
-        while loop.time() - began < 0.15:
-            await asyncio.sleep(0.01)
+        #
+        # The extension is sent, and held on its way while the stop lands.
+        #
+        await setup.ticks.tick()
+        await until(setup.queue.extension_arrived.is_set)
+
+        stop.set()
+        await until(lambda: setup.handler.cancelled == [body])
 
         assert setup.queue.visibility_changes("m-16") == []
 
-        stop.set()
+        gate.set()
         await asyncio.wait_for(task, 10)
 
         assert setup.queue.visibility_changes("m-16") == [5, 0]
@@ -616,20 +706,31 @@ def test_a_message_received_as_the_stop_arrives_is_handed_back_without_running()
         body = request("order-13")
         setup = harness(Handler({body: succeeded("order-13")}))
         stop = asyncio.Event()
+        stopped = threading.Event()
         loop = asyncio.get_running_loop()
+
+        async def watch() -> None:
+            """Tell the queue's thread once the worker's loop has seen the stop."""
+
+            await stop.wait()
+            stopped.set()
+
+        watching = asyncio.create_task(watch())
 
         def stop_while_receiving(
             message: QueueMessage,
         ) -> None:
-            """Stop the worker while this receive is still returning."""
+            """Stop the worker, and return only once the stop is set."""
 
             loop.call_soon_threadsafe(stop.set)
-            time.sleep(0.2)
+
+            assert stopped.wait(10), "the stop never arrived"
 
         setup.queue.on_receive = stop_while_receiving
         setup.queue.put("m-13", body)
 
         await asyncio.wait_for(setup.worker.run(stop), 10)
+        await watching
 
         assert setup.handler.ran == []
         assert setup.queue.visibility_changes("m-13") == [0]

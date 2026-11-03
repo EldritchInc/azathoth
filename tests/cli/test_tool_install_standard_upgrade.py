@@ -125,6 +125,8 @@ UPGRADED = (
     "Installed tool chunk_text@1.0.0 revision 1.\n"
     "Installed tool join_text@1.0.0 revision 1.\n"
     "Installed tool render_template@1.0.0 revision 1.\n"
+    "Installed tool split_s3_object@1.0.0 revision 1.\n"
+    "Installed tool read_s3_object@1.0.0 revision 1.\n"
 )
 
 
@@ -371,6 +373,8 @@ def test_installing_again_after_the_upgrade_writes_nothing(
         "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
         "Tool join_text@1.0.0 is already installed (revision 1).\n"
         "Tool render_template@1.0.0 is already installed (revision 1).\n"
+        "Tool split_s3_object@1.0.0 is already installed (revision 1).\n"
+        "Tool read_s3_object@1.0.0 is already installed (revision 1).\n"
     )
 
 

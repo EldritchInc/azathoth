@@ -25,8 +25,11 @@ class MemoryQueue:
 
     `calls` holds `("receive",)`, `("delete", <MESSAGE_ID>)` and
     `("visibility", <MESSAGE_ID>, <SECONDS>)`. An empty receive waits
-    briefly, so a worker polling an empty queue does not spin. An extension,
-    any visibility change but to 0, can be slowed by `extension_delay`.
+    briefly, so a worker polling an empty queue does not spin.
+
+    With `extension_gate`, an extension, any visibility change but to 0,
+    sets `extension_arrived` and waits for the gate to open before it lands,
+    so a test can hold one in flight for exactly as long as it needs.
     """
 
     messages: list[QueuedMessage] = field(default_factory=list)
@@ -34,7 +37,8 @@ class MemoryQueue:
     received: list[tuple[int, int]] = field(default_factory=list)
     on_receive: Callable[[QueueMessage], None] | None = None
     fail_visibility: bool = False
-    extension_delay: float = 0.0
+    extension_gate: threading.Event | None = None
+    extension_arrived: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def put(
@@ -104,8 +108,10 @@ class MemoryQueue:
     ) -> None:
         """Hide one message for the given number of seconds from now."""
 
-        if timeout_seconds and self.extension_delay:
-            time.sleep(self.extension_delay)
+        if timeout_seconds and self.extension_gate is not None:
+            self.extension_arrived.set()
+
+            assert self.extension_gate.wait(10), "the extension was never let through"
 
         with self.lock:
             self.calls.append(("visibility", message.message_id, timeout_seconds))

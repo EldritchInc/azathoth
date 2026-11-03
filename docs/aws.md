@@ -12,7 +12,7 @@ queue. One CloudFormation template,
 - the IAM roles, with exactly the permissions the workers use.
 
 It takes your network, your database and, optionally, a bucket inputs may
-come from. It creates no database.
+come from and a bucket the S3 tools may work in. It creates no database.
 
 This guide covers macOS and Windows. Each command is shown twice:
 
@@ -87,6 +87,7 @@ Every other parameter has a default:
 | `TaskCpu`, `TaskMemory` | `1024`, `2048` | One task's CPU units and MiB. |
 | `EnableBedrock` | `false` | `true` grants the Bedrock calls and turns Bedrock on in the stack's region. |
 | `InputBucket`, `InputPrefix` | none | Where `s3://` inputs may come from (step 8). |
+| `DataBucket`, `DataPrefix` | none | Where the S3 tools may read and write (step 8). |
 | `MaxReceiveCount` | `5` | Receipts before the dead-letter queue takes a message. |
 | `MinTasks`, `MaxTasks` | `1`, `4` | The fewest and most workers. |
 | `ScaleOutBacklog` | `10` | Waiting messages that add a worker. |
@@ -259,9 +260,75 @@ aws cloudformation deploy --stack-name $STACK --template-file deploy/aws/azathot
 
 A request's input is then `{"uri": "s3://azathoth-inputs/requests/<KEY>",
 "media_type": "text/markdown"}`, read before its run starts, at most 10 MiB,
-and kept in the stack's content bucket by its digest (ADR 0108). Data larger
-than that goes by pointer (see
-[`azathoth.inputs`](../src/azathoth/inputs/README.md#data-larger-than-the-cap)).
+and kept in the stack's content bucket by its digest (ADR 0108).
+
+### Data Larger Than the Cap
+
+Data larger than an input may be stays in S3, and a workflow works with it
+there (ADR 0110): `split_s3_object` streams one object into chunk objects,
+`map_workflow` runs a child over the chunks, and each child reads its own
+with `read_s3_object`. The tools use the task role, so give it a bucket and
+a prefix to work under. Redeploy with them:
+
+```bash
+aws cloudformation deploy --stack-name $STACK --template-file deploy/aws/azathoth.yaml --capabilities CAPABILITY_IAM --parameter-overrides VpcId=$VPC SubnetIds=$SUBNETS DatabaseSecretArn=$DATABASE_SECRET OpenRouterSecretArn=$OPENROUTER_SECRET DataBucket=azathoth-data DataPrefix=work/
+```
+
+```powershell
+aws cloudformation deploy --stack-name $STACK --template-file deploy/aws/azathoth.yaml --capabilities CAPABILITY_IAM --parameter-overrides VpcId=$VPC SubnetIds=$SUBNETS DatabaseSecretArn=$DATABASE_SECRET OpenRouterSecretArn=$OPENROUTER_SECRET DataBucket=azathoth-data DataPrefix=work/
+```
+
+A deploy keeps the value of every parameter it is not given, so the input
+bucket of step 8 stays as it was. The role may then get and put
+objects under `s3://azathoth-data/work/`, and nothing else in the bucket;
+it may not list it, so S3 answers a missing object with `403` rather than
+`404`.
+
+The [large-file example](../examples/large-file/README.md) counts the words
+of a text file of any size this way, in chunks of whole lines of at most
+1 MiB. Upload a file, then deploy the example from the machine that reaches
+the database:
+
+```bash
+aws s3 cp book.txt s3://azathoth-data/work/inbox/book.txt
+azathoth tool import examples/large-file/tools/sum-results.json
+azathoth workflow import examples/large-file/workflows/count-words-in-chunk.json
+azathoth workflow import examples/large-file/workflows/count-words-in-large-file.json
+azathoth workflow promote a1000000-0000-4000-8000-000000000008
+azathoth workflow promote a1000000-0000-4000-8000-000000000009
+```
+
+```powershell
+aws s3 cp book.txt s3://azathoth-data/work/inbox/book.txt
+azathoth tool import examples/large-file/tools/sum-results.json
+azathoth workflow import examples/large-file/workflows/count-words-in-chunk.json
+azathoth workflow import examples/large-file/workflows/count-words-in-large-file.json
+azathoth workflow promote a1000000-0000-4000-8000-000000000008
+azathoth workflow promote a1000000-0000-4000-8000-000000000009
+```
+
+Step 5 imported `word_count_process`, which each child uses. Send the
+example's request, whose input is only the file's URI, and read its result
+as in step 7:
+
+```bash
+aws sqs send-message --queue-url $JOB_QUEUE --message-body file://examples/large-file/request.json
+```
+
+```powershell
+aws sqs send-message --queue-url $JOB_QUEUE --message-body file://examples/large-file/request.json
+```
+
+```json
+{"kind": "invoke", "version": 1, "idempotency_key": "large-file-1", "status": "succeeded", "replayed": false, "invocation_id": "<INVOCATION_ID>", "result": {"result": <WORDS>}, "error": null}
+```
+
+`result` holds the file's word count. The chunks stay under
+`s3://azathoth-data/work/chunks/`, one folder per step attempt, as the
+evidence of what each child read; nothing deletes them, so expire them with
+an S3 lifecycle rule on that prefix. The children of a map run in the same
+task as their parent, four at a time here, so a large file is counted by one
+worker; more jobs, not more chunks, are what add workers.
 
 ## 9. Scaling and Stopping
 
@@ -388,3 +455,8 @@ first receive.
 **A job's result says `invalid_input` for an `s3://` input**: the object is
 outside `InputBucket` and `InputPrefix`, or missing. The result's message
 says which.
+
+**A job fails with `split_s3_object could not read` or `read_s3_object could
+not read` and `403`**: the object is outside `DataBucket` and `DataPrefix`,
+or missing; the task role may not list the bucket, so S3 says `403` for
+both.

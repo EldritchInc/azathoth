@@ -262,6 +262,8 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
+Installed tool read_s3_object@1.0.0 revision 1.
 ```
 
 The standard tools ship inside the package, so composing workflows needs no
@@ -269,10 +271,13 @@ copy of the repository:
 
 - `run_workflow` runs a child workflow once;
 - `loop_workflow` runs a child workflow repeatedly;
+- `map_workflow` runs a child workflow once per item of a list;
 - `json_select`, `json_object` and `json_merge` reshape the JSON that passes
   between steps, and `validate_json` checks it against a JSON Schema;
 - `chunk_text`, `join_text` and `render_template` split, join and fill in
-  text.
+  text;
+- `split_s3_object` splits an object in S3 too large to pass between steps
+  into chunk objects, and `read_s3_object` reads one of them back.
 
 Like every tool, they reach the database only by a recorded import, which is
 what `init` does. It needs no provider key, and running it again is safe: it
@@ -369,6 +374,8 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
+Installed tool read_s3_object@1.0.0 revision 1.
 ```
 
 Azathoth never shows the password: every message names the database without

@@ -348,10 +348,12 @@ region (ADR 0103).
 
 ## 9. The AWS Deployment
 
-The CloudFormation template is tested by reading it, and the worker's SQS
-and S3 calls against botocore's `Stubber`: nothing in the repository reaches
-AWS (ADR 0109). So a release that changes the template, the worker or the
-image is deployed once, by hand, to a sandbox account, before it ships:
+The CloudFormation template is tested by reading it, the worker's SQS and
+S3 calls against botocore's `Stubber`, and the S3 tools against a stand-in
+for S3 over HTTP: nothing in the repository reaches AWS (ADR 0109,
+ADR 0110). So a release that changes the template, the worker, the S3 tools
+or the image is deployed once, by hand, to a sandbox account, before it
+ships:
 
 1. `aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml`
    passes;
@@ -359,7 +361,10 @@ image is deployed once, by hand, to a sandbox account, before it ships:
    release's image, and the result queue returns the result step 7 shows;
 3. one worker is stopped with `aws ecs stop-task` while a job runs, and the
    job's result still arrives once, from another worker;
-4. the stack is torn down as the guide says.
+4. the guide's [Data Larger Than the Cap](aws.md#data-larger-than-the-cap)
+   is followed with a text file of at least 20 MiB, and the result's word
+   count is the file's own, as `wc -w` counts it;
+5. the stack is torn down as the guide says.
 
 This is the first place the worker meets real SQS and S3; it is a release
 gate, not an optional check.

@@ -51,6 +51,9 @@ DEFAULT_EXTEND_EVERY_SECONDS: Final = 30
 JobHandler = Callable[[QueueMessage], Awaitable[JobResult]]
 """Runs the job request one message carries, and returns its result."""
 
+Sleep = Callable[[float], Awaitable[None]]
+"""Waits a number of seconds, as `asyncio.sleep` does."""
+
 
 class WorkerSettings(BaseModel):
     """How a worker polls its queue and keeps its messages hidden."""
@@ -161,6 +164,7 @@ class Worker:
         log: Callable[[str], None] | None = None,
         report: Callable[[str], None] | None = None,
         heartbeat: Callable[[], None] | None = None,
+        sleep: Sleep | None = None,
     ) -> None:
         """Compose a worker.
 
@@ -173,6 +177,8 @@ class Worker:
             report: Writes one problem; stderr when omitted.
             heartbeat: Called before every receive and after every
                 extension, so a health check can tell the worker is alive.
+            sleep: Waits between extensions; `asyncio.sleep` when omitted,
+                and given by tests that decide when each extension happens.
         """
 
         self._queue = queue
@@ -182,6 +188,7 @@ class Worker:
         self._log = log if log is not None else _print_line
         self._report = report if report is not None else _print_problem
         self._heartbeat = heartbeat if heartbeat is not None else _nothing
+        self._sleep: Sleep = sleep if sleep is not None else asyncio.sleep
 
     async def run(
         self,
@@ -311,7 +318,7 @@ class Worker:
         """
 
         while True:
-            await asyncio.sleep(self._settings.extend_every_seconds)
+            await self._sleep(self._settings.extend_every_seconds)
 
             extension = asyncio.ensure_future(asyncio.to_thread(self._extend_once, message))
             extensions.append(extension)
@@ -413,6 +420,7 @@ __all__ = [
     "JobHandler",
     "SettledMessage",
     "Settlement",
+    "Sleep",
     "Worker",
     "WorkerSettings",
     "encode_job_result",

@@ -1,0 +1,80 @@
+{
+  "definition": {
+    "id": "c3000000-0000-4000-8000-000000000002",
+    "name": "read_s3_object",
+    "description": "Read one S3 object of at most max_bytes with one ranged GET, and decode it as JSON or text, returning its value with its size, digest and ETag.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "media_type": {
+                "type": "string"
+              },
+              "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 104857600
+              }
+            }
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "media_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "media_type",
+          "size_bytes",
+          "digest",
+          "etag"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c3000000-0000-4000-8000-000000000022",
+      "tool_id": "c3000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Read one S3 object within a cap, and decode it as a media type (ADR 0110).\n\nThe object is read with one ranged GET of at most max_bytes and one byte\nmore, so an object larger than the cap is refused without reading it whole.\nAn empty object has no range to read, so it is read once more, plainly, for\nits ETag.\n\nContent is decoded as resolved inputs are: as UTF-8, with a leading byte\norder mark dropped, and parsed when the media type is application/json,\nrefusing the non-finite numbers JSON does not have. A text/* media type\ngives a string.\n\nThe tool reaches S3 with boto3 and the AWS credentials it is given. Every\nproblem with its inputs exits with status 2, and every other failure with\nstatus 1; errors are written as UTF-8, whatever the platform's encoding.\n\"\"\"\n\nimport hashlib\nimport json\nimport re\nimport sys\n\nS3_PREFIX = \"s3://\"\nJSON_MEDIA_TYPE = \"application/json\"\nTEXT_PREFIX = \"text/\"\nDEFAULT_MEDIA_TYPE = \"text/plain\"\nDEFAULT_MAX_BYTES = 10 * 1024 * 1024\nMAX_BYTES = 100 * 1024 * 1024\nEMPTY_RANGE_CODE = \"InvalidRange\"\nMEDIA_TYPE_PATTERN = re.compile(r\"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$\")\nMISSING_BOTO3 = \"read_s3_object needs boto3, which is not installed; install azathoth-ai[worker].\"\n\n\nclass Failure(Exception):\n    \"\"\"A failure to report on stderr, with the status to exit with.\"\"\"\n\n    def __init__(self, status, message):\n        super().__init__(message)\n        self.status = status\n        self.message = message\n\n\ndef sentence(text):\n    \"\"\"Return text ending with exactly one period.\"\"\"\n\n    return text.rstrip().rstrip(\".\") + \".\"\n\n\ndef is_whole(value):\n    \"\"\"Return whether a JSON value is an integer, and not a boolean.\"\"\"\n\n    return isinstance(value, int) and not isinstance(value, bool)\n\n\ndef is_supported(media_type):\n    \"\"\"Return whether a media type is JSON or text, lowercase and without parameters.\"\"\"\n\n    if not isinstance(media_type, str) or MEDIA_TYPE_PATTERN.match(media_type) is None:\n        return False\n\n    return media_type == JSON_MEDIA_TYPE or media_type.startswith(TEXT_PREFIX)\n\n\ndef parse(inputs):\n    \"\"\"Return the plan of one read from the tool's inputs.\"\"\"\n\n    if not isinstance(inputs, dict):\n        raise Failure(2, \"read_s3_object needs 'uri' to be an s3:// URI naming an object.\")\n\n    settings = inputs.get(\"settings\", {})\n\n    if not isinstance(settings, dict):\n        raise Failure(2, \"read_s3_object needs 'settings' to be an object.\")\n\n    uri = inputs.get(\"uri\")\n    bucket, _, key = (\n        uri[len(S3_PREFIX) :].partition(\"/\")\n        if isinstance(uri, str) and uri.startswith(S3_PREFIX)\n        else (\"\", \"\", \"\")\n    )\n\n    if not bucket or not key:\n        raise Failure(2, \"read_s3_object needs 'uri' to be an s3:// URI naming an object.\")\n\n    media_type = settings.get(\"media_type\", DEFAULT_MEDIA_TYPE)\n    max_bytes = settings.get(\"max_bytes\", DEFAULT_MAX_BYTES)\n\n    if not is_supported(media_type):\n        raise Failure(\n            2,\n            \"read_s3_object needs 'media_type' to be application/json or a text/* media \"\n            \"type, lowercase and with no parameters.\",\n        )\n\n    if not is_whole(max_bytes) or not 1 <= max_bytes <= MAX_BYTES:\n        raise Failure(\n            2, f\"read_s3_object needs 'max_bytes' to be a whole number from 1 to {MAX_BYTES}.\"\n        )\n\n    return {\n        \"uri\": uri,\n        \"bucket\": bucket,\n        \"key\": key,\n        \"media_type\": media_type,\n        \"max_bytes\": max_bytes,\n    }\n\n\ndef open_client():\n    \"\"\"Return an S3 client, from boto3 and the credentials the tool was given.\"\"\"\n\n    try:\n        import boto3\n    except ImportError as exc:\n        raise Failure(1, MISSING_BOTO3) from exc\n\n    return boto3.client(\"s3\")\n\n\ndef get(client, plan, **parameters):\n    \"\"\"Get the object, with any range given; return its response, or None for an empty range.\"\"\"\n\n    from botocore.exceptions import BotoCoreError, ClientError\n\n    try:\n        return client.get_object(Bucket=plan[\"bucket\"], Key=plan[\"key\"], **parameters)\n    except ClientError as exc:\n        error = exc.response.get(\"Error\", {})\n        code = error.get(\"Code\", \"Unknown\")\n\n        if code == EMPTY_RANGE_CODE and parameters:\n            return None\n\n        raise Failure(\n            1,\n            sentence(\n                f\"read_s3_object could not read {plan['uri']}: {code}: {error.get('Message', '')}\"\n            ),\n        ) from exc\n    except BotoCoreError as exc:\n        raise Failure(1, sentence(f\"read_s3_object could not read {plan['uri']}: {exc}\")) from exc\n\n\ndef content_of(plan, response):\n    \"\"\"Read a response's body, at most one byte past the cap.\"\"\"\n\n    from botocore.exceptions import BotoCoreError\n\n    stream = response[\"Body\"]\n\n    try:\n        content = stream.read(plan[\"max_bytes\"] + 1)\n    except (BotoCoreError, OSError) as exc:\n        raise Failure(1, sentence(f\"read_s3_object could not read {plan['uri']}: {exc}\")) from exc\n    finally:\n        stream.close()\n\n    if len(content) > plan[\"max_bytes\"]:\n        raise Failure(\n            1,\n            f\"read_s3_object found {plan['uri']} larger than its max_bytes of {plan['max_bytes']}.\",\n        )\n\n    return content\n\n\ndef reject_constant(constant):\n    \"\"\"Refuse the non-finite numbers Python's JSON parser accepts by default.\"\"\"\n\n    raise ValueError(f\"{constant} is not a JSON number\")\n\n\ndef decode(plan, content):\n    \"\"\"Decode content as the plan's media type.\"\"\"\n\n    try:\n        text = content.decode(\"utf-8-sig\")\n    except UnicodeDecodeError as exc:\n        raise Failure(\n            1,\n            f\"read_s3_object found {plan['uri']} is not valid UTF-8: {exc.reason} \"\n            f\"at byte {exc.start}.\",\n        ) from exc\n\n    if plan[\"media_type\"] != JSON_MEDIA_TYPE:\n        return text\n\n    try:\n        return json.loads(text, parse_constant=reject_constant)\n    except json.JSONDecodeError as exc:\n        raise Failure(\n            1, f\"read_s3_object found {plan['uri']} is not valid JSON: {exc.msg}.\"\n        ) from exc\n    except ValueError as exc:\n        raise Failure(1, f\"read_s3_object found {plan['uri']} is not valid JSON: {exc}.\") from exc\n\n\ndef read(client, plan):\n    \"\"\"Read and decode the object a plan names; return the tool's output.\"\"\"\n\n    response = get(client, plan, Range=f\"bytes=0-{plan['max_bytes']}\")\n\n    if response is None:\n        response = get(client, plan)\n\n    content = content_of(plan, response)\n\n    return {\n        \"value\": decode(plan, content),\n        \"media_type\": plan[\"media_type\"],\n        \"size_bytes\": len(content),\n        \"digest\": hashlib.sha256(content).hexdigest(),\n        \"etag\": response[\"ETag\"].strip('\"'),\n    }\n\n\ndef main():\n    \"\"\"Read the object the tool's inputs name, and print its value.\"\"\"\n\n    try:\n        plan = parse(json.load(sys.stdin))\n        output = read(open_client(), plan)\n    except Failure as failure:\n        sys.stderr.buffer.write(failure.message.encode(\"utf-8\"))\n        sys.stderr.flush()\n        sys.exit(failure.status)\n\n    json.dump(output, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 300.0,
+      "environment": [
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}

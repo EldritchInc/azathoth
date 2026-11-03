@@ -99,6 +99,20 @@ Parameters:
       The key prefix inputs must start with, inside InputBucket; end it with
       a slash to allow one folder. Empty allows the whole bucket.
 
+  DataBucket:
+    Type: String
+    Default: ""
+    Description: >-
+      The bucket the S3 tools, split_s3_object and read_s3_object, may read
+      and write; empty to grant them nothing.
+
+  DataPrefix:
+    Type: String
+    Default: ""
+    Description: >-
+      The key prefix the S3 tools may read and write under, inside DataBucket;
+      end it with a slash to allow one folder. Empty allows the whole bucket.
+
   MaxReceiveCount:
     Type: Number
     Default: 5
@@ -132,6 +146,12 @@ Conditions:
     Fn::Not:
       - Fn::Equals:
           - Ref: InputBucket
+          - ""
+
+  HasDataBucket:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: DataBucket
           - ""
 
   HasOpenRouter:
@@ -249,7 +269,8 @@ Resources:
                     - - Ref: DatabaseSecretArn
 
   #
-  # The workers' own role: exactly the calls ADR 0107 and ADR 0108 make.
+  # The workers' own role: exactly the calls ADR 0107 and ADR 0108 make,
+  # and those of the S3 tools (ADR 0110) under DataBucket and DataPrefix.
   #
   TaskRole:
     Type: AWS::IAM::Role
@@ -299,6 +320,16 @@ Resources:
                       - s3:GetObject
                     Resource:
                       Fn::Sub: arn:${AWS::Partition}:s3:::${InputBucket}/${InputPrefix}*
+                  - Ref: AWS::NoValue
+              - Fn::If:
+                  - HasDataBucket
+                  - Sid: WorkWithData
+                    Effect: Allow
+                    Action:
+                      - s3:GetObject
+                      - s3:PutObject
+                    Resource:
+                      Fn::Sub: arn:${AWS::Partition}:s3:::${DataBucket}/${DataPrefix}*
                   - Ref: AWS::NoValue
               - Fn::If:
                   - UseBedrock

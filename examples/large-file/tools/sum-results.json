@@ -1,0 +1,61 @@
+{
+  "definition": {
+    "id": "a1000000-0000-4000-8000-0000000000a0",
+    "name": "sum_results",
+    "description": "Sum the numeric result of every child workflow a map ran.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "result"
+              ]
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "total"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "a1000000-0000-4000-8000-0000000000a1",
+      "tool_id": "a1000000-0000-4000-8000-0000000000a0",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Sum the result of every child a map ran: {\"results\": [{\"result\": <n>}, ...]}.\"\"\"\n\nimport json\nimport sys\n\ninputs = json.load(sys.stdin)\n\njson.dump({\"total\": sum(item[\"result\"] for item in inputs[\"results\"])}, sys.stdout)\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 30.0
+    }
+  ],
+  "test_cases": []
+}

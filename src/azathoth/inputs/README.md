@@ -162,15 +162,18 @@ largest data a workflow can process. Data larger than the cap goes by
 pointer (ADR 0108):
 
 1. The request's input is an inline value naming the object, such as
-   `{"value": {"source": "s3://intake/batch-0412.csv"}}`. Inline values are
-   not resolved, so neither the cap nor the allowed locations apply.
-2. A process tool that declares the `AWS_*` variables (ADR 0099) streams the
-   object, writes chunk objects back to S3, and returns only their keys.
-3. `map_workflow` runs a child over the keys (ADR 0106); each child reads
-   its own chunk, as a resolved reference when a chunk fits under the cap.
+   `{"value": "s3://intake/batch-0412.csv"}`. Inline values are not
+   resolved, so neither the cap nor the allowed locations apply.
+2. `split_s3_object`, from the standard tools, streams the object, writes
+   chunk objects back to S3, and returns only their URIs (ADR 0110).
+3. `map_workflow` runs a child over the chunks (ADR 0106); each child reads
+   its own with `read_s3_object`, which decodes it as a resolved input is
+   decoded.
 
-Only keys and small results pass through the context. What a tool reads is
-governed by the task's IAM role, not by the worker's allowed locations.
+Only URIs and small results pass between steps. What the tools read and
+write is governed by the task's IAM role, not by the worker's allowed
+locations. The [large-file example](../../../examples/large-file/README.md)
+counts the words of a file this way.
 
 ## Input Events
 

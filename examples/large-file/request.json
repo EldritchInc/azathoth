@@ -1,0 +1,7 @@
+{
+  "kind": "invoke",
+  "version": 1,
+  "idempotency_key": "large-file-1",
+  "workflow_id": "a1000000-0000-4000-8000-000000000009",
+  "input": {"value": "s3://azathoth-data/work/inbox/book.txt"}
+}

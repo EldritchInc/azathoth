@@ -35,13 +35,15 @@ from tests.deploy.template import (
 
 INPUTS = {"InputBucket": "azathoth-inputs", "InputPrefix": "requests/"}
 
+DATA = {"DataBucket": "azathoth-data", "DataPrefix": "work/"}
+
 OPENROUTER = {
     "OpenRouterSecretArn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:openrouter-Xy"
 }
 
 BEDROCK = {"EnableBedrock": "true"}
 
-EVERYTHING = {**INPUTS, **OPENROUTER, **BEDROCK}
+EVERYTHING = {**INPUTS, **DATA, **OPENROUTER, **BEDROCK}
 
 HEARTBEAT = "/tmp/azathoth-heartbeat"
 
@@ -195,6 +197,23 @@ def test_the_worker_allows_exactly_the_inputs_its_role_may_read() -> None:
     assert granted["Resource"] == f"arn:aws:s3:::{allowed.bucket}/{allowed.prefix}*"
 
 
+def test_the_s3_tools_may_read_and_write_exactly_the_data_prefix() -> None:
+    granted = statements(with_(**DATA))["WorkWithData"]
+
+    assert granted["Action"] == ["s3:GetObject", "s3:PutObject"]
+    assert granted["Resource"] == "arn:aws:s3:::azathoth-data/work/*"
+
+
+def test_the_data_bucket_is_never_a_place_the_worker_takes_inputs_from() -> None:
+    for parameters in (with_(**DATA), with_(**EVERYTHING)):
+        arguments = build_parser().parse_args(worker(parameters)["Command"])
+
+        assert all(
+            S3InputLocation.parse(value).bucket != "azathoth-data"
+            for value in arguments.worker_allow_input_buckets
+        )
+
+
 def test_the_health_check_is_a_real_worker_health_of_the_workers_heartbeat() -> None:
     container = worker(defaults())
     check = container["HealthCheck"]
@@ -296,6 +315,7 @@ def test_every_optional_grant_appears_only_with_its_parameter() -> None:
         "SendResults",
         "KeepContent",
         "ReadInputs",
+        "WorkWithData",
         "DiscoverModels",
         "InvokeModels",
     }
@@ -444,11 +464,13 @@ def test_the_outputs_name_everything_the_guide_uses() -> None:
 def test_the_conditions_follow_their_parameters() -> None:
     assert conditions(defaults()) == {
         "HasInputBucket": False,
+        "HasDataBucket": False,
         "HasOpenRouter": False,
         "UseBedrock": False,
     }
     assert conditions(with_(**EVERYTHING)) == {
         "HasInputBucket": True,
+        "HasDataBucket": True,
         "HasOpenRouter": True,
         "UseBedrock": True,
     }

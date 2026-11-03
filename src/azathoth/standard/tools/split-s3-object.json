@@ -1,0 +1,132 @@
+{
+  "definition": {
+    "id": "c3000000-0000-4000-8000-000000000001",
+    "name": "split_s3_object",
+    "description": "Stream one S3 object and write it back as chunk objects, split at line boundaries or by bytes, under the folder of the step attempt that splits it.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "destination_prefix": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "lines",
+                  "bytes"
+                ]
+              },
+              "chunk_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 104857600
+              },
+              "max_chunks": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "destination_prefix",
+              "max_chunks"
+            ]
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "uri"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "uri": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "size_bytes": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "uri",
+                "index",
+                "size_bytes"
+              ]
+            }
+          },
+          "count": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "uri": {
+                "type": "string"
+              },
+              "etag": {
+                "type": "string"
+              },
+              "version_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size_bytes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "uri",
+              "etag",
+              "version_id",
+              "size_bytes"
+            ]
+          }
+        },
+        "required": [
+          "chunks",
+          "count",
+          "source"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c3000000-0000-4000-8000-000000000011",
+      "tool_id": "c3000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Split one S3 object into chunk objects, at line boundaries or by bytes (ADR 0110).\n\nThe source is read as a stream and never held whole. Each chunk is written\nto destination_prefix, under the folder of the step attempt that splits it:\n<RUN_ID>/<STEP_ID>/<ATTEMPT>/chunk-000000, numbered from 0. A resumed attempt\nwrites the same keys with the same bytes; a retried attempt writes a folder\nof its own. Outside a workflow step there is no attempt, so the tool refuses.\n\nIn lines mode each chunk ends just after a newline, or at the end of the\nsource, and holds at most chunk_bytes bytes. A line longer than that is\nrefused rather than cut. Finding the boundaries takes one read of the source\nand writing the chunks a second, so a source that needs more than\nmax_chunks chunks, or holds a line too long, is refused before anything is\nwritten. In bytes mode every chunk but the last holds exactly chunk_bytes.\n\nBoth reads, and the size the boundaries come from, are pinned to the\nversion the tool first saw: its version ID in a versioned bucket, its ETag\nin any other. A source changed while it is split is refused.\n\nThe tool reaches S3 with boto3 and the AWS credentials it is given. Every\nproblem with its inputs exits with status 2, and every other failure with\nstatus 1; errors are written as UTF-8, whatever the platform's encoding.\n\"\"\"\n\nimport json\nimport os\nimport sys\n\nLINEAGE_VARIABLE = \"AZATHOTH_LINEAGE\"\nS3_PREFIX = \"s3://\"\nMODES = (\"lines\", \"bytes\")\nDEFAULT_MODE = \"lines\"\nDEFAULT_CHUNK_BYTES = 5 * 1024 * 1024\nMAX_CHUNK_BYTES = 100 * 1024 * 1024\nREAD_BYTES = 1024 * 1024\nCHANGED_CODES = (\"PreconditionFailed\", \"412\")\nMISSING_BOTO3 = \"split_s3_object needs boto3, which is not installed; install azathoth-ai[worker].\"\n\n\nclass Failure(Exception):\n    \"\"\"A failure to report on stderr, with the status to exit with.\"\"\"\n\n    def __init__(self, status, message):\n        super().__init__(message)\n        self.status = status\n        self.message = message\n\n\ndef sentence(text):\n    \"\"\"Return text ending with exactly one period.\"\"\"\n\n    return text.rstrip().rstrip(\".\") + \".\"\n\n\ndef is_whole(value):\n    \"\"\"Return whether a JSON value is an integer, and not a boolean.\"\"\"\n\n    return isinstance(value, int) and not isinstance(value, bool)\n\n\ndef parse_s3_uri(value):\n    \"\"\"Return (bucket, path) of an s3:// URI, or None when it is not one.\"\"\"\n\n    if not isinstance(value, str) or not value.startswith(S3_PREFIX):\n        return None\n\n    bucket, _, path = value[len(S3_PREFIX) :].partition(\"/\")\n\n    if not bucket:\n        return None\n\n    return bucket, path\n\n\ndef attempt_folder(lineage):\n    \"\"\"Return <RUN_ID>/<STEP_ID>/<ATTEMPT>/ of the step attempt a lineage names.\"\"\"\n\n    refused = Failure(\n        2,\n        \"split_s3_object writes chunks only from a workflow step, and was not run in one.\",\n    )\n\n    if not lineage:\n        raise refused\n\n    try:\n        step = json.loads(lineage)[\"step\"]\n        return f\"{step['run_id']}/{step['step_id']}/{step['attempt']}/\"\n    except (ValueError, KeyError, TypeError) as exc:\n        raise refused from exc\n\n\ndef parse(inputs, lineage):\n    \"\"\"Return the plan of one split from the tool's inputs and its step's lineage.\"\"\"\n\n    if not isinstance(inputs, dict) or not isinstance(inputs.get(\"settings\"), dict):\n        raise Failure(2, \"split_s3_object needs 'settings' to be an object.\")\n\n    settings = inputs[\"settings\"]\n    source = parse_s3_uri(inputs.get(\"uri\"))\n\n    if source is None or not source[1]:\n        raise Failure(2, \"split_s3_object needs 'uri' to be an s3:// URI naming an object.\")\n\n    destination = parse_s3_uri(settings.get(\"destination_prefix\"))\n\n    if destination is None:\n        raise Failure(\n            2,\n            \"split_s3_object needs 'destination_prefix' to be an s3:// URI naming a bucket.\",\n        )\n\n    mode = settings.get(\"mode\", DEFAULT_MODE)\n    chunk_bytes = settings.get(\"chunk_bytes\", DEFAULT_CHUNK_BYTES)\n    max_chunks = settings.get(\"max_chunks\")\n\n    if mode not in MODES:\n        raise Failure(2, \"split_s3_object needs 'mode' to be 'lines' or 'bytes'.\")\n\n    if not is_whole(chunk_bytes) or not 1 <= chunk_bytes <= MAX_CHUNK_BYTES:\n        raise Failure(\n            2,\n            f\"split_s3_object needs 'chunk_bytes' to be a whole number from 1 to \"\n            f\"{MAX_CHUNK_BYTES}.\",\n        )\n\n    if not is_whole(max_chunks) or max_chunks < 1:\n        raise Failure(2, \"split_s3_object needs 'max_chunks' to be a whole number of at least 1.\")\n\n    prefix = destination[1]\n\n    if prefix and not prefix.endswith(\"/\"):\n        prefix += \"/\"\n\n    return {\n        \"uri\": inputs[\"uri\"],\n        \"bucket\": source[0],\n        \"key\": source[1],\n        \"destination_bucket\": destination[0],\n        \"destination_prefix\": prefix + attempt_folder(lineage),\n        \"mode\": mode,\n        \"chunk_bytes\": chunk_bytes,\n        \"max_chunks\": max_chunks,\n    }\n\n\ndef open_client():\n    \"\"\"Return an S3 client, from boto3 and the credentials the tool was given.\"\"\"\n\n    try:\n        import boto3\n    except ImportError as exc:\n        raise Failure(1, MISSING_BOTO3) from exc\n\n    return boto3.client(\"s3\")\n\n\ndef call(verb, uri, operation, *, pinned=False, **parameters):\n    \"\"\"Make one S3 call, reporting its failure as the tool's own.\n\n    A pinned read that S3 refuses for its precondition read a source that\n    changed since the tool first saw it.\n    \"\"\"\n\n    from botocore.exceptions import BotoCoreError, ClientError\n\n    try:\n        return operation(**parameters)\n    except ClientError as exc:\n        error = exc.response.get(\"Error\", {})\n        code = error.get(\"Code\", \"Unknown\")\n\n        if pinned and code in CHANGED_CODES:\n            raise changed(uri) from exc\n\n        raise Failure(\n            1,\n            sentence(f\"split_s3_object could not {verb} {uri}: {code}: {error.get('Message', '')}\"),\n        ) from exc\n    except BotoCoreError as exc:\n        raise Failure(1, sentence(f\"split_s3_object could not {verb} {uri}: {exc}\")) from exc\n\n\ndef changed(uri):\n    \"\"\"Return the failure of a source that changed while it was split.\"\"\"\n\n    return Failure(1, f\"split_s3_object found {uri} changed while splitting it.\")\n\n\ndef stream(client, plan, source, read_bytes):\n    \"\"\"Yield the source's bytes, pinned to the version first seen, in pieces.\"\"\"\n\n    from botocore.exceptions import BotoCoreError\n\n    response = call(\n        \"read\",\n        plan[\"uri\"],\n        client.get_object,\n        pinned=True,\n        Bucket=plan[\"bucket\"],\n        Key=plan[\"key\"],\n        **source[\"pin\"],\n    )\n\n    try:\n        yield from response[\"Body\"].iter_chunks(read_bytes)\n    except (BotoCoreError, OSError) as exc:\n        raise Failure(1, sentence(f\"split_s3_object could not read {plan['uri']}: {exc}\")) from exc\n\n\ndef too_many_lines(plan):\n    \"\"\"Return the failure of a source that needs more than max_chunks chunks of lines.\"\"\"\n\n    return Failure(\n        1,\n        f\"split_s3_object would split {plan['uri']} into more than its max_chunks of \"\n        f\"{plan['max_chunks']} chunks.\",\n    )\n\n\ndef line_ends(client, plan, source, read_bytes):\n    \"\"\"Return where each chunk of lines ends, reading the source once.\"\"\"\n\n    chunk_bytes = plan[\"chunk_bytes\"]\n    size = source[\"size_bytes\"]\n\n    if -(-size // chunk_bytes) > plan[\"max_chunks\"]:\n        raise too_many_lines(plan)\n\n    if not size:\n        return []\n\n    ends = []\n    start = 0\n    last_break = None\n    base = 0\n\n    for piece in stream(client, plan, source, read_bytes):\n        index = 0\n\n        while True:\n            limit = start + chunk_bytes\n\n            if base + len(piece) <= limit:\n                newline = piece.rfind(b\"\\n\", index)\n\n                if newline != -1:\n                    last_break = base + newline + 1\n\n                break\n\n            newline = piece.rfind(b\"\\n\", index, limit - base)\n\n            if newline != -1:\n                last_break = base + newline + 1\n\n            if last_break is None:\n                raise Failure(\n                    1,\n                    f\"split_s3_object found a line at byte {start} of {plan['uri']} \"\n                    f\"longer than its chunk_bytes of {chunk_bytes}.\",\n                )\n\n            ends.append(last_break)\n\n            if len(ends) >= plan[\"max_chunks\"]:\n                raise too_many_lines(plan)\n\n            start = last_break\n            last_break = None\n            index = max(start - base, 0)\n\n        base += len(piece)\n\n    if base != size:\n        raise changed(plan[\"uri\"])\n\n    if base > start:\n        ends.append(base)\n\n    return ends\n\n\ndef byte_ends(plan, source):\n    \"\"\"Return where each chunk of exactly chunk_bytes bytes ends, the last excepted.\"\"\"\n\n    chunk_bytes = plan[\"chunk_bytes\"]\n    size = source[\"size_bytes\"]\n    ends = [*range(chunk_bytes, size, chunk_bytes), size] if size else []\n\n    if len(ends) > plan[\"max_chunks\"]:\n        raise Failure(\n            1,\n            f\"split_s3_object would split {plan['uri']} into {len(ends)} chunks, \"\n            f\"more than its max_chunks of {plan['max_chunks']}.\",\n        )\n\n    return ends\n\n\ndef write_chunks(client, plan, source, ends, read_bytes):\n    \"\"\"Read the source again and write each chunk as it fills; return the chunks.\"\"\"\n\n    chunks = []\n\n    if not ends:\n        return chunks\n\n    buffer = bytearray()\n    offset = 0\n\n    for piece in stream(client, plan, source, read_bytes):\n        buffer += piece\n\n        while len(chunks) < len(ends) and offset + len(buffer) >= ends[len(chunks)]:\n            end = ends[len(chunks)]\n            content = bytes(buffer[: end - offset])\n            del buffer[: end - offset]\n            offset = end\n            chunks.append(write_chunk(client, plan, source, len(chunks), content))\n\n    if len(chunks) != len(ends) or buffer:\n        raise changed(plan[\"uri\"])\n\n    return chunks\n\n\ndef write_chunk(client, plan, source, index, content):\n    \"\"\"Write one chunk object; return its entry in the tool's output.\"\"\"\n\n    key = f\"{plan['destination_prefix']}chunk-{index:06d}\"\n    uri = f\"{S3_PREFIX}{plan['destination_bucket']}/{key}\"\n    parameters = {\"Bucket\": plan[\"destination_bucket\"], \"Key\": key, \"Body\": content}\n\n    if source[\"content_type\"]:\n        parameters[\"ContentType\"] = source[\"content_type\"]\n\n    call(\"write\", uri, client.put_object, **parameters)\n\n    return {\"uri\": uri, \"index\": index, \"size_bytes\": len(content)}\n\n\ndef split(client, plan, *, read_bytes=READ_BYTES):\n    \"\"\"Split the source a plan names into chunk objects; return the tool's output.\"\"\"\n\n    head = call(\"read\", plan[\"uri\"], client.head_object, Bucket=plan[\"bucket\"], Key=plan[\"key\"])\n    version_id = head.get(\"VersionId\")\n    source = {\n        \"size_bytes\": head[\"ContentLength\"],\n        \"content_type\": head.get(\"ContentType\"),\n        \"pin\": {\"VersionId\": version_id} if version_id else {\"IfMatch\": head[\"ETag\"]},\n    }\n\n    if plan[\"mode\"] == \"lines\":\n        ends = line_ends(client, plan, source, read_bytes)\n    else:\n        ends = byte_ends(plan, source)\n\n    chunks = write_chunks(client, plan, source, ends, read_bytes)\n\n    return {\n        \"chunks\": chunks,\n        \"count\": len(chunks),\n        \"source\": {\n            \"uri\": plan[\"uri\"],\n            \"etag\": head[\"ETag\"].strip('\"'),\n            \"version_id\": version_id,\n            \"size_bytes\": source[\"size_bytes\"],\n        },\n    }\n\n\ndef main():\n    \"\"\"Split the object the tool's inputs name, and print its chunks.\"\"\"\n\n    try:\n        plan = parse(json.load(sys.stdin), os.environ.get(LINEAGE_VARIABLE))\n        output = split(open_client(), plan)\n    except Failure as failure:\n        sys.stderr.buffer.write(failure.message.encode(\"utf-8\"))\n        sys.stderr.flush()\n        sys.exit(failure.status)\n\n    json.dump(output, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 3600.0,
+      "environment": [
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}

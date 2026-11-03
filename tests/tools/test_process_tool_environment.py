@@ -384,6 +384,8 @@ def test_a_real_process_sees_exactly_the_built_environment(
 
 COMPOSITION_TOOLS = ("run_workflow", "loop_workflow", "map_workflow")
 
+S3_TOOLS = ("split_s3_object", "read_s3_object")
+
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
     "OPENROUTER_API_KEY",
@@ -453,7 +455,7 @@ def test_the_data_shaping_tools_see_only_the_base_environment() -> None:
     }
 
     for document in standard_tool_documents():
-        if document.definition.name in COMPOSITION_TOOLS:
+        if document.definition.name in (*COMPOSITION_TOOLS, *S3_TOOLS):
             continue
 
         (implementation,) = document.implementations
@@ -462,3 +464,30 @@ def test_the_data_shaping_tools_see_only_the_base_environment() -> None:
 
         assert environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE) == "60.0"
         assert environment == POSIX_BASE, document.definition.name
+
+
+@pytest.mark.parametrize("name", S3_TOOLS)
+def test_the_s3_tools_see_the_aws_variables_and_nothing_else_of_azathoths(
+    name: str,
+) -> None:
+    environ = {
+        **POSIX_ENVIRONMENT,
+        "AZATHOTH_OTEL": "1",
+        "AZATHOTH_BEDROCK": "1",
+        "AWS_REGION": "us-east-1",
+        "AWS_ENDPOINT_URL_S3": "http://localhost:9000",
+    }
+
+    (document,) = (
+        document for document in standard_tool_documents() if document.definition.name == name
+    )
+    (implementation,) = document.implementations
+
+    environment = posix(implementation, environ)
+    timeout = environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE)
+    aws = {key: value for key, value in environment.items() if key.startswith("AWS_")}
+
+    assert timeout == str(implementation.timeout_seconds)
+    assert aws == {key: value for key, value in environ.items() if key.startswith("AWS_")}
+    assert "AWS_SECRET_ACCESS_KEY" in aws
+    assert {key: value for key, value in environment.items() if key not in aws} == POSIX_BASE

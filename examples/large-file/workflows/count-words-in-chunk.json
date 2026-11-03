@@ -1,0 +1,142 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-000000000008",
+    "name": "count words in one chunk",
+    "description": "Count the words of the S3 chunk a map hands this workflow: select the chunk's URI from the map's {\"item\", \"index\"} input, read the chunk as text with read_s3_object, then count it with the process tool.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000081",
+      "specification": {
+        "requirement": {
+          "name": "json_select",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "value",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "path",
+          "source": {
+            "value": [
+              "item",
+              "uri"
+            ]
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "uri",
+          "path": [
+            "value"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000082",
+      "specification": {
+        "requirement": {
+          "name": "read_s3_object",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "a1000000-0000-4000-8000-000000000081"
+      ],
+      "inputs": [
+        {
+          "name": "settings",
+          "source": {
+            "value": {
+              "media_type": "text/plain",
+              "max_bytes": 1048576
+            }
+          }
+        },
+        {
+          "name": "uri",
+          "source": {
+            "name": "uri"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "path": [
+            "value"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Reading the chunk"
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000083",
+      "specification": {
+        "requirement": {
+          "name": "word_count_process",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "a1000000-0000-4000-8000-000000000082"
+      ],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}

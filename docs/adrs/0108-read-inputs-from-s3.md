@@ -1,6 +1,6 @@
 # ADR 0108: Read Inputs From S3
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0110
 - Date: 2026-11-02
 - Decided in: #126
 
@@ -100,11 +100,11 @@ installs that extra (ADR 0107). No extra is added.
 
 The cap is for content the engine resolves into a run, not for the data a
 workflow may process. Data larger than the cap goes by pointer: a request's
-inline value names the object, a process tool that declares the `AWS_*`
-variables streams it and splits it into chunk objects (ADR 0099), and
-`map_workflow` runs a child over the chunks (ADR 0106). Only keys and small
-results pass through the context, so the database never holds the data, and
-a map stopped halfway resumes without reading its finished chunks again. The
+inline value names the object, `split_s3_object` streams it into chunk
+objects, `map_workflow` runs a child over the chunks (ADR 0106), and each
+child reads its own with `read_s3_object` (ADR 0110). Only URIs and small
+results pass between steps, so no run holds the whole of the data, and a
+map stopped halfway resumes without reading its finished chunks again. The
 worker's allowed locations do not govern what a tool reads; the task's IAM
 role does.
 
@@ -117,8 +117,8 @@ to the run's recorded provenance and the stored bytes.
 
 ### Not decided here
 
-- A standard tool that splits an S3 object into chunk objects, for the
-  pattern above.
+- The standard tools that split an S3 object and read its chunks, for the
+  pattern above (ADR 0110).
 - `s3://` inputs on the command line.
 - Removing content no run refers to any more.
 
