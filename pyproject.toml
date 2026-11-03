@@ -78,6 +78,7 @@ dev = [
     "psycopg[binary]>=3.2,<4",
     "pytest",
     "pytest-cov",
+    "PyYAML>=6,<7",
     "ruff",
     "setuptools>=68",
     "types-jsonschema",
