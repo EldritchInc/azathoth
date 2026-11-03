@@ -5,9 +5,10 @@ package (ADR 0095). Its documents are ordinary tool documents, stored in
 `tools/`, and are recorded in a database the same way as any other tool: by
 an explicit import of each exact tool version.
 
-The library holds two kinds of tool. The composition tools run other
-workflows, and the data-shaping tools reshape the values that pass between
-steps:
+The library holds three kinds of tool. The composition tools run other
+workflows, the data-shaping tools reshape the values that pass between
+steps, and the S3 tools work with objects too large to pass between steps
+at all:
 
 | Tool              | Version | Implementation | Purpose                                     |
 | ----------------- | ------- | -------------- | ------------------------------------------- |
@@ -21,6 +22,7 @@ steps:
 | `chunk_text`      | 1.0.0   | 1.0.0          | Split text into chunks of a size.           |
 | `join_text`       | 1.0.0   | 1.0.0          | Join strings, or rendered objects.          |
 | `render_template` | 1.0.0   | 1.0.0          | Render a text template from inputs.         |
+| `split_s3_object` | 1.0.0   | 1.0.0          | Split an S3 object into chunk objects.      |
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -424,6 +426,118 @@ render_template could not read the template: Single '}' encountered in format st
 render_template reserves the name 'template' for the template itself.
 ```
 
+## The S3 Tools
+
+A worker reads inputs of at most 100 MiB (ADR 0108), and a step's values
+live in its run's journal. Data larger than that stays in S3, and the S3
+tools work with it there: `split_s3_object` streams one object into chunk
+objects small enough to work with, and `map_workflow` runs a child over
+them (ADR 0110).
+
+Each S3 tool is a process tool that runs its source with `python`, like
+the others, but:
+
+- it imports boto3, which the `worker` extra installs, and reaches S3 with
+  the AWS credentials it is given;
+- it grants itself `AWS_*`, and nothing else of Azathoth's, so it uses the
+  region, credentials and endpoint (`AWS_ENDPOINT_URL_S3`) of the process
+  that runs it, and on ECS the task role's;
+- it checks no allow-list: what it may read and write is the credentials'
+  to decide, so give the role that runs it exactly the prefixes its
+  workflows need.
+
+Its source never imports Azathoth, as with every standard tool. Bad inputs
+exit with status 2, and every other failure with status 1.
+
+### split_s3_object
+
+`split_s3_object` streams the object at `uri` and writes it back as chunk
+objects under `destination_prefix`:
+
+```json
+{
+  "settings": {
+    "destination_prefix": "s3://tenix-work/chunks/",
+    "max_chunks": 2000
+  },
+  "uri": "s3://tenix-work/inbox/claims-2026-10.ndjson"
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `destination_prefix` | required | The `s3://` bucket, and optional prefix, the chunks are written under. |
+| `max_chunks` | required | The most chunks the split may write; a source that needs more is refused, never cut short. |
+| `mode` | `lines` | `lines` ends each chunk after a newline; `bytes` cuts at exactly `chunk_bytes`. |
+| `chunk_bytes` | 5242880 | The most bytes in one chunk, 5 MiB by default, at most 104857600 (100 MiB). |
+
+It returns each chunk's URI, index and size, and the source it split, down
+to the version it read:
+
+```json
+{
+  "chunks": [
+    {"uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000000", "index": 0, "size_bytes": 5242836},
+    {"uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000001", "index": 1, "size_bytes": 1918113}
+  ],
+  "count": 2,
+  "source": {"uri": "s3://tenix-work/inbox/claims-2026-10.ndjson", "etag": "<ETAG>", "version_id": null, "size_bytes": 7160949}
+}
+```
+
+`chunks` is a list a map runs over directly. Each chunk carries the
+source's content type.
+
+The chunks go in the folder of the step attempt that writes them,
+`<RUN_ID>/<STEP_ID>/<ATTEMPT>/`, numbered from `chunk-000000`, so every
+chunk traces back to its run. A resumed attempt writes the same keys again,
+with the same bytes while the source is unchanged; a retried attempt writes
+a folder of its own. Nothing
+deletes chunks: an S3 lifecycle rule on the prefix is the way to expire
+them. Run anywhere but a workflow step, the tool has no attempt to name,
+and refuses.
+
+In `lines` mode a chunk ends just after a newline, or at the end of the
+source, and holds as many whole lines as fit in `chunk_bytes`. A line
+longer than that is refused rather than cut. Finding the boundaries takes
+one read of the source, and writing the chunks a second, so a source that
+needs more than `max_chunks` chunks, or holds a line too long, is refused
+before anything is written. `bytes` mode reads the source once.
+
+Both reads are pinned to the source as the tool first saw it, by its
+version ID in a versioned bucket and its ETag in any other, so the chunks
+are exactly the bytes `source` describes. A source changed while it is
+split is refused; in `bytes` mode the chunks already written stay, and a
+retry writes a new folder.
+
+Inputs it cannot use are refused with status 2, before S3 is reached:
+
+```text
+split_s3_object needs 'settings' to be an object.
+split_s3_object needs 'uri' to be an s3:// URI naming an object.
+split_s3_object needs 'destination_prefix' to be an s3:// URI naming a bucket.
+split_s3_object needs 'mode' to be 'lines' or 'bytes'.
+split_s3_object needs 'chunk_bytes' to be a whole number from 1 to 104857600.
+split_s3_object needs 'max_chunks' to be a whole number of at least 1.
+split_s3_object writes chunks only from a workflow step, and was not run in one.
+```
+
+Everything else fails with status 1:
+
+```text
+split_s3_object needs boto3, which is not installed; install azathoth-ai[worker].
+split_s3_object could not read <URI>: <CODE>: <MESSAGE>.
+split_s3_object could not read <URI>: <REASON>.
+split_s3_object could not write <URI>: <CODE>: <MESSAGE>.
+split_s3_object would split <URI> into <COUNT> chunks, more than its max_chunks of <MAX_CHUNKS>.
+split_s3_object would split <URI> into more than its max_chunks of <MAX_CHUNKS> chunks.
+split_s3_object found a line at byte <BYTE> of <URI> longer than its chunk_bytes of <CHUNK_BYTES>.
+split_s3_object found <URI> changed while splitting it.
+```
+
+Its timeout is an hour: a large source is read twice and written once, at
+the speed of the network between the worker and S3.
+
 ## Installing
 
 The library reaches a database through the CLI:
@@ -485,14 +599,18 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
 ```
 
 A database that already holds a later revision, 1.0.1 to 1.0.4 and 1.1.1 to
 1.1.4, gets 1.0.5 and 1.1.5 as the next revision of each the same way.
 
 A tool belongs here when it is pure Python, deterministic, works on Windows,
-needs no network, and has no side effects outside its inputs. The
-composition tools are the one exception: their side effects are Azathoth's
-own recorded invocations and runs. The data-shaping tools take their
-identifiers from the `c2000000-…` range, and no example tool may share an
+needs no network, and has no side effects outside its inputs. There are two
+exceptions. The composition tools' side effects are Azathoth's own recorded
+invocations and runs. The S3 tools reach S3, and the split writes objects,
+but only under the prefix it is given and the folder of its own step
+attempt, so what it writes traces back to the run that wrote it. The
+data-shaping tools take their identifiers from the `c2000000-…` range and
+the S3 tools from the `c3000000-…` range, and no example tool may share an
 identifier with a standard tool.

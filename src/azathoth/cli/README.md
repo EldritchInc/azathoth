@@ -329,6 +329,7 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
 ```
 
 `init` opens the database that `AZATHOTH_DATABASE` names, or `azathoth.db`
@@ -351,6 +352,7 @@ Tool validate_json@1.0.0 is already installed (revision 1).
 Tool chunk_text@1.0.0 is already installed (revision 1).
 Tool join_text@1.0.0 is already installed (revision 1).
 Tool render_template@1.0.0 is already installed (revision 1).
+Tool split_s3_object@1.0.0 is already installed (revision 1).
 ```
 
 A database that cannot be opened, for example because the path is a
@@ -375,6 +377,7 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
 ```
 
 It is the only command that creates a PostgreSQL schema. Several processes
@@ -3428,6 +3431,7 @@ Azathoth ships a standard tool library inside the package (ADR 0095):
 ```text
 run_workflow     1.0.0   run a child workflow once
 loop_workflow    1.1.0   run a child workflow repeatedly
+map_workflow     1.0.0   run a child workflow per item of a list
 json_select      1.0.0   select one value from JSON by path
 json_object      1.0.0   build one object from a step's inputs
 json_merge       1.0.0   deep-merge one object into another
@@ -3435,6 +3439,7 @@ validate_json    1.0.0   check a value against a JSON Schema
 chunk_text       1.0.0   split text into chunks of a size
 join_text        1.0.0   join strings, or rendered objects, into one text
 render_template  1.0.0   render a text template from a step's inputs
+split_s3_object  1.0.0   split an S3 object into chunk objects
 ```
 
 The [standard tool library](../standard/README.md) describes each tool's inputs, outputs
@@ -3457,6 +3462,7 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
 ```
 
 For each standard document, in that order, the command compares its content
@@ -3506,6 +3512,7 @@ Installed tool validate_json@1.0.0 revision 1.
 Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
+Installed tool split_s3_object@1.0.0 revision 1.
 ```
 
 # Trace Tool Usage

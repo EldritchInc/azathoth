@@ -51,6 +51,7 @@ def test_standard_documents_load_in_their_fixed_order() -> None:
         "chunk_text@1.0.0",
         "join_text@1.0.0",
         "render_template@1.0.0",
+        "split_s3_object@1.0.0",
     ]
 
 
@@ -66,6 +67,7 @@ def test_standard_documents_keep_their_tool_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000005"),
         UUID("c2000000-0000-4000-8000-000000000006"),
         UUID("c2000000-0000-4000-8000-000000000007"),
+        UUID("c3000000-0000-4000-8000-000000000001"),
     ]
 
 
@@ -150,6 +152,7 @@ def test_standard_implementations_keep_their_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000055"),
         UUID("c2000000-0000-4000-8000-000000000066"),
         UUID("c2000000-0000-4000-8000-000000000077"),
+        UUID("c3000000-0000-4000-8000-000000000011"),
     ]
 
 
@@ -160,7 +163,7 @@ def test_standard_tools_run_as_python_processes() -> None:
             assert implementation.command == ("python",)
 
 
-def test_only_the_composition_tools_grant_themselves_environment_variables() -> None:
+def test_only_the_composition_and_s3_tools_grant_themselves_environment_variables() -> None:
     granting = [
         document.definition.name
         for document in standard_tool_documents()
@@ -168,7 +171,7 @@ def test_only_the_composition_tools_grant_themselves_environment_variables() -> 
         if implementation.environment
     ]
 
-    assert granting == ["run_workflow", "loop_workflow", "map_workflow"]
+    assert granting == ["run_workflow", "loop_workflow", "map_workflow", "split_s3_object"]
 
 
 @pytest.mark.parametrize(

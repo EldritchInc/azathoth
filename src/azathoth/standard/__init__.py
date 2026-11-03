@@ -18,6 +18,7 @@ STANDARD_TOOL_FILES = (
     "chunk-text.json",
     "join-text.json",
     "render-template.json",
+    "split-s3-object.json",
 )
 """The packaged tool documents, in the order they are installed."""
 

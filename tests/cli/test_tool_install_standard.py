@@ -32,6 +32,7 @@ INSTALLED = (
     "Installed tool chunk_text@1.0.0 revision 1.\n"
     "Installed tool join_text@1.0.0 revision 1.\n"
     "Installed tool render_template@1.0.0 revision 1.\n"
+    "Installed tool split_s3_object@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
@@ -45,6 +46,7 @@ ALREADY_INSTALLED = (
     "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
     "Tool join_text@1.0.0 is already installed (revision 1).\n"
     "Tool render_template@1.0.0 is already installed (revision 1).\n"
+    "Tool split_s3_object@1.0.0 is already installed (revision 1).\n"
 )
 
 
@@ -193,6 +195,7 @@ def test_installing_again_writes_nothing(
         ("chunk_text", 1),
         ("join_text", 1),
         ("render_template", 1),
+        ("split_s3_object", 1),
     ]
 
 
@@ -220,6 +223,7 @@ def test_install_skips_a_tool_already_imported_from_the_same_document(
         "Installed tool chunk_text@1.0.0 revision 1.\n"
         "Installed tool join_text@1.0.0 revision 1.\n"
         "Installed tool render_template@1.0.0 revision 1.\n"
+        "Installed tool split_s3_object@1.0.0 revision 1.\n"
     )
 
 
@@ -247,6 +251,7 @@ def test_install_appends_a_revision_over_a_modified_copy(
         "Installed tool chunk_text@1.0.0 revision 1.\n"
         "Installed tool join_text@1.0.0 revision 1.\n"
         "Installed tool render_template@1.0.0 revision 1.\n"
+        "Installed tool split_s3_object@1.0.0 revision 1.\n"
     )
 
     loop = standard_document("loop_workflow")
@@ -287,6 +292,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
         "Tool chunk_text@1.0.0 is already installed (revision 1).\n"
         "Tool join_text@1.0.0 is already installed (revision 1).\n"
         "Tool render_template@1.0.0 is already installed (revision 1).\n"
+        "Tool split_s3_object@1.0.0 is already installed (revision 1).\n"
     )
     assert revision_numbers(database) == [
         ("run_workflow", 1),
@@ -301,6 +307,7 @@ def test_install_notes_a_revision_identical_to_an_earlier_one(
         ("chunk_text", 1),
         ("join_text", 1),
         ("render_template", 1),
+        ("split_s3_object", 1),
     ]
 
 
