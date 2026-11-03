@@ -196,7 +196,14 @@ image from the same commit:
    inside it to print `azathoth <version>`;
 2. it builds the image for `linux/amd64` and `linux/arm64`, and pushes both
    to `ghcr.io/eldritchinc/azathoth` as `<version>`, `<major>.<minor>` and
-   `latest`, labeled with the version and the commit.
+   `latest`, labeled with the version and the commit, with an SBOM and its
+   build's provenance attached;
+3. it signs the pushed image by its digest with cosign, keylessly, through
+   the workflow's own GitHub identity (ADR 0109).
+
+The image's base is pinned by digest in the `Dockerfile`. Dependabot opens a
+pull request when the base tag gets a new digest, so security fixes in the
+base arrive through the same tests as any other change.
 
 A manual run builds both architectures and pushes nothing. The container
 image tests prove the rest on every pull request (see
@@ -429,10 +436,12 @@ The workflow then builds, validates and publishes to PyPI, and then
 publishes the container image. When the `pypi` environment has a required
 reviewer, both wait for that approval.
 
-Confirm that the image is public and reports the release:
+Confirm that the image is public, reports the release, and is signed by
+the release workflow for its tag:
 
 ```bash
 docker run --rm ghcr.io/eldritchinc/azathoth:<version> --version
+cosign verify ghcr.io/eldritchinc/azathoth:<version> --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 Push a release tag once. Never move or reuse a tag that has been pushed. A tag
@@ -496,6 +505,24 @@ python -m pytest tests/providers/test_bedrock_live.py -ra
 
 Live verification tests provider compatibility. It does not replace
 deterministic release validation.
+
+## AWS Deployment Check
+
+A release that changes `deploy/aws/azathoth.yaml`, the worker or the image is
+deployed once to a sandbox AWS account first, as
+[Release Validation](docs/release-validation.md#9-the-aws-deployment)
+requires. Validate the template:
+
+```bash
+aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml
+```
+
+```powershell
+aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml
+```
+
+Then follow [Running on AWS](docs/aws.md) to its seventh step with the
+release's image, stop one worker mid-job, and tear the stack down.
 
 ## Release Principle
 

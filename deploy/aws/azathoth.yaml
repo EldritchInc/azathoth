@@ -1,0 +1,620 @@
+# Azathoth's queue workers on AWS Fargate (ADR 0109).
+#
+# One stack: the job queue and its dead-letter queue, the result queue, the
+# content bucket, and a Fargate service of `azathoth worker run` tasks that
+# scales on the job queue's backlog. It takes the network, the database and
+# the inputs it may read; it creates no database. docs/aws.md deploys it.
+#
+# Every intrinsic is written in its long form, so the template is plain
+# YAML that any YAML reader, and the tests, can read.
+
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Azathoth queue workers on AWS Fargate: SQS job and result queues with a
+  dead-letter queue, an S3 content store, and an autoscaled ECS service.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC the workers run in.
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >-
+      The subnets the workers run in. They need a route to the image's
+      registry, SQS, S3, Secrets Manager, CloudWatch Logs, the database and
+      the model providers.
+
+  AssignPublicIp:
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: >-
+      ENABLED for public subnets without a NAT gateway; DISABLED for private
+      subnets.
+
+  ImageUri:
+    Type: String
+    Default: ghcr.io/eldritchinc/azathoth:1.1.0
+    Description: >-
+      The Azathoth image, best pinned by digest, as
+      ghcr.io/eldritchinc/azathoth:<VERSION>@sha256:<DIGEST>, or a copy of it
+      in your own ECR.
+
+  CpuArchitecture:
+    Type: String
+    Default: X86_64
+    AllowedValues:
+      - X86_64
+      - ARM64
+    Description: The architecture the tasks run on; the image is built for both.
+
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    Description: The CPU units of one task.
+
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    Description: The memory of one task, in MiB.
+
+  DatabaseSecretArn:
+    Type: String
+    AllowedPattern: "arn:aws[a-z-]*:secretsmanager:.+"
+    Description: >-
+      The Secrets Manager secret whose value is the PostgreSQL URL every
+      worker shares, postgresql://<USER>:<PASSWORD>@<HOST>:5432/<DATABASE>.
+
+  OpenRouterSecretArn:
+    Type: String
+    Default: ""
+    Description: >-
+      The Secrets Manager secret whose value is the OpenRouter API key; empty
+      when the workers use no OpenRouter model.
+
+  EnableBedrock:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >-
+      Whether the workers run models on Amazon Bedrock, in this stack's region.
+      Without a pricing document, Bedrock models have unknown costs.
+
+  InputBucket:
+    Type: String
+    Default: ""
+    Description: >-
+      The bucket s3:// inputs may come from; empty to accept no references.
+
+  InputPrefix:
+    Type: String
+    Default: ""
+    Description: >-
+      The key prefix inputs must start with, inside InputBucket; end it with
+      a slash to allow one folder. Empty allows the whole bucket.
+
+  MaxReceiveCount:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    Description: >-
+      How many times a message may be received before the dead-letter queue
+      takes it.
+
+  MinTasks:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: >-
+      The fewest workers to run. 0 costs nothing while idle, but the first job
+      waits for a task to start.
+
+  MaxTasks:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    Description: The most workers to run.
+
+  ScaleOutBacklog:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: How many waiting messages add a worker.
+
+Conditions:
+  HasInputBucket:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: InputBucket
+          - ""
+
+  HasOpenRouter:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: OpenRouterSecretArn
+          - ""
+
+  UseBedrock:
+    Fn::Equals:
+      - Ref: EnableBedrock
+      - "true"
+
+Resources:
+  #
+  # The queues. The worker hides each message it receives for two minutes
+  # and extends that while its job runs (ADR 0107); a message that keeps
+  # stopping workers moves to the dead-letter queue.
+  #
+  JobDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  JobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 120
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+            - JobDeadLetterQueue
+            - Arn
+        maxReceiveCount:
+          Ref: MaxReceiveCount
+
+  ResultQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  #
+  # Resolved inputs are kept here by their digest (ADR 0108). They are
+  # evidence of what each run was given, so the bucket outlives the stack.
+  #
+  ContentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+
+  #
+  # The workers only call out; nothing calls in.
+  #
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Azathoth workers, which accept no connections.
+      VpcId:
+        Ref: VpcId
+
+  #
+  # ECS uses this role to pull the image, write logs and read the secrets it
+  # injects; the workers never hold it.
+  #
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  Fn::If:
+                    - HasOpenRouter
+                    - - Ref: DatabaseSecretArn
+                      - Ref: OpenRouterSecretArn
+                    - - Ref: DatabaseSecretArn
+
+  #
+  # The workers' own role: exactly the calls ADR 0107 and ADR 0108 make.
+  #
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: run-jobs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: TakeJobs
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:ChangeMessageVisibility
+                Resource:
+                  Fn::GetAtt:
+                    - JobQueue
+                    - Arn
+              - Sid: SendResults
+                Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource:
+                  Fn::GetAtt:
+                    - ResultQueue
+                    - Arn
+              - Sid: KeepContent
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  Fn::Sub: ${ContentBucket.Arn}/evidence/*
+              - Fn::If:
+                  - HasInputBucket
+                  - Sid: ReadInputs
+                    Effect: Allow
+                    Action:
+                      - s3:GetObject
+                    Resource:
+                      Fn::Sub: arn:${AWS::Partition}:s3:::${InputBucket}/${InputPrefix}*
+                  - Ref: AWS::NoValue
+              - Fn::If:
+                  - UseBedrock
+                  - Sid: DiscoverModels
+                    Effect: Allow
+                    Action:
+                      - bedrock:ListFoundationModels
+                      - bedrock:ListInferenceProfiles
+                    Resource: "*"
+                  - Ref: AWS::NoValue
+              - Fn::If:
+                  - UseBedrock
+                  - Sid: InvokeModels
+                    Effect: Allow
+                    Action:
+                      - bedrock:InvokeModel
+                    Resource:
+                      - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+                      - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+                  - Ref: AWS::NoValue
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu:
+        Ref: TaskCpu
+      Memory:
+        Ref: TaskMemory
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture:
+          Ref: CpuArchitecture
+      ExecutionRoleArn:
+        Fn::GetAtt:
+          - ExecutionRole
+          - Arn
+      TaskRoleArn:
+        Fn::GetAtt:
+          - TaskRole
+          - Arn
+      #
+      # Fargate has no tmpfs: an ephemeral volume at /tmp keeps the root
+      # filesystem read-only, as the image expects (ADR 0101).
+      #
+      Volumes:
+        - Name: tmp
+      ContainerDefinitions:
+        - Name: worker
+          Image:
+            Ref: ImageUri
+          Essential: true
+          ReadonlyRootFilesystem: true
+          MountPoints:
+            - SourceVolume: tmp
+              ContainerPath: /tmp
+              ReadOnly: false
+          Command:
+            Fn::If:
+              - HasInputBucket
+              - - worker
+                - run
+                - --queue-url
+                - Ref: JobQueue
+                - --result-queue-url
+                - Ref: ResultQueue
+                - --heartbeat-file
+                - /tmp/azathoth-heartbeat
+                - --allow-input-bucket
+                - Fn::Sub: ${InputBucket}/${InputPrefix}
+              - - worker
+                - run
+                - --queue-url
+                - Ref: JobQueue
+                - --result-queue-url
+                - Ref: ResultQueue
+                - --heartbeat-file
+                - /tmp/azathoth-heartbeat
+          Environment:
+            - Name: AWS_REGION
+              Value:
+                Ref: AWS::Region
+            - Name: AZATHOTH_CONTENT_STORE
+              Value:
+                Fn::Sub: s3://${ContentBucket}/evidence
+            - Fn::If:
+                - UseBedrock
+                - Name: AZATHOTH_BEDROCK
+                  Value: "1"
+                - Ref: AWS::NoValue
+          Secrets:
+            - Name: AZATHOTH_DATABASE
+              ValueFrom:
+                Ref: DatabaseSecretArn
+            - Fn::If:
+                - HasOpenRouter
+                - Name: OPENROUTER_API_KEY
+                  ValueFrom:
+                    Ref: OpenRouterSecretArn
+                - Ref: AWS::NoValue
+          HealthCheck:
+            Command:
+              - CMD
+              - azathoth
+              - worker
+              - health
+              - --heartbeat-file
+              - /tmp/azathoth-heartbeat
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          #
+          # A drain takes at most one receive wait and a job's unwinding
+          # (ADR 0107); ECS kills the task only after this long.
+          #
+          StopTimeout: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Ref: LogGroup
+              awslogs-region:
+                Ref: AWS::Region
+              awslogs-stream-prefix: worker
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Ref: Cluster
+      LaunchType: FARGATE
+      TaskDefinition:
+        Ref: TaskDefinition
+      DesiredCount:
+        Ref: MinTasks
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp:
+            Ref: AssignPublicIp
+          Subnets:
+            Ref: SubnetIds
+          SecurityGroups:
+            - Ref: WorkerSecurityGroup
+
+  #
+  # Scale on the backlog: a worker more while messages wait, one fewer once
+  # the queue has stayed empty. A worker scaled in drains, and hands its job
+  # to another (ADR 0107).
+  #
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId:
+        Fn::Sub: service/${Cluster}/${Service.Name}
+      MinCapacity:
+        Ref: MinTasks
+      MaxCapacity:
+        Ref: MaxTasks
+
+  ScaleOutPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: add-a-worker
+      PolicyType: StepScaling
+      ScalingTargetId:
+        Ref: ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 120
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 1
+
+  ScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: remove-a-worker
+      PolicyType: StepScaling
+      ScalingTargetId:
+        Ref: ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 300
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: -1
+
+  BacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Messages are waiting for a worker.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value:
+            Fn::GetAtt:
+              - JobQueue
+              - QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold:
+        Ref: ScaleOutBacklog
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Ref: ScaleOutPolicy
+
+  #
+  # Idle means no message waiting and none being run: a running job's
+  # message is hidden, and counting only visible ones would stop busy
+  # workers.
+  #
+  IdleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: No message has waited or run for five minutes.
+      Metrics:
+        - Id: waiting
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/SQS
+              MetricName: ApproximateNumberOfMessagesVisible
+              Dimensions:
+                - Name: QueueName
+                  Value:
+                    Fn::GetAtt:
+                      - JobQueue
+                      - QueueName
+            Period: 60
+            Stat: Maximum
+        - Id: running
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/SQS
+              MetricName: ApproximateNumberOfMessagesNotVisible
+              Dimensions:
+                - Name: QueueName
+                  Value:
+                    Fn::GetAtt:
+                      - JobQueue
+                      - QueueName
+            Period: 60
+            Stat: Maximum
+        - Id: busy
+          Expression: waiting + running
+          Label: Messages waiting or running
+          ReturnData: true
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - Ref: ScaleInPolicy
+
+Outputs:
+  JobQueueUrl:
+    Description: Where programs send job requests.
+    Value:
+      Ref: JobQueue
+
+  ResultQueueUrl:
+    Description: Where the workers send every final result.
+    Value:
+      Ref: ResultQueue
+
+  DeadLetterQueueUrl:
+    Description: Where messages that kept stopping workers are moved.
+    Value:
+      Ref: JobDeadLetterQueue
+
+  ContentBucketName:
+    Description: Where resolved inputs are kept, under evidence/.
+    Value:
+      Ref: ContentBucket
+
+  ClusterName:
+    Description: The cluster the workers run in.
+    Value:
+      Ref: Cluster
+
+  ServiceName:
+    Description: The workers' service.
+    Value:
+      Fn::GetAtt:
+        - Service
+        - Name
+
+  TaskDefinitionArn:
+    Description: The workers' task definition, for one-off tasks such as azathoth init.
+    Value:
+      Ref: TaskDefinition
+
+  SecurityGroupId:
+    Description: The workers' security group, for one-off tasks.
+    Value:
+      Ref: WorkerSecurityGroup
+
+  LogGroupName:
+    Description: Where the workers' output goes.
+    Value:
+      Ref: LogGroup

@@ -5,12 +5,13 @@
 #   docker build -t azathoth .
 #   docker run --rm azathoth --version
 
-ARG PYTHON_IMAGE=python:3.13-slim-trixie
-
 #
-# Build the wheel from the checkout.
+# Build the wheel from the checkout. Both stages start from the same base,
+# pinned by digest, so a rebuild of a release uses exactly the base it was
+# tested with. Dependabot proposes each new digest of the tag as a pull
+# request, in both lines (ADR 0109).
 #
-FROM ${PYTHON_IMAGE} AS builder
+FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 AS builder
 
 WORKDIR /src
 
@@ -26,7 +27,7 @@ RUN python -m build --wheel --outdir /dist
 # ADR 0102, ADR 0103, ADR 0107), into a venv that is first on PATH, so the
 # standard tools' child workflows run Azathoth's own Python.
 #
-FROM ${PYTHON_IMAGE}
+FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
 
 LABEL org.opencontainers.image.title="Azathoth" \
       org.opencontainers.image.description="An empirical optimization engine for context-aware AI workflows." \

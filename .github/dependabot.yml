@@ -1,0 +1,8 @@
+# Keeps the container image's pinned base current (ADR 0109): a new digest
+# of the base tag arrives as a pull request, tested like any other.
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

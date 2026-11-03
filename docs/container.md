@@ -345,6 +345,8 @@ On Amazon ECS, the same command is the container's `healthCheck`, and a
 
 Give the queue a dead-letter queue, so a message that keeps stopping
 workers is moved aside rather than received forever.
+[Running on AWS](aws.md) deploys all of this, the queues, the dead-letter
+queue, the service and its IAM, from one template.
 
 ## Building the Image Yourself
 
@@ -362,6 +364,32 @@ docker run --rm azathoth --version
 ```
 
 [Contributing](../CONTRIBUTING.md#container-tests) covers testing it.
+
+## Verifying the Image
+
+Each release's image is signed, and carries an SBOM and a record of how it
+was built (ADR 0109). With [cosign](https://docs.sigstore.dev/cosign/system_config/installation/),
+check that an image is the one Azathoth's release workflow built for its
+tag:
+
+```bash
+cosign verify ghcr.io/eldritchinc/azathoth:1.1.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.1.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+```powershell
+cosign verify ghcr.io/eldritchinc/azathoth:1.1.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.1.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+For another version, change the version in both places. Docker shows the
+SBOM, the list of every package in the image:
+
+```bash
+docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.1.0 --format "{{ json .SBOM }}"
+```
+
+```powershell
+docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.1.0 --format "{{ json .SBOM }}"
+```
 
 ## Upgrading and Cleaning Up
 
