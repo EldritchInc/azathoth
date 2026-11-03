@@ -785,17 +785,24 @@ and always has a media type (ADR 0096):
 References are resolved at the edge, by the command that received them,
 before the run starts, so steps only ever see values. JSON content is parsed
 and text content becomes a string. Each entry point decides which URI
-schemes it accepts, and resolved content is capped at 10 MiB.
+schemes it accepts: the CLI accepts `file://`, and the queue worker `s3://`
+from the buckets and prefixes it is allowed (ADR 0108). Resolved content is
+capped, at 10 MiB unless a worker sets its own cap of up to 100 MiB.
 
 The resolved content is kept in a content-addressed store, by the SHA-256
 digest of its bytes, and the run records a `workflow.input.resolved` event
 with the reference's URI, media type, size and digest. An inline input
-records exactly the `workflow.input.received` event it always has. The CLI
-accepts local files:
+records exactly the `workflow.input.received` event it always has. The
+store is a table in the database, or, with `AZATHOTH_CONTENT_STORE`, a
+bucket in S3. The CLI accepts local files:
 
 ```bash
 azathoth workflow run <WORKFLOW_ID> --input-file chapter.md
 ```
+
+The cap is for content the engine resolves into a run, not for the data a
+workflow processes. Larger data goes by pointer: the input names an object,
+a tool streams it into chunks, and `map_workflow` runs a child over them.
 
 See [`azathoth.inputs`](../src/azathoth/inputs/README.md).
 

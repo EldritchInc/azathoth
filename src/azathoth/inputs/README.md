@@ -154,6 +154,24 @@ s3:// inputs need boto3, which is not installed; install azathoth-ai[worker].
 The client is boto3's, made on the first read, with AWS's own credential
 chain and standard retries.
 
+### Data Larger Than the Cap
+
+The cap is for content the engine resolves into a run, whose decoded value
+lands in the run's context, in the database. It is not the size of the
+largest data a workflow can process. Data larger than the cap goes by
+pointer (ADR 0108):
+
+1. The request's input is an inline value naming the object, such as
+   `{"value": {"source": "s3://intake/batch-0412.csv"}}`. Inline values are
+   not resolved, so neither the cap nor the allowed locations apply.
+2. A process tool that declares the `AWS_*` variables (ADR 0099) streams the
+   object, writes chunk objects back to S3, and returns only their keys.
+3. `map_workflow` runs a child over the keys (ADR 0106); each child reads
+   its own chunk, as a resolved reference when a chunk fits under the cap.
+
+Only keys and small results pass through the context. What a tool reads is
+governed by the task's IAM role, not by the worker's allowed locations.
+
 ## Input Events
 
 `azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
