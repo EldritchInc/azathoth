@@ -82,7 +82,7 @@ class FileInputResolver:
             raise InputResolutionError(f"Unable to read input {uri}: {exc}") from exc
 
         if len(content) > max_bytes:
-            raise _too_large(uri, max_bytes)
+            raise input_too_large(uri, max_bytes)
 
         return content
 
@@ -206,7 +206,7 @@ def resolve_input(
     )
 
     if len(content) > policy.max_bytes:
-        raise _too_large(source.uri, policy.max_bytes)
+        raise input_too_large(source.uri, policy.max_bytes)
 
     try:
         value = decode_content(content, source.media_type)
@@ -227,11 +227,11 @@ def resolve_input(
     )
 
 
-def _too_large(
+def input_too_large(
     uri: str,
     max_bytes: int,
 ) -> InputResolutionError:
-    """Return the error for content beyond the cap."""
+    """Return the error for content beyond the cap, whatever its scheme."""
 
     return InputResolutionError(f"Input {uri} is larger than the limit of {max_bytes} bytes.")
 
@@ -247,5 +247,6 @@ __all__ = [
     "ResolvedInput",
     "file_path",
     "file_uri",
+    "input_too_large",
     "resolve_input",
 ]

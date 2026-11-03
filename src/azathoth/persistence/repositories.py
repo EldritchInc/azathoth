@@ -5,6 +5,7 @@ This module imports Azathoth's domain packages, which import
 it: import it as `azathoth.persistence.repositories`.
 """
 
+from collections.abc import Callable
 from functools import cached_property
 from pathlib import Path
 from typing import Final
@@ -136,9 +137,19 @@ class Repositories:
         self,
         location: DatabaseLocation,
         database: Database,
+        *,
+        content: Callable[[], ContentStore] | None = None,
     ) -> None:
+        """Compose the repositories of one database.
+
+        `content` makes the content store, when it is kept elsewhere than in
+        the database, as in S3 (ADR 0108); it is called the first time the
+        store is used.
+        """
+
         self._location = location
         self._database = database
+        self._content = content
 
     @property
     def location(
@@ -390,6 +401,9 @@ class Repositories:
     def content(
         self,
     ) -> ContentStore:
+        if self._content is not None:
+            return self._content()
+
         path = self._sqlite_path
 
         return SQLiteContentStore(path) if path is not None else SqlContentStore(self._database)
@@ -430,10 +444,13 @@ def close_postgres_databases() -> None:
 
 def open_repositories(
     location: DatabaseLocation | str | Path,
+    *,
+    content: Callable[[], ContentStore] | None = None,
 ) -> Repositories:
     """Return every repository of the database one location names.
 
-    Nothing is opened until a repository is first used.
+    Nothing is opened until a repository is first used. `content` makes a
+    content store kept outside the database, the first time it is used.
 
     Raises:
         DatabaseUnavailableError: It is a PostgreSQL database, and the
@@ -447,9 +464,9 @@ def open_repositories(
     )
 
     if isinstance(resolved, PostgresLocation):
-        return Repositories(resolved, postgres_database(resolved))
+        return Repositories(resolved, postgres_database(resolved), content=content)
 
-    return Repositories(resolved, SQLiteDatabase(resolved.path))
+    return Repositories(resolved, SQLiteDatabase(resolved.path), content=content)
 
 
 __all__ = [

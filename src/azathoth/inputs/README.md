@@ -97,6 +97,83 @@ The CLI resolves `workflow run --input-file` and `workflow invoke
 --input-file` under `azathoth.cli.CLI_INPUT_POLICY`, which accepts `file://`
 only.
 
+## S3 References
+
+`S3InputResolver` reads `s3://<BUCKET>/<KEY>` references to objects in
+Amazon S3, but only inside the locations it is given (ADR 0108):
+
+```python
+from azathoth.inputs import (
+    S3_SCHEME,
+    InputPolicy,
+    S3InputLocation,
+    S3InputResolver,
+)
+
+allowed = (S3InputLocation.parse("azathoth-inputs/requests/"),)
+policy = InputPolicy(resolvers={S3_SCHEME: S3InputResolver(allowed)})
+```
+
+A location is a bucket, which allows every key in it, or a bucket and a key
+prefix, which allows the keys that start with it. A prefix is matched
+literally, as S3 matches it: keys have no paths, so `azathoth-inputs/requests`
+also allows `requests-old/`, and only a trailing `/` stops it. A resolver
+with no locations allows nothing.
+
+The key is the rest of the URI after the bucket, exactly as written. A URI
+with a query or a fragment, such as `?versionId=`, is refused: a request
+names an object, and the provenance's digest pins exactly which bytes ran.
+The media type is the reference's own; S3's `Content-Type` is ignored.
+
+An allowed object is read with one ranged GET of at most the cap plus one
+byte, so an object beyond the cap is refused without downloading it. Each
+refusal is an `InputResolutionError`, which an entry point reports to the
+request's caller:
+
+```text
+Input s3://azathoth-other/chapter.md is not in an allowed location; allowed: azathoth-inputs/requests/.
+Input s3://azathoth-inputs/requests/chapter.md does not exist.
+Unable to read input s3://azathoth-inputs/requests/chapter.md: AccessDenied: Access Denied
+Input s3://azathoth-inputs/requests/chapter.md is larger than the limit of 10485760 bytes.
+Input s3://azathoth-inputs/requests/chapter.md?versionId=3 must name an object only, with no query or fragment.
+```
+
+S3 answers `AccessDenied` for a missing object, too, when the reader may
+not list its bucket.
+
+A read that never reached S3, because there are no credentials or no
+network, is not the request's fault. It raises `InputUnavailableError`
+instead, which stops an entry point rather than refusing one request. So
+does reading without boto3, which is imported only on the first read of an
+allowed object:
+
+```text
+s3:// inputs need boto3, which is not installed; install azathoth-ai[worker].
+```
+
+The client is boto3's, made on the first read, with AWS's own credential
+chain and standard retries.
+
+### Data Larger Than the Cap
+
+The cap is for content the engine resolves into a run, whose decoded value
+lands in the run's context, in the database. It is not the size of the
+largest data a workflow can process. Data larger than the cap goes by
+pointer (ADR 0108):
+
+1. The request's input is an inline value naming the object, such as
+   `{"value": {"source": "s3://intake/batch-0412.csv"}}`. Inline values are
+   not resolved, so neither the cap nor the allowed locations apply.
+2. A process tool that declares the `AWS_*` variables (ADR 0099) streams the
+   object, writes chunk objects back to S3, and returns only their keys.
+3. `map_workflow` runs a child over the keys (ADR 0106); each child reads
+   its own chunk, as a resolved reference when a chunk fits under the cap.
+
+Only keys and small results pass through the context. What a tool reads is
+governed by the task's IAM role, not by the worker's allowed locations.
+
+## Input Events
+
 `azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
 turns a resolved input into a run's initial events: the canonical
 `workflow.input.received` event with the value, followed, for a reference
@@ -130,6 +207,29 @@ A `ContentStore` has three operations:
 configured database, with its size and when it was first stored. It creates
 the table on first use. `InMemoryContentStore` keeps content in process
 memory, for tests and embedding.
+
+`S3ContentStore` keeps content in Amazon S3 instead (ADR 0108), at an
+`S3ContentLocation`: a bucket and a prefix, parsed from
+`s3://<BUCKET>[/<PREFIX>]`. Content is kept at `<PREFIX>/sha256/<DIGEST>`.
+`put` writes only if nothing is there yet, with S3's conditional
+`If-None-Match: *`, and takes S3's answer that something is, or is being
+written, as already stored. `get` and `contains` read the object. Every
+failure, a call S3 refused or one that never reached it, raises
+`ContentStoreError`, which is never the request's fault:
+
+```text
+Cannot store content in s3://<BUCKET>/<KEY>: <CODE>: <MESSAGE>
+Cannot read s3://<BUCKET>/<KEY>: <CODE>: <MESSAGE>
+```
+
+`content_store_location(environment)` reads `AZATHOTH_CONTENT_STORE`, and
+returns `None` when it is unset, which keeps content in the database. The
+store makes boto3's client when it is made, with standard retries, and says
+which extra to install without boto3:
+
+```text
+AZATHOTH_CONTENT_STORE names S3, but boto3 is not installed; install azathoth-ai[worker].
+```
 
 Nothing removes stored content yet.
 

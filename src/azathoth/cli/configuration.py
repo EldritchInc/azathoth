@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
+from azathoth.inputs import S3ContentLocation, content_store_location
 from azathoth.persistence import (
     DatabaseLocation,
     PostgresLocation,
@@ -53,11 +54,15 @@ class CliRuntimeConfiguration:
     `AZATHOTH_BEDROCK` turns Bedrock on, and is empty otherwise (ADR 0103).
     They are read only when the runtime is composed, so a command that
     composes none never imports boto3.
+
+    `content_store` is the S3 location `AZATHOTH_CONTENT_STORE` names, or
+    `None` to keep resolved content in the database (ADR 0108).
     """
 
     database: Path | PostgresLocation = DEFAULT_DATABASE
     openrouter_api_key: SecretStr | None = None
     bedrock_environment: tuple[tuple[str, str], ...] = ()
+    content_store: S3ContentLocation | None = None
 
     @property
     def bedrock_enabled(
@@ -83,7 +88,12 @@ class CliRuntimeConfiguration:
         cls,
         environment: Mapping[str, str] | None = None,
     ) -> "CliRuntimeConfiguration":
-        """Construct CLI runtime configuration from environment variables."""
+        """Construct CLI runtime configuration from environment variables.
+
+        Raises:
+            ContentStoreError: `AZATHOTH_CONTENT_STORE` is set, but not to an
+                `s3://` URL.
+        """
 
         values = environment if environment is not None else os.environ
 
@@ -113,4 +123,5 @@ class CliRuntimeConfiguration:
             database=database,
             openrouter_api_key=api_key,
             bedrock_environment=bedrock,
+            content_store=content_store_location(values),
         )

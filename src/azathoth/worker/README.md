@@ -138,7 +138,13 @@ A queue that fails also raises from `run`.
 ## Heartbeat
 
 `heartbeat` is called before every receive and after every extension, so a
-health check can tell a live worker from a stuck one.
+health check can tell a live worker from a stuck one. An extension beats in
+the same call that hides the message, so it is never left without its
+heartbeat, even when its job finishes as it lands.
+
+A heartbeat that fails before a receive raises from `run`. One that fails
+after an extension is reported, and the job carries on to its end; the next
+receive's heartbeat then fails the worker.
 
 `HeartbeatFile(path).beat()` touches a file, and
 `check_heartbeat(path, max_age_seconds=...)` reads how long ago that was.

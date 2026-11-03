@@ -1,15 +1,18 @@
 """Queue worker command dispatch for the Azathoth CLI (ADR 0107)."""
 
 from argparse import Namespace
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
 from azathoth.cli.parsing import (
     WORKER_ACTION_ATTRIBUTE,
+    WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE,
     WORKER_EXTEND_EVERY_ATTRIBUTE,
     WORKER_HEALTH_ACTION,
     WORKER_HEARTBEAT_FILE_ATTRIBUTE,
     WORKER_MAX_AGE_ATTRIBUTE,
+    WORKER_MAX_INPUT_BYTES_ATTRIBUTE,
     WORKER_QUEUE_URL_ATTRIBUTE,
     WORKER_RESULT_QUEUE_URL_ATTRIBUTE,
     WORKER_RUN_ACTION,
@@ -30,6 +33,8 @@ class WorkerRunner(Protocol):
         visibility_timeout_seconds: int,
         extend_every_seconds: float,
         heartbeat_file: Path | None,
+        allow_input_buckets: Sequence[str],
+        max_input_bytes: int,
     ) -> int: ...
 
 
@@ -81,6 +86,10 @@ def dispatch_worker_command(
                 Path | None,
                 getattr(arguments, WORKER_HEARTBEAT_FILE_ATTRIBUTE),
             ),
+            allow_input_buckets=tuple(
+                cast(list[str], getattr(arguments, WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE))
+            ),
+            max_input_bytes=cast(int, getattr(arguments, WORKER_MAX_INPUT_BYTES_ATTRIBUTE)),
         )
 
     if action == WORKER_HEALTH_ACTION:

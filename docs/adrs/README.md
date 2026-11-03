@@ -130,3 +130,4 @@ requests that made it:
 - [ADR 0105: Resume Interrupted Runs From a Journal](0105-resume-interrupted-runs-from-a-journal.md)
 - [ADR 0106: Map a Child Workflow Over a List](0106-map-a-child-workflow-over-a-list.md)
 - [ADR 0107: Run Jobs From a Queue](0107-run-jobs-from-a-queue.md)
+- [ADR 0108: Read Inputs From S3](0108-read-inputs-from-s3.md)
