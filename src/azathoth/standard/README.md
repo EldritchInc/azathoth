@@ -23,6 +23,7 @@ at all:
 | `join_text`       | 1.0.0   | 1.0.0          | Join strings, or rendered objects.          |
 | `render_template` | 1.0.0   | 1.0.0          | Render a text template from inputs.         |
 | `split_s3_object` | 1.0.0   | 1.0.0          | Split an S3 object into chunk objects.      |
+| `read_s3_object`  | 1.0.0   | 1.0.0          | Read and decode one S3 object within a cap. |
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -431,8 +432,10 @@ render_template reserves the name 'template' for the template itself.
 A worker reads inputs of at most 100 MiB (ADR 0108), and a step's values
 live in its run's journal. Data larger than that stays in S3, and the S3
 tools work with it there: `split_s3_object` streams one object into chunk
-objects small enough to work with, and `map_workflow` runs a child over
-them (ADR 0110).
+objects small enough to work with, `map_workflow` runs a child over them,
+and each child reads its own chunk with `read_s3_object` (ADR 0110). A map
+hands each child an inline item, which the engine does not resolve, so the
+child reads the chunk itself.
 
 Each S3 tool is a process tool that runs its source with `python`, like
 the others, but:
@@ -538,6 +541,59 @@ split_s3_object found <URI> changed while splitting it.
 Its timeout is an hour: a large source is read twice and written once, at
 the speed of the network between the worker and S3.
 
+### read_s3_object
+
+`read_s3_object` reads the object at `uri` and decodes it as `media_type`:
+
+```json
+{
+  "settings": {"media_type": "application/json", "max_bytes": 5242880},
+  "uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000003"
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `media_type` | `text/plain` | `application/json` or any `text/*` type, lowercase and with no parameters. |
+| `max_bytes` | 10485760 | The largest object it reads, 10 MiB by default, at most 104857600 (100 MiB). |
+
+`settings` may be left out. It returns the decoded value with the object's
+size, its SHA-256 digest in lowercase hex, and its ETag:
+
+```json
+{"value": {"claims": [1, 2, 3]}, "media_type": "application/json", "size_bytes": 21, "digest": "<DIGEST>", "etag": "<ETAG>"}
+```
+
+It decodes exactly as the engine decodes a resolved input: UTF-8, with a
+leading byte order mark dropped; text as a string, and JSON parsed,
+refusing `NaN` and the infinities, which JSON does not have. It reads with
+one ranged GET of at most `max_bytes` and one byte more, as the worker
+reads `s3://` inputs (ADR 0108), so an object past the cap is refused
+without being read whole. An empty object answers that range with no
+bytes and no ETag, so it is read once more, plainly.
+
+Inputs it cannot use are refused with status 2, before S3 is reached:
+
+```text
+read_s3_object needs 'settings' to be an object.
+read_s3_object needs 'uri' to be an s3:// URI naming an object.
+read_s3_object needs 'media_type' to be application/json or a text/* media type, lowercase and with no parameters.
+read_s3_object needs 'max_bytes' to be a whole number from 1 to 104857600.
+```
+
+Everything else fails with status 1:
+
+```text
+read_s3_object needs boto3, which is not installed; install azathoth-ai[worker].
+read_s3_object could not read <URI>: <CODE>: <MESSAGE>.
+read_s3_object could not read <URI>: <REASON>.
+read_s3_object found <URI> larger than its max_bytes of <MAX_BYTES>.
+read_s3_object found <URI> is not valid UTF-8: <REASON> at byte <BYTE>.
+read_s3_object found <URI> is not valid JSON: <REASON>.
+```
+
+Its timeout is five minutes.
+
 ## Installing
 
 The library reaches a database through the CLI:
@@ -600,6 +656,7 @@ Installed tool chunk_text@1.0.0 revision 1.
 Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
+Installed tool read_s3_object@1.0.0 revision 1.
 ```
 
 A database that already holds a later revision, 1.0.1 to 1.0.4 and 1.1.1 to

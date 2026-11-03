@@ -19,6 +19,7 @@ STANDARD_TOOL_FILES = (
     "join-text.json",
     "render-template.json",
     "split-s3-object.json",
+    "read-s3-object.json",
 )
 """The packaged tool documents, in the order they are installed."""
 

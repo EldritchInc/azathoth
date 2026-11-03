@@ -52,6 +52,7 @@ def test_standard_documents_load_in_their_fixed_order() -> None:
         "join_text@1.0.0",
         "render_template@1.0.0",
         "split_s3_object@1.0.0",
+        "read_s3_object@1.0.0",
     ]
 
 
@@ -68,6 +69,7 @@ def test_standard_documents_keep_their_tool_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000006"),
         UUID("c2000000-0000-4000-8000-000000000007"),
         UUID("c3000000-0000-4000-8000-000000000001"),
+        UUID("c3000000-0000-4000-8000-000000000002"),
     ]
 
 
@@ -153,6 +155,7 @@ def test_standard_implementations_keep_their_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000066"),
         UUID("c2000000-0000-4000-8000-000000000077"),
         UUID("c3000000-0000-4000-8000-000000000011"),
+        UUID("c3000000-0000-4000-8000-000000000022"),
     ]
 
 
@@ -171,7 +174,13 @@ def test_only_the_composition_and_s3_tools_grant_themselves_environment_variable
         if implementation.environment
     ]
 
-    assert granting == ["run_workflow", "loop_workflow", "map_workflow", "split_s3_object"]
+    assert granting == [
+        "run_workflow",
+        "loop_workflow",
+        "map_workflow",
+        "split_s3_object",
+        "read_s3_object",
+    ]
 
 
 @pytest.mark.parametrize(

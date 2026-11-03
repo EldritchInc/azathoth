@@ -384,7 +384,7 @@ def test_a_real_process_sees_exactly_the_built_environment(
 
 COMPOSITION_TOOLS = ("run_workflow", "loop_workflow", "map_workflow")
 
-S3_TOOLS = ("split_s3_object",)
+S3_TOOLS = ("split_s3_object", "read_s3_object")
 
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
@@ -487,7 +487,7 @@ def test_the_s3_tools_see_the_aws_variables_and_nothing_else_of_azathoths(
     timeout = environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE)
     aws = {key: value for key, value in environment.items() if key.startswith("AWS_")}
 
-    assert timeout == "3600.0"
+    assert timeout == str(implementation.timeout_seconds)
     assert aws == {key: value for key, value in environ.items() if key.startswith("AWS_")}
     assert "AWS_SECRET_ACCESS_KEY" in aws
     assert {key: value for key, value in environment.items() if key not in aws} == POSIX_BASE
