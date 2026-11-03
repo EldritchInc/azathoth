@@ -7,6 +7,27 @@ Contributions should preserve those properties.
 
 This guide describes the development expectations for the Azathoth codebase.
 
+## Getting Involved
+
+- **Questions, ideas and show-and-tell** go to
+  [Discussions](https://github.com/EldritchInc/azathoth/discussions):
+  how to model a workflow, whether a tool belongs in the standard library,
+  what you built.
+- **Bugs and concrete proposals** are issues. A bug report is most useful
+  with the command you ran, what it printed, and `azathoth --version`.
+- **A first contribution** is easiest from a
+  [good first issue](https://github.com/EldritchInc/azathoth/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+  Each one is scoped to one boundary, names the decision record that
+  describes it, and says which tests would prove it. Comment on the issue
+  to take it, so two people do not build the same thing.
+- **Commercial support, pilots and deployments** are Eldritch, Inc.'s; see
+  [Work With Us](https://eldritchinc.com/workwithus/).
+
+A change of substance starts from a decision: read the
+[Architecture Decision Records](docs/adrs/README.md) the change touches
+first, and expect one to be written or amended with it (see
+[Architecture Decision Records](#architecture-decision-records) below).
+
 ## Development Environment
 
 Clone the repository, create a virtual environment in it, and install the

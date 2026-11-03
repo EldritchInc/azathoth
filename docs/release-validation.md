@@ -384,6 +384,7 @@ gate, not an optional check.
 [ ] the TestPyPI trial published, installed and passed the provider-free examples
 [ ] every link in README.md resolves, including https://eldritchinc.com/workwithus/
 [ ] CHANGELOG.md's first entry is the release, and its notes are on the GitHub release
+[ ] Discussions are enabled, and open good first issues are labeled
 [ ] no credentials are committed
 [ ] live verification, if done, was done after the deterministic gate
 ```
