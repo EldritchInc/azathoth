@@ -7,8 +7,13 @@ from importlib.metadata import (
     requires,
     version,
 )
+from pathlib import Path
+
+import pytest
 
 from azathoth import __version__
+
+PROJECT_ROOT = Path(__file__).parents[1]
 
 DISTRIBUTION_NAME = "azathoth-ai"
 CONSOLE_SCRIPT = "azathoth"
@@ -50,8 +55,55 @@ def is_development_requirement(
     return marker.replace("'", '"').split() == ["extra", "==", '"dev"']
 
 
+#
+# Every way the documents show this Azathoth's own version: what
+# `--version` prints, the image's tag, and the release's git tag.
+#
+SHOWN_VERSIONS = (
+    re.compile(r"azathoth (\d+\.\d+\.\d+)"),
+    re.compile(r"ghcr\.io/eldritchinc/azathoth:(\d+\.\d+\.\d+)"),
+    re.compile(r"\$REGISTRY/azathoth:(\d+\.\d+\.\d+)"),
+    re.compile(r"refs/tags/v(\d+\.\d+\.\d+)"),
+    re.compile(r"git tag -a v(\d+\.\d+\.\d+)"),
+    re.compile(r"git push origin v(\d+\.\d+\.\d+)"),
+)
+
+
+def current_documents() -> list[Path]:
+    """Return the documents that describe this release, not past ones.
+
+    The decision records and the changelog record history, so they are left
+    out.
+    """
+
+    return [
+        PROJECT_ROOT / "README.md",
+        PROJECT_ROOT / "RELEASING.md",
+        PROJECT_ROOT / "CONTRIBUTING.md",
+        PROJECT_ROOT / "deploy" / "aws" / "azathoth.yaml",
+        *sorted((PROJECT_ROOT / "docs").glob("*.md")),
+        *sorted((PROJECT_ROOT / "src").rglob("README.md")),
+    ]
+
+
 def test_package_exposes_version() -> None:
-    assert __version__ == "1.0.0"
+    assert __version__ == "1.1.0"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(path, id=path.relative_to(PROJECT_ROOT).as_posix())
+        for path in current_documents()
+    ],
+)
+def test_every_version_the_documents_show_is_this_one(
+    path: Path,
+) -> None:
+    text = path.read_text(encoding="utf-8")
+    shown = {found for pattern in SHOWN_VERSIONS for found in pattern.findall(text)}
+
+    assert shown <= {__version__}, shown
 
 
 def test_distribution_name_is_public_package_name() -> None:
