@@ -41,6 +41,12 @@ PROBE_SOURCE = (
     "        runs.write('ran\\n')\n"
     "if probe:\n"
     "    Path(probe, f'{index}.start').write_text(repr(time.time()))\n"
+    "barrier = item.get('barrier')\n"
+    "deadline = time.time() + 30\n"
+    "def started():\n"
+    "    return len(list(Path(probe).glob('*.start')))\n"
+    "while barrier and started() < barrier and time.time() < deadline:\n"
+    "    time.sleep(0.02)\n"
     "time.sleep(item.get('sleep', 0))\n"
     "if probe:\n"
     "    Path(probe, f'{index}.end').write_text(repr(time.time()))\n"
@@ -52,7 +58,9 @@ PROBE_SOURCE = (
 """Echo the item and its index, after sleeping, failing or recording as the item asks.
 
 A `tally` directory gets one line per execution of the item, so a test can
-prove an item ran exactly once.
+prove an item ran exactly once. With a `probe` directory and a `barrier`,
+the item waits, for up to 30 seconds, until that many items have started,
+so a test can prove that many ran at once however slowly processes start.
 """
 
 
@@ -321,8 +329,17 @@ def test_no_more_than_max_concurrency_children_run_at_once(
     probe = tmp_path / f"probe-{concurrency}"
     probe.mkdir()
 
+    #
+    # Each item waits until `concurrency` items have started, so they run
+    # together however slowly the platform starts processes; a map that
+    # ran fewer at once would leave them waiting out the barrier's timeout,
+    # and one that ran more would overlap more.
+    #
     output = map_items(
-        [{"value": index, "sleep": 0.6, "probe": str(probe)} for index in range(6)],
+        [
+            {"value": index, "sleep": 0.2, "probe": str(probe), "barrier": concurrency}
+            for index in range(6)
+        ],
         max_concurrency=concurrency,
     )
 

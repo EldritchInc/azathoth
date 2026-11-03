@@ -7,6 +7,7 @@ parameters. Nothing reaches AWS.
 import json
 import re
 import tomllib
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -173,7 +174,7 @@ def test_the_command_is_a_real_worker_run_over_the_stacks_queues(
     assert arguments.worker_action == "run"
     assert arguments.worker_queue_url == placeholders()["JobQueue"]
     assert arguments.worker_result_queue_url == placeholders()["ResultQueue"]
-    assert str(arguments.worker_heartbeat_file) == HEARTBEAT
+    assert arguments.worker_heartbeat_file == Path(HEARTBEAT)
 
 
 def test_without_an_input_bucket_the_worker_accepts_no_references() -> None:
@@ -204,7 +205,7 @@ def test_the_health_check_is_a_real_worker_health_of_the_workers_heartbeat() -> 
     health = build_parser().parse_args(command[2:])
 
     assert health.worker_action == "health"
-    assert str(health.worker_heartbeat_file) == HEARTBEAT
+    assert health.worker_heartbeat_file == Path(HEARTBEAT)
     assert health.worker_max_age_seconds > check["Interval"]
     assert (check["Retries"], check["StartPeriod"]) == (3, 60)
 
