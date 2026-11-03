@@ -190,6 +190,29 @@ configured database, with its size and when it was first stored. It creates
 the table on first use. `InMemoryContentStore` keeps content in process
 memory, for tests and embedding.
 
+`S3ContentStore` keeps content in Amazon S3 instead (ADR 0108), at an
+`S3ContentLocation`: a bucket and a prefix, parsed from
+`s3://<BUCKET>[/<PREFIX>]`. Content is kept at `<PREFIX>/sha256/<DIGEST>`.
+`put` writes only if nothing is there yet, with S3's conditional
+`If-None-Match: *`, and takes S3's answer that something is, or is being
+written, as already stored. `get` and `contains` read the object. Every
+failure, a call S3 refused or one that never reached it, raises
+`ContentStoreError`, which is never the request's fault:
+
+```text
+Cannot store content in s3://<BUCKET>/<KEY>: <CODE>: <MESSAGE>
+Cannot read s3://<BUCKET>/<KEY>: <CODE>: <MESSAGE>
+```
+
+`content_store_location(environment)` reads `AZATHOTH_CONTENT_STORE`, and
+returns `None` when it is unset, which keeps content in the database. The
+store makes boto3's client when it is made, with standard retries, and says
+which extra to install without boto3:
+
+```text
+AZATHOTH_CONTENT_STORE names S3, but boto3 is not installed; install azathoth-ai[worker].
+```
+
 Nothing removes stored content yet.
 
 ## Job Envelopes

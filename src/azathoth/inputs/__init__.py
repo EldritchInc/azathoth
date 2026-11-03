@@ -33,6 +33,15 @@ from azathoth.inputs.s3 import (
     s3_client,
     s3_object,
 )
+from azathoth.inputs.s3_store import (
+    CONTENT_STORE_VARIABLE,
+    MISSING_CONTENT_STORE_EXTRA_MESSAGE,
+    ContentStoreError,
+    S3ContentLocation,
+    S3ContentStore,
+    content_store_location,
+    s3_content_client,
+)
 from azathoth.inputs.source import (
     InlineInput,
     InputSourceError,
@@ -50,13 +59,16 @@ from azathoth.inputs.store import (
 )
 
 __all__ = [
+    "CONTENT_STORE_VARIABLE",
     "CONTENT_TABLES",
+    "MISSING_CONTENT_STORE_EXTRA_MESSAGE",
     "SqlContentStore",
     "DEFAULT_MAX_INPUT_BYTES",
     "FILE_SCHEME",
     "JSON_MEDIA_TYPE",
     "MEDIA_TYPES_BY_EXTENSION",
     "ContentStore",
+    "ContentStoreError",
     "MISSING_S3_EXTRA_MESSAGE",
     "S3_SCHEME",
     "FileInputResolver",
@@ -71,11 +83,14 @@ __all__ = [
     "InputUnavailableError",
     "ReferenceInput",
     "ResolvedInput",
+    "S3ContentLocation",
+    "S3ContentStore",
     "S3InputLocation",
     "S3InputResolver",
     "SQLiteContentStore",
     "WorkflowInputSource",
     "content_bytes_digest",
+    "content_store_location",
     "decode_content",
     "decode_input_source",
     "file_path",
@@ -86,6 +101,7 @@ __all__ = [
     "is_text_media_type",
     "resolve_input",
     "s3_client",
+    "s3_content_client",
     "s3_object",
     "validate_media_type",
 ]

@@ -273,6 +273,12 @@ def _run_traced_worker(
     configuration = CliRuntimeConfiguration.from_environment()
     stores = repositories(configuration)
 
+    #
+    # The content store is opened now, so one in S3 without its extra
+    # stops the worker before it receives anything.
+    #
+    store = stores.content
+
     heartbeat = HeartbeatFile(heartbeat_file) if heartbeat_file is not None else None
 
     if heartbeat is not None:
@@ -325,7 +331,7 @@ def _run_traced_worker(
             result = await run_job_content(
                 message.body,
                 policy=policy,
-                store=stores.content,
+                store=store,
                 invocation_repository=stores.invocations,
                 invoke=invoke,
                 resume=resume,

@@ -258,7 +258,9 @@ OPENROUTER_API_KEY
 
 Azathoth 1.1 adds `AZATHOTH_OTEL`, which turns tracing on (see
 [Tracing](#tracing)), and `AZATHOTH_BEDROCK` and `AZATHOTH_BEDROCK_PRICING`,
-which run models on Amazon Bedrock (see [AZATHOTH_BEDROCK](#azathoth_bedrock)).
+which run models on Amazon Bedrock (see [AZATHOTH_BEDROCK](#azathoth_bedrock)),
+and `AZATHOTH_CONTENT_STORE`, which keeps resolved input content in Amazon S3
+(see [AZATHOTH_CONTENT_STORE](#azathoth_content_store)).
 
 # AZATHOTH_DATABASE
 
@@ -437,6 +439,38 @@ credentials, the IAM policy and the pricing document.
 when Bedrock is on, and is empty otherwise. They are read only when a
 command composes the runtime, so a command that does not, such as
 `tool list`, never imports boto3.
+
+# AZATHOTH_CONTENT_STORE
+
+An input given by reference is kept, by the digest of its bytes, in a
+content store before its run starts (ADR 0096). The store is a table in the
+database unless `AZATHOTH_CONTENT_STORE` names a bucket in Amazon S3, and a
+prefix in it (ADR 0108). It needs boto3, from the `worker` extra:
+
+```bash
+python -m pip install "azathoth-ai[worker]"
+export AZATHOTH_CONTENT_STORE=s3://azathoth-content/evidence
+```
+
+Content is kept at `<PREFIX>/sha256/<DIGEST>`, written only when nothing is
+there yet, with S3's conditional `If-None-Match: *`, so it is never written
+twice. Every command that stores content stores it there: `workflow run` and
+`workflow invoke` with `--input-file`, `job run`, and the worker. The store
+is opened only when a command first stores content, so a command that
+stores none, such as `workflow list`, never imports boto3.
+
+A store that cannot be used stops the command in one line, before anything
+runs, and records nothing:
+
+```text
+AZATHOTH_CONTENT_STORE '/var/lib/azathoth/content' is not an s3://<BUCKET>[/<PREFIX>] URL.
+AZATHOTH_CONTENT_STORE names S3, but boto3 is not installed; install azathoth-ai[worker].
+Cannot store content in s3://<BUCKET>/<KEY>: <CODE>: <MESSAGE>
+```
+
+The store needs `s3:PutObject` and `s3:GetObject` under its prefix. The
+worker opens it when it starts, so a store it cannot open stops it before it
+receives anything.
 
 A command that composes the runtime with Bedrock on prints one line to
 stderr, and exits with status 1, when the extra is missing, no region is
