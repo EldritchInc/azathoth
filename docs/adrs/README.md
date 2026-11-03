@@ -132,3 +132,4 @@ requests that made it:
 - [ADR 0107: Run Jobs From a Queue](0107-run-jobs-from-a-queue.md)
 - [ADR 0108: Read Inputs From S3](0108-read-inputs-from-s3.md)
 - [ADR 0109: Deploy on AWS](0109-deploy-on-aws.md)
+- [ADR 0110: Split and Read S3 Objects](0110-split-and-read-s3-objects.md)

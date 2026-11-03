@@ -1,6 +1,6 @@
 # ADR 0109: Deploy on AWS
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0110
 - Date: 2026-11-02
 - Decided in: #127
 
@@ -48,8 +48,9 @@ It creates:
 - scaling on the queue.
 
 It takes the VPC and subnets, the image, the database URL's secret, an
-optional OpenRouter key's secret, an optional input bucket and prefix, and
-the scaling bounds. It creates no database: sizing, backups and networking
+optional OpenRouter key's secret, an optional input bucket and prefix, an
+optional data bucket and prefix for the S3 tools (ADR 0110), and the
+scaling bounds. It creates no database: sizing, backups and networking
 are each team's own, and the guide shows the one rule the workers need.
 
 ### Least privilege
@@ -57,7 +58,8 @@ are each team's own, and the guide shows the one rule the workers need.
 The task role grants exactly the calls the worker makes: receiving,
 deleting and hiding messages on the job queue, sending to the result
 queue, reading and writing under the content bucket's `evidence/` prefix,
-reading under the input prefix when there is one, and Bedrock's discovery
+reading under the input prefix when there is one, reading and writing
+under the data prefix when there is one, and Bedrock's discovery
 and invocation, the same actions as the Bedrock guide, only when Bedrock is
 on. No grant names every action, and only model discovery names every
 resource. The execution role reads only the secrets it injects.
@@ -149,7 +151,8 @@ Nothing in the repository reaches AWS. A release that changes the template,
 the worker or the image is deployed once to a sandbox account first, and
 must return the guide's result and survive a worker stopped mid-job. That
 deployment is the first place the worker meets real SQS and S3, and it is a
-release gate.
+release gate. Since ADR 0110 it also runs the large-file example, the S3
+tools' first meeting with real S3.
 
 ## Consequences
 
