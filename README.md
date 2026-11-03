@@ -1,21 +1,28 @@
 # Azathoth
 
+[![CI](https://github.com/EldritchInc/azathoth/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/EldritchInc/azathoth/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/azathoth-ai)](https://pypi.org/project/azathoth-ai/)
+[![Python](https://img.shields.io/pypi/pyversions/azathoth-ai)](https://pypi.org/project/azathoth-ai/)
+[![Downloads](https://img.shields.io/pypi/dm/azathoth-ai)](https://pypistats.org/packages/azathoth-ai)
+[![License](https://img.shields.io/github/license/EldritchInc/azathoth)](https://github.com/EldritchInc/azathoth/blob/main/LICENSE)
+
 > Empirical optimization for context-aware AI workflows.
 
 Azathoth is an open-source engine for building LLM workflows by composing
-them rather than coding them, and then improving them with measured
-evidence rather than intuition.
+them rather than coding them, improving them with measured evidence rather
+than intuition, and running them in production on your own infrastructure.
 
 You describe a workflow as a JSON document:
 
 - prompt steps that state model requirements instead of naming models;
 - tool steps;
-- child workflows and loops;
+- child workflows, loops and maps;
 - the dependencies, conditions and failure policies between them.
 
 Azathoth runs it and benchmarks it. It searches for the models that pass your
 benchmark at the latency and cost you target. It deploys only what you
-deliberately promote.
+deliberately promote, and runs it from a queue, a container or your own
+program.
 
 ```text
 define ──► run ──► benchmark ──► optimize ──► promote ──► invoke production
@@ -41,7 +48,7 @@ them:
 
 Writing code should be for tools, not for LLM workflows.
 
-## Quick Look
+## Quickstart
 
 Install it in a virtual environment. The [install guide](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md)
 explains why a venv, and gives the Windows commands:
@@ -55,24 +62,47 @@ azathoth init
 ```
 
 `azathoth init` creates the database and installs the standard tools that
-ship in the package: `run_workflow` runs a child workflow, `loop_workflow`
-repeats one, `json_select`, `json_object`, `json_merge` and `validate_json`
-reshape and check the JSON that passes between steps, and `chunk_text`,
-`join_text` and `render_template` split, join and fill in text. Composing workflows from other workflows
-needs nothing but the installed package.
+ship in the package: `run_workflow`, `loop_workflow` and `map_workflow`
+compose workflows from other workflows; `json_select`, `json_object`,
+`json_merge` and `validate_json` reshape and check the JSON that passes
+between steps; `chunk_text`, `join_text` and `render_template` split, join
+and fill in text; and `split_s3_object` and `read_s3_object` work with data
+in S3 too large to pass between steps.
 
-From a clone of this repository, run a workflow built from two tools. It
-needs no model and no API key:
+Then take a workflow through its whole life, from a clone of this
+repository. It needs no model and no API key:
 
 ```bash
+git clone https://github.com/EldritchInc/azathoth.git
+cd azathoth
 azathoth tool import examples/tools/word-count.json
 azathoth tool import examples/tools/word-count-process.json
 azathoth workflow import examples/workflows/redundant-word-count.json
 azathoth workflow run a1000000-0000-4000-8000-000000000001 --input '"that is not dead which can eternal lie"' --output result
+azathoth benchmark import examples/benchmarks/word-count.json
+azathoth benchmark run b1000000-0000-4000-8000-000000000001 --workflow a1000000-0000-4000-8000-000000000001
+azathoth workflow promote a1000000-0000-4000-8000-000000000001
+azathoth workflow invoke a1000000-0000-4000-8000-000000000001 --input '"and with strange aeons even death may die"' --output result
+azathoth workflow runs a1000000-0000-4000-8000-000000000001
 ```
 
-It prints `8`. To go from there to a model-backed workflow that is
-benchmarked, optimized, promoted and invoked in production, follow
+The workflow counts words twice, with two different tools, so either can
+fail and the other still answers. `workflow run` runs it as configured. It
+prints `8`. The benchmark measures it against its cases:
+
+```text
+Cases Run: 1
+Cases Passed: 1
+Passed (exact): 1/1
+```
+
+`workflow promote` makes this revision production, and `workflow invoke`
+runs production, which prints `{"result": 8}`. `workflow runs` lists the
+evidence: one run of each kind, `production`, `benchmark` and `configured`,
+each with its steps, attempts and outputs recorded.
+
+To add a model, benchmark it and let the optimizer find a cheaper one that
+still passes, follow
 [Getting Started](https://github.com/EldritchInc/azathoth/blob/main/docs/getting-started.md).
 
 ## Documentation
@@ -89,6 +119,7 @@ benchmarked, optimized, promoted and invoked in production, follow
 | [Concepts](https://github.com/EldritchInc/azathoth/blob/main/docs/concepts.md) | How Azathoth is put together, and why |
 | [CLI Reference](https://github.com/EldritchInc/azathoth/blob/main/src/azathoth/cli/README.md) | Every command, its options and its output |
 | [Architecture Decisions](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/README.md) | The ADRs behind each boundary |
+| [Changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md) | What each release changed, and how to upgrade |
 | [Contributing](https://github.com/EldritchInc/azathoth/blob/main/CONTRIBUTING.md) | Working on Azathoth itself |
 | [Releasing](https://github.com/EldritchInc/azathoth/blob/main/RELEASING.md) | How a release is validated and published |
 
@@ -101,25 +132,28 @@ tests:
 - **word count**: tools, redundancy, and benchmark cases made from corrected
   runs;
 - **classify sentiment**: the whole lifecycle in one step;
-- **child workflow** and **countdown loop**: composing workflows;
+- **child workflow**, **countdown loop** and **word count map**: composing
+  workflows;
 - **ticket triage**: conditional routing to specialists, and a cheaper
   classifier found by the optimizer;
 - **workflow writer**: a workflow that writes workflows and validates them;
 - **code review**: three concurrent reviewers, merged by code rather than a
   model;
-- **novel**: nested loops that plan, draft, edit and revise a book.
+- **novel**: nested loops that plan, draft, edit and revise a book;
+- **large file**: a file of any size in S3, split into chunks, counted by a
+  map and summed.
 
 ## What Azathoth Does
 
 - **Composes workflows** from prompt, tool and child-workflow steps. Steps can
   depend on each other, pass values by name or as constants, run
-  conditionally, retry, and fail in a controlled way. Child workflows and
-  loops run through standard tools that ship in the package.
+  conditionally, retry, and fail in a controlled way. Child workflows, loops
+  and maps run through standard tools that ship in the package.
 - **Separates intent from models.** Steps state requirements, and Azathoth
   chooses from the models you have authorized among those OpenRouter and
   Amazon Bedrock currently offer.
 - **Records everything**: every run, step, attempt, prompt, reply, token and
-  cost, as durable evidence.
+  cost, as durable evidence, and traces it with OpenTelemetry when asked.
 - **Benchmarks** workflows with exact, normalized, schema and model-judged
   semantic cases.
 - **Optimizes** by trying strictly cheaper authorized models, step by step,
@@ -128,6 +162,13 @@ tests:
 - **Promotes deliberately.** Production runs only what was explicitly
   promoted, on exact models, with a revision history and an invocation log.
   Optimizing never deploys anything by itself.
+- **Runs in production**: from versioned job requests that replay rather than
+  repeat, in a signed container image, or as a fleet of queue workers on AWS
+  that share one PostgreSQL database. A run interrupted by a deploy or a lost
+  machine resumes from its journal.
+- **Takes inputs by value or by reference**, from files or S3, and keeps the
+  content each run was given. Data too large for an input stays in S3 and is
+  worked in chunks.
 
 Azathoth is also a typed Python library. The
 [package READMEs](https://github.com/EldritchInc/azathoth/blob/main/docs/concepts.md#package-guide)
@@ -153,18 +194,23 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.0 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and Windows,
-all tested in CI, with OpenRouter as its model provider.
+Azathoth 1.1 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Windows, all tested in CI. It runs models on OpenRouter and Amazon Bedrock,
+keeps its state in SQLite or PostgreSQL, ships as a signed container image
+for amd64 and arm64, and deploys to AWS from one CloudFormation template.
+The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
+lists what each release added.
 
-## Support the Project
+Within 1.x, these stay compatible: workflow, tool and job documents, the
+CLI's commands and the output it documents, and the database schema, which
+`azathoth init` migrates forward. The Python API is typed and documented,
+but may change in a minor release.
 
-If you find Azathoth useful and would like to support its continued
-development, you can become a patron:
+## Commercial Support and Pilots
 
-**❤️ Patreon:** https://patreon.com/ErisDiscordiaM
-
-Your support funds ongoing development, experiments, documentation, testing
-and long-term maintenance.
+Eldritch, Inc. builds and supports Azathoth. For help putting workflows
+into production, a pilot on your own data, or support for a deployment,
+see [Work With Us](https://eldritchinc.com/workwithus/).
 
 ## License
 
