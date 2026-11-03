@@ -97,6 +97,65 @@ The CLI resolves `workflow run --input-file` and `workflow invoke
 --input-file` under `azathoth.cli.CLI_INPUT_POLICY`, which accepts `file://`
 only.
 
+## S3 References
+
+`S3InputResolver` reads `s3://<BUCKET>/<KEY>` references to objects in
+Amazon S3, but only inside the locations it is given (ADR 0108):
+
+```python
+from azathoth.inputs import (
+    S3_SCHEME,
+    InputPolicy,
+    S3InputLocation,
+    S3InputResolver,
+)
+
+allowed = (S3InputLocation.parse("azathoth-inputs/requests/"),)
+policy = InputPolicy(resolvers={S3_SCHEME: S3InputResolver(allowed)})
+```
+
+A location is a bucket, which allows every key in it, or a bucket and a key
+prefix, which allows the keys that start with it. A prefix is matched
+literally, as S3 matches it: keys have no paths, so `azathoth-inputs/requests`
+also allows `requests-old/`, and only a trailing `/` stops it. A resolver
+with no locations allows nothing.
+
+The key is the rest of the URI after the bucket, exactly as written. A URI
+with a query or a fragment, such as `?versionId=`, is refused: a request
+names an object, and the provenance's digest pins exactly which bytes ran.
+The media type is the reference's own; S3's `Content-Type` is ignored.
+
+An allowed object is read with one ranged GET of at most the cap plus one
+byte, so an object beyond the cap is refused without downloading it. Each
+refusal is an `InputResolutionError`, which an entry point reports to the
+request's caller:
+
+```text
+Input s3://azathoth-other/chapter.md is not in an allowed location; allowed: azathoth-inputs/requests/.
+Input s3://azathoth-inputs/requests/chapter.md does not exist.
+Unable to read input s3://azathoth-inputs/requests/chapter.md: AccessDenied: Access Denied
+Input s3://azathoth-inputs/requests/chapter.md is larger than the limit of 10485760 bytes.
+Input s3://azathoth-inputs/requests/chapter.md?versionId=3 must name an object only, with no query or fragment.
+```
+
+S3 answers `AccessDenied` for a missing object, too, when the reader may
+not list its bucket.
+
+A read that never reached S3, because there are no credentials or no
+network, is not the request's fault. It raises `InputUnavailableError`
+instead, which stops an entry point rather than refusing one request. So
+does reading without boto3, which is imported only on the first read of an
+allowed object:
+
+```text
+s3:// inputs need boto3, which is not installed; install azathoth-ai[worker].
+```
+
+The client is boto3's, made on the first read, with AWS's own credential
+chain and standard retries.
+
+## Input Events
+
 `azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
 turns a resolved input into a run's initial events: the canonical
 `workflow.input.received` event with the value, followed, for a reference
