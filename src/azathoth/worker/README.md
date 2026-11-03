@@ -105,6 +105,9 @@ because its job raised, has a `null` status and invocation.
 | `visibility_timeout_seconds` | 120 | How long a received message stays hidden, at most 43200. |
 | `extend_every_seconds` | 30 | How often a running job's message is hidden again. |
 
+The worker waits between extensions with `asyncio.sleep`, or with the
+`sleep` it is given, so tests decide exactly when each extension happens.
+
 Visibility must be extended more often than it runs out:
 
 ```text
