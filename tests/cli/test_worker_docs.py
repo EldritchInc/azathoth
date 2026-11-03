@@ -9,8 +9,22 @@ import pytest
 from pydantic import ValidationError
 
 from azathoth.cli import build_parser
-from azathoth.cli.worker import WORKER_INPUT_POLICY, settings_problems
-from azathoth.inputs import InputResolutionError, ReferenceInput, SQLiteContentStore, resolve_input
+from azathoth.cli.worker import (
+    MAX_WORKER_INPUT_BYTES,
+    WORKER_INPUT_POLICY,
+    input_problems,
+    settings_problems,
+)
+from azathoth.inputs import (
+    DEFAULT_MAX_INPUT_BYTES,
+    MISSING_S3_EXTRA_MESSAGE,
+    InputResolutionError,
+    ReferenceInput,
+    S3InputLocation,
+    S3InputResolver,
+    SQLiteContentStore,
+    resolve_input,
+)
 from azathoth.worker import (
     MISSING_WORKER_EXTRA_MESSAGE,
     HeartbeatError,
@@ -239,3 +253,28 @@ def test_the_container_guides_task_definition_parses() -> None:
     assert build_parser().parse_args(health[2:]).worker_action == "health"
     assert run.worker_heartbeat_file == build_parser().parse_args(health[2:]).worker_heartbeat_file
     assert definition["stopTimeout"] > 20
+
+
+def test_the_cli_readme_quotes_the_real_input_option_refusals() -> None:
+    _, problems = input_problems(("Not_A_Bucket",), MAX_WORKER_INPUT_BYTES + 1)
+
+    for problem in problems:
+        assert_quoted(CLI_README, problem)
+
+
+def test_the_cli_readme_quotes_the_real_s3_input_refusals() -> None:
+    uri = "s3://azathoth-inputs/secrets/key.json"
+    resolver = S3InputResolver((S3InputLocation.parse("azathoth-inputs/requests/"),))
+
+    with pytest.raises(InputResolutionError) as raised:
+        resolver.read(uri, max_bytes=1024)
+
+    assert_quoted(CLI_README, str(raised.value))
+    assert_quoted(CLI_README, MISSING_S3_EXTRA_MESSAGE)
+
+
+def test_the_options_table_states_the_real_input_cap() -> None:
+    table = section(CLI_README, "## Worker Options")
+
+    assert f"| `--max-input-bytes` | {DEFAULT_MAX_INPUT_BYTES} |" in table
+    assert f"at most {MAX_WORKER_INPUT_BYTES} (100 MiB)" in table

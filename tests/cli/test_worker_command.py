@@ -100,8 +100,7 @@ class Deployment:
     runtime_loads: list[int]
 
 
-@pytest.fixture
-def deployment(
+def deploy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Deployment:
@@ -141,6 +140,16 @@ def deployment(
     monkeypatch.setattr(cli_worker, "load_runtime", counted_load_runtime)
 
     return Deployment(environment, queue, results, opened, loads)
+
+
+@pytest.fixture
+def deployment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Deployment:
+    """Deploy the job workflow, and give the worker in-memory queues."""
+
+    return deploy(tmp_path, monkeypatch)
 
 
 def body(
@@ -186,6 +195,8 @@ def test_worker_run_defaults_to_a_long_poll_and_two_minutes_of_visibility() -> N
     assert arguments.worker_visibility_timeout_seconds == 120
     assert arguments.worker_extend_every_seconds == 30
     assert arguments.worker_heartbeat_file is None
+    assert arguments.worker_allow_input_buckets == []
+    assert arguments.worker_max_input_bytes == 10 * 1024 * 1024
 
 
 def test_worker_health_defaults_to_ninety_seconds() -> None:
@@ -229,6 +240,12 @@ def test_the_cli_dispatches_worker_run_with_every_option(
             "45",
             "--heartbeat-file",
             "/tmp/azathoth-heartbeat",
+            "--allow-input-bucket",
+            "azathoth-inputs/requests/",
+            "--allow-input-bucket",
+            "azathoth-batches",
+            "--max-input-bytes",
+            "2048",
         )
     )
 
@@ -242,6 +259,8 @@ def test_the_cli_dispatches_worker_run_with_every_option(
                 "visibility_timeout_seconds": 300,
                 "extend_every_seconds": 45.0,
                 "heartbeat_file": Path("/tmp/azathoth-heartbeat"),
+                "allow_input_buckets": ("azathoth-inputs/requests/", "azathoth-batches"),
+                "max_input_bytes": 2048,
             },
         )
     ]

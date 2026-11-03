@@ -279,6 +279,18 @@ $QUEUE = "https://sqs.us-east-1.amazonaws.com/123456789012/azathoth-jobs"
 docker run --rm --read-only --tmpfs /tmp -e OPENROUTER_API_KEY -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_DATABASE $IMAGE worker run --queue-url $QUEUE --heartbeat-file /tmp/azathoth-heartbeat
 ```
 
+A request may name its input in S3 when the worker allows where it lies;
+`--allow-input-bucket` takes a bucket, or a bucket and a key prefix, and may
+be given more than once:
+
+```bash
+docker run --rm --read-only --tmpfs /tmp -e OPENROUTER_API_KEY -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_DATABASE $IMAGE worker run --queue-url $QUEUE --allow-input-bucket azathoth-inputs/requests/ --heartbeat-file /tmp/azathoth-heartbeat
+```
+
+```powershell
+docker run --rm --read-only --tmpfs /tmp -e OPENROUTER_API_KEY -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AZATHOTH_DATABASE $IMAGE worker run --queue-url $QUEUE --allow-input-bucket azathoth-inputs/requests/ --heartbeat-file /tmp/azathoth-heartbeat
+```
+
 Each settled message is one line of JSON on stdout. Several workers share
 a queue only through a database they all reach, so `AZATHOTH_DATABASE`
 names PostgreSQL (step 2); workers on one SQLite file each wait their turn

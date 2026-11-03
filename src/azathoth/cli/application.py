@@ -124,6 +124,7 @@ from azathoth.cli.workflows import (
     show_workflow,
 )
 from azathoth.context import LineageError, WorkflowDepthError
+from azathoth.inputs import InputUnavailableError
 from azathoth.persistence import DatabaseSchemaError, DatabaseUnavailableError
 from azathoth.persistence.repositories import close_postgres_databases
 from azathoth.providers import (
@@ -193,6 +194,7 @@ def main(
         RunLeaseError,
         RunResumeError,
         WorkerError,
+        InputUnavailableError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -205,7 +207,8 @@ def main(
         # (ADR 0104). So does a run that could not be journaled, lost its
         # lease, or cannot be resumed (ADR 0105): it stays unfinished. So
         # does a worker without its extra, whose queue cannot be used, or
-        # whose heartbeat cannot be written (ADR 0107).
+        # whose heartbeat cannot be written (ADR 0107), or that cannot
+        # reach S3 for an input it is allowed to read (ADR 0108).
         #
         print(
             str(exc),

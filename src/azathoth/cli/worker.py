@@ -3,10 +3,10 @@
 import asyncio
 import signal
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import FrameType
-from typing import Final
+from typing import Any, Final
 
 from pydantic import ValidationError
 
@@ -20,7 +20,14 @@ from azathoth.cli.termination import (
     TERMINATED_STATUS,
 )
 from azathoth.cli.tracing import run_traced
-from azathoth.inputs import InputPolicy
+from azathoth.inputs import (
+    DEFAULT_MAX_INPUT_BYTES,
+    S3_SCHEME,
+    InputPolicy,
+    S3InputLocation,
+    S3InputResolver,
+    s3_client,
+)
 from azathoth.jobs import (
     JobResult,
     run_job_content,
@@ -45,9 +52,17 @@ from azathoth.worker import (
 )
 
 WORKER_INPUT_POLICY: Final = InputPolicy()
-"""The worker accepts no references: a message must never read the worker's disk.
+"""What a worker allowed no S3 location accepts: no references at all.
 
-`s3://` from allow-listed buckets is the worker's to accept next (ADR 0108).
+A message must never read the worker's own disk, so `file://` is never
+accepted (ADR 0096, ADR 0107).
+"""
+
+MAX_WORKER_INPUT_BYTES: Final = 100 * 1024 * 1024
+"""The largest cap a worker may set on one input: 100 MiB.
+
+A resolved input is decoded into its run's context, in the database, so the
+ceiling protects the database as much as the worker (ADR 0108).
 """
 
 STOPPING_MESSAGE: Final = "Stopping."
@@ -76,6 +91,56 @@ def open_result_queue(
     return SqsResultQueue(url)
 
 
+def open_s3_client() -> Any:
+    """Return the client `s3://` inputs are read with."""
+
+    return s3_client()
+
+
+def worker_input_policy(
+    allowed: Sequence[S3InputLocation],
+    *,
+    max_bytes: int,
+    client: Any | None,
+) -> InputPolicy:
+    """Return what a worker accepts: `s3://` inside the allowed locations, or nothing.
+
+    A worker allowed no location accepts no scheme at all, so its refusal
+    says so.
+    """
+
+    if not allowed:
+        return InputPolicy(max_bytes=max_bytes)
+
+    return InputPolicy(
+        resolvers={S3_SCHEME: S3InputResolver(allowed, client=client)},
+        max_bytes=max_bytes,
+    )
+
+
+def input_problems(
+    allow_input_buckets: Sequence[str],
+    max_input_bytes: int,
+) -> tuple[tuple[S3InputLocation, ...], tuple[str, ...]]:
+    """Parse the allowed locations and check the cap; return them and any problems."""
+
+    locations: list[S3InputLocation] = []
+    problems: list[str] = []
+
+    for value in allow_input_buckets:
+        try:
+            locations.append(S3InputLocation.parse(value))
+        except ValueError as exc:
+            problems.append(f"--allow-input-bucket: {exc}")
+
+    if not 1 <= max_input_bytes <= MAX_WORKER_INPUT_BYTES:
+        problems.append(
+            f"--max-input-bytes: Input should be from 1 to {MAX_WORKER_INPUT_BYTES} bytes."
+        )
+
+    return tuple(locations), tuple(problems)
+
+
 def run_worker(
     queue_url: str,
     *,
@@ -84,6 +149,8 @@ def run_worker(
     visibility_timeout_seconds: int,
     extend_every_seconds: float,
     heartbeat_file: Path | None,
+    allow_input_buckets: Sequence[str] = (),
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
 ) -> int:
     """Run job requests from a queue, one at a time, until stopped.
 
@@ -93,14 +160,22 @@ def run_worker(
     to the queue at once; the worker then prints `Stopped.` and returns 0. A
     second signal stops it where it is, and returns 130 or 143.
 
+    A request's input may be an `s3://` reference inside one of the
+    `allow_input_buckets` locations, of at most `max_input_bytes`; with no
+    location allowed, it may be no reference at all (ADR 0108).
+
     Settings that are not valid print why and return 1, before anything is
     opened. A queue that cannot be opened or refuses a call, a heartbeat file
     that cannot be written, and the `worker` extra missing raise
-    `WorkerError`, which the CLI prints in one line.
+    `WorkerError`, which the CLI prints in one line. S3 that cannot be
+    reached raises `InputUnavailableError`, and stops the worker the same
+    way, leaving its message on the queue.
 
     With tracing on, each job is traced as `job run` traces it, with the
     message's ID on its job span (ADR 0100).
     """
+
+    problems: list[str] = []
 
     try:
         settings = WorkerSettings(
@@ -109,7 +184,13 @@ def run_worker(
             extend_every_seconds=extend_every_seconds,
         )
     except ValidationError as exc:
-        for problem in settings_problems(exc):
+        problems.extend(settings_problems(exc))
+
+    locations, input_errors = input_problems(allow_input_buckets, max_input_bytes)
+    problems.extend(input_errors)
+
+    if problems:
+        for problem in problems:
             print(problem, file=sys.stderr)
 
         return 1
@@ -120,6 +201,8 @@ def run_worker(
             result_queue_url=result_queue_url,
             settings=settings,
             heartbeat_file=heartbeat_file,
+            locations=locations,
+            max_input_bytes=max_input_bytes,
             telemetry=telemetry,
         )
     )
@@ -168,12 +251,24 @@ def _run_traced_worker(
     result_queue_url: str | None,
     settings: WorkerSettings,
     heartbeat_file: Path | None,
+    locations: tuple[S3InputLocation, ...],
+    max_input_bytes: int,
     telemetry: Telemetry,
 ) -> int:
-    """Open the queues and the database, then serve until stopped."""
+    """Open the queues, S3 and the database, then serve until stopped."""
 
     queue = open_job_queue(queue_url)
     results = open_result_queue(result_queue_url) if result_queue_url is not None else None
+
+    #
+    # A worker allowed S3 locations makes its client now, so a missing
+    # extra stops it before it receives anything.
+    #
+    policy = worker_input_policy(
+        locations,
+        max_bytes=max_input_bytes,
+        client=open_s3_client() if locations else None,
+    )
 
     configuration = CliRuntimeConfiguration.from_environment()
     stores = repositories(configuration)
@@ -229,7 +324,7 @@ def _run_traced_worker(
 
             result = await run_job_content(
                 message.body,
-                policy=WORKER_INPUT_POLICY,
+                policy=policy,
                 store=stores.content,
                 invocation_repository=stores.invocations,
                 invoke=invoke,
@@ -339,13 +434,17 @@ def _stop_on_signals(
 
 
 __all__ = [
+    "MAX_WORKER_INPUT_BYTES",
     "STOPPED_MESSAGE",
     "STOPPING_MESSAGE",
     "STOP_SIGNALS",
     "WORKER_INPUT_POLICY",
     "check_worker_health",
+    "input_problems",
+    "open_s3_client",
     "open_job_queue",
     "open_result_queue",
     "run_worker",
     "settings_problems",
+    "worker_input_policy",
 ]

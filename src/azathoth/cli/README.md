@@ -2805,14 +2805,55 @@ the message:
 A worker that dies with a message leaves it to come back the same way, so
 another worker resumes its run from the journal (ADR 0105).
 
-The worker accepts no references in a request's `input`, so a message can
-never read the worker's own disk:
+## Worker Inputs
+
+A request's `input` may be an `s3://` reference to an object inside a
+location the worker allows, and nothing else (ADR 0108). A location is a
+bucket, or a bucket and a key prefix:
+
+```bash
+azathoth worker run --queue-url <QUEUE_URL> --allow-input-bucket azathoth-inputs/requests/
+```
+
+```json
+{"input": {"uri": "s3://azathoth-inputs/requests/review.json", "media_type": "application/json"}}
+```
+
+The object is read before the run starts, never more than `--max-input-bytes`
+of it, decoded as the request's media type, and kept in the content store by
+its digest; the run records where it came from, as for an input file. Each
+input the worker may not use is `rejected` as `invalid_input`, so its
+message is deleted rather than received again:
+
+```text
+Input s3://azathoth-inputs/secrets/key.json is not in an allowed location; allowed: azathoth-inputs/requests/.
+Input s3://azathoth-inputs/requests/review.json does not exist.
+Unable to read input s3://azathoth-inputs/requests/review.json: AccessDenied: Access Denied
+Input s3://azathoth-inputs/requests/review.json is larger than the limit of 10485760 bytes.
+```
+
+A prefix is matched literally, as S3 matches it: end it with `/` to allow
+one folder and not its namesakes. A worker allowed no location accepts no
+reference at all, and none ever accepts `file://`, so a message can never
+read the worker's own disk:
 
 ```text
 Input file:///etc/hostname uses the 'file' scheme, which is not accepted here; no schemes are accepted.
 ```
 
-`s3://` references from allow-listed buckets come next.
+S3 that cannot be reached, as without credentials, is not the request's
+fault: it stops the worker, and the message stays on the queue, as any other
+failure of the worker does. A worker allowed a location needs boto3 before it
+receives anything:
+
+```text
+s3:// inputs need boto3, which is not installed; install azathoth-ai[worker].
+```
+
+The cap is for content the engine resolves into a run. Data larger than
+that goes by pointer: a request's inline value names the object, a process
+tool streams it and splits it into chunk objects, and `map_workflow` runs a
+child over the chunks (ADR 0106, ADR 0108).
 
 ## Worker Options
 
@@ -2824,6 +2865,8 @@ Input file:///etc/hostname uses the 'file' scheme, which is not accepted here; n
 | `--visibility-timeout-seconds` | 120 | How long a received message stays hidden, at most 43200. |
 | `--extend-every-seconds` | 30 | How often a running job's message is hidden again. |
 | `--heartbeat-file` | none | A file to touch while the worker is alive. |
+| `--allow-input-bucket` | none | A bucket, or `BUCKET/PREFIX`, `s3://` inputs may come from; may be given more than once. |
+| `--max-input-bytes` | 10485760 | The largest input to read, at most 104857600 (100 MiB). |
 
 Settings that are not valid are refused before anything is opened, one line
 per option:
@@ -2831,6 +2874,8 @@ per option:
 ```text
 --wait-seconds: Input should be less than or equal to 20.
 A worker must extend a message's visibility more often than its visibility timeout of <SECONDS> seconds.
+--allow-input-bucket: 'Not_A_Bucket' is not an S3 bucket, or a bucket and a key prefix: a bucket name is 3 to 63 lowercase letters, digits, dots and hyphens.
+--max-input-bytes: Input should be from 1 to 104857600 bytes.
 ```
 
 A result sent to the result queue is the one line `job run` prints, with the
@@ -2850,8 +2895,10 @@ Cannot tell the AWS region of queue <URL>; set AWS_REGION.
 ```
 
 The worker needs `sqs:ReceiveMessage`, `sqs:DeleteMessage` and
-`sqs:ChangeMessageVisibility` on its queue, and `sqs:SendMessage` on the
-result queue.
+`sqs:ChangeMessageVisibility` on its queue, `sqs:SendMessage` on the result
+queue, and `s3:GetObject` on the objects under each allowed location. Without
+`s3:ListBucket` on a bucket, S3 answers `AccessDenied` for a missing object
+there rather than saying it does not exist.
 
 ## Worker Output
 
@@ -4003,8 +4050,8 @@ Cannot tell the media type of notes.log from its extension; give it with --media
 ```
 
 The CLI accepts only local files. Other schemes are for other entry points:
-the queue worker accepts no references yet, and never `file://` ones (see
-[Run a Worker](#run-a-worker)).
+the queue worker accepts `s3://` from the locations it allows, and never
+`file://` (see [Worker Inputs](#worker-inputs)).
 
 # End-to-End From Checked-In Examples
 

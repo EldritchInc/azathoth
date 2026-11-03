@@ -5,6 +5,7 @@ from __future__ import annotations
 from argparse import ArgumentParser, _SubParsersAction
 from pathlib import Path
 
+from azathoth.inputs import DEFAULT_MAX_INPUT_BYTES
 from azathoth.worker import (
     DEFAULT_EXTEND_EVERY_SECONDS,
     DEFAULT_MAX_HEARTBEAT_AGE_SECONDS,
@@ -33,6 +34,10 @@ WORKER_EXTEND_EVERY_ATTRIBUTE = "worker_extend_every_seconds"
 WORKER_HEARTBEAT_FILE_ATTRIBUTE = "worker_heartbeat_file"
 
 WORKER_MAX_AGE_ATTRIBUTE = "worker_max_age_seconds"
+
+WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE = "worker_allow_input_buckets"
+
+WORKER_MAX_INPUT_BYTES_ATTRIBUTE = "worker_max_input_bytes"
 
 
 def add_worker_parser(
@@ -112,6 +117,27 @@ def add_worker_parser(
         help="A file to touch while the worker is alive, for `azathoth worker health`.",
     )
 
+    run_parser.add_argument(
+        "--allow-input-bucket",
+        dest=WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE,
+        metavar="BUCKET[/PREFIX]",
+        action="append",
+        default=[],
+        help=(
+            "Accept s3:// inputs in this bucket, or under this key prefix of it; "
+            "may be given more than once."
+        ),
+    )
+
+    run_parser.add_argument(
+        "--max-input-bytes",
+        dest=WORKER_MAX_INPUT_BYTES_ATTRIBUTE,
+        metavar="BYTES",
+        type=int,
+        default=DEFAULT_MAX_INPUT_BYTES,
+        help=f"The largest s3:// input to read (default {DEFAULT_MAX_INPUT_BYTES}).",
+    )
+
     health_parser = worker_actions.add_parser(
         WORKER_HEALTH_ACTION,
         help="Exit 0 when a worker's heartbeat file is fresh, and 1 when it is not.",
@@ -138,11 +164,13 @@ def add_worker_parser(
 
 __all__ = [
     "WORKER_ACTION_ATTRIBUTE",
+    "WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE",
     "WORKER_COMMAND",
     "WORKER_EXTEND_EVERY_ATTRIBUTE",
     "WORKER_HEALTH_ACTION",
     "WORKER_HEARTBEAT_FILE_ATTRIBUTE",
     "WORKER_MAX_AGE_ATTRIBUTE",
+    "WORKER_MAX_INPUT_BYTES_ATTRIBUTE",
     "WORKER_QUEUE_URL_ATTRIBUTE",
     "WORKER_RESULT_QUEUE_URL_ATTRIBUTE",
     "WORKER_RUN_ACTION",
