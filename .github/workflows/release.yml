@@ -126,6 +126,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     env:
       IMAGE: ghcr.io/eldritchinc/azathoth
@@ -179,6 +180,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build for every architecture, and push on a tag
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -188,5 +190,22 @@ jobs:
           labels: |
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha,scope=release
           cache-to: type=gha,scope=release,mode=max
+
+      #
+      # Sign the image by its digest, which covers every tag pushed with it,
+      # keylessly: the signature names this workflow and the tag it ran for
+      # (ADR 0109).
+      #
+      - name: Install cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the pushed image
+        if: github.event_name == 'push'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"

@@ -108,12 +108,14 @@ def labels() -> dict[str, str]:
 # The base
 
 
-def test_the_base_is_slim_debian_trixie_with_a_tested_python() -> None:
-    (default,) = (rest for rest in arguments("ARG") if rest.startswith("PYTHON_IMAGE="))
+def test_the_base_is_slim_debian_trixie_with_a_tested_python_pinned_by_digest() -> None:
+    builder, runtime = arguments("FROM")
+    base = builder.removesuffix(" AS builder")
 
-    match = re.fullmatch(r"PYTHON_IMAGE=python:(3\.\d+)-slim-trixie", default)
+    match = re.fullmatch(r"python:(3\.\d+)-slim-trixie@sha256:[0-9a-f]{64}", base)
 
-    assert match is not None, default
+    assert match is not None, base
+    assert runtime == base
 
     python = match.group(1)
     workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -124,7 +126,9 @@ def test_the_base_is_slim_debian_trixie_with_a_tested_python() -> None:
 
 
 def test_a_builder_stage_builds_the_wheel_and_the_runtime_starts_clean() -> None:
-    assert arguments("FROM") == ("${PYTHON_IMAGE} AS builder", "${PYTHON_IMAGE}")
+    builder, runtime = arguments("FROM")
+
+    assert builder == f"{runtime} AS builder"
     assert any("python -m build --wheel" in rest for rest in arguments("RUN"))
     assert "--from=builder /dist/ /tmp/dist/" in arguments("COPY")
 
@@ -193,7 +197,7 @@ def test_nothing_secret_is_baked_in() -> None:
 
     assert not any(name.startswith(("OPENROUTER", "OTEL_", "AWS_")) for name in names)
     assert "AZATHOTH_OTEL" not in names
-    assert arguments("ARG") == ("PYTHON_IMAGE=python:3.13-slim-trixie",)
+    assert arguments("ARG") == ()
 
 
 def test_the_image_carries_oci_labels() -> None:

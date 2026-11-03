@@ -1,4 +1,4 @@
-"""Static tests that CI tests the image and releases publish it (ADR 0101).
+"""Static tests that CI tests the image and releases publish and sign it (ADR 0101, ADR 0109).
 
 The workflows are read as text, so no YAML parser is needed.
 """
@@ -103,3 +103,62 @@ def test_only_the_image_job_may_write_packages() -> None:
 
     assert text.count("packages: write") == 1
     assert re.search(r"^permissions:\n  contents: read\n", text, re.MULTILINE)
+
+
+# The supply chain
+
+
+def test_the_release_attests_an_sbom_and_full_provenance() -> None:
+    publish = job("release.yml", "publish-image")
+    push = publish[publish.index("name: Build for every architecture, and push on a tag") :]
+
+    assert "id: push" in push
+    assert "sbom: true" in push
+    assert "provenance: mode=max" in push
+
+
+def test_the_release_signs_the_pushed_image_by_its_digest_only_on_a_tag() -> None:
+    publish = job("release.yml", "publish-image")
+
+    push = publish.index("name: Build for every architecture, and push on a tag")
+    install = publish.index("name: Install cosign")
+    sign = publish.index('cosign sign --yes "${IMAGE}@${DIGEST}"')
+
+    assert push < install < sign
+    assert "uses: sigstore/cosign-installer@" in publish[install:sign]
+    assert "DIGEST: ${{ steps.push.outputs.digest }}" in publish
+    assert publish[install:].count("if: github.event_name == 'push'") == 2
+    assert "id-token: write" in publish
+
+
+def test_only_the_publishing_jobs_may_mint_identity_tokens() -> None:
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+
+    assert text.count("id-token: write") == 3
+
+    for name in ("publish-pypi", "publish-testpypi", "publish-image"):
+        assert "id-token: write" in job("release.yml", name)
+
+    assert "id-token: write" not in job("release.yml", "build")
+
+
+def test_dependabot_keeps_the_base_images_digest_current() -> None:
+    text = (PROJECT_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+
+    assert "version: 2" in text
+    assert re.search(
+        r'- package-ecosystem: "docker"\n    directory: "/"\n    schedule:\n'
+        r'      interval: "weekly"',
+        text,
+    )
+
+
+def test_the_container_guide_verifies_the_signature_this_workflow_makes() -> None:
+    guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
+    identity = (
+        "https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.1.0"
+    )
+
+    assert (WORKFLOWS / "release.yml").exists()
+    assert guide.count(f"--certificate-identity {identity}") == 2
+    assert guide.count("--certificate-oidc-issuer https://token.actions.githubusercontent.com") == 2

@@ -336,8 +336,12 @@ def test_a_stopped_command_releases_its_run_and_leaves_its_journal_unfinished(
     status: int,
     message: str,
 ) -> None:
+    #
+    # With faulthandler on, a child that never stops can be made to print
+    # every thread's stack, so a hang says where it is.
+    #
     child = subprocess.Popen(
-        [sys.executable, "-m", "azathoth.cli", *COMMANDS[command]],
+        [sys.executable, "-X", "faulthandler", "-m", "azathoth.cli", *COMMANDS[command]],
         cwd=sleeping_workflow.parent,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -359,7 +363,17 @@ def test_a_stopped_command_releases_its_run_and_leaves_its_journal_unfinished(
         assert repositories.run_leases.get(run_id) is not None
 
         child.send_signal(sent)
-        out, err = child.communicate(timeout=30)
+
+        try:
+            out, err = child.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            child.send_signal(signal.SIGABRT)
+            _, stacks = child.communicate(timeout=30)
+
+            raise AssertionError(
+                f"azathoth {command} did not stop within 30 seconds of {sent.name}; "
+                f"its threads were:\n{stacks}"
+            ) from None
     finally:
         if child.poll() is None:
             child.kill()
