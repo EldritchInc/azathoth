@@ -306,19 +306,14 @@ class Worker:
         """Keep a running job's message hidden, until cancelled or refused.
 
         Each extension is shielded, and recorded, so cancelling the loop
-        never abandons one already sent.
+        never abandons one already sent; it beats as it lands, so none goes
+        without its heartbeat, however the job ends.
         """
 
         while True:
             await asyncio.sleep(self._settings.extend_every_seconds)
 
-            extension = asyncio.ensure_future(
-                asyncio.to_thread(
-                    self._queue.change_visibility,
-                    message,
-                    timeout_seconds=self._settings.visibility_timeout_seconds,
-                )
-            )
+            extension = asyncio.ensure_future(asyncio.to_thread(self._extend_once, message))
             extensions.append(extension)
 
             try:
@@ -331,7 +326,28 @@ class Worker:
                 )
                 return
 
+    def _extend_once(
+        self,
+        message: QueueMessage,
+    ) -> None:
+        """Hide a running job's message again, then beat, in one call from a thread.
+
+        A heartbeat that fails is reported, and the job carries on: the
+        health check, finding no fresh beat, is what replaces the worker.
+
+        Raises:
+            Exception: The queue refused the extension.
+        """
+
+        self._queue.change_visibility(
+            message,
+            timeout_seconds=self._settings.visibility_timeout_seconds,
+        )
+
+        try:
             self._heartbeat()
+        except Exception as exc:
+            self._report(str(exc))
 
     def _settle(
         self,

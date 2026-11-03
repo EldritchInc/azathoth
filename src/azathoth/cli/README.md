@@ -2998,6 +2998,10 @@ anything:
 Cannot write the heartbeat file <PATH>: <REASON>.
 ```
 
+One that stops being writable while a job runs is reported on stderr, and
+the job finishes; the next receive's heartbeat then stops the worker, and
+until then the health check finds the file going stale.
+
 # No Dedicated Rollback Command in V1
 
 V1 does not expose:

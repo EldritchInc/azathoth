@@ -25,6 +25,7 @@ from azathoth.worker import (
     DEFAULT_VISIBILITY_TIMEOUT_SECONDS,
     DEFAULT_WAIT_SECONDS,
     MAX_WAIT_SECONDS,
+    HeartbeatError,
     QueueMessage,
     Settlement,
     Worker,
@@ -467,6 +468,67 @@ def test_visibility_is_not_extended_once_the_job_finishes() -> None:
         await asyncio.sleep(0.2)
 
         assert setup.queue.visibility_changes("m-10") == []
+
+    asyncio.run(scenario())
+
+
+def test_an_extension_that_lands_as_its_job_finishes_is_still_followed_by_a_heartbeat() -> None:
+    async def scenario() -> None:
+        body = request("order-17")
+
+        #
+        # The first extension is sent 0.05 seconds in and lands 0.3 later;
+        # the job finishes at 0.15, while it is still on its way.
+        #
+        setup = harness(Handler({body: succeeded("order-17")}, delay=0.15))
+        setup.queue.extension_delay = 0.3
+        setup.queue.put("m-17", body)
+
+        await run_until(setup.worker, lambda: setup.queue.find("m-17").deleted)
+
+        (extended,) = [
+            index for index, call in enumerate(setup.queue.calls) if call[0] == "visibility"
+        ]
+
+        assert setup.queue.visibility_changes("m-17") == [5]
+        assert extended + 1 in setup.heartbeats
+
+    asyncio.run(scenario())
+
+
+def test_a_heartbeat_that_fails_during_a_job_is_reported_and_the_job_still_settles() -> None:
+    async def scenario() -> None:
+        body = request("order-18")
+        queue = MemoryQueue()
+        queue.put("m-18", body)
+        reports: list[str] = []
+        beats: list[int] = []
+
+        def heartbeat() -> None:
+            """Beat before the first receive, then fail, as a full disk would."""
+
+            beats.append(len(queue.calls))
+
+            if len(beats) > 1:
+                raise HeartbeatError(
+                    "Cannot write the heartbeat file beat: No space left on device."
+                )
+
+        worker = Worker(
+            queue,
+            Handler({body: succeeded("order-18")}, delay=0.2),
+            settings=FAST,
+            log=lambda line: None,
+            report=reports.append,
+            heartbeat=heartbeat,
+        )
+
+        (message,) = (queued.message for queued in queue.messages)
+        settled = await worker.process(message, asyncio.Event())
+
+        assert settled.settled is Settlement.DELETED
+        assert reports
+        assert set(reports) == {"Cannot write the heartbeat file beat: No space left on device."}
 
     asyncio.run(scenario())
 
