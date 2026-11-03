@@ -639,9 +639,12 @@ under one key per iteration, the same way, as implementations 1.0.5 and
 and waits for one another process still runs. Their grants, timeouts and
 definitions are unchanged.
 
-A database that installed the library from Azathoth 1.0 runs
-`azathoth tool install-standard`, or `azathoth init`, once to pick up the
-current revisions. The same run installs the data-shaping tools, which are
+A database from the 1.0 release holds the composition tools 1.0 shipped as
+examples, and `azathoth init` upgrades it as the
+[changelog](../../../CHANGELOG.md#upgrading-from-10) shows. A database that
+installed the library from a development build of 1.1, before ADR 0099,
+runs `azathoth tool install-standard`, or `azathoth init`, once to pick up
+the current revisions. The same run installs the data-shaping tools, which are
 new in 1.1:
 
 ```text

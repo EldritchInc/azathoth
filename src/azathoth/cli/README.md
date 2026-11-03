@@ -3504,8 +3504,10 @@ the exact versions they require. `azathoth init` runs the same installation.
 Azathoth 1.1 also ships new revisions of `run_workflow@1.0.0` and
 `loop_workflow@1.1.0` that grant the environment their child process needs
 (ADR 0099), including the tracing configuration (ADR 0100). A database that
-installed them before 1.1 runs child workflows only after the command runs
-again, which also installs the tools that are new in 1.1:
+installed them from a development build of 1.1, before ADR 0099, runs child
+workflows only after the command runs again, which also installs the tools
+added since; a database from the 1.0 release upgrades as the
+[changelog](../../../CHANGELOG.md#upgrading-from-10) shows:
 
 ```text
 Installed tool run_workflow@1.0.0 revision 2.

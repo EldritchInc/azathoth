@@ -49,8 +49,10 @@ CHILD_GRANTS = (
 PRE_GRANT_VERSIONS = {"run_workflow": "1.0.0", "loop_workflow": "1.1.0"}
 
 #
-# Implementation digests of the standard tools as Azathoth 1.0 shipped them,
-# before ADR 0099. The reconstructed documents below must match them exactly.
+# Implementation digests of the standard tools as the development builds of
+# 1.1 shipped them, before ADR 0099. The 1.0 release shipped no standard
+# library; tests/test_upgrade_from_1_0.py upgrades a database from it. The
+# reconstructed documents below must match them exactly.
 #
 PRE_GRANT_IMPLEMENTATION_DIGESTS = {
     "run_workflow": "7c82bce9a41bbeade40a1cf273da55fe892f045513334c9b89fbf9dac472acf8",

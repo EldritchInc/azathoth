@@ -428,8 +428,8 @@ git push origin v<version>
 For example:
 
 ```bash
-git tag -a v1.0.0 -m "Azathoth 1.0.0"
-git push origin v1.0.0
+git tag -a v1.1.0 -m "Azathoth 1.1.0"
+git push origin v1.1.0
 ```
 
 The workflow then builds, validates and publishes to PyPI, and then
@@ -452,11 +452,13 @@ git tag -d v<version>
 git push origin --delete v<version>
 ```
 
-After publication, create the GitHub Release from the tag with the release
-notes:
+After publication, create the GitHub Release from the tag. Its notes are
+the version's entry in [`CHANGELOG.md`](CHANGELOG.md), which the release
+commit must already hold:
 
 ```bash
-gh release create v<version> --title "Azathoth <version>" --notes-file <NOTES_FILE>
+awk -v version=<version> '$0 == "## " version {found = 1; next} /^## / {found = 0} found' CHANGELOG.md > release-notes.md
+gh release create v<version> --title "Azathoth <version>" --notes-file release-notes.md
 ```
 
 A tag identifies source that has already passed validation. It is not the

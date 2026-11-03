@@ -623,7 +623,8 @@ metadata
 executability
 ```
 
-Azathoth 1.0 includes OpenRouter provider discovery and execution behind provider-neutral interfaces.
+Azathoth includes two providers behind provider-neutral interfaces: OpenRouter,
+and Amazon Bedrock (ADR 0103), each with model discovery and execution.
 
 See [`azathoth.providers`](../src/azathoth/providers/README.md).
 
