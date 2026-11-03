@@ -460,10 +460,10 @@ objects under `destination_prefix`:
 ```json
 {
   "settings": {
-    "destination_prefix": "s3://tenix-work/chunks/",
+    "destination_prefix": "s3://azathoth-data/chunks/",
     "max_chunks": 2000
   },
-  "uri": "s3://tenix-work/inbox/claims-2026-10.ndjson"
+  "uri": "s3://azathoth-data/inbox/claims-2026-10.ndjson"
 }
 ```
 
@@ -480,11 +480,11 @@ to the version it read:
 ```json
 {
   "chunks": [
-    {"uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000000", "index": 0, "size_bytes": 5242836},
-    {"uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000001", "index": 1, "size_bytes": 1918113}
+    {"uri": "s3://azathoth-data/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000000", "index": 0, "size_bytes": 5242836},
+    {"uri": "s3://azathoth-data/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000001", "index": 1, "size_bytes": 1918113}
   ],
   "count": 2,
-  "source": {"uri": "s3://tenix-work/inbox/claims-2026-10.ndjson", "etag": "<ETAG>", "version_id": null, "size_bytes": 7160949}
+  "source": {"uri": "s3://azathoth-data/inbox/claims-2026-10.ndjson", "etag": "<ETAG>", "version_id": null, "size_bytes": 7160949}
 }
 ```
 
@@ -548,7 +548,7 @@ the speed of the network between the worker and S3.
 ```json
 {
   "settings": {"media_type": "application/json", "max_bytes": 5242880},
-  "uri": "s3://tenix-work/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000003"
+  "uri": "s3://azathoth-data/chunks/<RUN_ID>/<STEP_ID>/1/chunk-000003"
 }
 ```
 

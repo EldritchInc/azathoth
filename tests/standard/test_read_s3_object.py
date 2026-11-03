@@ -32,7 +32,7 @@ PROJECT_ROOT = Path(__file__).parents[2]
 
 STANDARD_README = PROJECT_ROOT / "src" / "azathoth" / "standard" / "README.md"
 
-BUCKET = "tenix-work"
+BUCKET = "azathoth-data"
 
 KEY = "chunks/run/step/1/chunk-000003"
 
@@ -472,7 +472,7 @@ REFUSALS: tuple[tuple[dict[str, JsonValue], str], ...] = (
     ({"settings": [], "uri": URI}, "read_s3_object needs 'settings' to be an object."),
     ({"settings": {}}, URI_REFUSAL),
     ({"settings": {}, "uri": "file:///etc/hostname"}, URI_REFUSAL),
-    ({"settings": {}, "uri": "s3://tenix-work"}, URI_REFUSAL),
+    ({"settings": {}, "uri": "s3://azathoth-data"}, URI_REFUSAL),
     ({"settings": {}, "uri": "s3:///chunk-000000"}, URI_REFUSAL),
     (inputs(media_type="image/png"), MEDIA_TYPE_REFUSAL),
     (inputs(media_type="text/plain; charset=utf-8"), MEDIA_TYPE_REFUSAL),

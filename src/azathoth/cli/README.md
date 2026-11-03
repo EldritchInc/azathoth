@@ -2891,9 +2891,10 @@ s3:// inputs need boto3, which is not installed; install azathoth-ai[worker].
 ```
 
 The cap is for content the engine resolves into a run. Data larger than
-that goes by pointer: a request's inline value names the object, a process
-tool streams it and splits it into chunk objects, and `map_workflow` runs a
-child over the chunks (ADR 0106, ADR 0108).
+that goes by pointer: a request's inline value names the object,
+`split_s3_object` streams it into chunk objects, `map_workflow` runs a
+child over the chunks, and each child reads its own with `read_s3_object`
+(ADR 0106, ADR 0108, ADR 0110).
 
 ## Worker Options
 

@@ -335,6 +335,13 @@ fails, the others still run, and the map fails naming the first that
 failed. If the map is stopped halfway, `run resume <RUN_ID>` finishes it,
 and only the items that had not finished run again.
 
+A map over data too large to pass between steps works the same way, over
+chunks in S3: the [large-file example](../examples/large-file/README.md)
+splits a file with `split_s3_object`, maps a child over its chunks, and has
+each child read its own with `read_s3_object`. It needs S3, so it is run on
+the stack of [Running Azathoth on AWS](aws.md#data-larger-than-the-cap)
+rather than here.
+
 ## 6. Ticket Triage: Routing
 
 `triage-ticket.json` classifies a support ticket and sends it to one of four

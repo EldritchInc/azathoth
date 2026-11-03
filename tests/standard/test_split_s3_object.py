@@ -33,13 +33,13 @@ PROJECT_ROOT = Path(__file__).parents[2]
 
 STANDARD_README = PROJECT_ROOT / "src" / "azathoth" / "standard" / "README.md"
 
-SOURCE_BUCKET = "tenix-work"
+SOURCE_BUCKET = "azathoth-data"
 
 SOURCE_KEY = "inbox/large.txt"
 
 SOURCE_URI = f"s3://{SOURCE_BUCKET}/{SOURCE_KEY}"
 
-DESTINATION_BUCKET = "tenix-chunks"
+DESTINATION_BUCKET = "azathoth-chunks"
 
 RUN_ID = UUID("e8000000-0000-4000-8000-000000000001")
 
@@ -610,10 +610,10 @@ def test_chunks_carry_the_sources_content_type(
 @pytest.mark.parametrize(
     ("destination", "prefix"),
     [
-        ("s3://tenix-chunks/chunks/", FOLDER),
-        ("s3://tenix-chunks/chunks", FOLDER),
-        ("s3://tenix-chunks/", f"{RUN_ID}/{STEP_ID}/1/"),
-        ("s3://tenix-chunks", f"{RUN_ID}/{STEP_ID}/1/"),
+        ("s3://azathoth-chunks/chunks/", FOLDER),
+        ("s3://azathoth-chunks/chunks", FOLDER),
+        ("s3://azathoth-chunks/", f"{RUN_ID}/{STEP_ID}/1/"),
+        ("s3://azathoth-chunks", f"{RUN_ID}/{STEP_ID}/1/"),
     ],
 )
 def test_chunks_go_under_the_destination_in_the_folder_of_the_step_attempt(
@@ -768,11 +768,11 @@ REFUSALS: tuple[tuple[dict[str, JsonValue], str], ...] = (
         "split_s3_object needs 'settings' to be an object.",
     ),
     (
-        {**inputs(), "uri": "https://tenix-work/inbox/large.txt"},
+        {**inputs(), "uri": "https://azathoth-data/inbox/large.txt"},
         "split_s3_object needs 'uri' to be an s3:// URI naming an object.",
     ),
     (
-        {**inputs(), "uri": "s3://tenix-work/"},
+        {**inputs(), "uri": "s3://azathoth-data/"},
         "split_s3_object needs 'uri' to be an s3:// URI naming an object.",
     ),
     (

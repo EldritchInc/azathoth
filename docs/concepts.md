@@ -801,8 +801,9 @@ azathoth workflow run <WORKFLOW_ID> --input-file chapter.md
 ```
 
 The cap is for content the engine resolves into a run, not for the data a
-workflow processes. Larger data goes by pointer: the input names an object,
-a tool streams it into chunks, and `map_workflow` runs a child over them.
+workflow processes. Larger data goes by pointer: the input names an object
+in S3, `split_s3_object` streams it into chunks, `map_workflow` runs a child
+over them, and each child reads its own with `read_s3_object`.
 
 See [`azathoth.inputs`](../src/azathoth/inputs/README.md).
 
