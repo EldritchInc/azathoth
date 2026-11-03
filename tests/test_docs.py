@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).parents[1]
 
 TOP_LEVEL_DOCUMENTS = (
     "README.md",
+    "CHANGELOG.md",
     "CONTRIBUTING.md",
     "RELEASING.md",
 )
