@@ -6,6 +6,17 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+### Documents In
+
+- **A workflow's input can be a PDF or an image.** `application/pdf`,
+  `image/png`, `image/jpeg` and `image/webp` join JSON and `text/*`, by
+  reference from the CLI or a worker. The content is checked against its
+  media type's signature, kept in the content store, and given to the
+  workflow as a content handle naming its digest, media type and size
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+
 ## 1.2.0
 
 Azathoth 1.2 serves workflows to AI clients. `azathoth-mcp`, a new package

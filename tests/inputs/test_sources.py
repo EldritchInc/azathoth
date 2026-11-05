@@ -114,12 +114,12 @@ def test_json_and_text_media_types_are_supported(
 @pytest.mark.parametrize(
     "media_type",
     [
-        "image/png",
-        "application/pdf",
+        "image/gif",
+        "application/zip",
         "application/octet-stream",
     ],
 )
-def test_binary_media_types_are_not_supported_yet(
+def test_other_binary_media_types_are_not_supported(
     media_type: str,
 ) -> None:
     assert not is_supported_media_type(media_type)
@@ -148,10 +148,10 @@ def test_malformed_media_types_are_rejected(
 
 def test_sources_reject_unsupported_media_types() -> None:
     with pytest.raises(ValidationError, match="is not supported"):
-        InlineInput(value="x", media_type="image/png")
+        InlineInput(value="x", media_type="image/gif")
 
     with pytest.raises(ValidationError, match="is not supported"):
-        ReferenceInput(uri=CHAPTER_URI, media_type="image/png")
+        ReferenceInput(uri=CHAPTER_URI, media_type="image/gif")
 
 
 def test_decode_input_source_reads_an_inline_value() -> None:

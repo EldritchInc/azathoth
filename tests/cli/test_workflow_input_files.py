@@ -254,14 +254,14 @@ def test_an_unsupported_media_type_is_a_usage_error(
                 action,
                 str(WORKFLOW_ID),
                 "--input-file",
-                str(tmp_path / "scan.pdf"),
+                str(tmp_path / "animation.gif"),
                 "--media-type",
-                "application/pdf",
+                "image/gif",
             )
         )
 
     assert raised.value.code == 2
-    assert "Media type 'application/pdf' is not supported" in capsys.readouterr().err
+    assert "Media type 'image/gif' is not supported" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("action", ["run", "invoke"])

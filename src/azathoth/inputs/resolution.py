@@ -1,4 +1,4 @@
-"""Resolving input references at the edge, before a run (ADR 0096)."""
+"""Resolving input references at the edge, before a run (ADR 0096, ADR 0112)."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -9,9 +9,12 @@ from urllib.request import url2pathname
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from azathoth.inputs.content import ContentRef
 from azathoth.inputs.media import (
     InputContentError,
+    check_binary_signature,
     decode_content,
+    is_binary_media_type,
 )
 from azathoth.inputs.source import (
     InlineInput,
@@ -176,8 +179,10 @@ def resolve_input(
 
     An inline value is used as it is. A reference is read by the resolver for
     its scheme, within the policy's cap, decoded as its media type, and its
-    content saved in the store before the resolved input is returned.
-    Nothing is stored for content that is refused.
+    content saved in the store before the resolved input is returned. Binary
+    content is checked against its media type's signature instead of being
+    decoded, and resolves to a content handle naming it (ADR 0112). Nothing
+    is stored for content that is refused.
 
     Raises:
         InputResolutionError: The scheme is not accepted, or the content
@@ -208,12 +213,25 @@ def resolve_input(
     if len(content) > policy.max_bytes:
         raise input_too_large(source.uri, policy.max_bytes)
 
+    binary = is_binary_media_type(source.media_type)
+
     try:
-        value = decode_content(content, source.media_type)
+        if binary:
+            check_binary_signature(content, source.media_type)
+            value: JsonValue = None
+        else:
+            value = decode_content(content, source.media_type)
     except InputContentError as exc:
         raise InputResolutionError(f"Input {source.uri}: {exc}") from exc
 
     digest = store.put(content)
+
+    if binary:
+        value = ContentRef(
+            digest=digest,
+            media_type=source.media_type,
+            size_bytes=len(content),
+        ).to_value()
 
     return ResolvedInput(
         value=value,

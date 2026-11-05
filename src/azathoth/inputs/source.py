@@ -1,4 +1,4 @@
-"""Value-or-reference sources of workflow input (ADR 0096)."""
+"""Value-or-reference sources of workflow input (ADR 0096, ADR 0112)."""
 
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -17,6 +17,7 @@ from pydantic import (
 
 from azathoth.inputs.media import (
     JSON_MEDIA_TYPE,
+    is_binary_media_type,
     is_text_media_type,
     validate_media_type,
 )
@@ -37,7 +38,8 @@ class InputSourceError(ValueError):
 class InlineInput(BaseModel):
     """An input that holds its content: `{"value": <JSON>, "media_type": ...}`.
 
-    The media type defaults to JSON. A text media type requires a string.
+    The media type defaults to JSON. A text media type requires a string. A
+    binary media type is not accepted inline yet; it is given by reference.
     """
 
     model_config = ConfigDict(
@@ -62,7 +64,12 @@ class InlineInput(BaseModel):
     def validate_text_value(
         self,
     ) -> "InlineInput":
-        """Require a text input to hold a string."""
+        """Require a text input to hold a string, and refuse a binary one."""
+
+        if is_binary_media_type(self.media_type):
+            raise ValueError(
+                f"An inline {self.media_type} input is not accepted yet; give it by reference."
+            )
 
         if is_text_media_type(self.media_type) and not isinstance(self.value, str):
             raise ValueError(f"An inline {self.media_type} input must hold a string.")
