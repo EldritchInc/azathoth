@@ -154,6 +154,18 @@ def test_ci_installs_it_wherever_the_whole_suite_runs() -> None:
     assert whole_suite.count(f"run: python -m pip install {EDITABLE_INSTALL}\n") == 2
 
 
+def test_ci_installs_it_where_the_image_tests_run() -> None:
+    """The image tests talk to the image's MCP server with the SDK's client."""
+
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    container = workflow.split("\n  container:\n")[1].split("\n  postgres:\n")[0]
+
+    assert f"run: python -m pip install {EDITABLE_INSTALL}\n" in container
+    assert "from mcp import Client, StdioServerParameters" in (
+        PROJECT_ROOT / "tests" / "container" / "test_image.py"
+    ).read_text(encoding="utf-8")
+
+
 def test_every_type_check_covers_it() -> None:
     for path in (
         PROJECT_ROOT / "Makefile",
