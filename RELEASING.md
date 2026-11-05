@@ -33,6 +33,18 @@ azathoth
 These names intentionally differ only where required by Python package naming
 conventions. The name `azathoth` on PyPI belongs to an unrelated project.
 
+Azathoth's MCP server is a second distribution, built from
+`packages/azathoth-mcp` and released with every release, at the same version
+(ADR 0111):
+
+```text
+azathoth-mcp
+```
+
+Its import package is `azathoth_mcp` and its command `azathoth-mcp`. It
+requires exactly its own minor release of `azathoth-ai`, so the two are
+always published together, from one tag.
+
 Each release is also published as a container image (ADR 0101):
 
 ```text
@@ -46,13 +58,18 @@ Azathoth records its version in:
 ```text
 pyproject.toml
 src/azathoth/__init__.py
+packages/azathoth-mcp/pyproject.toml
+packages/azathoth-mcp/src/azathoth_mcp/__init__.py
 ```
 
-The installed-distribution tests require both values to agree, and the release
-workflow refuses a tag that does not match `pyproject.toml`.
+`azathoth-mcp`'s `azathoth-ai` requirement names the same minor release, as
+`azathoth-ai==<major>.<minor>.*`. The installed-distribution tests require all
+of them to agree, and the release workflow refuses a tag that does not match
+`pyproject.toml`, and an `azathoth-mcp` that declares another version.
 
-A release version must therefore be updated in both locations, in a commit
-merged to `main`, before it is tagged.
+A release version must therefore be updated in every one of these, in a commit
+merged to `main`, before it is tagged. Its changelog entry is the
+`## Unreleased` entry, renamed to the version.
 
 PyPI never accepts the same version twice, even after a release is deleted.
 A version that was published wrongly is fixed by publishing the next version.
@@ -93,7 +110,10 @@ It requires, once:
 - a pending publisher on PyPI for `azathoth-ai`, naming the repository
   `EldritchInc/azathoth`, the workflow `release.yml`, and the environment
   `pypi`;
-- the same on TestPyPI, with the environment `testpypi`;
+- the same for `azathoth-mcp`, which the same job publishes beside it: a
+  pending publisher until its first release creates the project, and a
+  trusted publisher of the project after that;
+- the same two on TestPyPI, with the environment `testpypi`;
 - recommended: a required reviewer on the `pypi` environment, under
   Settings → Environments in GitHub, so a pushed tag waits for approval before
   anything reaches PyPI. The image waits for the same approval, because it is
@@ -181,11 +201,16 @@ released. The workflow's `build` job validates exactly what it publishes:
 
 1. it reads the version from `pyproject.toml`;
 2. for a tag, it requires the tag to be exactly `v` followed by that version;
-3. it builds the source distribution and wheel with `python -m build`;
-4. it installs the wheel into a clean environment, outside the checkout, and
-   requires `azathoth --version` to print `azathoth <version>` and
-   `azathoth --help` to succeed; and
-5. it passes those same files, unchanged, to the publishing job.
+3. it requires `packages/azathoth-mcp/pyproject.toml` to declare the same
+   version;
+4. it builds the source distributions and wheels of both with
+   `python -m build`;
+5. it installs both wheels into a clean environment, outside the checkout,
+   and requires `azathoth --version` to print `azathoth <version>`,
+   `azathoth-mcp --version` to print `azathoth-mcp <version>`, and both
+   commands' help to succeed; and
+6. it passes those same files, unchanged, to the publishing job, which
+   publishes both distributions.
 
 Nothing is rebuilt between validation and publication.
 
@@ -193,7 +218,8 @@ Once the wheel is published, the `publish-image` job builds the container
 image from the same commit:
 
 1. it builds the image for `linux/amd64`, and requires `azathoth --version`
-   inside it to print `azathoth <version>`;
+   inside it to print `azathoth <version>`, and `azathoth-mcp --version` to
+   print `azathoth-mcp <version>`;
 2. it builds the image for `linux/amd64` and `linux/arm64`, and pushes both
    to `ghcr.io/eldritchinc/azathoth` as `<version>`, `<major>.<minor>` and
    `latest`, labeled with the version and the commit, with an SBOM and its
@@ -441,6 +467,7 @@ the release workflow for its tag:
 
 ```bash
 docker run --rm ghcr.io/eldritchinc/azathoth:<version> --version
+docker run --rm --entrypoint /usr/bin/tini ghcr.io/eldritchinc/azathoth:<version> -- azathoth-mcp --version
 cosign verify ghcr.io/eldritchinc/azathoth:<version> --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

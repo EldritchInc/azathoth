@@ -5,6 +5,7 @@
 !README.md
 !LICENSE
 !src/
+!packages/azathoth-mcp/
 **/__pycache__
 **/*.py[cod]
 **/*.egg-info

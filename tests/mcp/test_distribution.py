@@ -166,3 +166,12 @@ def test_every_type_check_covers_it() -> None:
 
         assert commands, path.name
         assert all(SOURCE_PATH in command for command in commands), (path.name, commands)
+
+
+def test_its_page_links_the_guide() -> None:
+    urls = metadata(DISTRIBUTION_NAME).get_all("Project-URL") or ()
+
+    assert "Documentation, https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md" in urls
+    assert "https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md" in (
+        PACKAGE_ROOT / "README.md"
+    ).read_text(encoding="utf-8")

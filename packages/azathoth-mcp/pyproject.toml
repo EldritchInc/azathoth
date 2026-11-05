@@ -41,6 +41,7 @@ azathoth-mcp = "azathoth_mcp.cli:main"
 Homepage = "https://github.com/EldritchInc/azathoth"
 Repository = "https://github.com/EldritchInc/azathoth"
 Issues = "https://github.com/EldritchInc/azathoth/issues"
+Documentation = "https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

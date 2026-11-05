@@ -27,6 +27,7 @@ USER_GUIDES = (
     "docs/getting-started.md",
     "docs/container.md",
     "docs/aws.md",
+    "docs/mcp.md",
 )
 
 FENCE = re.compile(r"^\s*```(?P<language>\S*)\s*$")

@@ -98,6 +98,14 @@ invocation's result and its evidence: what `invocation show` reports, its
 runs, steps and revision, and the caller metadata it was recorded with. It
 answers only for invocations of exposed workflows.
 
+A refused call, for an unknown tool, a missing scope, arguments that do not
+match the tool's schema, a workflow no longer active or an invocation the
+caller may not read, is a tool result marked as an error whose text says
+why, never a protocol error, so the model can correct the call. Any other
+failure is the server's: it is logged in full on the server, and the
+client is told only that it happened, so nothing of the server's state
+reaches it.
+
 Nothing that changes what a workflow is, such as promoting, importing or
 optimizing, is offered. If an organization wants an agent to manage
 workflows, it can write a workflow that does it, and expose that,
@@ -117,6 +125,13 @@ The server records who called in the invocation's caller metadata, under
 `mcp`: the transport, the tool's name, and over HTTP the token's subject and
 client ID. The database schema does not change, and `invocation show`
 already prints caller metadata.
+
+The server keeps the runtime it composed when it started, and composes a
+new one only when a call finds that the workflow it invokes has another
+active state than the kept runtime holds, as after it is promoted again.
+Composing a runtime discovers provider models, which is too slow for every
+call; the cost is that other changes, such as a model authorized or a tool
+imported, reach a running server only when it restarts.
 
 The tool call waits for the invocation to finish, and the server sends the
 client a progress notification as each step completes. A client that times
@@ -143,7 +158,10 @@ The server runs over one of two transports:
   credentials, and needs no authorization of its own: whoever can start
   the process already has those credentials.
 - **Streamable HTTP**, for a team sharing one server and one PostgreSQL
-  database. It is protected as below.
+  database. It is protected as below. It is stateless: each request is
+  served on its own, under its own token, and a call's progress is streamed
+  back in its own response. The endpoint is `/mcp`, so the resource URL
+  ends in `/mcp`.
 
 ### Authorization over HTTP
 
@@ -153,8 +171,8 @@ in; the organization's identity provider, such as Entra ID, Okta, Cognito
 or Keycloak, does.
 
 - The server publishes Protected Resource Metadata (RFC 9728), naming the
-  identity provider as its authorization server, and answers an
-  unauthenticated request with a 401 that points to it.
+  identity provider as its authorization server and every scope its tools
+  need, and answers an unauthenticated request with a 401 that points to it.
 - Every request carries a bearer token, which the server validates with
   PyJWT against the provider's published keys: its signature, by an allowed
   algorithm only; its issuer; its audience, which must be this server's own
@@ -166,7 +184,9 @@ or Keycloak, does.
   `azathoth:read:all`.
 - The server never passes a token on to anything else, and never logs one.
 - The SDK's checks of a request's `Host` and `Origin` headers are on, which
-  stops a web page from reaching a local server through DNS rebinding.
+  stops a web page from reaching a local server through DNS rebinding. A
+  server answers its resource URL's host, or loopback names without
+  authorization, and any other host or origin the operator allows.
 - The server runs without authorization only when it is bound to a loopback
   address, `127.0.0.1` or `::1`, and refuses to start unauthenticated on any
   other.
@@ -174,8 +194,8 @@ or Keycloak, does.
 ### The container image
 
 The signed image installs both distributions, so one image runs the CLI,
-the worker and the server. The server is started by naming its command as
-the entrypoint. The AWS stack does not yet run it; that waits until the
+the worker and the server. The server is started through tini, by naming
+tini as the entrypoint and the server's command after it. The AWS stack does not yet run it; that waits until the
 stack itself has run on Fargate.
 
 ## Consequences
@@ -199,6 +219,8 @@ stack itself has run on Fargate.
   the workflow it describes, and can fall out of step with it.
 - A long invocation holds its tool call open until it finishes, and a
   client with a short timeout has to call again with its key.
+- A running server sees a newly authorized model or imported tool only
+  after a restart.
 - Inputs too large to send inline cannot be passed until references are
   allowed.
 

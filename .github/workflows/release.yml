@@ -32,6 +32,19 @@ jobs:
           version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
+      #
+      # azathoth-mcp is released with Azathoth, at the same version (ADR 0111).
+      #
+      - name: Require azathoth-mcp to declare the same version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mcp_version="$(python -c "import tomllib; print(tomllib.load(open('packages/azathoth-mcp/pyproject.toml', 'rb'))['project']['version'])")"
+          if [ "${mcp_version}" != "${VERSION}" ]; then
+            echo "azathoth-mcp declares ${mcp_version}, not ${VERSION}." >&2
+            exit 1
+          fi
+
       - name: Require the tag to match the declared version
         if: github.event_name == 'push'
         env:
@@ -46,8 +59,9 @@ jobs:
         run: |
           python -m pip install build
           python -m build
+          python -m build packages/azathoth-mcp --outdir dist
 
-      - name: Install the built wheel into a clean environment
+      - name: Install the built wheels into a clean environment
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -56,6 +70,8 @@ jobs:
           cd "${RUNNER_TEMP}"
           test "$("${RUNNER_TEMP}/release-check/bin/azathoth" --version)" = "azathoth ${VERSION}"
           "${RUNNER_TEMP}/release-check/bin/azathoth" --help > /dev/null
+          test "$("${RUNNER_TEMP}/release-check/bin/azathoth-mcp" --version)" = "azathoth-mcp ${VERSION}"
+          "${RUNNER_TEMP}/release-check/bin/azathoth-mcp" serve --help > /dev/null
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
@@ -168,6 +184,11 @@ jobs:
           reported="$(docker run --rm azathoth:release --version)"
           if [ "${reported}" != "azathoth ${VERSION}" ]; then
             echo "The image reports ${reported}, not azathoth ${VERSION}." >&2
+            exit 1
+          fi
+          served="$(docker run --rm --entrypoint /usr/bin/tini azathoth:release -- azathoth-mcp --version)"
+          if [ "${served}" != "azathoth-mcp ${VERSION}" ]; then
+            echo "The image's MCP server reports ${served}, not azathoth-mcp ${VERSION}." >&2
             exit 1
           fi
 

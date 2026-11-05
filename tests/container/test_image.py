@@ -8,6 +8,7 @@ They need Docker, so they run only with `AZATHOTH_RUN_CONTAINER_TESTS=1`:
 builds; without it, the image is built from the checkout first.
 """
 
+import asyncio
 import json
 import os
 import subprocess
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from mcp import Client, StdioServerParameters
 
 from azathoth import __version__
 from azathoth.jobs import JobResult, JobStatus
@@ -412,3 +414,81 @@ def test_tracing_to_the_console_leaves_stdout_alone(
     assert completed.stdout == "7\n"
     assert '"name": "azathoth.run"' in completed.stderr
     assert '"name": "azathoth.step"' in completed.stderr
+
+
+# The MCP server (ADR 0111)
+
+
+def test_the_image_holds_the_mcp_server_at_the_same_version(
+    image: str,
+) -> None:
+    completed = succeeded(
+        docker(
+            "run", "--rm", "--entrypoint", "/usr/bin/tini", image, "--", "azathoth-mcp", "--version"
+        )
+    )
+
+    assert completed.stdout == f"azathoth-mcp {__version__}\n"
+
+
+def test_the_mcp_server_serves_a_promoted_workflow_over_stdio(
+    deployment: Deployment,
+    tmp_path: Path,
+) -> None:
+    exposure = tmp_path / "exposure.json"
+    exposure.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "tools": [
+                    {
+                        "workflow_id": CHILD_WORKFLOW_ID,
+                        "name": "count_words",
+                        "description": "Count the words in a piece of text.",
+                        "input_schema": {"type": "string"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    tmp_path.chmod(0o755)
+    exposure.chmod(0o644)
+
+    parameters = StdioServerParameters(
+        command="docker",
+        args=[
+            "run",
+            "--interactive",
+            "--rm",
+            "--volume",
+            f"{deployment.volume}:{DATA}",
+            "--volume",
+            f"{tmp_path}:/mcp:ro",
+            "--entrypoint",
+            "/usr/bin/tini",
+            deployment.image,
+            "--",
+            "azathoth-mcp",
+            "serve",
+            "--exposure",
+            "/mcp/exposure.json",
+        ],
+        env=dict(os.environ),
+    )
+
+    async def use() -> tuple[list[str], dict[str, object] | None]:
+        async with Client(parameters) as client:
+            names = [tool.name for tool in (await client.list_tools()).tools]
+            result = await client.call_tool(
+                "count_words", {"input": "the old ones wait and dream", "idempotency_key": "c-1"}
+            )
+
+            return names, result.structured_content
+
+    names, outcome = asyncio.run(use())
+
+    assert names == ["count_words", "get_invocation"]
+    assert outcome is not None
+    assert outcome["status"] == "succeeded"
+    assert outcome["idempotency_key"] == "c-1"

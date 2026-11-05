@@ -14,10 +14,11 @@ release dates are on the
   such as Claude Desktop, IDEs and agents. It is a separate distribution,
   released with Azathoth at the same version. Only the workflows an operator
   lists are offered, each as one tool; every call is a recorded, idempotent
-  invocation of the workflow's active production revision. It runs over
-  stdio, or over Streamable HTTP as an OAuth 2.1 resource server with a
-  scope per tool
-  ([ADR 0111](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0111-serve-promoted-workflows-over-mcp.md)).
+  invocation of the workflow's active production revision, recorded with
+  who called. It runs over stdio, or over Streamable HTTP as an OAuth 2.1
+  resource server with a scope per tool, and ships in the container image
+  ([ADR 0111](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0111-serve-promoted-workflows-over-mcp.md);
+  [Serving Workflows Over MCP](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md)).
 
 ## 1.1.0
 

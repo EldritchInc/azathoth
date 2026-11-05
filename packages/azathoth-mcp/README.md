@@ -15,6 +15,10 @@ It runs over stdio for a local client, or over Streamable HTTP for a team,
 as an OAuth 2.1 resource server in front of your organization's identity
 provider.
 
+[Serving Workflows Over MCP](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md)
+shows how to expose a workflow, connect Claude Desktop, and serve a team
+behind your identity provider.
+
 Azathoth MCP is released with Azathoth, at the same version, and requires
 the same minor release of `azathoth-ai`. The design is recorded in
 [ADR 0111](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0111-serve-promoted-workflows-over-mcp.md).

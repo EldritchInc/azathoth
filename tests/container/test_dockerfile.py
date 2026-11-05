@@ -21,7 +21,7 @@ VENV = "/opt/azathoth/venv"
 
 DATA = "/var/lib/azathoth"
 
-BUILD_INPUTS = ("pyproject.toml", "README.md", "LICENSE", "src/")
+BUILD_INPUTS = ("pyproject.toml", "README.md", "LICENSE", "src/", "packages/azathoth-mcp/")
 
 
 def instructions() -> tuple[tuple[str, str], ...]:
@@ -129,7 +129,11 @@ def test_a_builder_stage_builds_the_wheel_and_the_runtime_starts_clean() -> None
     builder, runtime = arguments("FROM")
 
     assert builder == f"{runtime} AS builder"
-    assert any("python -m build --wheel" in rest for rest in arguments("RUN"))
+    assert any("python -m build --wheel --outdir /dist" in rest for rest in arguments("RUN"))
+    assert any(
+        "python -m build --wheel --outdir /dist packages/azathoth-mcp" in rest
+        for rest in arguments("RUN")
+    )
     assert "--from=builder /dist/ /tmp/dist/" in arguments("COPY")
 
 
@@ -141,7 +145,8 @@ def test_azathoth_is_installed_with_its_cloud_extras_into_its_own_venv() -> None
 
     assert f"python -m venv {VENV}" in install
     assert f"{VENV}/bin/python -m pip install" in install
-    assert '"$1[otel,postgres,bedrock,worker]"' in install
+    assert "set -- /tmp/dist/azathoth_ai-*.whl /tmp/dist/azathoth_mcp-*.whl" in install
+    assert '"$1[otel,postgres,bedrock,worker]" "$2"' in install
     assert "--no-cache-dir" in install
 
 
