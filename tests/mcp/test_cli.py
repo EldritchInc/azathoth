@@ -3,8 +3,10 @@
 import asyncio
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
 from importlib.metadata import entry_points
 from pathlib import Path
 from uuid import UUID
@@ -170,14 +172,218 @@ def test_serving_needs_an_exposure_document(
     )
 
 
-def test_only_stdio_is_served_so_far(
+def test_only_stdio_and_http_are_transports(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with pytest.raises(SystemExit) as raised:
-        main(["serve", "--exposure", "x.json", "--transport", "http"])
+        main(["serve", "--exposure", "x.json", "--transport", "sse"])
 
     assert raised.value.code == 2
-    assert "invalid choice: 'http'" in capsys.readouterr().err
+    assert "invalid choice: 'sse'" in capsys.readouterr().err
+
+
+ISSUER_OPTIONS = (
+    "--issuer",
+    "https://idp.example.com/tenant",
+    "--resource",
+    "https://mcp.example.com/mcp",
+)
+
+
+@pytest.mark.parametrize(
+    ("options", "problem"),
+    [
+        (
+            ("--host", "0.0.0.0", "--port", "9000"),
+            "--host, --port apply only with --transport http.",
+        ),
+        (ISSUER_OPTIONS, "--issuer, --resource apply only with --transport http."),
+        (
+            ("--transport", "http", "--issuer", "https://idp.example.com/tenant"),
+            "Name both --issuer and --resource, or neither.",
+        ),
+        (
+            ("--transport", "http", "--resource", "https://mcp.example.com/mcp"),
+            "Name both --issuer and --resource, or neither.",
+        ),
+        (
+            ("--transport", "http", "--host", "0.0.0.0"),
+            "Without --issuer and --resource, the server authorizes no one, so it listens "
+            "only on a loopback address, such as 127.0.0.1 or ::1; got --host 0.0.0.0.",
+        ),
+        (
+            ("--transport", "http", "--jwks-url", "https://idp.example.com/keys"),
+            "--jwks-url applies only with --issuer and --resource.",
+        ),
+        (
+            ("--transport", "http", "--max-token-lifetime", "600"),
+            "--max-token-lifetime applies only with --issuer and --resource.",
+        ),
+        (
+            ("--transport", "http", "--algorithm", "ES256"),
+            "--algorithm applies only with --issuer and --resource.",
+        ),
+        (
+            ("--transport", "http", *ISSUER_OPTIONS, "--algorithm", "HS256"),
+            "Only public-key signing algorithms may be allowed; not HS256.",
+        ),
+        (
+            (
+                "--transport",
+                "http",
+                "--issuer",
+                "http://idp.example.com",
+                "--resource",
+                "https://mcp.example.com/mcp",
+            ),
+            "http://idp.example.com must be an HTTPS URL, or an HTTP URL on a loopback "
+            "address, with no query or fragment.",
+        ),
+        (
+            (
+                "--transport",
+                "http",
+                "--issuer",
+                "https://idp.example.com/tenant",
+                "--resource",
+                "https://mcp.example.com/",
+            ),
+            "--resource must name the path /mcp, where the server answers; "
+            "got https://mcp.example.com/.",
+        ),
+        (
+            ("--transport", "http", *ISSUER_OPTIONS, "--max-token-lifetime", "0"),
+            "--max-token-lifetime must be a positive number of seconds; got 0.",
+        ),
+        (
+            ("--transport", "http", "--port", "70000"),
+            "--port must be between 0 and 65535; got 70000.",
+        ),
+    ],
+)
+def test_a_command_line_that_cannot_be_used_is_refused_before_anything_starts(
+    options: tuple[str, ...],
+    problem: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["serve", "--exposure", "x.json", *options]) == 2
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err == f"{problem}\n"
+
+
+def test_an_authorized_server_may_listen_anywhere(
+    tmp_path: Path,
+) -> None:
+    database, exposure = prepared(tmp_path)
+
+    #
+    # The provider's metadata cannot be reached from here, so the server
+    # stops while finding its keys: after the command line was accepted.
+    #
+    completed = run_command(
+        "serve",
+        "--exposure",
+        str(exposure),
+        "--transport",
+        "http",
+        "--host",
+        "0.0.0.0",
+        "--issuer",
+        "http://127.0.0.1:9/tenant",
+        "--resource",
+        "https://mcp.example.com/mcp",
+        environment=server_environment(database),
+    )
+
+    assert completed.returncode == 1
+    assert completed.stderr == (
+        "Cannot find the signing keys of http://127.0.0.1:9/tenant: neither its OpenID "
+        "Connect nor its OAuth metadata names a jwks_uri. Name them with --jwks-url.\n"
+    )
+
+
+def test_a_client_calls_the_server_over_http(
+    tmp_path: Path,
+) -> None:
+    database, exposure = prepared(tmp_path)
+    port = free_port()
+    server = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "azathoth_mcp",
+            "serve",
+            "--exposure",
+            str(exposure),
+            "--transport",
+            "http",
+            "--port",
+            str(port),
+        ],
+        env=server_environment(database),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+
+    try:
+        wait_for(port, server)
+
+        async def use() -> tuple[list[str], dict[str, object] | None]:
+            async with Client(f"http://127.0.0.1:{port}/mcp") as client:
+                names = [tool.name for tool in (await client.list_tools()).tools]
+                result = await client.call_tool("tool-0", {"input": "x", "idempotency_key": "h-1"})
+
+                return names, result.structured_content
+
+        names, outcome = asyncio.run(use())
+    finally:
+        server.terminate()
+        _, errors = server.communicate(timeout=60)
+
+    assert names == ["tool-0", "get_invocation"]
+    assert outcome is not None
+    assert outcome["idempotency_key"] == "h-1"
+    assert "Bearer" not in errors
+
+    invocation = open_repositories(database).invocations.invocation_for_idempotency_key("h-1")
+
+    assert invocation is not None
+    assert invocation.caller_metadata == {"mcp": {"transport": "http", "tool": "tool-0"}}
+
+
+def free_port() -> int:
+    """Return a loopback port nothing listens on."""
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+
+        return int(probe.getsockname()[1])
+
+
+def wait_for(
+    port: int,
+    server: subprocess.Popen[str],
+) -> None:
+    """Wait until a server listens on one loopback port, or fail if it stops first."""
+
+    deadline = time.monotonic() + 60
+
+    while time.monotonic() < deadline:
+        assert server.poll() is None, server.communicate()[1]
+
+        with socket.socket() as probe:
+            if probe.connect_ex(("127.0.0.1", port)) == 0:
+                return
+
+        time.sleep(0.1)
+
+    pytest.fail("The server did not start listening.")
 
 
 def test_a_missing_document_stops_the_server(
