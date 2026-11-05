@@ -2,6 +2,7 @@
 
 import re
 
+from azathoth import __version__
 from azathoth.worker import MAX_WAIT_SECONDS
 from tests.deploy.template import PROJECT_ROOT, defaults, properties, resolve, template
 
@@ -23,8 +24,12 @@ def test_the_adr_states_the_templates_defaults() -> None:
     assert "between `MinTasks` and `MaxTasks` workers, 1 and 4 by default" in prose()
     assert parameters["ScaleOutBacklog"]["Default"] == 10
     assert "`ScaleOutBacklog` messages wait, 10 by default" in prose()
-    assert parameters["ImageUri"]["Default"] == "ghcr.io/eldritchinc/azathoth:1.1.0"
-    assert f"`{parameters['ImageUri']['Default']}`" in prose()
+    #
+    # The template defaults to this release's image; the decision names the
+    # image of the release it was made for, and is never rewritten.
+    #
+    assert parameters["ImageUri"]["Default"] == f"ghcr.io/eldritchinc/azathoth:{__version__}"
+    assert "`ghcr.io/eldritchinc/azathoth:1.1.0`" in prose()
 
 
 def test_the_adr_states_the_tasks_health_check_and_stop_timeout() -> None:
@@ -48,7 +53,7 @@ def test_the_adr_states_the_queues_timing() -> None:
 def test_the_adr_quotes_the_verify_command_the_container_guide_shows() -> None:
     guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
     (shown,) = set(re.findall(r"^cosign verify .+$", guide, re.MULTILINE))
-    general = shown.replace("1.1.0", "<VERSION>")
+    general = shown.replace(__version__, "<VERSION>")
 
     assert f"```text\n{general}\n```" in ADR.read_text(encoding="utf-8")
 

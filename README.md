@@ -170,6 +170,10 @@ tests:
 - **Takes inputs by value or by reference**, from files or S3, and keeps the
   content each run was given. Data too large for an input stays in S3 and is
   worked in chunks.
+- **Serves workflows to AI clients.** `azathoth-mcp` offers the promoted
+  workflows you list as MCP tools, to Claude Desktop, IDEs and agents, over
+  stdio or over HTTP behind your identity provider, a scope per tool. Every
+  call is a recorded invocation that names who made it.
 
 Azathoth is also a typed Python library. The
 [package READMEs](https://github.com/EldritchInc/azathoth/blob/main/docs/concepts.md#package-guide)
@@ -195,10 +199,11 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.1 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Azathoth 1.2 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
 Windows, all tested in CI. It runs models on OpenRouter and Amazon Bedrock,
 keeps its state in SQLite or PostgreSQL, ships as a signed container image
-for amd64 and arm64, and deploys to AWS from one CloudFormation template.
+for amd64 and arm64, deploys to AWS from one CloudFormation template, and
+serves promoted workflows to AI clients over MCP with `azathoth-mcp`.
 The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
 lists what each release added.
 
