@@ -202,3 +202,11 @@ def test_every_link_is_absolute_so_it_works_in_the_release_notes() -> None:
 
     assert targets
     assert all(target.startswith("https://") for target in targets), targets
+
+
+def test_1_2_says_it_was_not_deployed_to_aws_and_why() -> None:
+    validation = (PROJECT_ROOT / "docs" / "release-validation.md").read_text(encoding="utf-8")
+
+    assert "changes the image only by adding\nwhat the stack does not run" in validation
+    assert "this release was not\ndeployed to the AWS sandbox again" in entry("1.2.0")
+    assert f"]({REPOSITORY}/docs/release-validation.md#9-the-aws-deployment)" in entry("1.2.0")

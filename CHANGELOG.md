@@ -15,6 +15,11 @@ agents, locally over stdio or to a team over HTTP behind the organization's
 identity provider. Everything 1.1 promised is unchanged: documents, commands,
 documented output and the database schema are as they were.
 
+The AWS stack, the worker and the S3 tools are unchanged, and the image only
+gained `azathoth-mcp`, which the stack does not run, so this release was not
+deployed to the AWS sandbox again
+([Release Validation](https://github.com/EldritchInc/azathoth/blob/main/docs/release-validation.md#9-the-aws-deployment)).
+
 ### Serving Workflows to AI Clients
 
 - **`azathoth-mcp` serves promoted workflows as MCP tools.** It is a separate
