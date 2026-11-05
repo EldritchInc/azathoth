@@ -6,6 +6,8 @@ The workflows are read as text, so no YAML parser is needed.
 import re
 from pathlib import Path
 
+from azathoth import __version__
+
 PROJECT_ROOT = Path(__file__).parents[2]
 
 WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
@@ -156,7 +158,8 @@ def test_dependabot_keeps_the_base_images_digest_current() -> None:
 def test_the_container_guide_verifies_the_signature_this_workflow_makes() -> None:
     guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
     identity = (
-        "https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.1.0"
+        "https://github.com/EldritchInc/azathoth/.github/workflows/release.yml"
+        f"@refs/tags/v{__version__}"
     )
 
     assert (WORKFLOWS / "release.yml").exists()

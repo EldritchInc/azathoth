@@ -264,22 +264,24 @@ Run it on macOS after the release commit is merged to `main`, and before the
 TestPyPI trial. Run it in PowerShell 7 on Windows too whenever a Windows
 machine is available; the guides give every command for both.
 
-### 1. Build the wheel from `main`
+### 1. Build the wheels from `main`
 
-From the checkout, with the development venv active:
+From the checkout, with the development venv active, build both
+distributions:
 
 ```bash
 git switch main
 git pull
 rm -rf dist
 python -m build
+python -m build packages/azathoth-mcp --outdir dist
 ls dist
 deactivate
 ```
 
-### 2. Install it into a fresh venv
+### 2. Install them into a fresh venv
 
-Install the wheel into a venv outside the checkout, with a database of its
+Install both wheels into a venv outside the checkout, with a database of its
 own. Stay in the checkout afterwards: the example commands use its paths.
 
 ```bash
@@ -287,21 +289,22 @@ rm -rf ~/azathoth-release-check
 mkdir ~/azathoth-release-check
 python3 -m venv ~/azathoth-release-check/.venv
 source ~/azathoth-release-check/.venv/bin/activate
-python -m pip install dist/azathoth_ai-*.whl
+python -m pip install dist/azathoth_ai-*.whl dist/azathoth_mcp-*.whl
 export AZATHOTH_DATABASE="$HOME/azathoth-release-check/examples.db"
 ```
 
-Confirm that the command, the `python` on the `PATH` and the imported package
-all come from the fresh venv, not from the checkout:
+Confirm that the commands, the `python` on the `PATH` and the imported
+packages all come from the fresh venv, not from the checkout:
 
 ```bash
 azathoth --version
+azathoth-mcp --version
 command -v python
-python -c "import azathoth; print(azathoth.__file__)"
+python -c "import azathoth, azathoth_mcp; print(azathoth.__file__, azathoth_mcp.__file__)"
 ```
 
-All three should point inside `~/azathoth-release-check/.venv`, and the
-version should be the release version.
+All of them should point inside `~/azathoth-release-check/.venv`, and both
+versions should be the release version.
 
 ### 3. Run the provider-free examples
 
@@ -343,7 +346,59 @@ must pass. `tool install-standard` proves that the standard tools ship in
 the installed package, and the child, loop and map runs prove that the
 process tools find that package through the venv's `python`.
 
-### 4. Run the model-backed examples
+### 4. Serve a workflow over MCP
+
+Step 3 promoted the word-count workflow. Expose it, as
+[Serving Workflows Over MCP](docs/mcp.md) does, beside the database, and call
+it through the installed server over stdio, with the SDK's client from the
+same venv:
+
+```bash
+cat > "$(dirname "$AZATHOTH_DATABASE")/exposure.json" <<'EOF'
+{"version": 1, "tools": [{"workflow_id": "a1000000-0000-4000-8000-000000000002", "name": "count_words", "description": "Count the words in a piece of text.", "input_schema": {"type": "string"}}]}
+EOF
+
+python - <<'EOF'
+import asyncio
+import json
+import os
+
+from mcp import Client, StdioServerParameters
+
+exposure = os.path.join(os.path.dirname(os.environ["AZATHOTH_DATABASE"]), "exposure.json")
+server = StdioServerParameters(
+    command="azathoth-mcp", args=["serve", "--exposure", exposure], env=dict(os.environ)
+)
+
+
+async def check() -> None:
+    async with Client(server) as client:
+        print([tool.name for tool in (await client.list_tools()).tools])
+        called = await client.call_tool("count_words", {"input": "the old ones wait and dream"})
+        print(json.dumps(called.structured_content["result"]))
+        evidence = await client.call_tool(
+            "get_invocation", {"invocation_id": called.structured_content["invocation_id"]}
+        )
+        print(evidence.structured_content["status"], evidence.structured_content["caller"])
+
+
+asyncio.run(check())
+EOF
+```
+
+It must print exactly:
+
+```text
+['count_words', 'get_invocation']
+{"result": 6}
+succeeded {'mcp': {'transport': 'stdio', 'tool': 'count_words'}}
+```
+
+That proves the installed server finds its document and the database,
+offers only what is exposed, runs the promoted workflow as a recorded
+invocation, and reads back its evidence with the caller.
+
+### 5. Run the model-backed examples
 
 Set the key (see [Connecting OpenRouter](docs/openrouter.md)), authorize
 models and add a judge. Then work through examples 2 and 6 to 8 of the
@@ -363,7 +418,7 @@ workflow writer and code review. Each must complete:
 The novel (example 9) is optional because of its cost. When it is run, a
 three-chapter book is enough.
 
-### 5. Clean up
+### 6. Clean up
 
 ```bash
 deactivate
@@ -373,7 +428,7 @@ rm -rf ~/azathoth-release-check
 A failure in this run blocks the release, just as a failing test would. Fix
 it on a branch, merge, and run it again from step 1.
 
-### 6. Test the image
+### 7. Test the image
 
 With Docker running and the development venv active again, from the
 checkout on `main`, build the release commit's image and run its tests:
@@ -387,7 +442,7 @@ They must pass, as they did in CI. Then follow steps 2 and 3 of
 [Running in a Container](docs/container.md) once by hand, with the image you
 built (`azathoth:test`) and a fresh volume, and remove the volume afterwards.
 
-### 7. Test PostgreSQL
+### 8. Test PostgreSQL
 
 Still with Docker running, run the persistence tests against a throwaway
 PostgreSQL server:
@@ -418,14 +473,14 @@ not the one from the pre-release run, from inside the checkout:
 rm -rf ~/azathoth-testpypi-check
 python3 -m venv ~/azathoth-testpypi-check/.venv
 source ~/azathoth-testpypi-check/.venv/bin/activate
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "azathoth-ai==<version>"
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "azathoth-ai==<version>" "azathoth-mcp==<version>"
 export AZATHOTH_DATABASE="$HOME/azathoth-testpypi-check/examples.db"
 azathoth --version
+azathoth-mcp --version
 ```
 
-Repeat step 3 of the [Pre-Release Examples Run](#pre-release-examples-run):
-the provider-free examples must print `8`, `4` and `[3, 2, 1]`. Then clean
-up:
+Repeat steps 3 and 4 of the [Pre-Release Examples Run](#pre-release-examples-run):
+they must print exactly what they printed there. Then clean up:
 
 ```bash
 deactivate
@@ -434,7 +489,7 @@ rm -rf ~/azathoth-testpypi-check
 
 `--extra-index-url` lets `pip` take Azathoth's dependencies from PyPI, because
 TestPyPI does not carry them. Pinning `==<version>` makes sure the trial
-version is what was installed.
+versions are what was installed.
 
 TestPyPI also never accepts the same version twice. A second trial of one
 version fails at the publishing step, after validation has already passed.
@@ -454,8 +509,8 @@ git push origin v<version>
 For example:
 
 ```bash
-git tag -a v1.1.0 -m "Azathoth 1.1.0"
-git push origin v1.1.0
+git tag -a v1.2.0 -m "Azathoth 1.2.0"
+git push origin v1.2.0
 ```
 
 The workflow then builds, validates and publishes to PyPI, and then
@@ -537,9 +592,9 @@ deterministic release validation.
 
 ## AWS Deployment Check
 
-A release that changes `deploy/aws/azathoth.yaml`, the worker or the image is
-deployed once to a sandbox AWS account first, as
-[Release Validation](docs/release-validation.md#9-the-aws-deployment)
+A release that changes `deploy/aws/azathoth.yaml`, the worker, the S3 tools
+or what the image runs on AWS is deployed once to a sandbox AWS account
+first, as [Release Validation](docs/release-validation.md#9-the-aws-deployment)
 requires. Validate the template:
 
 ```bash
@@ -550,8 +605,14 @@ aws cloudformation validate-template --template-body file://deploy/aws/azathoth.
 aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml
 ```
 
-Then follow [Running on AWS](docs/aws.md) to its seventh step with the
-release's image, stop one worker mid-job, and tear the stack down.
+Then work through the rest of that section with the release's image: follow
+[Running on AWS](docs/aws.md) through its job, stop one worker while a job
+runs, process the large file of at least 20 MiB, and tear the stack down.
+Section 9 is the authority for what each step must show.
+
+A release that changes none of these, and changes the image only by adding
+what the stack does not run, as 1.2.0 added `azathoth-mcp`, is not deployed.
+Its changelog entry says so, so the release notes do.
 
 ## Release Principle
 

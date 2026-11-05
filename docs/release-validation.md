@@ -159,17 +159,19 @@ They must also work for a real user, on a real machine, from the built wheel.
 Before the TestPyPI trial, run the pre-release examples check in
 [Releasing](../RELEASING.md#pre-release-examples-run) on macOS:
 
-- install the locally built wheel into a fresh venv outside the checkout,
-  following [Installing Azathoth](install.md);
-- run every example in [Examples Tour](examples.md) against a fresh database.
+- install the locally built wheels of both distributions into a fresh venv
+  outside the checkout, following [Installing Azathoth](install.md);
+- run every example in [Examples Tour](examples.md) against a fresh database;
+- serve a promoted workflow through the installed `azathoth-mcp` over stdio,
+  and read its evidence back.
 
 The provider-free examples (word count, child workflow, loop) must print
 exactly their documented results. The model-backed examples must complete
 with the documented shape of result. A Windows run in PowerShell 7 is
 recommended whenever a Windows machine is available.
 
-After the TestPyPI trial, install from TestPyPI into another fresh venv and
-repeat the provider-free examples.
+After the TestPyPI trial, install both distributions from TestPyPI into
+another fresh venv and repeat the provider-free examples and the MCP check.
 
 ## 5. Architecture Invariants
 
@@ -357,8 +359,8 @@ The CloudFormation template is tested by reading it, the worker's SQS and
 S3 calls against botocore's `Stubber`, and the S3 tools against a stand-in
 for S3 over HTTP: nothing in the repository reaches AWS (ADR 0109,
 ADR 0110). So a release that changes the template, the worker, the S3 tools
-or the image is deployed once, by hand, to a sandbox account, before it
-ships:
+or what the image runs on AWS is deployed once, by hand, to a sandbox
+account, before it ships:
 
 1. `aws cloudformation validate-template --template-body file://deploy/aws/azathoth.yaml`
    passes;
@@ -374,6 +376,11 @@ ships:
 This is the first place the worker meets real SQS and S3; it is a release
 gate, not an optional check.
 
+A release that changes none of these, and changes the image only by adding
+what the stack does not run, such as another distribution's command, is not
+deployed: nothing the deployment would exercise has changed. Its changelog
+entry says that it was not, so its release notes do.
+
 ## Release Candidate Checklist
 
 ```text
@@ -381,12 +388,15 @@ gate, not an optional check.
 [ ] CI is green: quality, plus tests on 3 platforms x 3 Python versions
 [ ] packaging tests pass
 [ ] docs tests pass, and the documents above were reviewed
-[ ] pyproject.toml and src/azathoth/__init__.py declare the release version
-[ ] the pre-release examples run passed on macOS from the locally built wheel
+[ ] both pyproject.toml files and both __init__.py files declare the release version
+[ ] the pre-release examples run passed on macOS from the locally built wheels,
+    including the MCP check
 [ ] CI's container job is green, and make container-test passed locally
 [ ] CI's postgres job is green, and make postgres-test passed locally
-[ ] the AWS stack validated and passed the sandbox deployment of section 9
-[ ] the TestPyPI trial published, installed and passed the provider-free examples
+[ ] the AWS stack validated and passed the sandbox deployment of section 9, or
+    the release changes nothing it runs, and its changelog entry says so
+[ ] the TestPyPI trial published both distributions, installed them and passed
+    the provider-free examples and the MCP check
 [ ] every link in README.md resolves, including https://eldritchinc.com/workwithus/
 [ ] CHANGELOG.md's first entry is the release, and its notes are on the GitHub release
 [ ] Discussions are enabled, and open good first issues are labeled

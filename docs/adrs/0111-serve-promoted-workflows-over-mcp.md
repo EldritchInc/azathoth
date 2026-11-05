@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-05
-- Decided in: #130
+- Decided in: #135
 
 ## Context
 

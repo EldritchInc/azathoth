@@ -201,7 +201,7 @@ azathoth --help
 ```
 
 `azathoth --version` prints the installed version, for example
-`azathoth 1.1.0`.
+`azathoth 1.2.0`.
 
 Then confirm that the `python` on your `PATH` is the venv's, and that it can
 import Azathoth. Azathoth's child-process tools depend on this:
@@ -564,6 +564,21 @@ azathoth init
 
 ```powershell
 python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+If you also installed `azathoth-mcp`, to serve workflows over MCP (see
+[Serving Workflows Over MCP](mcp.md)), upgrade it in the same command. Each
+release of it requires its own minor release of `azathoth-ai`, so pip would
+otherwise keep Azathoth where it is:
+
+```bash
+python -m pip install --upgrade azathoth-ai azathoth-mcp
+azathoth init
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai azathoth-mcp
 azathoth init
 ```
 
