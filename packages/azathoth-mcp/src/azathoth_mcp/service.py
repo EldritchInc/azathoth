@@ -137,6 +137,13 @@ class ToolService:
 
         return self._catalog
 
+    def preload(
+        self,
+    ) -> None:
+        """Compose the runtime the calls will run on, before any call arrives."""
+
+        self._runtimes.preload()
+
     async def invoke(
         self,
         tool: str,

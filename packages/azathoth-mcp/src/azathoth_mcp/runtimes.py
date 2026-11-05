@@ -30,6 +30,19 @@ class RuntimeProvider:
         self._runtime: AzathothRuntime | None = None
         self._lock = threading.Lock()
 
+    def preload(
+        self,
+    ) -> None:
+        """Compose the runtime now, and keep it.
+
+        A server preloads when it starts, so a provider that cannot be used
+        stops it before any client connects, and the first call needs no
+        composing.
+        """
+
+        with self._lock:
+            self._runtime = self._load()
+
     def runtime_for(
         self,
         workflow_id: UUID,

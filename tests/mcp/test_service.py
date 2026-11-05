@@ -917,3 +917,17 @@ def test_evidence_names_a_run_that_has_not_finished(
     assert evidence.status is InvocationStatus.INCOMPLETE
     assert evidence.idempotency_key is None
     assert evidence.run == RunEvidence(run_id=HIDDEN_ID, finished=False, resumes=1)
+
+
+def test_preloading_composes_the_runtime_before_any_call(
+    tmp_path: Path,
+) -> None:
+    server = harness(tmp_path)
+
+    server.service.preload()
+
+    assert server.loads == 1
+
+    server.invoke("summarize", {"input": TICKET})
+
+    assert server.loads == 1

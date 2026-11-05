@@ -34,6 +34,9 @@ dependencies = [
     "pyjwt[crypto]>=2.10,<3",
 ]
 
+[project.scripts]
+azathoth-mcp = "azathoth_mcp.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/EldritchInc/azathoth"
 Repository = "https://github.com/EldritchInc/azathoth"

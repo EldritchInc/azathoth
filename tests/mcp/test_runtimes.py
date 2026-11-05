@@ -122,3 +122,26 @@ def test_a_runtime_without_the_workflow_is_composed_again() -> None:
     provider.runtime_for(WORKFLOW_ID, production_state(WORKFLOW_ID))
 
     assert loader.loads == 2
+
+
+def test_preloading_composes_the_runtime_the_first_call_keeps() -> None:
+    loader = Loader(production_state(WORKFLOW_ID))
+    provider = RuntimeProvider(loader)
+
+    provider.preload()
+
+    assert loader.loads == 1
+
+    provider.runtime_for(WORKFLOW_ID, production_state(WORKFLOW_ID))
+
+    assert loader.loads == 1
+
+
+def test_preloading_again_composes_again() -> None:
+    loader = Loader(production_state(WORKFLOW_ID))
+    provider = RuntimeProvider(loader)
+
+    provider.preload()
+    provider.preload()
+
+    assert loader.loads == 2
