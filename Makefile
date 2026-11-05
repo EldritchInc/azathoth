@@ -1,7 +1,7 @@
 .PHONY: install test lint format typecheck check container-test postgres-test
 
 install:
-	python -m pip install -e ".[dev]"
+	python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 
 test:
 	pytest
@@ -13,12 +13,12 @@ format:
 	ruff format .
 
 typecheck:
-	python -m mypy src/azathoth tests
+	python -m mypy src/azathoth packages/azathoth-mcp/src/azathoth_mcp tests
 
 check:
 	python -m ruff check .
 	python -m ruff format --check .
-	python -m mypy src/azathoth tests
+	python -m mypy src/azathoth packages/azathoth-mcp/src/azathoth_mcp tests
 	python -m pytest
 
 container-test:

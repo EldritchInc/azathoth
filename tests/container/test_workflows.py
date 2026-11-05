@@ -162,3 +162,47 @@ def test_the_container_guide_verifies_the_signature_this_workflow_makes() -> Non
     assert (WORKFLOWS / "release.yml").exists()
     assert guide.count(f"--certificate-identity {identity}") == 2
     assert guide.count("--certificate-oidc-issuer https://token.actions.githubusercontent.com") == 2
+
+
+# The MCP server (ADR 0111)
+
+
+def test_the_release_builds_azathoth_mcp_at_the_same_version() -> None:
+    build = job("release.yml", "build")
+
+    assert "packages/azathoth-mcp/pyproject.toml" in build
+    assert 'if [ "${mcp_version}" != "${VERSION}" ]; then' in build
+    assert "python -m build packages/azathoth-mcp --outdir dist" in build
+    assert build.index("python -m build\n") < build.index("python -m build packages/azathoth-mcp")
+
+
+def test_the_release_runs_both_installed_commands_before_publishing() -> None:
+    build = job("release.yml", "build")
+
+    assert "-m pip install dist/*.whl" in build
+    assert (
+        'test "$("${RUNNER_TEMP}/release-check/bin/azathoth-mcp" --version)" = '
+        '"azathoth-mcp ${VERSION}"'
+    ) in build
+    assert '"${RUNNER_TEMP}/release-check/bin/azathoth-mcp" serve --help > /dev/null' in build
+    assert build.index('azathoth-mcp" --version') < build.index("name: Upload distributions")
+
+
+def test_the_release_checks_the_images_mcp_server_before_pushing() -> None:
+    publish = job("release.yml", "publish-image")
+
+    check = publish.index(
+        'served="$(docker run --rm --entrypoint /usr/bin/tini azathoth:release -- '
+        'azathoth-mcp --version)"'
+    )
+    login = publish.index("uses: docker/login-action@")
+
+    assert check < login
+    assert '"${served}" != "azathoth-mcp ${VERSION}"' in publish
+
+
+def test_one_publishing_job_publishes_both_distributions() -> None:
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+
+    assert text.count("uses: pypa/gh-action-pypi-publish@") == 2
+    assert "packages-dir" not in text

@@ -73,6 +73,10 @@ The release is the built wheel, not the checkout. The release workflow
 - install the wheel into a clean environment outside the checkout;
 - require `azathoth --version` to print `azathoth <version>` and
   `azathoth --help` to succeed;
+- build `azathoth-mcp` from `packages/azathoth-mcp` with the same version,
+  refusing one that declares another, install its wheel beside Azathoth's,
+  and require `azathoth-mcp --version` to print `azathoth-mcp <version>`
+  (ADR 0111);
 - publish exactly those files, without rebuilding them.
 
 The packaging tests (`tests/test_package.py` and
@@ -90,8 +94,9 @@ The container image is the same release, packaged for deployment (ADR 0101).
 The release workflow must:
 
 - publish the image only after the wheel is published, from the same commit;
-- require `azathoth --version` inside the image to print `azathoth <version>`
-  before anything is pushed;
+- require `azathoth --version` inside the image to print `azathoth <version>`,
+  and `azathoth-mcp --version` to print `azathoth-mcp <version>`, before
+  anything is pushed;
 - push `linux/amd64` and `linux/arm64` as `<version>`, `<major>.<minor>` and
   `latest`.
 

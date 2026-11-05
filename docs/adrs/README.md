@@ -133,3 +133,4 @@ requests that made it:
 - [ADR 0108: Read Inputs From S3](0108-read-inputs-from-s3.md)
 - [ADR 0109: Deploy on AWS](0109-deploy-on-aws.md)
 - [ADR 0110: Split and Read S3 Objects](0110-split-and-read-s3-objects.md)
+- [ADR 0111: Serve Promoted Workflows Over MCP](0111-serve-promoted-workflows-over-mcp.md)

@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# Azathoth's container image (ADR 0101).
+# Azathoth's container image (ADR 0101), with its MCP server (ADR 0111).
 #
 #   docker build -t azathoth .
 #   docker run --rm azathoth --version
+#   docker run --rm --entrypoint /usr/bin/tini azathoth -- azathoth-mcp --version
 
 #
-# Build the wheel from the checkout. Both stages start from the same base,
+# Build both wheels from the checkout. Both stages start from the same base,
 # pinned by digest, so a rebuild of a release uses exactly the base it was
 # tested with. Dependabot proposes each new digest of the tag as a pull
 # request, in both lines (ADR 0109).
@@ -19,13 +20,16 @@ RUN python -m pip install --no-cache-dir --root-user-action=ignore build
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
+COPY packages/azathoth-mcp ./packages/azathoth-mcp
 
-RUN python -m build --wheel --outdir /dist
+RUN python -m build --wheel --outdir /dist \
+    && python -m build --wheel --outdir /dist packages/azathoth-mcp
 
 #
-# Install it, with the otel, postgres, bedrock and worker extras (ADR 0100,
-# ADR 0102, ADR 0103, ADR 0107), into a venv that is first on PATH, so the
-# standard tools' child workflows run Azathoth's own Python.
+# Install Azathoth, with the otel, postgres, bedrock and worker extras
+# (ADR 0100, ADR 0102, ADR 0103, ADR 0107), and its MCP server (ADR 0111),
+# into a venv that is first on PATH, so the standard tools' child workflows
+# run Azathoth's own Python.
 #
 FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
 
@@ -55,9 +59,9 @@ ENV VIRTUAL_ENV=/opt/azathoth/venv \
 COPY --from=builder /dist/ /tmp/dist/
 
 RUN python -m venv /opt/azathoth/venv \
-    && set -- /tmp/dist/*.whl \
+    && set -- /tmp/dist/azathoth_ai-*.whl /tmp/dist/azathoth_mcp-*.whl \
     && /opt/azathoth/venv/bin/python -m pip install --no-cache-dir --root-user-action=ignore \
-        "$1[otel,postgres,bedrock,worker]" \
+        "$1[otel,postgres,bedrock,worker]" "$2" \
     && rm -rf /tmp/dist
 
 WORKDIR /var/lib/azathoth

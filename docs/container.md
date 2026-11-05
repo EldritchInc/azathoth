@@ -352,6 +352,13 @@ workers is moved aside rather than received forever.
 [Running on AWS](aws.md) deploys all of this, the queues, the dead-letter
 queue, the service and its IAM, from one template.
 
+## 9. Serve Workflows Over MCP
+
+The image also holds `azathoth-mcp`, which offers promoted workflows as
+Model Context Protocol tools to AI clients (ADR 0111). Its command is not
+the image's entrypoint, so it is started through tini by name; see
+[In the Container](mcp.md#8-in-the-container).
+
 ## Building the Image Yourself
 
 From a clone of the repository, `docker build` builds the image from the
