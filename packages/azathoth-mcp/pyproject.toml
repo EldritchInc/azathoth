@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azathoth-mcp"
+version = "1.1.0"
+description = "Serve promoted Azathoth workflows as Model Context Protocol tools."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Eris Discordia Montano" }
+]
+keywords = [
+    "artificial-intelligence",
+    "llm",
+    "mcp",
+    "model-context-protocol",
+    "workflow-optimization"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed"
+]
+dependencies = [
+    "azathoth-ai==1.1.*",
+    "mcp>=2.3,<3",
+    "pyjwt[crypto]>=2.10,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/EldritchInc/azathoth"
+Repository = "https://github.com/EldritchInc/azathoth"
+Issues = "https://github.com/EldritchInc/azathoth/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+azathoth_mcp = ["py.typed"]

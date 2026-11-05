@@ -96,6 +96,7 @@ addopts = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = [".", "src", "packages/azathoth-mcp/src"]
 
 [tool.ruff.lint]
 select = [

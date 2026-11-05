@@ -8,6 +8,7 @@ PROJECT_ROOT = Path(__file__).parents[1]
 CHECKED_DIRECTORIES = (
     "docs",
     "examples",
+    "packages",
     "src",
     "tests",
 )

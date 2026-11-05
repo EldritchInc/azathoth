@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from azathoth import __version__
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -16,7 +18,14 @@ REPOSITORY = "https://github.com/EldritchInc/azathoth/blob/main"
 
 RELEASE_HEADING = re.compile(r"^## (\d+\.\d+\.\d+)$", re.MULTILINE)
 
+ENTRY_HEADING = re.compile(r"^## (\S.*)$", re.MULTILINE)
+
+UNRELEASED = "Unreleased"
+"""The entry for what is on `main` but not yet released, renamed when it is."""
+
 FIRST_ADR_OF_1_1 = 91
+
+FIRST_ADR_AFTER_1_1 = 111
 
 #
 # The command RELEASING.md gives for a release's notes, with its version.
@@ -75,17 +84,42 @@ def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     assert releases[0] == __version__
 
 
+def decision_numbers() -> set[int]:
+    """Return the number of every decision record."""
+
+    return {int(path.name[:4]) for path in ADRS.glob("[0-9][0-9][0-9][0-9]-*.md")}
+
+
+def cited_numbers(
+    version: str,
+) -> set[int]:
+    """Return the number of every decision one entry cites."""
+
+    return {int(number) for number in re.findall(r"ADR (\d{4})", entry(version))}
+
+
+def test_the_unreleased_entry_comes_before_every_release() -> None:
+    assert ENTRY_HEADING.findall(text()) == [UNRELEASED, "1.1.0", "1.0.0"]
+
+
 def test_this_releases_entry_cites_every_decision_made_for_it() -> None:
-    cited = {int(number) for number in re.findall(r"ADR (\d{4})", entry(__version__))}
-    decided = {int(path.name[:4]) for path in ADRS.glob("[0-9][0-9][0-9][0-9]-*.md")} - set(
-        range(1, FIRST_ADR_OF_1_1)
-    )
+    decided = decision_numbers() & set(range(FIRST_ADR_OF_1_1, FIRST_ADR_AFTER_1_1))
 
-    assert cited == decided
+    assert cited_numbers(__version__) == decided
 
 
-def test_every_cited_decision_links_its_record() -> None:
-    for number in re.findall(r"ADR (\d{4})", entry(__version__)):
+def test_the_unreleased_entry_cites_every_decision_made_since() -> None:
+    decided = {number for number in decision_numbers() if number >= FIRST_ADR_AFTER_1_1}
+
+    assert decided
+    assert cited_numbers(UNRELEASED) == decided
+
+
+@pytest.mark.parametrize("version", [__version__, UNRELEASED])
+def test_every_cited_decision_links_its_record(
+    version: str,
+) -> None:
+    for number in re.findall(r"ADR (\d{4})", entry(version)):
         (path,) = ADRS.glob(f"{number}-*.md")
 
         assert f"]({REPOSITORY}/docs/adrs/{path.name})" in text(), number

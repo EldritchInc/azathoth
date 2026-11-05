@@ -66,7 +66,7 @@ macOS and Linux:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 ```
 
 Windows (PowerShell):
@@ -74,7 +74,7 @@ Windows (PowerShell):
 ```powershell
 py -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 ```
 
 If PowerShell refuses to run the activation script, allow local scripts once
@@ -123,7 +123,7 @@ Windows has no `make`, so run the same commands directly:
 ```powershell
 python -m ruff check .
 python -m ruff format --check .
-python -m mypy src/azathoth tests
+python -m mypy src/azathoth packages/azathoth-mcp/src/azathoth_mcp tests
 python -m pytest
 ```
 

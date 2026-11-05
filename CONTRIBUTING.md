@@ -40,7 +40,7 @@ git clone https://github.com/EldritchInc/azathoth.git
 cd azathoth
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 ```
 
 Windows (PowerShell 7):
@@ -50,7 +50,7 @@ git clone https://github.com/EldritchInc/azathoth.git
 Set-Location azathoth
 py -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 ```
 
 [Installing Azathoth](docs/install.md) covers getting a suitable Python, the
@@ -345,12 +345,12 @@ which runs:
 ```bash
 python -m ruff check .
 python -m ruff format --check .
-python -m mypy src/azathoth tests
+python -m mypy src/azathoth packages/azathoth-mcp/src/azathoth_mcp tests
 python -m pytest
 ```
 
-`mypy` runs in strict mode, configured in `pyproject.toml`, over both the
-package and the tests.
+`mypy` runs in strict mode, configured in `pyproject.toml`, over both
+packages and the tests.
 
 The repository expects:
 

@@ -6,6 +6,19 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+### Serving Workflows to AI Clients
+
+- **`azathoth-mcp` serves promoted workflows as MCP tools**, to AI clients
+  such as Claude Desktop, IDEs and agents. It is a separate distribution,
+  released with Azathoth at the same version. Only the workflows an operator
+  lists are offered, each as one tool; every call is a recorded, idempotent
+  invocation of the workflow's active production revision. It runs over
+  stdio, or over Streamable HTTP as an OAuth 2.1 resource server with a
+  scope per tool
+  ([ADR 0111](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0111-serve-promoted-workflows-over-mcp.md)).
+
 ## 1.1.0
 
 Azathoth 1.1 runs in production. Programs send it jobs through a queue,

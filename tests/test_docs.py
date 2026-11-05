@@ -14,6 +14,11 @@ TOP_LEVEL_DOCUMENTS = (
     "RELEASING.md",
 )
 
+#
+# The distributions' own descriptions, which PyPI shows.
+#
+PACKAGE_DOCUMENTS = ("packages/azathoth-mcp/README.md",)
+
 USER_GUIDES = (
     "docs/install.md",
     "docs/openrouter.md",
@@ -64,7 +69,9 @@ def linked_documents() -> tuple[str, ...]:
     """Return every documentation file whose relative links must resolve."""
 
     documents = [
-        document for document in TOP_LEVEL_DOCUMENTS if (PROJECT_ROOT / document).is_file()
+        document
+        for document in (*TOP_LEVEL_DOCUMENTS, *PACKAGE_DOCUMENTS)
+        if (PROJECT_ROOT / document).is_file()
     ]
     documents.extend(
         path.relative_to(PROJECT_ROOT).as_posix()
