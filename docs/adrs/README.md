@@ -136,3 +136,4 @@ requests that made it:
 - [ADR 0111: Serve Promoted Workflows Over MCP](0111-serve-promoted-workflows-over-mcp.md)
 - [ADR 0112: Accept Binary Inputs](0112-accept-binary-inputs.md)
 - [ADR 0113: Anchor and Verify Citations](0113-anchor-and-verify-citations.md)
+- [ADR 0114: Read Documents with Tools](0114-read-documents-with-tools.md)

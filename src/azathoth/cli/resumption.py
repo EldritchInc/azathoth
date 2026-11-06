@@ -218,6 +218,7 @@ def _resume_run(
                     journal=stores.run_journal,
                     leases=stores.run_leases,
                     children=stores.run_children,
+                    content=stores.tool_content,
                 ),
             )
         )
@@ -297,6 +298,7 @@ def _resume_invocation(
                         journal=stores.run_journal,
                         leases=stores.run_leases,
                         children=stores.run_children,
+                        content=stores.tool_content,
                     ),
                     journal=stores.run_journal,
                     run_repository=stores.runs,

@@ -32,6 +32,12 @@ release dates are on the
   `Input Provenance`. A run given a PDF or image cannot become a benchmark
   case yet, and `benchmark add-case --from-run` says so
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **A tool can read a document its run received.** A process
+  implementation's `content_inputs` are given as files of the content their
+  handles name, written and removed by the engine, so a tool needs no access
+  to the content store. A handle naming content the run, or a run above it,
+  never received is refused before the tool runs
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 
 ### Evidence Out
 

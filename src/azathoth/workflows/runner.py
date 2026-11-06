@@ -20,6 +20,7 @@ from azathoth.context import (
 from azathoth.execution import ExecutionResult, StrategyExecutor
 from azathoth.prompting import WORKFLOW_INPUT_BOUND_EVENT_TYPE
 from azathoth.strategies import Strategy
+from azathoth.tools import ToolContentAccess, providing_tool_content
 from azathoth.workflows.attempt import (
     WorkflowStepAttempt,
     WorkflowStepFailure,
@@ -221,6 +222,11 @@ class WorkflowRunner:
 
     A runner given a child repository indexes each run started with lineage
     under the run whose step started it, once, as the run starts.
+
+    A runner given content access gives it to each step attempt's tools, so
+    a tool's content inputs are written to files of the content the run
+    received (ADR 0114). A runner without it gives none, and a tool that
+    takes content inputs is refused.
     """
 
     def __init__(
@@ -233,6 +239,7 @@ class WorkflowRunner:
         leases: RunLeaseRepository | None = None,
         lease_policy: RunLeasePolicy | None = None,
         children: RunChildRepository | None = None,
+        content: ToolContentAccess | None = None,
     ) -> None:
         if leases is not None and journal is None:
             raise ValueError("A runner that leases its runs must journal them.")
@@ -244,6 +251,17 @@ class WorkflowRunner:
         self._leases = leases
         self._lease_policy = lease_policy if lease_policy is not None else RunLeasePolicy()
         self._children = children
+        self._content = content
+
+    def _providing_content(
+        self,
+    ) -> contextlib.AbstractContextManager[object]:
+        """Return the block that gives a step attempt's tools this runner's content access."""
+
+        if self._content is None:
+            return contextlib.nullcontext()
+
+        return providing_tool_content(self._content)
 
     def _notify(
         self,
@@ -652,17 +670,18 @@ class WorkflowRunner:
             error: Exception | None = None
 
             try:
-                if lineage is not None and step_id is not None:
-                    with running_step(lineage.step(step_id=step_id, attempt=attempt_number)):
+                with self._providing_content():
+                    if lineage is not None and step_id is not None:
+                        with running_step(lineage.step(step_id=step_id, attempt=attempt_number)):
+                            execution = await self._executor.execute(
+                                strategy,
+                                context,
+                            )
+                    else:
                         execution = await self._executor.execute(
                             strategy,
                             context,
                         )
-                else:
-                    execution = await self._executor.execute(
-                        strategy,
-                        context,
-                    )
 
                 for binding in outputs:
                     binding.resolve(execution.output)

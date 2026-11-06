@@ -181,6 +181,7 @@ class ToolService:
             journal=stores.run_journal,
             leases=stores.run_leases,
             children=stores.run_children,
+            content=stores.tool_content,
         )
 
         def runtime() -> AzathothRuntime:

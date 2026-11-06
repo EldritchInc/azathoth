@@ -299,6 +299,7 @@ def _run_traced_worker(
         journal=stores.run_journal,
         leases=stores.run_leases,
         children=stores.run_children,
+        content=stores.tool_content,
     )
     invoke = traced_job_invoker(
         telemetry,

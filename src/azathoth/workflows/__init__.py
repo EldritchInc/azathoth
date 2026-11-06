@@ -275,6 +275,7 @@ from azathoth.workflows.run_journal import (
     RunJournalPositionTakenError,
     RunJournalRepository,
     RunJournalWriter,
+    journaled_initial_context,
 )
 from azathoth.workflows.run_lease import (
     LEASE_DURATION,
@@ -453,6 +454,7 @@ __all__ = [
     "RunResumePoint",
     "finished_run",
     "journal_resumes",
+    "journaled_initial_context",
     "resume_point",
     "run_started",
     "JournalRunStarted",

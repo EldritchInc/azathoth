@@ -2,13 +2,14 @@
 
 from pydantic import JsonValue
 
-from azathoth.context import Context
+from azathoth.context import Context, active_step_lineage
 from azathoth.revisions import content_digest
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyOutcome,
     StrategyResourceBinding,
 )
+from azathoth.tools.content import active_tool_content, content_input_files
 from azathoth.tools.exceptions import ToolExecutionError
 from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.protocols import ToolExecutor
@@ -47,12 +48,25 @@ class ToolStrategy:
         self,
         context: Context,
     ) -> StrategyOutcome:
-        """Execute the resolved tool using workflow-bound inputs."""
+        """Execute the resolved tool using workflow-bound inputs.
 
-        output = await self._executor.execute(
+        Content inputs are given as files of the content their handles name,
+        from the running step's content access (ADR 0114).
+        """
+
+        step = active_step_lineage()
+
+        async with content_input_files(
             self._implementation,
             self._inputs_from_context(context),
-        )
+            tool=self._metadata.name,
+            access=active_tool_content(),
+            run_id=step.step.run_id if step is not None else None,
+        ) as inputs:
+            output = await self._executor.execute(
+                self._implementation,
+                inputs,
+            )
 
         return StrategyOutcome(
             output=output,
