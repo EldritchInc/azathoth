@@ -49,6 +49,11 @@ ENVIRONMENT_PREFIX_WILDCARD = "*"
 
 _ENVIRONMENT_GRANT = re.compile(ENVIRONMENT_GRANT_PATTERN)
 
+CONTENT_INPUT_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
+"""A content input is named as a tool input is: letters, digits and underscores (ADR 0114)."""
+
+_CONTENT_INPUT_NAME = re.compile(CONTENT_INPUT_NAME_PATTERN)
+
 _PROCESS_ONLY_FIELDS = (
     "command",
     "timeout_seconds",
@@ -69,6 +74,16 @@ class ToolImplementation(BaseModel):
     beyond the base environment every process tool receives: exact names, or
     prefixes ending in `*` (ADR 0099). An implementation without grants
     serializes without them.
+
+    A process implementation may name some of its inputs content inputs: each
+    is given as a file holding the content a handle names, rather than as the
+    handle (ADR 0114). An implementation without content inputs serializes
+    without them.
+
+    An implementation with content inputs may name an extraction output: the
+    output holding what the tool extracted from them, which the engine checks,
+    keeps and records, and replaces with a handle naming it (ADR 0114). An
+    implementation without one serializes without it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -92,6 +107,62 @@ class ToolImplementation(BaseModel):
     )
 
     environment: tuple[str, ...] = ()
+
+    content_inputs: tuple[str, ...] = ()
+
+    extraction_output: str | None = None
+
+    @model_validator(mode="after")
+    def validate_extraction_output(self) -> Self:
+        """Require a well-formed extraction output, only beside content inputs.
+
+        Raises:
+            ValueError: The name is malformed, or the implementation takes no
+                content inputs to extract from.
+        """
+
+        if self.extraction_output is None:
+            return self
+
+        if _CONTENT_INPUT_NAME.fullmatch(self.extraction_output) is None:
+            raise ValueError(
+                f"Extraction output {self.extraction_output!r} must be a name of letters, "
+                "digits and underscores."
+            )
+
+        if not self.content_inputs:
+            raise ValueError(
+                "An extraction output holds what a tool extracted from its content inputs, "
+                "so an implementation with one takes at least one content input."
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_content_inputs(self) -> Self:
+        """Require well-formed, unique content input names, and only on process implementations.
+
+        Raises:
+            ValueError: A name is malformed or repeated, or another runtime
+                declares content inputs.
+        """
+
+        if not self.content_inputs:
+            return self
+
+        if self.runtime != PROCESS_TOOL_RUNTIME:
+            raise ValueError("Only process tool implementations may take content inputs.")
+
+        for name in self.content_inputs:
+            if _CONTENT_INPUT_NAME.fullmatch(name) is None:
+                raise ValueError(
+                    f"Content input {name!r} must be a name of letters, digits and underscores."
+                )
+
+        if len(set(self.content_inputs)) != len(self.content_inputs):
+            raise ValueError("Content inputs must be unique.")
+
+        return self
 
     @model_validator(mode="after")
     def validate_environment_grants(self) -> Self:
@@ -168,7 +239,8 @@ class ToolImplementation(BaseModel):
             if serialized.get(name) is None:
                 serialized.pop(name, None)
 
-        if not serialized.get("environment"):
-            serialized.pop("environment", None)
+        for name in ("environment", "content_inputs", "extraction_output"):
+            if not serialized.get(name):
+                serialized.pop(name, None)
 
         return serialized

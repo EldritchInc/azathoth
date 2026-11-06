@@ -123,6 +123,7 @@ def invoke_with_key(
         journal=stores.run_journal,
         leases=stores.run_leases,
         children=stores.run_children,
+        content=stores.tool_content,
     )
 
     job = asyncio.run(

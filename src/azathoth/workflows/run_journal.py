@@ -326,6 +326,24 @@ class RunJournalWriter:
         return entry
 
 
+def journaled_initial_context(
+    journal: RunJournalRepository,
+    run_id: UUID,
+) -> Context | None:
+    """Return the initial context one run's journal records it started from, or None.
+
+    A run's journal begins with its start, which holds that context, whether
+    the run is still under way or long finished (ADR 0114).
+    """
+
+    entries = journal.entries(run_id)
+
+    if not entries or not isinstance(entries[0].event, JournalRunStarted):
+        return None
+
+    return entries[0].event.initial_context
+
+
 __all__ = [
     "Clock",
     "Fence",
@@ -342,4 +360,5 @@ __all__ = [
     "RunJournalPositionTakenError",
     "RunJournalRepository",
     "RunJournalWriter",
+    "journaled_initial_context",
 ]

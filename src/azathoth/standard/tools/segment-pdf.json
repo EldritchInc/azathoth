@@ -1,0 +1,64 @@
+{
+  "definition": {
+    "id": "c4000000-0000-4000-8000-000000000001",
+    "name": "segment_pdf",
+    "description": "Divide a PDF into segments, one per text box, each with its page and its box on the page, and keep them as the step's extraction.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "max_pages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            }
+          },
+          "document": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "document"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "extraction": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "extraction"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "c4000000-0000-4000-8000-000000000011",
+      "tool_id": "c4000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Divide a PDF into segments, one per text box, with their pages and boxes (ADR 0114).\n\nThe tool is given the PDF as a content input: a file the engine wrote, with\nthe content's digest and media type. pdfminer.six lays each page out with\nthe layout parameters below, and every text box with text becomes one\nsegment, in the order the layout reads them, with IDs p<PAGE>.s<N> counting\nfrom 1 on each page.\n\nA segment's text is its box's lines, each without the whitespace around it,\njoined by newlines, with the Latin ligatures U+FB00 to U+FB06 written out as\ntheir letters and the whole put in NFC. Segments are joined by a blank line.\nA hyphen that ends a line is kept: the text is the page's, not a guess at the\nword.\n\nA segment's box is given in points from the top-left corner of the page's\ncrop box, as RFC 8118 measures a viewrect, and clipped to it. A segment\noutside the crop box, or on a rotated page, names its page and no box.\n\nEvery page is listed with its size as it is shown, its crop box turned with\nit, and whether any segment is on it, so a page with no text layer, such as\na scan, is told apart from one that is not there. A PDF of more pages than\nmax_pages is refused before any page is laid out, and so is a PDF that\ncannot be opened without a password.\n\nThe tool reads PDFs with pdfminer.six, which the documents extra installs.\nEvery problem with its inputs exits with status 2, and every other failure\nwith status 1; errors are written as UTF-8, whatever the platform's encoding.\n\"\"\"\n\nimport json\nimport sys\nimport unicodedata\n\nTOOL = \"segment_pdf\"\nTOOL_VERSION = \"1.0.0\"\nPDF_MEDIA_TYPE = \"application/pdf\"\nINPUTS = (\"document\", \"settings\")\nDEFAULT_MAX_PAGES = 300\nMAX_PAGES = 1000\nLAYOUT = (\n    (\"line_overlap\", 0.5),\n    (\"char_margin\", 2.0),\n    (\"line_margin\", 0.5),\n    (\"word_margin\", 0.1),\n    (\"boxes_flow\", 0.5),\n)\nLIGATURES = {\n    \"\\ufb00\": \"ff\",\n    \"\\ufb01\": \"fi\",\n    \"\\ufb02\": \"fl\",\n    \"\\ufb03\": \"ffi\",\n    \"\\ufb04\": \"ffl\",\n    \"\\ufb05\": \"st\",\n    \"\\ufb06\": \"st\",\n}\nSEPARATOR = \"\\n\\n\"\nENCRYPTED = \"segment_pdf cannot read the document: it is encrypted with a password.\"\nMISSING_PDFMINER = (\n    \"segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents].\"\n)\n\n\nclass Failure(Exception):\n    \"\"\"A failure to report on stderr, with the status to exit with.\"\"\"\n\n    def __init__(self, status, message):\n        super().__init__(message)\n        self.status = status\n        self.message = message\n\n\ndef sentence(text):\n    \"\"\"Return text ending with exactly one period.\"\"\"\n\n    return text.rstrip().rstrip(\".\") + \".\"\n\n\ndef is_whole(value):\n    \"\"\"Return whether a JSON value is an integer, and not a boolean.\"\"\"\n\n    return isinstance(value, int) and not isinstance(value, bool)\n\n\ndef parse(inputs):\n    \"\"\"Return the plan of one segmentation from the tool's inputs.\"\"\"\n\n    if not isinstance(inputs, dict):\n        raise Failure(2, \"segment_pdf needs 'document' to be a content input.\")\n\n    for name in sorted(inputs):\n        if name not in INPUTS:\n            raise Failure(2, f\"segment_pdf does not take the input {name!r}.\")\n\n    settings = inputs.get(\"settings\", {})\n\n    if not isinstance(settings, dict):\n        raise Failure(2, \"segment_pdf needs 'settings' to be an object.\")\n\n    document = inputs.get(\"document\")\n\n    if not isinstance(document, dict) or not all(\n        isinstance(document.get(field), str) for field in (\"path\", \"digest\", \"media_type\")\n    ):\n        raise Failure(2, \"segment_pdf needs 'document' to be a content input.\")\n\n    if document[\"media_type\"] != PDF_MEDIA_TYPE:\n        raise Failure(2, f\"segment_pdf reads PDFs; 'document' is {document['media_type']}.\")\n\n    max_pages = settings.get(\"max_pages\", DEFAULT_MAX_PAGES)\n\n    if not is_whole(max_pages) or not 1 <= max_pages <= MAX_PAGES:\n        raise Failure(\n            2, f\"segment_pdf needs 'max_pages' to be a whole number from 1 to {MAX_PAGES}.\"\n        )\n\n    return {\"document\": document, \"max_pages\": max_pages}\n\n\ndef load_pdfminer():\n    \"\"\"Return the pdfminer.six names the tool uses.\"\"\"\n\n    try:\n        import pdfminer\n        from pdfminer.converter import PDFPageAggregator\n        from pdfminer.layout import LAParams, LTTextBox\n        from pdfminer.pdfdocument import PDFDocument, PDFPasswordIncorrect\n        from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager\n        from pdfminer.pdfpage import PDFPage\n        from pdfminer.pdfparser import PDFParser\n    except ImportError as exc:\n        raise Failure(1, MISSING_PDFMINER) from exc\n\n    return {\n        \"version\": pdfminer.__version__,\n        \"PDFPageAggregator\": PDFPageAggregator,\n        \"LAParams\": LAParams,\n        \"LTTextBox\": LTTextBox,\n        \"PDFDocument\": PDFDocument,\n        \"PDFPasswordIncorrect\": PDFPasswordIncorrect,\n        \"PDFPageInterpreter\": PDFPageInterpreter,\n        \"PDFResourceManager\": PDFResourceManager,\n        \"PDFPage\": PDFPage,\n        \"PDFParser\": PDFParser,\n    }\n\n\ndef extraction_version(pdfminer_version):\n    \"\"\"Return the version an extraction records: the tool's, the library's and the layout's.\"\"\"\n\n    layout = \",\".join(f\"{name}={value}\" for name, value in LAYOUT)\n\n    return f\"{TOOL_VERSION} (pdfminer.six {pdfminer_version}; {layout})\"\n\n\ndef box_text(box):\n    \"\"\"Return a text box's text: its lines trimmed, ligatures written out, in NFC.\"\"\"\n\n    lines = [line.strip() for line in box.get_text().splitlines()]\n    text = \"\\n\".join(line for line in lines if line)\n\n    for ligature, letters in LIGATURES.items():\n        text = text.replace(ligature, letters)\n\n    return unicodedata.normalize(\"NFC\", text)\n\n\ndef viewrect(page, box):\n    \"\"\"Return a box in points from the crop box's top-left corner, clipped to it, or None.\n\n    pdfminer lays a page out from its media box's lower-left corner, with y\n    upwards. A rotated page is laid out turned, so its boxes are not given.\n    \"\"\"\n\n    if page.rotate != 0:\n        return None\n\n    media_left, media_bottom = page.mediabox[0], page.mediabox[1]\n    crop_left, crop_bottom, crop_right, crop_top = (\n        page.cropbox[0] - media_left,\n        page.cropbox[1] - media_bottom,\n        page.cropbox[2] - media_left,\n        page.cropbox[3] - media_bottom,\n    )\n    left = max(box.x0, crop_left)\n    right = min(box.x1, crop_right)\n    bottom = max(box.y0, crop_bottom)\n    top = min(box.y1, crop_top)\n\n    if right <= left or top <= bottom:\n        return None\n\n    return {\n        \"left\": round(left - crop_left, 2),\n        \"top\": round(crop_top - top, 2),\n        \"width\": round(right - left, 2),\n        \"height\": round(top - bottom, 2),\n    }\n\n\ndef shown_size(page):\n    \"\"\"Return a page's width and height in points as it is shown: its crop box, turned.\"\"\"\n\n    width = page.cropbox[2] - page.cropbox[0]\n    height = page.cropbox[3] - page.cropbox[1]\n\n    if page.rotate in (90, 270):\n        width, height = height, width\n\n    return round(abs(width), 2), round(abs(height), 2)\n\n\ndef open_pages(file, plan, library):\n    \"\"\"Open the PDF, and return its pages, refusing one locked or too long.\"\"\"\n\n    parser = library[\"PDFParser\"](file)\n\n    try:\n        pdf = library[\"PDFDocument\"](parser)\n    except library[\"PDFPasswordIncorrect\"] as exc:\n        raise Failure(1, ENCRYPTED) from exc\n\n    pages = list(library[\"PDFPage\"].create_pages(pdf))\n\n    if len(pages) > plan[\"max_pages\"]:\n        raise Failure(\n            1,\n            f\"segment_pdf found {len(pages)} pages in the document, more than its \"\n            f\"max_pages of {plan['max_pages']}.\",\n        )\n\n    return pages\n\n\ndef segment(plan, library):\n    \"\"\"Divide the document into segments; return the tool's output.\"\"\"\n\n    document = plan[\"document\"]\n\n    parameters = library[\"LAParams\"](**dict(LAYOUT))\n    manager = library[\"PDFResourceManager\"]()\n    device = library[\"PDFPageAggregator\"](manager, laparams=parameters)\n    interpreter = library[\"PDFPageInterpreter\"](manager, device)\n    texts = []\n    segments = []\n    pages = []\n    start = 0\n\n    with open(document[\"path\"], \"rb\") as file:\n        for number, page in enumerate(open_pages(file, plan, library), start=1):\n            interpreter.process_page(page)\n            count = 0\n\n            for box in device.get_result():\n                if not isinstance(box, library[\"LTTextBox\"]):\n                    continue\n\n                text = box_text(box)\n\n                if not text:\n                    continue\n\n                if texts:\n                    start += len(SEPARATOR)\n\n                count += 1\n                found = {\n                    \"id\": f\"p{number}.s{count}\",\n                    \"start\": start,\n                    \"end\": start + len(text),\n                    \"page\": number,\n                }\n                rect = viewrect(page, box)\n\n                if rect is not None:\n                    found[\"bbox\"] = rect\n\n                texts.append(text)\n                segments.append(found)\n                start += len(text)\n\n            width, height = shown_size(page)\n            pages.append({\"page\": number, \"width\": width, \"height\": height, \"has_text\": count > 0})\n\n    return {\n        \"extraction\": {\n            \"tool\": TOOL,\n            \"version\": extraction_version(library[\"version\"]),\n            \"source_digest\": document[\"digest\"],\n            \"media_type\": PDF_MEDIA_TYPE,\n            \"text\": SEPARATOR.join(texts),\n            \"segments\": segments,\n            \"pages\": pages,\n        }\n    }\n\n\ndef main():\n    \"\"\"Segment the document the tool's inputs give it, and print its extraction.\"\"\"\n\n    try:\n        plan = parse(json.load(sys.stdin))\n        library = load_pdfminer()\n\n        try:\n            output = segment(plan, library)\n        except Failure:\n            raise\n        except Exception as exc:\n            raise Failure(\n                1, sentence(f\"segment_pdf could not read the document: {type(exc).__name__}: {exc}\")\n            ) from exc\n    except Failure as failure:\n        sys.stderr.buffer.write(failure.message.encode(\"utf-8\"))\n        sys.stderr.flush()\n        sys.exit(failure.status)\n\n    sys.stdout.buffer.write(json.dumps(output, ensure_ascii=False).encode(\"utf-8\"))\n    sys.stdout.flush()\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 300.0,
+      "content_inputs": [
+        "document"
+      ],
+      "extraction_output": "extraction"
+    }
+  ],
+  "test_cases": []
+}

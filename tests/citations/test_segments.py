@@ -6,11 +6,14 @@ import pytest
 from pydantic import JsonValue, ValidationError
 
 from azathoth.citations import (
+    EXTRACTION_KEY,
     BoundingBox,
     Extraction,
     ExtractionError,
+    ExtractionHandle,
     Segment,
     SegmentedText,
+    extraction_handle_from_value,
 )
 from azathoth.inputs import InMemoryContentStore, content_bytes_digest
 
@@ -301,3 +304,73 @@ def test_a_segment_with_a_box_round_trips_through_the_store() -> None:
     )
 
     assert SegmentedText.load(store, page.store(store)) == page
+
+
+def test_a_segmented_text_names_itself_by_an_extraction_handle() -> None:
+    text = segmented(FIRST, SECOND)
+
+    assert EXTRACTION_KEY == "extraction"
+    assert text.handle() == ExtractionHandle(
+        tool="segment_text",
+        version="1.3.0",
+        digest=text.digest(),
+        source_digest=SOURCE,
+        media_type="text/plain",
+    )
+    assert text.handle().to_value() == {
+        "extraction": {
+            "tool": "segment_text",
+            "version": "1.3.0",
+            "digest": text.digest(),
+            "source_digest": SOURCE,
+            "media_type": "text/plain",
+        }
+    }
+
+
+def test_an_extraction_handle_names_the_extraction_an_anchor_names() -> None:
+    text = segmented(FIRST)
+
+    assert text.handle().extraction() == text.extraction()
+
+
+def test_an_extraction_handles_value_reads_back() -> None:
+    handle = segmented(FIRST).handle()
+
+    assert extraction_handle_from_value(handle.to_value()) == handle
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(None, id="null"),
+        pytest.param({"extraction": {"digest": SOURCE}}, id="incomplete"),
+        pytest.param(
+            {
+                "extraction": {
+                    "tool": "segment_text",
+                    "version": "1",
+                    "digest": SOURCE,
+                    "source_digest": SOURCE,
+                    "media_type": "text/plain",
+                },
+                "note": "extra",
+            },
+            id="extra-key",
+        ),
+        pytest.param(
+            {
+                "content": {
+                    "digest": SOURCE,
+                    "media_type": "application/pdf",
+                    "size_bytes": 8,
+                }
+            },
+            id="content-handle",
+        ),
+    ],
+)
+def test_other_values_are_not_extraction_handles(
+    value: JsonValue,
+) -> None:
+    assert extraction_handle_from_value(value) is None

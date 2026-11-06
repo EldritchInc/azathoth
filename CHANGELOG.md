@@ -32,6 +32,26 @@ release dates are on the
   `Input Provenance`. A run given a PDF or image cannot become a benchmark
   case yet, and `benchmark add-case --from-run` says so
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **A tool can read a document its run received.** A process
+  implementation's `content_inputs` are given as files of the content their
+  handles name, written and removed by the engine, so a tool needs no access
+  to the content store. A handle naming content the run, or a run above it,
+  never received is refused before the tool runs
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **A document tool's extraction is checked, kept and recorded by the
+  engine.** An implementation's `extraction_output` must be a segmented
+  text of content the tool was given. The engine keeps it in the content
+  store, records it as a resource of the step, and outputs an extraction
+  handle in its place
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **The standard `segment_pdf` tool divides a PDF into citable segments.**
+  Each text box is a segment, `p<PAGE>.s<N>`, with its page and its box in
+  points from the crop box's top-left corner, and every page is listed with
+  its size and whether it has text. It refuses a PDF of more than
+  `max_pages`, 300 by default, or one that needs a password. It reads PDFs
+  with pdfminer.six, which the new `documents` extra installs, and the
+  container image includes
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 
 ### Evidence Out
 
@@ -230,6 +250,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 Two changes can stop a workflow that ran on 1.0:

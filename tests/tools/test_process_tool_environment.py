@@ -386,6 +386,8 @@ COMPOSITION_TOOLS = ("run_workflow", "loop_workflow", "map_workflow")
 
 S3_TOOLS = ("split_s3_object", "read_s3_object")
 
+DOCUMENT_TOOLS = ("segment_pdf",)
+
 CHILD_GRANTS = (
     "AZATHOTH_DATABASE",
     "OPENROUTER_API_KEY",
@@ -455,7 +457,7 @@ def test_the_data_shaping_tools_see_only_the_base_environment() -> None:
     }
 
     for document in standard_tool_documents():
-        if document.definition.name in (*COMPOSITION_TOOLS, *S3_TOOLS):
+        if document.definition.name in (*COMPOSITION_TOOLS, *S3_TOOLS, *DOCUMENT_TOOLS):
             continue
 
         (implementation,) = document.implementations
@@ -464,6 +466,28 @@ def test_the_data_shaping_tools_see_only_the_base_environment() -> None:
 
         assert environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE) == "60.0"
         assert environment == POSIX_BASE, document.definition.name
+
+
+@pytest.mark.parametrize("name", DOCUMENT_TOOLS)
+def test_the_document_tools_see_only_the_base_environment(
+    name: str,
+) -> None:
+    environ = {
+        **POSIX_ENVIRONMENT,
+        "AZATHOTH_OTEL": "1",
+        "AZATHOTH_BEDROCK": "1",
+        "AWS_REGION": "us-east-1",
+    }
+
+    (document,) = (
+        document for document in standard_tool_documents() if document.definition.name == name
+    )
+    (implementation,) = document.implementations
+
+    environment = posix(implementation, environ)
+
+    assert environment.pop(PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE) == "300.0"
+    assert environment == POSIX_BASE
 
 
 @pytest.mark.parametrize("name", S3_TOOLS)

@@ -31,6 +31,9 @@ from azathoth.revisions import CONTENT_DIGEST_PATTERN
 SEGMENT_ID: Final = re.compile(r"(?:p(?P<page>[1-9][0-9]*)\.)?s[1-9][0-9]*")
 """A segment's ID, matched whole: `s12`, or `p3.s12` for a segment on page 3."""
 
+EXTRACTION_KEY: Final = "extraction"
+"""The single key of an extraction handle's value (ADR 0114)."""
+
 
 class ExtractionError(ValueError):
     """Raised when stored content is not the segmented text it is taken for."""
@@ -132,6 +135,88 @@ class Segment(BaseModel):
         return data
 
 
+class SourcePage(BaseModel):
+    """One page of an extraction's source, as it is shown (ADR 0114).
+
+    `width` and `height` are the page's, in points, as a reader sees it: its
+    crop box, turned with the page. `has_text` says whether any segment is on
+    it, so a page with none, such as a scan, is told apart from a page that
+    is not there.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    page: int = Field(ge=1)
+    width: float = Field(gt=0, allow_inf_nan=False)
+    height: float = Field(gt=0, allow_inf_nan=False)
+    has_text: bool = Field(strict=True)
+
+
+class ExtractionHandle(BaseModel):
+    """A stored extraction, by its digest, the tool that made it, and its source (ADR 0114).
+
+    It names an extraction as a content handle names content: a step's output
+    holds the handle, and the extraction's text and segments stay in the
+    content store.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    tool: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    digest: str = Field(pattern=CONTENT_DIGEST_PATTERN)
+    source_digest: str = Field(pattern=CONTENT_DIGEST_PATTERN)
+    media_type: str
+
+    @field_validator("media_type")
+    @classmethod
+    def check_media_type(
+        cls,
+        media_type: str,
+    ) -> str:
+        """Require a well-formed, supported media type."""
+
+        return validate_media_type(media_type)
+
+    def to_value(
+        self,
+    ) -> dict[str, JsonValue]:
+        """Return the value a step outputs: `{"extraction": {...}}`."""
+
+        return {EXTRACTION_KEY: cast(JsonValue, self.model_dump(mode="json"))}
+
+    def extraction(
+        self,
+    ) -> Extraction:
+        """Return the extraction an anchor made from this one names."""
+
+        return Extraction(
+            tool=self.tool,
+            version=self.version,
+            digest=self.digest,
+        )
+
+
+def extraction_handle_from_value(
+    value: JsonValue,
+) -> ExtractionHandle | None:
+    """Return the extraction handle one value is, or None when it is not exactly one."""
+
+    if not isinstance(value, dict) or set(value) != {EXTRACTION_KEY}:
+        return None
+
+    try:
+        return ExtractionHandle.model_validate(value[EXTRACTION_KEY])
+    except ValidationError:
+        return None
+
+
 class SegmentedText(BaseModel):
     """An extraction's whole output: the text it took from a source, and its segments.
 
@@ -152,6 +237,7 @@ class SegmentedText(BaseModel):
     media_type: str
     text: str
     segments: tuple[Segment, ...] = ()
+    pages: tuple[SourcePage, ...] = ()
 
     @field_validator("media_type")
     @classmethod
@@ -207,6 +293,74 @@ class SegmentedText(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def require_listed_pages(
+        self,
+    ) -> "SegmentedText":
+        """Require listed pages to run from 1, and to agree with the segments on them."""
+
+        if not self.pages:
+            return self
+
+        for number, page in enumerate(self.pages, start=1):
+            if page.page != number:
+                raise ValueError(
+                    f"Page {page.page} is listed as page {number}; "
+                    "pages are listed in order, from 1."
+                )
+
+        on_pages: dict[int, str] = {}
+
+        for segment in self.segments:
+            if segment.page is None:
+                raise ValueError(
+                    f"Segment {segment.id} names no page, but the extraction lists its pages."
+                )
+
+            if segment.page > len(self.pages):
+                raise ValueError(
+                    f"Segment {segment.id} is on page {segment.page}, "
+                    f"but the extraction lists {len(self.pages)} pages."
+                )
+
+            on_pages.setdefault(segment.page, segment.id)
+
+        for page in self.pages:
+            if page.has_text and page.page not in on_pages:
+                raise ValueError(f"Page {page.page} has text, but no segment is on it.")
+
+            if not page.has_text and page.page in on_pages:
+                raise ValueError(
+                    f"Page {page.page} has no text, but segment {on_pages[page.page]} is on it."
+                )
+
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_pages(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, JsonValue]:
+        """Leave out pages the extraction does not list, so its digest is unchanged."""
+
+        data = cast(dict[str, JsonValue], handler(self))
+
+        if not data.get("pages"):
+            data.pop("pages", None)
+
+        return data
+
+    def page(
+        self,
+        number: int,
+    ) -> SourcePage | None:
+        """Return one listed page by its number, or None when it is not listed."""
+
+        if 1 <= number <= len(self.pages):
+            return self.pages[number - 1]
+
+        return None
+
     def segment(
         self,
         segment_id: str,
@@ -258,6 +412,19 @@ class SegmentedText(BaseModel):
             digest=self.digest(),
         )
 
+    def handle(
+        self,
+    ) -> ExtractionHandle:
+        """Return the handle a step outputs in place of this text."""
+
+        return ExtractionHandle(
+            tool=self.tool,
+            version=self.version,
+            digest=self.digest(),
+            source_digest=self.source_digest,
+            media_type=self.media_type,
+        )
+
     def store(
         self,
         store: ContentStore,
@@ -298,9 +465,13 @@ class SegmentedText(BaseModel):
 
 
 __all__ = [
+    "EXTRACTION_KEY",
     "SEGMENT_ID",
     "BoundingBox",
     "ExtractionError",
+    "ExtractionHandle",
     "Segment",
     "SegmentedText",
+    "SourcePage",
+    "extraction_handle_from_value",
 ]

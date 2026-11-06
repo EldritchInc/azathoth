@@ -457,5 +457,5 @@ def test_wheel_loads_the_standard_tool_library_outside_repository(
         "run_workflow@1.0.0 loop_workflow@1.1.0 map_workflow@1.0.0 json_select@1.0.0 "
         "json_object@1.0.0 json_merge@1.0.0 validate_json@1.0.0 chunk_text@1.0.0 "
         "join_text@1.0.0 render_template@1.0.0 split_s3_object@1.0.0 "
-        "read_s3_object@1.0.0\n"
+        "read_s3_object@1.0.0 segment_pdf@1.0.0\n"
     )

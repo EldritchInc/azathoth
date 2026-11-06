@@ -63,6 +63,14 @@ type, the text it extracted, and its `Segment`s.
 The text is in NFC. Segments are in order, do not overlap, lie within the
 text and are named once each. A source with no text has no segments.
 
+An extraction of a paged source may list its `pages`, each a `SourcePage`
+of its `page` number, its `width` and `height` in points as it is shown,
+and `has_text`, whether any segment is on it (ADR 0114). Listed pages run
+from 1 in order, every segment is on one of them, and a page has text
+exactly when a segment is on it. `page(number)` finds one. An extraction
+that lists no pages leaves them out of its JSON, so its digest is what it
+was before pages could be listed.
+
 `segment(id)` finds a segment and `segment_text(segment)` returns what it
 spans. `canonical_bytes()` is the canonical JSON the content store keeps,
 with sorted keys and no padding, and `digest()` names it. `extraction()`
@@ -70,6 +78,12 @@ returns the `Extraction` an anchor made from the text names, and
 `store(store)` keeps the JSON. `SegmentedText.load(store, digest)` reads it
 back, returns `None` when the store lacks it, and raises `ExtractionError`
 when the content there is not a segmented text.
+
+`handle()` returns the `ExtractionHandle` a step outputs in its place (ADR
+0114): `{"extraction": {"tool", "version", "digest", "source_digest",
+"media_type"}}`, as `to_value()` gives it. `extraction_handle_from_value`
+reads one back, and returns `None` for any value that is not exactly one.
+`extraction()` gives the `Extraction` an anchor names.
 
 ## Checking Citations
 

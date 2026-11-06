@@ -163,6 +163,7 @@ def _run_workflow(
                     journal=repositories(configuration).run_journal,
                     leases=repositories(configuration).run_leases,
                     children=repositories(configuration).run_children,
+                    content=repositories(configuration).tool_content,
                 ),
             )
         )
@@ -379,6 +380,7 @@ def _invoke_workflow(
                     journal=repositories(configuration).run_journal,
                     leases=repositories(configuration).run_leases,
                     children=repositories(configuration).run_children,
+                    content=repositories(configuration).tool_content,
                 ),
             )
         )

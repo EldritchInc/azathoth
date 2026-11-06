@@ -23,6 +23,7 @@ from azathoth.telemetry.conventions import (
     STEP_SPAN,
     WORKFLOW_ID,
 )
+from azathoth.tools import ToolContentAccess
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowRun,
@@ -222,8 +223,9 @@ class TracingWorkflowRunner(WorkflowRunner):
     """A workflow runner that traces every run it executes, and its steps.
 
     Each run is executed by a plain runner with the same executor, retry
-    sleep, journal and leases, observed by both this runner's own observer and the
-    run's tracing observer, so concurrent runs never share a trace.
+    sleep, journal, leases and content access, observed by both this runner's
+    own observer and the run's tracing observer, so concurrent runs never
+    share a trace.
     """
 
     def __init__(
@@ -237,6 +239,7 @@ class TracingWorkflowRunner(WorkflowRunner):
         leases: RunLeaseRepository | None = None,
         lease_policy: RunLeasePolicy | None = None,
         children: RunChildRepository | None = None,
+        content: ToolContentAccess | None = None,
     ) -> None:
         super().__init__(
             executor=executor,
@@ -246,6 +249,7 @@ class TracingWorkflowRunner(WorkflowRunner):
             leases=leases,
             lease_policy=lease_policy,
             children=children,
+            content=content,
         )
 
         self._telemetry = telemetry
@@ -264,6 +268,7 @@ class TracingWorkflowRunner(WorkflowRunner):
             leases=self._leases,
             lease_policy=self._lease_policy,
             children=self._children,
+            content=self._content,
         )
 
     async def run(
@@ -337,16 +342,24 @@ def tracing_runner(
     journal: RunJournalRepository | None = None,
     leases: RunLeaseRepository | None = None,
     children: RunChildRepository | None = None,
+    content: ToolContentAccess | None = None,
 ) -> WorkflowRunner:
     """Return a runner that traces its runs when telemetry is on, and a plain one otherwise.
 
     Either records each run's journal in the given repository, holds each
-    run's lease in the given one, and indexes each child run under its
-    parent in the given one (ADR 0105).
+    run's lease in the given one, indexes each child run under its parent in
+    the given one (ADR 0105), and gives its tools the given content access
+    (ADR 0114).
     """
 
     if not telemetry.enabled:
-        return WorkflowRunner(observer=observer, journal=journal, leases=leases, children=children)
+        return WorkflowRunner(
+            observer=observer,
+            journal=journal,
+            leases=leases,
+            children=children,
+            content=content,
+        )
 
     return TracingWorkflowRunner(
         telemetry,
@@ -354,6 +367,7 @@ def tracing_runner(
         journal=journal,
         leases=leases,
         children=children,
+        content=content,
     )
 
 

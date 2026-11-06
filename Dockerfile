@@ -61,7 +61,7 @@ COPY --from=builder /dist/ /tmp/dist/
 RUN python -m venv /opt/azathoth/venv \
     && set -- /tmp/dist/azathoth_ai-*.whl /tmp/dist/azathoth_mcp-*.whl \
     && /opt/azathoth/venv/bin/python -m pip install --no-cache-dir --root-user-action=ignore \
-        "$1[otel,postgres,bedrock,worker]" "$2" \
+        "$1[otel,postgres,bedrock,worker,documents]" "$2" \
     && rm -rf /tmp/dist
 
 WORKDIR /var/lib/azathoth

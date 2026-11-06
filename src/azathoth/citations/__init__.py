@@ -5,11 +5,15 @@ from azathoth.citations.anchors import (
     SourceAnchor,
 )
 from azathoth.citations.segments import (
+    EXTRACTION_KEY,
     SEGMENT_ID,
     BoundingBox,
     ExtractionError,
+    ExtractionHandle,
     Segment,
     SegmentedText,
+    SourcePage,
+    extraction_handle_from_value,
 )
 from azathoth.citations.selectors import (
     FRAGMENT_SELECTOR,
@@ -40,6 +44,7 @@ from azathoth.citations.verification import (
 
 __all__ = [
     "BLANK_LINES",
+    "EXTRACTION_KEY",
     "FRAGMENT_SELECTOR",
     "FRAGMENT_SPECIFICATIONS",
     "MEDIA_FRAGMENT_SPECIFICATION",
@@ -57,13 +62,16 @@ __all__ = [
     "CitationStatus",
     "Extraction",
     "ExtractionError",
+    "ExtractionHandle",
     "FragmentSelector",
     "Segment",
     "SegmentedText",
+    "SourcePage",
     "Selector",
     "SourceAnchor",
     "TextPositionSelector",
     "TextQuoteSelector",
+    "extraction_handle_from_value",
     "segment_text",
     "verify_citation",
 ]

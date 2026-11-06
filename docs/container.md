@@ -82,6 +82,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 The image never initializes a database by itself, so run `init` once per
@@ -123,6 +124,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 Then pass the same `-e AZATHOTH_DATABASE=…` wherever this guide passes

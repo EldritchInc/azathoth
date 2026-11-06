@@ -45,7 +45,13 @@ from azathoth.providers import (
     SqlModelRepository,
     SqlProviderModelObservationRepository,
 )
-from azathoth.tools import TOOL_TABLES, SQLiteToolRepository, SqlToolRepository, ToolRepository
+from azathoth.tools import (
+    TOOL_TABLES,
+    SQLiteToolRepository,
+    SqlToolRepository,
+    ToolContentAccess,
+    ToolRepository,
+)
 from azathoth.workflows import (
     PRODUCTION_INVOCATION_RUN_TABLES,
     PRODUCTION_INVOCATION_TABLES,
@@ -94,6 +100,7 @@ from azathoth.workflows import (
     WorkflowRunEvaluationRepository,
     WorkflowRunFeedbackRepository,
     WorkflowRunRepository,
+    journaled_initial_context,
 )
 
 SCHEMA_TABLES: Final[tuple[Table, ...]] = (
@@ -407,6 +414,23 @@ class Repositories:
         path = self._sqlite_path
 
         return SQLiteContentStore(path) if path is not None else SqlContentStore(self._database)
+
+    @cached_property
+    def tool_content(
+        self,
+    ) -> ToolContentAccess:
+        """Return what tools' content inputs are given from (ADR 0114).
+
+        The content is this content store's, and a run's received content is
+        read from the initial contexts its journal and its ancestors' record.
+        """
+
+        journal = self.run_journal
+
+        return ToolContentAccess(
+            store=self.content,
+            initial_context=lambda run_id: journaled_initial_context(journal, run_id),
+        )
 
 
 _POSTGRES_DATABASES: dict[PostgresLocation, PostgresDatabase] = {}

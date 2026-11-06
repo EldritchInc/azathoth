@@ -522,7 +522,7 @@ def test_the_schema_states_the_scripts_limit() -> None:
 
 def test_the_readme_documents_exactly_the_tools_messages() -> None:
     text = STANDARD_README.read_text(encoding="utf-8")
-    section = text[text.index("### read_s3_object") : text.index("## Installing")]
+    section = text[text.index("### read_s3_object") : text.index("## The Document Tools")]
     documented = {
         line
         for block in section.split("```text\n")[1:]

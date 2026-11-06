@@ -1157,6 +1157,71 @@ never outlives its step.
 Like Python tools, process tools are trusted. The executor does not sandbox
 the command: it runs with the operator's permissions.
 
+## Content Inputs
+
+A process implementation may name some of its inputs content inputs
+(ADR 0114):
+
+```json
+"content_inputs": ["document"]
+```
+
+Each must be bound to a content handle (ADR 0112), naming content the run
+received: content a `workflow.input.resolved` event records in the initial
+context of the run, or of a run above it in its lineage. The engine reads the
+bytes from the content store, checks them against their digest, and writes
+them to a file of their own, `document.pdf` here, in a temporary folder. The
+tool is given the file in place of the handle:
+
+```json
+{"document": {"path": "/tmp/azathoth-content-.../document.pdf", "digest": "<SHA-256>", "media_type": "application/pdf", "size_bytes": 482113}}
+```
+
+The folder is removed once the tool is done, however it ends. A tool never
+reads the content store itself, so it needs no database path or cloud
+credential to read a document.
+
+A handle that names content the run never received is refused before the
+tool runs, so knowing a digest is not enough to read the content it names:
+
+```text
+Content input 'document' of tool segment_pdf names content <SHA-256>, which this run never received.
+```
+
+Only a step's own initial context and its ancestors' count: an event a step
+adds while the run is under way claims nothing. A runner given no content
+access, as a benchmark's is, refuses a tool that takes content inputs. Only
+process implementations take them, and an implementation without them
+serializes as it always has.
+
+## Extraction Outputs
+
+An implementation with content inputs may name the output holding what it
+extracted from them (ADR 0114):
+
+```json
+"extraction_output": "extraction"
+```
+
+The output must be a segmented text (ADR 0113) of one of the tool's content
+inputs, under the media type it was given and naming the tool itself. The
+engine keeps it in the content store, records it as an `extraction`
+resource of the step beside the tool's own, and replaces it with an
+extraction handle naming it:
+
+```json
+{"extraction": {"tool": "segment_pdf", "version": "1", "digest": "<SHA-256 of the extraction>", "source_digest": "<SHA-256 of the PDF>", "media_type": "application/pdf"}}
+```
+
+An extraction of content the tool was not given is refused, and nothing is
+kept:
+
+```text
+Tool segment_pdf returned an extraction of content <SHA-256>, which it was not given.
+```
+
+An implementation without an extraction output serializes as it always has.
+
 # Entrypoint Validation
 
 If implementation source cannot provide the configured callable entrypoint,
