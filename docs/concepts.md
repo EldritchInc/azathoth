@@ -1115,6 +1115,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.cli`](../src/azathoth/cli/README.md) | Installed operator surface and runtime bootstrap |
 | [`azathoth.context`](../src/azathoth/context/README.md) | Immutable event-backed working context |
 | [`azathoth.inputs`](../src/azathoth/inputs/README.md) | External inputs as values or references, media types, resolution and the content store |
+| [`azathoth.citations`](../src/azathoth/citations/README.md) | Source anchors as W3C Web Annotation selectors, and checking citations against them |
 | [`azathoth.jobs`](../src/azathoth/jobs/README.md) | The versioned job envelope: one request and one result per invocation |
 | [`azathoth.worker`](../src/azathoth/worker/README.md) | The queue worker: job requests from SQS, settled by their results |
 | [`azathoth.goals`](../src/azathoth/goals/README.md) | Durable objective intent |

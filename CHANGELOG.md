@@ -33,6 +33,16 @@ release dates are on the
   case yet, and `benchmark add-case --from-run` says so
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
 
+### Evidence Out
+
+- **Source anchors say where in exactly which content something is.**
+  `azathoth.citations` writes a place in content as W3C Web Annotation
+  selectors, under their own names: a quote with its context, a span in
+  Unicode code points, and a PDF page or image region. An anchor names the
+  content's digest and origin, and the extraction whose text its selectors
+  count
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+
 ## 1.2.0
 
 Azathoth 1.2 serves workflows to AI clients. `azathoth-mcp`, a new package

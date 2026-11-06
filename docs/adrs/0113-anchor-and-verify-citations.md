@@ -1,0 +1,142 @@
+# ADR 0113: Anchor and Verify Citations
+
+- Status: Accepted
+- Date: 2026-11-05
+- Decided in: #138
+
+## Context
+
+Azathoth 1.3 takes documents in and gives evidence out. A workflow can now
+be given a PDF or an image, kept by the digest of its bytes, with the origin
+it came from (ADR 0112). What it cannot yet do is say *where* in that
+content a result came from, in a form a reviewer's tools can open, and check
+that the place really says what a model claims.
+
+A model's own account of where it read something cannot be trusted: a page
+number or a quote written by a model is generated text like any other.
+Azathoth therefore locates, and the model only cites. A deterministic tool
+divides a document into segments, each with its place in the document; a
+cited step names segments and quotes them; and Azathoth checks each quote
+against the segment it names, and records where it really is.
+
+This decision is the part of that design that involves no model: how a
+place in content is written down, and how a citation is checked. Reading
+PDFs into segments, prompting a cited step, and recording its checks are
+later decisions of 1.3.
+
+## Decision
+
+### Places are written as W3C Web Annotation selectors
+
+A place in content is written with the selectors of the W3C Web Annotation
+Data Model, under the model's own names, so a reviewer's annotation tools
+read them as they stand:
+
+- a `TextQuoteSelector` holds the `exact` text cited, with a `prefix` and a
+  `suffix` of the text around it;
+- a `TextPositionSelector` holds the `start` and `end` of the text cited;
+- a `FragmentSelector` holds a fragment of the document, its `value`, and
+  the specification it `conformsTo`.
+
+```json
+[
+  {"type": "TextQuoteSelector", "exact": "received on December 14", "prefix": "was ", "suffix": ", 2026"},
+  {"type": "TextPositionSelector", "start": 18234, "end": 18257},
+  {"type": "FragmentSelector", "value": "page=3", "conformsTo": "http://tools.ietf.org/rfc/rfc3778"}
+]
+```
+
+Positions count Unicode code points, as the Web Annotation model says:
+`start` is included and `end` is not. A JavaScript highlighter counts UTF-16
+code units, which differ from code points beyond the Basic Multilingual
+Plane, such as emoji; converting between them is the business of whatever
+exports anchors to such a tool, never of the stored anchor.
+
+Two fragment specifications are accepted:
+
+- `http://tools.ietf.org/rfc/rfc3778`, for a page or a rectangle of a PDF
+  (`page=3`, `page=3&viewrect=…`). RFC 8118 has replaced RFC 3778 and keeps
+  the same parameters; the Web Annotation model's table names RFC 3778, and
+  that is the IRI annotation tools look for.
+- `http://www.w3.org/TR/media-frags/`, for a region of an image
+  (`xywh=160,120,320,240`).
+
+A fragment's value is written without the `#` that introduces it in a URI.
+
+The model's field `conformsTo` keeps its own name, the one camel-case name
+among Azathoth's fields, rather than a snake-case name translated at export.
+
+### A source anchor
+
+A source anchor is one place in one exact piece of content:
+
+```json
+{
+  "digest": "<SHA-256 of the content's bytes>",
+  "media_type": "application/pdf",
+  "origin": {"uri": "s3://claims-intake/2026/11/claim-0412.pdf", "version_id": "3HL4kqtJlcpXroDTDmJ"},
+  "selectors": ["…"],
+  "extraction": {"tool": "segment_pdf", "version": "1.3.0", "digest": "<SHA-256 of its output>"}
+}
+```
+
+- `digest` names the bytes, as the content store keeps them (ADR 0096).
+- `origin` is where those bytes durably live, as an input recorded it
+  (ADR 0112). It is left out when nothing names one.
+- `selectors` holds one to three selectors, at most one of each kind.
+- `extraction` names the tool, and its version, that produced the text the
+  text selectors count, and the digest of the tool's output in the content
+  store. An anchor can then be checked again against exactly the text it was
+  made from, long after the run.
+
+A PDF's text is not its bytes: it is what a tool extracted from them. So
+text selectors always count an extraction's text, and an anchor holding one
+names its extraction:
+
+```text
+A source anchor's text selectors count the text of an extraction, so the anchor names its extraction.
+```
+
+A quote and a position in one anchor must agree on the length of the text
+they select:
+
+```text
+A source anchor's quote is 23 characters long, but its position spans 5.
+```
+
+A fragment must be one its content's media type can have: a PDF fragment
+for a PDF, a media fragment for an image.
+
+```text
+A FragmentSelector conforming to http://tools.ietf.org/rfc/rfc3778 cannot locate image/png content.
+```
+
+## Consequences
+
+- Places in content have one shape everywhere they will be recorded: in run
+  evidence, in the values a cited step returns, in `invocation show` and
+  over MCP.
+- A process tool reading a cited value reads standard selectors, in plain
+  JSON, with no Azathoth import.
+- Nothing is recorded yet. The models are the vocabulary the later
+  decisions of 1.3 record and check.
+
+## Alternatives Considered
+
+### Snake-case fields, translated at export
+
+Rejected. Every anchor in every run's evidence would use names no
+annotation tool knows, and every export would translate them back. One
+camel-case field is the smaller cost.
+
+### RFC 8118's IRI for PDF fragments
+
+Rejected for now. RFC 8118 is the current definition of PDF fragments, but
+the Web Annotation model lists RFC 3778, and a tool matching the listed IRI
+would not recognize another. The parameters are the same under either.
+
+### Anchors that hold a page number from the model
+
+Rejected. A page number a model writes is generated text. Azathoth records
+where a quote is from the extraction that located it, never from what a
+model says about it.
