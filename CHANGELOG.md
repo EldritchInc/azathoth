@@ -33,6 +33,33 @@ release dates are on the
   case yet, and `benchmark add-case --from-run` says so
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
 
+### Evidence Out
+
+- **Source anchors say where in exactly which content something is.**
+  `azathoth.citations` writes a place in content as W3C Web Annotation
+  selectors, under their own names: a quote with its context, a span in
+  Unicode code points, and a PDF page or image region. An anchor names the
+  content's digest and origin, and the extraction whose text its selectors
+  count
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **An extraction is the text a tool took from a source, and its
+  segments.** Each segment has an ID a model can cite, its span of the text,
+  and, on a PDF, its page and bounding box. The whole output is stored as
+  canonical JSON, so its digest names it, and an anchor can be checked again
+  from the content store alone
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **A citation is checked against the segment it names, with no model
+  involved.** A quote found exactly is `verified`; one found only after
+  normalizing whitespace, quotes and dashes is `verified_normalized`; and
+  otherwise the check says `quote_not_found` or `unknown_segment`. A found
+  quote is anchored by the source's own text, its position, and on a PDF its
+  page and box
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **Text can be segmented and cited with no document tool.**
+  `segment_text` makes one segment per paragraph, deterministically, under
+  a version of its own that changes only when its output does
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+
 ## 1.2.0
 
 Azathoth 1.2 serves workflows to AI clients. `azathoth-mcp`, a new package
