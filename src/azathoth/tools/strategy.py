@@ -1,5 +1,7 @@
 """Executable strategies backed by durable tool implementations."""
 
+import asyncio
+
 from pydantic import JsonValue
 
 from azathoth.context import Context, active_step_lineage
@@ -11,6 +13,7 @@ from azathoth.strategies import (
 )
 from azathoth.tools.content import active_tool_content, content_input_files
 from azathoth.tools.exceptions import ToolExecutionError
+from azathoth.tools.extraction import keep_extraction
 from azathoth.tools.implementation import ToolImplementation
 from azathoth.tools.protocols import ToolExecutor
 
@@ -51,37 +54,56 @@ class ToolStrategy:
         """Execute the resolved tool using workflow-bound inputs.
 
         Content inputs are given as files of the content their handles name,
-        from the running step's content access (ADR 0114).
+        from the running step's content access, and an extraction output is
+        kept in its content store, recorded as a resource of the step, and
+        replaced by its handle (ADR 0114).
         """
 
         step = active_step_lineage()
+        access = active_tool_content()
+        resources: tuple[StrategyResourceBinding, ...] = (
+            StrategyResourceBinding(
+                kind="tool",
+                identifier=str(self._implementation.id),
+                attributes={
+                    "tool_id": str(self._implementation.tool_id),
+                    "tool_version": self._implementation.tool_version,
+                    "runtime": self._implementation.runtime,
+                    "implementation_digest": content_digest(self._implementation),
+                },
+            ),
+        )
 
         async with content_input_files(
             self._implementation,
             self._inputs_from_context(context),
             tool=self._metadata.name,
-            access=active_tool_content(),
+            access=access,
             run_id=step.step.run_id if step is not None else None,
         ) as inputs:
-            output = await self._executor.execute(
+            output: JsonValue = await self._executor.execute(
                 self._implementation,
                 inputs,
             )
 
+            #
+            # An extraction output implies content inputs, which were given
+            # only from content access, so the access is there to keep it in.
+            #
+            if self._implementation.extraction_output is not None and access is not None:
+                output, kept = await asyncio.to_thread(
+                    keep_extraction,
+                    self._implementation,
+                    output,
+                    tool=self._metadata.name,
+                    given=inputs,
+                    store=access.store,
+                )
+                resources = (*resources, kept)
+
         return StrategyOutcome(
             output=output,
-            resources=(
-                StrategyResourceBinding(
-                    kind="tool",
-                    identifier=str(self._implementation.id),
-                    attributes={
-                        "tool_id": str(self._implementation.tool_id),
-                        "tool_version": self._implementation.tool_version,
-                        "runtime": self._implementation.runtime,
-                        "implementation_digest": content_digest(self._implementation),
-                    },
-                ),
-            ),
+            resources=resources,
         )
 
     @staticmethod

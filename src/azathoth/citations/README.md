@@ -71,6 +71,12 @@ returns the `Extraction` an anchor made from the text names, and
 back, returns `None` when the store lacks it, and raises `ExtractionError`
 when the content there is not a segmented text.
 
+`handle()` returns the `ExtractionHandle` a step outputs in its place (ADR
+0114): `{"extraction": {"tool", "version", "digest", "source_digest",
+"media_type"}}`, as `to_value()` gives it. `extraction_handle_from_value`
+reads one back, and returns `None` for any value that is not exactly one.
+`extraction()` gives the `Extraction` an anchor names.
+
 ## Checking Citations
 
 `verify_citation(segmented, segment_id=..., quote=..., origin=...)` checks

@@ -38,6 +38,12 @@ release dates are on the
   to the content store. A handle naming content the run, or a run above it,
   never received is refused before the tool runs
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **A document tool's extraction is checked, kept and recorded by the
+  engine.** An implementation's `extraction_output` must be a segmented
+  text of content the tool was given. The engine keeps it in the content
+  store, records it as a resource of the step, and outputs an extraction
+  handle in its place
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 
 ### Evidence Out
 

@@ -103,6 +103,56 @@ Tool segment_pdf takes content inputs, which this run cannot give: it has no con
 Only process implementations take content inputs. An implementation without
 them serializes as it always has, so its digest is unchanged.
 
+### Extraction outputs
+
+A document tool's work is an extraction: the text it took from a document,
+divided into segments (ADR 0113). An implementation with content inputs may
+name the output that holds it:
+
+```json
+"extraction_output": "extraction"
+```
+
+The engine requires that output to be a segmented text, and checks it
+against what the tool was given: its source must be one of the tool's
+content inputs, under the media type it was given, and it must name the tool
+that made it. A tool that claims to have extracted content it was never
+given is refused:
+
+```text
+Tool segment_pdf returned an extraction of content <SHA-256>, which it was not given.
+```
+
+```text
+Tool segment_pdf returned an extraction that names the tool segment_text.
+```
+
+An extraction that passes is kept in the content store, as the canonical
+JSON whose digest names it, and the output is replaced by an extraction
+handle naming it, as a content handle names content:
+
+```json
+{"extraction": {"tool": "segment_pdf", "version": "1", "digest": "<SHA-256 of the extraction>", "source_digest": "<SHA-256 of the PDF>", "media_type": "application/pdf"}}
+```
+
+Its text and segments stay in the store. A whole document's text does not
+travel through every event, every step's output and every child's input.
+
+The extraction is recorded as a resource of the step that made it, beside
+the tool's own:
+
+```json
+{"kind": "extraction", "identifier": "<SHA-256 of the extraction>", "attributes": {"tool": "segment_pdf", "version": "1", "source_digest": "<SHA-256 of the PDF>", "media_type": "application/pdf", "segments": 214}}
+```
+
+A step's resources are written by the engine's own strategies, never by a
+tool, a model or a workflow document, and are kept in the run's journal and
+its record. That record, not the store, is what says an extraction was made:
+the store is content-addressed and shared, and anything can be put in it as
+an input. Whatever checks citations against an extraction requires that
+record in the run's lineage, as a content input requires a run to have
+received its content.
+
 ## Consequences
 
 - A handle passes between steps, to tools, and to child workflows as plain
@@ -113,7 +163,11 @@ them serializes as it always has, so its digest is unchanged.
 - Knowing a digest is not enough to read the content it names, though the
   content store is shared by every run of a database.
 - Reading the bytes and writing the file happen off the event loop, so a
-  large document does not hold up the steps running beside it.
+  large document does not hold up the steps running beside it, and so does
+  keeping an extraction.
+- A document tool never writes the content store. What it extracted is
+  checked and kept by the engine, under its own digest, and the step that
+  made it says so.
 
 ## Alternatives Considered
 
@@ -129,6 +183,18 @@ rule for itself.
 
 Rejected. A document of ten megabytes would become more than thirteen of
 JSON, and most document libraries open a file rather than a buffer.
+
+### Record an extraction as a context event
+
+Rejected. A strategy can add events to a run's context, and one of them
+lets a step choose the event's type. A resource of a step is written only by
+the strategy that ran it, so it is the stronger record.
+
+### Pass the extraction itself as the step's output
+
+Rejected. A long document's text would be copied into the step's output,
+the context, the journal and every child's input. A handle keeps the text in
+one place, as a content handle does for the bytes.
 
 ### Trust a handle whose content is in the store
 

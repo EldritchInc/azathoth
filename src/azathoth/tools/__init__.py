@@ -44,6 +44,11 @@ from azathoth.tools.execution import (
     PYTHON_TOOL_RUNTIME,
     PythonToolExecutor,
 )
+from azathoth.tools.extraction import (
+    EXTRACTION_RESOURCE_KIND,
+    ExtractionOutputError,
+    keep_extraction,
+)
 from azathoth.tools.implementation import (
     CONTENT_INPUT_NAME_PATTERN,
     ENVIRONMENT_GRANT_PATTERN,
@@ -90,6 +95,9 @@ from azathoth.tools.verification import ToolTestResult, ToolVerification
 from azathoth.tools.verifier import ToolVerifier
 
 __all__ = [
+    "EXTRACTION_RESOURCE_KIND",
+    "ExtractionOutputError",
+    "keep_extraction",
     "CONTENT_DIRECTORY_PREFIX",
     "CONTENT_FILE_EXTENSIONS",
     "CONTENT_INPUT_NAME_PATTERN",

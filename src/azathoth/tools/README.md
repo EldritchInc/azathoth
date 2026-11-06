@@ -1194,6 +1194,34 @@ access, as a benchmark's is, refuses a tool that takes content inputs. Only
 process implementations take them, and an implementation without them
 serializes as it always has.
 
+## Extraction Outputs
+
+An implementation with content inputs may name the output holding what it
+extracted from them (ADR 0114):
+
+```json
+"extraction_output": "extraction"
+```
+
+The output must be a segmented text (ADR 0113) of one of the tool's content
+inputs, under the media type it was given and naming the tool itself. The
+engine keeps it in the content store, records it as an `extraction`
+resource of the step beside the tool's own, and replaces it with an
+extraction handle naming it:
+
+```json
+{"extraction": {"tool": "segment_pdf", "version": "1", "digest": "<SHA-256 of the extraction>", "source_digest": "<SHA-256 of the PDF>", "media_type": "application/pdf"}}
+```
+
+An extraction of content the tool was not given is refused, and nothing is
+kept:
+
+```text
+Tool segment_pdf returned an extraction of content <SHA-256>, which it was not given.
+```
+
+An implementation without an extraction output serializes as it always has.
+
 # Entrypoint Validation
 
 If implementation source cannot provide the configured callable entrypoint,

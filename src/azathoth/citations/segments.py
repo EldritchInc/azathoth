@@ -31,6 +31,9 @@ from azathoth.revisions import CONTENT_DIGEST_PATTERN
 SEGMENT_ID: Final = re.compile(r"(?:p(?P<page>[1-9][0-9]*)\.)?s[1-9][0-9]*")
 """A segment's ID, matched whole: `s12`, or `p3.s12` for a segment on page 3."""
 
+EXTRACTION_KEY: Final = "extraction"
+"""The single key of an extraction handle's value (ADR 0114)."""
+
 
 class ExtractionError(ValueError):
     """Raised when stored content is not the segmented text it is taken for."""
@@ -130,6 +133,68 @@ class Segment(BaseModel):
                 data.pop(name, None)
 
         return data
+
+
+class ExtractionHandle(BaseModel):
+    """A stored extraction, by its digest, the tool that made it, and its source (ADR 0114).
+
+    It names an extraction as a content handle names content: a step's output
+    holds the handle, and the extraction's text and segments stay in the
+    content store.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    tool: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    digest: str = Field(pattern=CONTENT_DIGEST_PATTERN)
+    source_digest: str = Field(pattern=CONTENT_DIGEST_PATTERN)
+    media_type: str
+
+    @field_validator("media_type")
+    @classmethod
+    def check_media_type(
+        cls,
+        media_type: str,
+    ) -> str:
+        """Require a well-formed, supported media type."""
+
+        return validate_media_type(media_type)
+
+    def to_value(
+        self,
+    ) -> dict[str, JsonValue]:
+        """Return the value a step outputs: `{"extraction": {...}}`."""
+
+        return {EXTRACTION_KEY: cast(JsonValue, self.model_dump(mode="json"))}
+
+    def extraction(
+        self,
+    ) -> Extraction:
+        """Return the extraction an anchor made from this one names."""
+
+        return Extraction(
+            tool=self.tool,
+            version=self.version,
+            digest=self.digest,
+        )
+
+
+def extraction_handle_from_value(
+    value: JsonValue,
+) -> ExtractionHandle | None:
+    """Return the extraction handle one value is, or None when it is not exactly one."""
+
+    if not isinstance(value, dict) or set(value) != {EXTRACTION_KEY}:
+        return None
+
+    try:
+        return ExtractionHandle.model_validate(value[EXTRACTION_KEY])
+    except ValidationError:
+        return None
 
 
 class SegmentedText(BaseModel):
@@ -258,6 +323,19 @@ class SegmentedText(BaseModel):
             digest=self.digest(),
         )
 
+    def handle(
+        self,
+    ) -> ExtractionHandle:
+        """Return the handle a step outputs in place of this text."""
+
+        return ExtractionHandle(
+            tool=self.tool,
+            version=self.version,
+            digest=self.digest(),
+            source_digest=self.source_digest,
+            media_type=self.media_type,
+        )
+
     def store(
         self,
         store: ContentStore,
@@ -298,9 +376,12 @@ class SegmentedText(BaseModel):
 
 
 __all__ = [
+    "EXTRACTION_KEY",
     "SEGMENT_ID",
     "BoundingBox",
     "ExtractionError",
+    "ExtractionHandle",
     "Segment",
     "SegmentedText",
+    "extraction_handle_from_value",
 ]

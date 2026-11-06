@@ -18,9 +18,11 @@ from azathoth.inputs import (
 from azathoth.tools import (
     PROCESS_TOOL_RUNTIME,
     ContentInputError,
+    ExtractionOutputError,
     ToolContentAccess,
     ToolImplementation,
     content_input_files,
+    keep_extraction,
 )
 from azathoth.workflows import create_workflow_input_events
 
@@ -145,3 +147,70 @@ def test_the_adr_and_readme_show_the_file_a_tool_is_given() -> None:
 
         assert '"content_inputs": ["document"]' in text
         assert '"path": "/tmp/azathoth-content-.../document.pdf"' in text
+
+
+def extraction_refusal(
+    source_digest: str,
+    *,
+    tool: str = "segment_pdf",
+) -> str:
+    """Return the refusal of an extraction a tool named segment_pdf returned."""
+
+    document: JsonValue = {
+        "path": "/tmp/document.pdf",
+        "digest": DIGEST,
+        "media_type": "application/pdf",
+        "size_bytes": len(PDF),
+    }
+
+    with pytest.raises(ExtractionOutputError) as raised:
+        keep_extraction(
+            ToolImplementation(
+                tool_id=UUID("c1400000-0000-4000-8000-000000000002"),
+                tool_version="1.0.0",
+                runtime=PROCESS_TOOL_RUNTIME,
+                source="print('{}')\n",
+                command=(sys.executable,),
+                content_inputs=("document",),
+                extraction_output="extraction",
+            ),
+            {
+                "extraction": {
+                    "tool": tool,
+                    "version": "1",
+                    "source_digest": source_digest,
+                    "media_type": "application/pdf",
+                    "text": "Claim 0412.",
+                    "segments": [{"id": "p1.s1", "start": 0, "end": 11, "page": 1}],
+                }
+            },
+            tool="segment_pdf",
+            given={"document": document},
+            store=InMemoryContentStore(),
+        )
+
+    return str(raised.value)
+
+
+def test_the_adr_and_readme_quote_the_refusal_of_an_extraction_of_other_content() -> None:
+    other = content_bytes_digest(b"another document")
+    message = extraction_refusal(other).replace(other, DIGEST)
+
+    assert quoted(ADR, message)
+    assert quoted(TOOLS_README, message)
+
+
+def test_the_adr_quotes_the_refusal_of_an_extraction_naming_another_tool() -> None:
+    assert quoted(ADR, extraction_refusal(DIGEST, tool="segment_text"))
+
+
+def test_the_adr_and_readme_show_an_extraction_handle_as_it_is_written() -> None:
+    for path in (ADR, TOOLS_README):
+        text = path.read_text(encoding="utf-8")
+
+        assert '"extraction_output": "extraction"' in text
+        assert (
+            '{"extraction": {"tool": "segment_pdf", "version": "1", "digest": '
+            '"<SHA-256 of the extraction>", "source_digest": "<SHA-256 of the PDF>", '
+            '"media_type": "application/pdf"}}'
+        ) in text
