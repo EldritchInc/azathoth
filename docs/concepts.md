@@ -821,6 +821,25 @@ over them, and each child reads its own with `read_s3_object`.
 
 See [`azathoth.inputs`](../src/azathoth/inputs/README.md).
 
+## Citations
+
+Azathoth locates; models only cite (ADR 0113). A tool divides content into
+segments, spans of its text with IDs such as `s2` or, on a PDF, `p3.s12`. A
+citation names a segment and quotes it, and Azathoth checks the quote
+against that segment alone, never trusting a page number or a location a
+model writes. A quote found is `verified`, or `verified_normalized` when it
+matches only once whitespace, quotes and dashes are normalized; otherwise
+the check records `quote_not_found` or `unknown_segment`.
+
+A verified citation is anchored by W3C Web Annotation selectors, under the
+model's own names, so a reviewer's tools read them as they stand: the
+source's exact text with the text around it, its position in Unicode code
+points, and for a PDF its page and box. The anchor names the content's
+digest, its origin, and the extraction it was found in, which is kept in
+the content store, so any anchor can be checked again later.
+
+See [`azathoth.citations`](../src/azathoth/citations/README.md).
+
 ## Child Workflows and Loops
 
 A workflow is a directed acyclic graph: each step runs at most once per run.

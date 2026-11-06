@@ -23,6 +23,12 @@ from azathoth.citations.selectors import (
     TextPositionSelector,
     TextQuoteSelector,
 )
+from azathoth.citations.text_segmenter import (
+    BLANK_LINES,
+    TEXT_SEGMENTER,
+    TEXT_SEGMENTER_VERSION,
+    segment_text,
+)
 from azathoth.citations.verification import (
     PLAIN_PUNCTUATION,
     QUOTE_CONTEXT_LENGTH,
@@ -33,6 +39,7 @@ from azathoth.citations.verification import (
 )
 
 __all__ = [
+    "BLANK_LINES",
     "FRAGMENT_SELECTOR",
     "FRAGMENT_SPECIFICATIONS",
     "MEDIA_FRAGMENT_SPECIFICATION",
@@ -42,6 +49,8 @@ __all__ = [
     "TEXT_POSITION_SELECTOR",
     "SEGMENT_ID",
     "TEXT_QUOTE_SELECTOR",
+    "TEXT_SEGMENTER",
+    "TEXT_SEGMENTER_VERSION",
     "VERIFIED_STATUSES",
     "BoundingBox",
     "CitationCheck",
@@ -55,5 +64,6 @@ __all__ = [
     "SourceAnchor",
     "TextPositionSelector",
     "TextQuoteSelector",
+    "segment_text",
     "verify_citation",
 ]

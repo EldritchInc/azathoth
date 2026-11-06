@@ -215,6 +215,21 @@ A check is recorded as it was cited and as it was found:
 
 A failed check holds no anchor and no occurrences.
 
+### The standard text segmenter
+
+Text needs no document tool to be cited, so Azathoth segments it itself:
+`segment_text` makes one segment per paragraph, `s1`, `s2` and so on. It
+first puts the text in NFC. Paragraphs are separated by blank lines, a line
+holding only whitespace included, and a segment spans its paragraph without
+the whitespace around it. Text holding nothing but whitespace has no
+segments.
+
+Its extractions record the tool `segment_text` and its own version, `1`,
+not Azathoth's: the version is raised only when the segmenter's output
+changes, so a release that leaves segmentation as it was leaves every
+extraction's digest as it was. Only `text/*` content is segmented this way;
+a PDF's segments come from a document tool that reads its pages.
+
 ## Consequences
 
 - Places in content have one shape everywhere they will be recorded: in run
@@ -228,6 +243,18 @@ A failed check holds no anchor and no occurrences.
   it again against the stored extraction, by digest.
 
 ## Alternatives Considered
+
+### Segments cut at sentences
+
+Rejected for now. Sentence boundaries depend on language and on
+abbreviations, and a segmenter that guessed them would anchor citations to
+its guesses. Paragraphs are found by blank lines alone, the same for every
+text.
+
+### Tie the segmenter's version to Azathoth's
+
+Rejected. Every release would change the digest of every text extraction,
+though not one segment had moved.
 
 ### Snake-case fields, translated at export
 

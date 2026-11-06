@@ -10,6 +10,8 @@ from azathoth.citations import (
     PDF_FRAGMENT_SPECIFICATION,
     PLAIN_PUNCTUATION,
     QUOTE_CONTEXT_LENGTH,
+    TEXT_SEGMENTER,
+    TEXT_SEGMENTER_VERSION,
     BoundingBox,
     CitationCheck,
     CitationStatus,
@@ -199,3 +201,9 @@ def test_the_adr_shows_a_check_as_it_is_recorded() -> None:
         "anchor",
     ]
     assert '"status": "verified_normalized"' in text()
+
+
+def test_the_adr_names_the_text_segmenter_and_its_version() -> None:
+    assert f"the tool `{TEXT_SEGMENTER}` and its own version, `{TEXT_SEGMENTER_VERSION}`" in (
+        prose()
+    )

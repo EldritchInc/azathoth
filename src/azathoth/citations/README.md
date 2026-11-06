@@ -93,3 +93,23 @@ with up to `QUOTE_CONTEXT_LENGTH` (32) code points of the extraction's text
 around it, its position, and, on a PDF page, a fragment of the page and its
 box as a `viewrect`. `VERIFIED_STATUSES` are the two found statuses. A check
 holds an anchor and at least one occurrence exactly when it is one of them.
+
+## Segmenting Text
+
+`segment_text(text, source_digest=..., media_type=...)` makes one segment
+per paragraph of `text/*` content, `s1` onwards. The text is first put in
+NFC. Paragraphs are separated by blank lines, a line of only whitespace
+included, and each segment spans its paragraph without the whitespace around
+it. The extraction records `TEXT_SEGMENTER` (`segment_text`) and
+`TEXT_SEGMENTER_VERSION`, raised only when its output changes, so the same
+text always gives the same digest.
+
+```python
+from azathoth.citations import segment_text, verify_citation
+from azathoth.inputs import content_bytes_digest
+
+text = "Claim 0412.\n\nThe claim was received on December 14."
+segmented = segment_text(text, source_digest=content_bytes_digest(text.encode()))
+
+check = verify_citation(segmented, segment_id="s2", quote="received on December 14")
+```

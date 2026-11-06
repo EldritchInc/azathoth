@@ -55,6 +55,10 @@ release dates are on the
   quote is anchored by the source's own text, its position, and on a PDF its
   page and box
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **Text can be segmented and cited with no document tool.**
+  `segment_text` makes one segment per paragraph, deterministically, under
+  a version of its own that changes only when its output does
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
 
 ## 1.2.0
 
