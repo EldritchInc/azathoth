@@ -264,6 +264,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 The standard tools ship inside the package, so composing workflows needs no
@@ -376,6 +377,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 Azathoth never shows the password: every message names the database without
@@ -447,6 +449,30 @@ azathoth worker needs boto3, which is not installed; install azathoth-ai[worker]
 
 The [CLI Reference](../src/azathoth/cli/README.md#run-a-worker) describes
 its options, its output, and how it stops.
+
+## Optional: Reading PDFs
+
+A workflow can be given a PDF (see the
+[CLI Reference](../src/azathoth/cli/README.md)), and the standard
+`segment_pdf` tool divides it into segments a model can cite. It reads PDFs
+with pdfminer.six, an optional extra. Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[documents]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[documents]"
+```
+
+Without it, a step that runs `segment_pdf` fails and says so:
+
+```text
+segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents].
+```
+
+The [standard tools](../src/azathoth/standard/README.md#segment_pdf)
+describe what it extracts.
 
 ## Optional: Tracing With OpenTelemetry
 

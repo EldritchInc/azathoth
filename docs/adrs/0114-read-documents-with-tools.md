@@ -153,6 +153,47 @@ an input. Whatever checks citations against an extraction requires that
 record in the run's lineage, as a content input requires a run to have
 received its content.
 
+### A standard tool to segment PDFs
+
+The standard library gains `segment_pdf`, the first document tool, with its
+identifiers from a range of its own, `c4000000-…`. It takes one content
+input, `document`, and names one extraction output, `extraction`. It reads
+PDFs with pdfminer.six, under the MIT license, which a new extra installs:
+
+```bash
+python -m pip install "azathoth-ai[documents]"
+```
+
+A step that runs it without the extra fails, with status 1:
+
+```text
+segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents].
+```
+
+pdfminer.six lays each page out, and each text box with text is one
+segment, `p<PAGE>.s<N>` from 1 on each page. A box is a unit a reader sees
+as one: a paragraph, a heading, a cell of a form. The layout's parameters
+change which boxes there are, so the extraction's version names them, with
+the tool's version and pdfminer.six's:
+
+```text
+1.0.0 (pdfminer.six 20260107; line_overlap=0.5,char_margin=2.0,line_margin=0.5,word_margin=0.1,boxes_flow=0.5)
+```
+
+The text is the page's: the ligatures U+FB00 to U+FB06 are written out as
+their letters, so a model's plain quote is found, and nothing else is
+changed. A hyphen at the end of a line stays, since only a dictionary could
+say whether it splits a word.
+
+A box is converted from pdfminer's frame, points from the lower-left corner
+of the media box, to RFC 8118's, points from the top-left corner of the crop
+box, and clipped to the crop box. A rotated page is laid out as it is shown,
+in a frame RFC 8118 does not settle, so its segments name their page and no
+box; so does a segment outside the crop box. A citation of either names the
+page alone.
+
+The image the container builds installs the extra, with the cloud ones.
+
 ## Consequences
 
 - A handle passes between steps, to tools, and to child workflows as plain
@@ -168,6 +209,12 @@ received its content.
 - A document tool never writes the content store. What it extracted is
   checked and kept by the engine, under its own digest, and the step that
   made it says so.
+- A workflow can divide a PDF into citable segments with no tool of its
+  own, once the `documents` extra is installed.
+- The same PDF segments to the same extraction, and digest, only under the
+  same tool, pdfminer.six and layout; a new pdfminer.six is a new version.
+- A page with no text layer, such as a scan, has no segments. Reading it
+  needs a tool that recognizes text.
 
 ## Alternatives Considered
 
@@ -200,3 +247,19 @@ one place, as a content handle does for the bytes.
 
 Rejected. The store is content-addressed and shared, so content being there
 says only that some run received it, not that this one did.
+
+### Read PDFs with PyMuPDF, or with pypdf
+
+Rejected. PyMuPDF is licensed under the AGPL, which every user of Azathoth
+would inherit. pypdf extracts a page's text, but not the boxes it lies in,
+so a segment could name only its page.
+
+### Segment by page, or by line
+
+Rejected. A page is too long to cite precisely, and a line too short to
+hold a claim. A text box is the unit the layout already finds.
+
+### Join a word hyphenated across lines
+
+Rejected. Whether `re-` and `viewed` are one word is a guess, and a guess
+would make the text differ from the page a reader checks it against.

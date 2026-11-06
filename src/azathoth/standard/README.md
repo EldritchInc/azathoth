@@ -5,10 +5,10 @@ package (ADR 0095). Its documents are ordinary tool documents, stored in
 `tools/`, and are recorded in a database the same way as any other tool: by
 an explicit import of each exact tool version.
 
-The library holds three kinds of tool. The composition tools run other
+The library holds four kinds of tool. The composition tools run other
 workflows, the data-shaping tools reshape the values that pass between
-steps, and the S3 tools work with objects too large to pass between steps
-at all:
+steps, the S3 tools work with objects too large to pass between steps at
+all, and the document tools read the documents a workflow is given:
 
 | Tool              | Version | Implementation | Purpose                                     |
 | ----------------- | ------- | -------------- | ------------------------------------------- |
@@ -24,6 +24,7 @@ at all:
 | `render_template` | 1.0.0   | 1.0.0          | Render a text template from inputs.         |
 | `split_s3_object` | 1.0.0   | 1.0.0          | Split an S3 object into chunk objects.      |
 | `read_s3_object`  | 1.0.0   | 1.0.0          | Read and decode one S3 object within a cap. |
+| `segment_pdf`     | 1.0.0   | 1.0.0          | Divide a PDF into citable segments.         |
 
 `standard_tool_documents()` decodes them in that fixed order:
 
@@ -594,6 +595,86 @@ read_s3_object found <URI> is not valid JSON: <REASON>.
 
 Its timeout is five minutes.
 
+## The Document Tools
+
+A workflow can be given a PDF, kept in the content store and named by a
+content handle (ADR 0112). A document tool reads it as a content input and
+returns what it extracted as an extraction output, which the engine checks,
+keeps and records (ADR 0114). A model then cites the extraction's segments,
+and Azathoth checks each citation against them (ADR 0113).
+
+`segment_pdf` is a process tool that runs its source with `python`, like
+the others, but it imports pdfminer.six, which the `documents` extra
+installs:
+
+```bash
+python -m pip install "azathoth-ai[documents]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[documents]"
+```
+
+It grants itself no environment variables, and reaches nothing but the file
+the engine gives it.
+
+### segment_pdf
+
+`segment_pdf` takes one input, `document`, a content handle naming a PDF the
+run received. A step gives it the handle as any other value:
+
+```json
+{
+  "name": "document",
+  "source": {"event_type": "workflow.input.received", "field_name": "input"}
+}
+```
+
+The engine gives the tool the PDF as a file, and the tool returns a
+segmented text, which the engine keeps; the step's `extraction` output is
+then its handle:
+
+```json
+{"extraction": {"tool": "segment_pdf", "version": "1.0.0 (pdfminer.six 20260107; line_overlap=0.5,char_margin=2.0,line_margin=0.5,word_margin=0.1,boxes_flow=0.5)", "digest": "<SHA-256 of the extraction>", "source_digest": "<SHA-256 of the PDF>", "media_type": "application/pdf"}}
+```
+
+pdfminer.six lays each page out with its default layout parameters, and
+every text box with text becomes one segment, in the order the layout reads
+them. A segment's ID is `p<PAGE>.s<N>`, counting from 1 on each page, so a
+page with no text, such as a scan, has no segments, and the next page's
+segments still begin at `s1`. The extraction's version names the tool's
+version, pdfminer.six's, and the layout parameters, since each can change
+what is extracted.
+
+- A segment's text is its box's lines, each trimmed of the whitespace around
+  it, joined by newlines. Segments are joined by a blank line.
+- The ligatures U+FB00 to U+FB06 (ﬀ, ﬁ, ﬂ, ﬃ, ﬄ, ﬅ and ﬆ) are written out as
+  their letters, so a quote typed with plain letters is found, and the text
+  is put in NFC.
+- A hyphen that ends a line is kept: the text is the page's, not a guess at
+  the word.
+- A segment's `bbox` is in points from the top-left corner of the page's
+  crop box, as RFC 8118 measures a `viewrect`, and clipped to it. A segment
+  outside the crop box, or on a rotated page, names its page and no box, so
+  its citation names the page alone.
+
+Inputs it cannot use are refused with status 2, before the PDF is read:
+
+```text
+segment_pdf needs 'document' to be a content input.
+segment_pdf reads PDFs; 'document' is <MEDIA_TYPE>.
+segment_pdf does not take the input '<NAME>'.
+```
+
+Everything else fails with status 1:
+
+```text
+segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents].
+segment_pdf could not read the document: <ERROR>: <REASON>.
+```
+
+Its timeout is five minutes.
+
 ## Installing
 
 The library reaches a database through the CLI:
@@ -660,6 +741,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 A database that already holds a later revision, 1.0.1 to 1.0.4 and 1.1.1 to
@@ -671,6 +753,7 @@ exceptions. The composition tools' side effects are Azathoth's own recorded
 invocations and runs. The S3 tools reach S3, and the split writes objects,
 but only under the prefix it is given and the folder of its own step
 attempt, so what it writes traces back to the run that wrote it. The
-data-shaping tools take their identifiers from the `c2000000-…` range and
-the S3 tools from the `c3000000-…` range, and no example tool may share an
-identifier with a standard tool.
+data-shaping tools take their identifiers from the `c2000000-…` range, the
+S3 tools from the `c3000000-…` range and the document tools from the
+`c4000000-…` range, and no example tool may share an identifier with a
+standard tool.

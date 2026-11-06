@@ -53,6 +53,7 @@ def test_standard_documents_load_in_their_fixed_order() -> None:
         "render_template@1.0.0",
         "split_s3_object@1.0.0",
         "read_s3_object@1.0.0",
+        "segment_pdf@1.0.0",
     ]
 
 
@@ -70,6 +71,7 @@ def test_standard_documents_keep_their_tool_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000007"),
         UUID("c3000000-0000-4000-8000-000000000001"),
         UUID("c3000000-0000-4000-8000-000000000002"),
+        UUID("c4000000-0000-4000-8000-000000000001"),
     ]
 
 
@@ -156,6 +158,7 @@ def test_standard_implementations_keep_their_ids() -> None:
         UUID("c2000000-0000-4000-8000-000000000077"),
         UUID("c3000000-0000-4000-8000-000000000011"),
         UUID("c3000000-0000-4000-8000-000000000022"),
+        UUID("c4000000-0000-4000-8000-000000000011"),
     ]
 
 

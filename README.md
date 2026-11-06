@@ -66,8 +66,9 @@ ship in the package: `run_workflow`, `loop_workflow` and `map_workflow`
 compose workflows from other workflows; `json_select`, `json_object`,
 `json_merge` and `validate_json` reshape and check the JSON that passes
 between steps; `chunk_text`, `join_text` and `render_template` split, join
-and fill in text; and `split_s3_object` and `read_s3_object` work with data
-in S3 too large to pass between steps.
+and fill in text; `split_s3_object` and `read_s3_object` work with data in
+S3 too large to pass between steps; and `segment_pdf` divides a PDF into
+segments a model can cite.
 
 Then take a workflow through its whole life, from a clone of this
 repository. It needs no model and no API key:

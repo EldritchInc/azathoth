@@ -44,6 +44,12 @@ release dates are on the
   store, records it as a resource of the step, and outputs an extraction
   handle in its place
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **The standard `segment_pdf` tool divides a PDF into citable segments.**
+  Each text box is a segment, `p<PAGE>.s<N>`, with its page and its box in
+  points from the crop box's top-left corner. It reads PDFs with
+  pdfminer.six, which the new `documents` extra installs, and the container
+  image includes
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 
 ### Evidence Out
 
@@ -242,6 +248,7 @@ Installed tool join_text@1.0.0 revision 1.
 Installed tool render_template@1.0.0 revision 1.
 Installed tool split_s3_object@1.0.0 revision 1.
 Installed tool read_s3_object@1.0.0 revision 1.
+Installed tool segment_pdf@1.0.0 revision 1.
 ```
 
 Two changes can stop a workflow that ran on 1.0:

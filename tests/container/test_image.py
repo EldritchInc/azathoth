@@ -165,6 +165,7 @@ def deployment(
             "Installed tool render_template@1.0.0 revision 1.",
             "Installed tool split_s3_object@1.0.0 revision 1.",
             "Installed tool read_s3_object@1.0.0 revision 1.",
+            "Installed tool segment_pdf@1.0.0 revision 1.",
         ]
 
         for arguments in (

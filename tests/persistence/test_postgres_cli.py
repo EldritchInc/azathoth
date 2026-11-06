@@ -43,6 +43,7 @@ INSTALLED = (
     "Installed tool render_template@1.0.0 revision 1.\n"
     "Installed tool split_s3_object@1.0.0 revision 1.\n"
     "Installed tool read_s3_object@1.0.0 revision 1.\n"
+    "Installed tool segment_pdf@1.0.0 revision 1.\n"
 )
 
 ALREADY_INSTALLED = (
@@ -58,6 +59,7 @@ ALREADY_INSTALLED = (
     "Tool render_template@1.0.0 is already installed (revision 1).\n"
     "Tool split_s3_object@1.0.0 is already installed (revision 1).\n"
     "Tool read_s3_object@1.0.0 is already installed (revision 1).\n"
+    "Tool segment_pdf@1.0.0 is already installed (revision 1).\n"
 )
 
 
