@@ -12,6 +12,7 @@ from azathoth.citations.segments import (
     ExtractionHandle,
     Segment,
     SegmentedText,
+    SourcePage,
     extraction_handle_from_value,
 )
 from azathoth.citations.selectors import (
@@ -65,6 +66,7 @@ __all__ = [
     "FragmentSelector",
     "Segment",
     "SegmentedText",
+    "SourcePage",
     "Selector",
     "SourceAnchor",
     "TextPositionSelector",

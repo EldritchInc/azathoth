@@ -129,6 +129,7 @@ def test_a_workflow_segments_a_pdf_and_a_citation_of_it_verifies(
 
     assert segmented is not None
     assert [segment.id for segment in segmented.segments] == ["p1.s1", "p1.s2", "p2.s1"]
+    assert [(page.page, page.has_text) for page in segmented.pages] == [(1, True), (2, True)]
 
     check = verify_citation(segmented, segment_id="p1.s2", quote="December 14")
 

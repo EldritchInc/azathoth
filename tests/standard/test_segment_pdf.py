@@ -12,7 +12,13 @@ from typing import Any
 import pytest
 from pydantic import JsonValue
 
-from azathoth.citations import BoundingBox, CitationStatus, SegmentedText, verify_citation
+from azathoth.citations import (
+    BoundingBox,
+    CitationStatus,
+    SegmentedText,
+    SourcePage,
+    verify_citation,
+)
 from azathoth.inputs import PDF_MEDIA_TYPE
 from azathoth.tools import ToolDefinition
 from tests.standard.harness import (
@@ -35,16 +41,29 @@ MISSING_PDFMINER = (
     "segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents]."
 )
 
+ENCRYPTED = "segment_pdf cannot read the document: it is encrypted with a password."
+
 DOCUMENTED = (
+    "segment_pdf needs 'settings' to be an object.",
     "segment_pdf needs 'document' to be a content input.",
     "segment_pdf reads PDFs; 'document' is <MEDIA_TYPE>.",
+    "segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.",
     "segment_pdf does not take the input '<NAME>'.",
     MISSING_PDFMINER,
+    ENCRYPTED,
+    "segment_pdf found <PAGES> pages in the document, more than its max_pages of <MAX_PAGES>.",
     "segment_pdf could not read the document: <ERROR>: <REASON>.",
 )
 """Every message the standard README documents for segment_pdf, placeholders included."""
 
 LAYOUT = "line_overlap=0.5,char_margin=2.0,line_margin=0.5,word_margin=0.1,boxes_flow=0.5"
+
+NAMED_PDF: dict[str, JsonValue] = {
+    "path": "/tmp/document.pdf",
+    "digest": "0" * 64,
+    "media_type": PDF_MEDIA_TYPE,
+}
+"""A content input naming a PDF, for inputs refused before the file is read."""
 
 CLAIM = Page(
     texts=(
@@ -59,10 +78,12 @@ CLAIM = Page(
 def write_pdf(
     tmp_path: Path,
     pages: tuple[Page, ...],
+    *,
+    user_password: str | None = None,
 ) -> dict[str, JsonValue]:
     """Write a PDF of the pages given; return it as the engine gives a content input."""
 
-    content = pdf_document(pages)
+    content = pdf_document(pages, user_password=user_password)
     path = tmp_path / "document.pdf"
     path.write_bytes(content)
 
@@ -310,6 +331,36 @@ def test_a_segment_cites_and_anchors_on_its_page_and_box(
             "segment_pdf does not take the input 'pages'.",
             id="unknown-input",
         ),
+        pytest.param(
+            {"document": NAMED_PDF, "settings": [1]},
+            "segment_pdf needs 'settings' to be an object.",
+            id="settings-not-an-object",
+        ),
+        pytest.param(
+            {"document": "/tmp/document.pdf", "settings": 3},
+            "segment_pdf needs 'settings' to be an object.",
+            id="settings-before-document",
+        ),
+        pytest.param(
+            {"document": NAMED_PDF, "settings": {"max_pages": 0}},
+            "segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.",
+            id="max-pages-zero",
+        ),
+        pytest.param(
+            {"document": NAMED_PDF, "settings": {"max_pages": 1001}},
+            "segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.",
+            id="max-pages-too-many",
+        ),
+        pytest.param(
+            {"document": NAMED_PDF, "settings": {"max_pages": 2.5}},
+            "segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.",
+            id="max-pages-fraction",
+        ),
+        pytest.param(
+            {"document": NAMED_PDF, "settings": {"max_pages": True}},
+            "segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.",
+            id="max-pages-boolean",
+        ),
     ],
 )
 def test_inputs_it_cannot_use_exit_with_status_2(
@@ -463,7 +514,13 @@ def test_the_schemas_take_a_document_and_give_an_extraction() -> None:
 
     assert definition.input_schema.json_schema == {
         "type": "object",
-        "properties": {"document": {"type": "object"}},
+        "properties": {
+            "settings": {
+                "type": "object",
+                "properties": {"max_pages": {"type": "integer", "minimum": 1, "maximum": 1000}},
+            },
+            "document": {"type": "object"},
+        },
         "required": ["document"],
     }
     assert definition.output_schema.json_schema == {
@@ -541,3 +598,113 @@ def test_a_box_past_the_crop_boxs_right_edge_is_clipped_to_it(
     assert boxes(segmented) == [
         ("p1.s1", 1, BoundingBox(left=500.0, top=82.48, width=50.0, height=12.0)),
     ]
+
+
+def test_every_page_is_listed_with_its_size_and_whether_it_has_text(
+    tmp_path: Path,
+) -> None:
+    segmented = segment(
+        tmp_path,
+        CLAIM,
+        Page(),
+        Page(texts=(Text(72, 700, "Cropped."),), crop_box=(50, 100, 562, 742)),
+    )
+
+    assert segmented.pages == (
+        SourcePage(page=1, width=612.0, height=792.0, has_text=True),
+        SourcePage(page=2, width=612.0, height=792.0, has_text=False),
+        SourcePage(page=3, width=512.0, height=642.0, has_text=True),
+    )
+
+
+@pytest.mark.parametrize(
+    ("rotate", "size"),
+    [(90, (700.0, 600.0)), (180, (600.0, 700.0)), (270, (700.0, 600.0))],
+)
+def test_a_rotated_page_is_listed_at_its_size_as_it_is_shown(
+    tmp_path: Path,
+    rotate: int,
+    size: tuple[float, float],
+) -> None:
+    segmented = segment(tmp_path, Page(crop_box=(0, 0, 600, 700), rotate=rotate))
+
+    (page,) = segmented.pages
+
+    assert (page.width, page.height) == size
+
+
+def test_a_page_of_only_whitespace_is_listed_with_no_text(
+    tmp_path: Path,
+) -> None:
+    segmented = segment(tmp_path, Page(texts=(Text(72, 700, "     "),)))
+
+    assert segmented.pages == (SourcePage(page=1, width=612.0, height=792.0, has_text=False),)
+
+
+def test_a_pdf_of_more_pages_than_max_pages_is_refused(
+    tmp_path: Path,
+) -> None:
+    document = write_pdf(tmp_path, (CLAIM, CLAIM, CLAIM))
+
+    assert standard_tool_failure(
+        "segment_pdf", {"document": document, "settings": {"max_pages": 2}}
+    ) == (1, "segment_pdf found 3 pages in the document, more than its max_pages of 2.")
+
+
+def test_a_pdf_of_exactly_max_pages_is_read(
+    tmp_path: Path,
+) -> None:
+    document = write_pdf(tmp_path, (CLAIM, CLAIM))
+    output = run_standard_tool("segment_pdf", {"document": document, "settings": {"max_pages": 2}})
+
+    assert len(SegmentedText.model_validate(output["extraction"]).pages) == 2
+
+
+def test_settings_may_be_left_out_or_empty(
+    tmp_path: Path,
+) -> None:
+    document = write_pdf(tmp_path, (CLAIM,))
+
+    assert run_standard_tool("segment_pdf", {"document": document}) == run_standard_tool(
+        "segment_pdf", {"document": document, "settings": {}}
+    )
+
+
+def test_max_pages_defaults_to_300_and_goes_up_to_1000() -> None:
+    tool = script()
+
+    assert (tool["DEFAULT_MAX_PAGES"], tool["MAX_PAGES"]) == (300, 1000)
+
+
+def test_by_default_a_pdf_of_301_pages_is_refused(
+    tmp_path: Path,
+) -> None:
+    document = write_pdf(tmp_path, (Page(),) * 301)
+
+    assert standard_tool_failure("segment_pdf", {"document": document}) == (
+        1,
+        "segment_pdf found 301 pages in the document, more than its max_pages of 300.",
+    )
+
+
+def test_a_pdf_that_needs_a_password_is_refused(
+    tmp_path: Path,
+) -> None:
+    document = write_pdf(tmp_path, (CLAIM,), user_password="secret")
+
+    assert standard_tool_failure("segment_pdf", {"document": document}) == (1, ENCRYPTED)
+
+
+def test_a_pdf_encrypted_with_an_empty_user_password_is_read(
+    tmp_path: Path,
+) -> None:
+    open_pdf = segment(tmp_path, CLAIM)
+    document = write_pdf(tmp_path, (CLAIM,), user_password="")
+    output = run_standard_tool("segment_pdf", {"document": document})
+    encrypted = SegmentedText.model_validate(output["extraction"])
+
+    assert (encrypted.text, encrypted.segments, encrypted.pages) == (
+        open_pdf.text,
+        open_pdf.segments,
+        open_pdf.pages,
+    )

@@ -192,6 +192,32 @@ in a frame RFC 8118 does not settle, so its segments name their page and no
 box; so does a segment outside the crop box. A citation of either names the
 page alone.
 
+An extraction may list its source's pages, a field the segmented text of
+ADR 0113 gains, left out of its JSON when there are none, so no earlier
+extraction's digest changes:
+
+```json
+"pages": [{"page": 1, "width": 612.0, "height": 792.0, "has_text": true}, {"page": 2, "width": 612.0, "height": 792.0, "has_text": false}]
+```
+
+`segment_pdf` lists every page, at its size as it is shown, with whether
+any segment is on it. A page with no segments is then a page with no text,
+such as a scan, and not a page that went missing.
+
+A long PDF is laid out page by page, so the tool takes `max_pages`, 300 by
+default and at most 1000, and refuses a PDF of more before laying out any:
+
+```text
+segment_pdf found 412 pages in the document, more than its max_pages of 300.
+```
+
+A PDF that needs a password to open is refused; one encrypted with an empty
+user password, as one that only restricts printing or copying is, is read:
+
+```text
+segment_pdf cannot read the document: it is encrypted with a password.
+```
+
 The image the container builds installs the extra, with the cloud ones.
 
 ## Consequences
@@ -213,8 +239,9 @@ The image the container builds installs the extra, with the cloud ones.
   own, once the `documents` extra is installed.
 - The same PDF segments to the same extraction, and digest, only under the
   same tool, pdfminer.six and layout; a new pdfminer.six is a new version.
-- A page with no text layer, such as a scan, has no segments. Reading it
-  needs a tool that recognizes text.
+- A page with no text layer, such as a scan, has no segments, and is
+  listed as having no text. Reading it needs a tool that recognizes text.
+- A document of more than 1000 pages cannot be segmented in one step.
 
 ## Alternatives Considered
 
@@ -263,3 +290,9 @@ hold a claim. A text box is the unit the layout already finds.
 
 Rejected. Whether `re-` and `viewed` are one word is a guess, and a guess
 would make the text differ from the page a reader checks it against.
+
+### Segment the first max_pages pages of a longer PDF
+
+Rejected. An extraction of part of a document would cite as though it were
+the whole, and what was left out would say nothing. A refusal says how many
+pages there are, so the step can be given a larger `max_pages`.

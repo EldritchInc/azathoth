@@ -63,6 +63,14 @@ type, the text it extracted, and its `Segment`s.
 The text is in NFC. Segments are in order, do not overlap, lie within the
 text and are named once each. A source with no text has no segments.
 
+An extraction of a paged source may list its `pages`, each a `SourcePage`
+of its `page` number, its `width` and `height` in points as it is shown,
+and `has_text`, whether any segment is on it (ADR 0114). Listed pages run
+from 1 in order, every segment is on one of them, and a page has text
+exactly when a segment is on it. `page(number)` finds one. An extraction
+that lists no pages leaves them out of its JSON, so its digest is what it
+was before pages could be listed.
+
 `segment(id)` finds a segment and `segment_text(segment)` returns what it
 spans. `canonical_bytes()` is the canonical JSON the content store keeps,
 with sorted keys and no padding, and `digest()` names it. `extraction()`

@@ -620,15 +620,22 @@ the engine gives it.
 
 ### segment_pdf
 
-`segment_pdf` takes one input, `document`, a content handle naming a PDF the
-run received. A step gives it the handle as any other value:
+`segment_pdf` takes `document`, a content handle naming a PDF the run
+received, which a step gives it as any other value, and `settings`:
 
 ```json
 {
-  "name": "document",
-  "source": {"event_type": "workflow.input.received", "field_name": "input"}
+  "settings": {"max_pages": 50},
+  "document": {"content": {"digest": "<SHA-256 of the PDF>", "media_type": "application/pdf", "size_bytes": 482113}}
 }
 ```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `max_pages` | 300 | The most pages a PDF it reads may have, at most 1000. |
+
+`settings` may be left out. A PDF of more pages is refused before any page
+is laid out, so a long document fails quickly rather than at the timeout.
 
 The engine gives the tool the PDF as a file, and the tool returns a
 segmented text, which the engine keeps; the step's `extraction` output is
@@ -657,12 +664,22 @@ what is extracted.
   crop box, as RFC 8118 measures a `viewrect`, and clipped to it. A segment
   outside the crop box, or on a rotated page, names its page and no box, so
   its citation names the page alone.
+- Every page is listed in the extraction's `pages`, with its `width` and
+  `height` in points as it is shown, its crop box turned with it, and
+  `has_text`, whether any segment is on it. A page with no text layer, such
+  as a scan, is then told apart from one that is not there.
+
+A PDF encrypted with an empty user password, as one that only restricts
+printing or copying is, opens as any other. One that needs a password to
+open is refused.
 
 Inputs it cannot use are refused with status 2, before the PDF is read:
 
 ```text
+segment_pdf needs 'settings' to be an object.
 segment_pdf needs 'document' to be a content input.
 segment_pdf reads PDFs; 'document' is <MEDIA_TYPE>.
+segment_pdf needs 'max_pages' to be a whole number from 1 to 1000.
 segment_pdf does not take the input '<NAME>'.
 ```
 
@@ -670,6 +687,8 @@ Everything else fails with status 1:
 
 ```text
 segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[documents].
+segment_pdf cannot read the document: it is encrypted with a password.
+segment_pdf found <PAGES> pages in the document, more than its max_pages of <MAX_PAGES>.
 segment_pdf could not read the document: <ERROR>: <REASON>.
 ```
 

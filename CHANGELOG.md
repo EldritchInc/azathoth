@@ -46,9 +46,11 @@ release dates are on the
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 - **The standard `segment_pdf` tool divides a PDF into citable segments.**
   Each text box is a segment, `p<PAGE>.s<N>`, with its page and its box in
-  points from the crop box's top-left corner. It reads PDFs with
-  pdfminer.six, which the new `documents` extra installs, and the container
-  image includes
+  points from the crop box's top-left corner, and every page is listed with
+  its size and whether it has text. It refuses a PDF of more than
+  `max_pages`, 300 by default, or one that needs a password. It reads PDFs
+  with pdfminer.six, which the new `documents` extra installs, and the
+  container image includes
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
 
 ### Evidence Out
