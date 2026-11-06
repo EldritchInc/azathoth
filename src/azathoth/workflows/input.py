@@ -42,13 +42,15 @@ def create_workflow_input_events(
     producer: str,
     occurred_at: datetime | None = None,
 ) -> tuple[ContextEvent, ...]:
-    """Create the events that deliver one resolved input to a run (ADR 0096).
+    """Create the events that deliver one resolved input to a run (ADR 0096, ADR 0112).
 
     The canonical input event holds the resolved value, exactly as for a
-    JSON input. When the input was a reference, a `workflow.input.resolved`
+    JSON input. When the input has provenance, a `workflow.input.resolved`
     event follows it, at the same time and from the same producer, recording
-    the reference's URI, media type, size and content digest. An inline input
-    adds no event, so its run records exactly the context it always has.
+    its media type, size and content digest: a reference's URI, or, for an
+    inline input that is binary or names an origin, that it was inline and
+    the origin it named. An inline JSON or text input naming no origin adds
+    no event, so its run records exactly the context it always has.
     """
 
     occurred = occurred_at if occurred_at is not None else datetime.now(UTC)

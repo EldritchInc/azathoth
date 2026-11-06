@@ -183,7 +183,8 @@ def test_decode_input_source_reads_a_reference() -> None:
         ),
         pytest.param(
             {"value": 1, "unit": "seconds"},
-            "An input source holds only 'value' or 'uri', and 'media_type'; got 'unit'.",
+            "An input source holds only 'value', 'media_type' and 'origin', or 'uri' and "
+            "'media_type'; got 'unit'.",
             id="extra-key",
         ),
         pytest.param(

@@ -152,3 +152,15 @@ def test_non_ascii_text_digests_as_utf_8() -> None:
 
     assert "Grüße ✓" in canonical
     assert job_request_digest(request) == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def test_an_inline_inputs_origin_is_part_of_its_digest() -> None:
+    value = {"change": "rename", "files": ["a.py", "b.py"]}
+    with_origin = request_data(input={"value": value, "origin": {"uri": "s3://intake/change.json"}})
+    other_origin = request_data(input={"value": value, "origin": {"uri": "s3://intake/other.json"}})
+
+    canonical = job_request_canonical_json(decode_job_request(with_origin))
+
+    assert '"origin":{"uri":"s3://intake/change.json"}' in canonical
+    assert digest(with_origin) != digest(request_data())
+    assert digest(with_origin) != digest(other_origin)

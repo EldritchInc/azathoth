@@ -16,6 +16,12 @@ release dates are on the
   media type's signature, kept in the content store, and given to the
   workflow as a content handle naming its digest, media type and size
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **A job's inline input can hold a document as base64, and name its
+  origin.** Any inline input may name where its content durably lives, such
+  as an S3 object with its version ID and ETag; the origin is recorded with
+  the input's digest in the run's `workflow.input.resolved` event. A request
+  that names no origin digests exactly as before
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
 
 ## 1.2.0
 

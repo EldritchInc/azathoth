@@ -3,13 +3,22 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from azathoth.inputs import (
     BINARY_MEDIA_TYPES,
     DEFAULT_MAX_INPUT_BYTES,
+    MAX_ORIGIN_URI_LENGTH,
     MEDIA_TYPES_BY_EXTENSION,
+    ORIGIN_ON_REFERENCE_MESSAGE,
+    InlineInput,
+    InMemoryContentStore,
     InputContentError,
+    InputOrigin,
+    InputPolicy,
+    InputResolutionError,
     check_binary_signature,
+    resolve_input,
     validate_media_type,
 )
 
@@ -75,3 +84,58 @@ def test_the_adr_says_where_a_pdf_header_may_be() -> None:
 def test_the_adr_states_the_clis_default_cap() -> None:
     assert DEFAULT_MAX_INPUT_BYTES == 10 * 1024 * 1024
     assert "the CLI's default of 10 MiB" in prose()
+
+
+def validation_message(
+    error: ValidationError,
+) -> str:
+    """Return one validation error's single message, without pydantic's prefix."""
+
+    (detail,) = error.errors(include_url=False)
+
+    return str(detail["msg"]).removeprefix("Value error, ")
+
+
+def test_the_adr_quotes_the_refusal_of_a_non_string_inline_binary_value() -> None:
+    with pytest.raises(ValidationError) as raised:
+        InlineInput(value=3, media_type="application/pdf")
+
+    assert_quoted(validation_message(raised.value))
+
+
+def test_the_adr_quotes_the_refusal_of_malformed_base64() -> None:
+    with pytest.raises(ValidationError) as raised:
+        InlineInput(value="JVBERi0xLjc", media_type="application/pdf")
+
+    assert_quoted(validation_message(raised.value))
+
+
+def test_the_adr_quotes_the_refusal_of_inline_content_beyond_the_cap() -> None:
+    with pytest.raises(InputResolutionError) as raised:
+        resolve_input(
+            InlineInput(value="AAAA" * 4, media_type="application/pdf"),
+            policy=InputPolicy(max_bytes=10),
+            store=InMemoryContentStore(),
+        )
+
+    assert_quoted(str(raised.value).replace("10 bytes", "10485760 bytes"))
+
+
+def test_the_adr_quotes_the_refusal_of_an_origin_on_a_reference() -> None:
+    assert_quoted(ORIGIN_ON_REFERENCE_MESSAGE)
+
+
+def test_the_adr_quotes_the_refusal_of_a_version_off_s3() -> None:
+    with pytest.raises(ValidationError) as raised:
+        InputOrigin(uri="https://docs.example.com/claims/0412", etag="9b2c")
+
+    assert_quoted(validation_message(raised.value))
+
+
+def test_the_adr_states_the_longest_origin_uri() -> None:
+    assert MAX_ORIGIN_URI_LENGTH == 2048
+    assert "at most 2048 characters" in prose()
+
+
+def test_the_adr_states_how_the_encoded_length_is_bounded() -> None:
+    assert "four characters for every three bytes" in prose()

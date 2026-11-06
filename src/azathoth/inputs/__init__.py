@@ -34,6 +34,7 @@ from azathoth.inputs.resolution import (
     file_path,
     file_uri,
     input_too_large,
+    resolve_inline_input,
     resolve_input,
 )
 from azathoth.inputs.s3 import (
@@ -55,7 +56,10 @@ from azathoth.inputs.s3_store import (
     s3_content_client,
 )
 from azathoth.inputs.source import (
+    MAX_ORIGIN_URI_LENGTH,
+    ORIGIN_ON_REFERENCE_MESSAGE,
     InlineInput,
+    InputOrigin,
     InputSourceError,
     ReferenceInput,
     WorkflowInputSource,
@@ -71,6 +75,10 @@ from azathoth.inputs.store import (
 )
 
 __all__ = [
+    "MAX_ORIGIN_URI_LENGTH",
+    "ORIGIN_ON_REFERENCE_MESSAGE",
+    "InputOrigin",
+    "resolve_inline_input",
     "BINARY_MEDIA_TYPES",
     "CONTENT_REF_KEY",
     "JPEG_MEDIA_TYPE",
