@@ -108,6 +108,38 @@ input, so a worker's `--max-input-bytes` (ADR 0108) and the CLI's default of
 10 MiB bound documents too. No cap of its own is added: a document beyond the
 cap is refused as any input is.
 
+### An S3 reference records the version it read
+
+An `s3://` key names whichever object is there now; its bytes may be
+replaced tomorrow. So a worker reading an `s3://` reference (ADR 0108)
+records, as the reference's origin, the `VersionId` and `ETag` of the
+response that held the bytes: the ranged read that is already made, with no
+call added. An empty object has no range to read, so it is read once more,
+plainly, for its version; that read is held to the cap too, in case the
+object was replaced in between.
+
+```json
+{
+  "uri": "s3://claims-intake/2026/11/claim-0412.pdf",
+  "origin": {
+    "uri": "s3://claims-intake/2026/11/claim-0412.pdf",
+    "version_id": "3HL4kqtJlcpXroDTDmJ.rmSpXd3dIbrHY",
+    "etag": "9b2cf535f27731c974343645a3985328"
+  },
+  "media_type": "application/pdf",
+  "size_bytes": 482113,
+  "digest": "<SHA-256 of the bytes>"
+}
+```
+
+An unversioned bucket gives an ETag and no version ID, and the origin says
+only what S3 said. Its quotes are dropped from the ETag. A `file://`
+reference names no version, so it records no origin, and its provenance is
+exactly what it always was.
+
+A resolver says it reads versions by offering `read_versioned` beside
+`read`. Resolvers that offer only `read` keep working, and record no origin.
+
 ### Inline content, as base64
 
 A job envelope's inline input may hold binary content, as standard base64
@@ -212,7 +244,8 @@ always has.
 - The database schema is unchanged. Binary content is stored in
   `content_blobs`, as text content is, and an inline input's provenance is
   an event payload, which gains only fields that are left out when absent.
-- Text and JSON inputs resolve exactly as before.
+- Text and JSON inputs resolve exactly as before, except that an `s3://`
+  one now records the version and ETag it was read from.
 - The standard tools `read_s3_object` and `split_s3_object` still refuse
   binary media types: a document inside a workflow will be read by the
   document tools, by digest.

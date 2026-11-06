@@ -139,3 +139,8 @@ def test_the_adr_states_the_longest_origin_uri() -> None:
 
 def test_the_adr_states_how_the_encoded_length_is_bounded() -> None:
     assert "four characters for every three bytes" in prose()
+
+
+def test_the_adr_says_an_s3_reference_records_the_version_it_read() -> None:
+    assert "the `VersionId` and `ETag` of the response that held the bytes" in prose()
+    assert "read once more, plainly, for its version" in prose()

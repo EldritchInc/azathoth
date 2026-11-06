@@ -31,6 +31,8 @@ from azathoth.inputs.resolution import (
     InputResolutionError,
     InputResolver,
     ResolvedInput,
+    VersionedContent,
+    VersionedInputResolver,
     file_path,
     file_uri,
     input_too_large,
@@ -75,6 +77,8 @@ from azathoth.inputs.store import (
 )
 
 __all__ = [
+    "VersionedContent",
+    "VersionedInputResolver",
     "MAX_ORIGIN_URI_LENGTH",
     "ORIGIN_ON_REFERENCE_MESSAGE",
     "InputOrigin",

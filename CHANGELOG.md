@@ -22,6 +22,11 @@ release dates are on the
   the input's digest in the run's `workflow.input.resolved` event. A request
   that names no origin digests exactly as before
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **An `s3://` input records the object version it was read from.** A
+  worker records the `VersionId` and `ETag` of the response that held the
+  bytes as the input's origin, so evidence names the exact object even after
+  the key is overwritten
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
 
 ## 1.2.0
 

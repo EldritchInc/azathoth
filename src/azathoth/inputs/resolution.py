@@ -68,6 +68,38 @@ class InputResolver(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class VersionedContent:
+    """Content read from a store that versions it, with the version that held it.
+
+    Either may be None when the store did not say: an unversioned S3 bucket
+    gives an ETag but no version ID.
+    """
+
+    content: bytes
+    version_id: str | None = None
+    etag: str | None = None
+
+
+@runtime_checkable
+class VersionedInputResolver(InputResolver, Protocol):
+    """A resolver that can also say which version of an object it read (ADR 0112)."""
+
+    def read_versioned(
+        self,
+        uri: str,
+        *,
+        max_bytes: int,
+    ) -> VersionedContent:
+        """Return the content and the version and ETag of the object that held it.
+
+        Raises:
+            InputResolutionError: The content is missing, unreadable, or
+                larger than `max_bytes`.
+        """
+        ...
+
+
 class FileInputResolver:
     """Read `file://` URIs that name an absolute path on the local host."""
 
@@ -241,10 +273,11 @@ def resolve_input(
     An inline JSON or text value is used as it is (see `resolve_inline_input`).
     A reference is read by the resolver for its scheme, within the policy's
     cap, decoded as its media type, and its content saved in the store before
-    the resolved input is returned. Binary content is checked against its
-    media type's signature instead of being decoded, and resolves to a
-    content handle naming it (ADR 0112). Nothing is stored for content that
-    is refused.
+    the resolved input is returned. A resolver that reads versions records
+    the version and ETag it read as the reference's origin. Binary content is
+    checked against its media type's signature instead of being decoded, and
+    resolves to a content handle naming it (ADR 0112). Nothing is stored for
+    content that is refused.
 
     Raises:
         InputResolutionError: The scheme is not accepted, or the content
@@ -268,10 +301,26 @@ def resolve_input(
             + (f"accepted schemes: {accepted}." if accepted else "no schemes are accepted.")
         )
 
-    content = resolver.read(
-        source.uri,
-        max_bytes=policy.max_bytes,
-    )
+    origin: InputOrigin | None = None
+
+    if isinstance(resolver, VersionedInputResolver):
+        read = resolver.read_versioned(
+            source.uri,
+            max_bytes=policy.max_bytes,
+        )
+        content = read.content
+
+        if read.version_id is not None or read.etag is not None:
+            origin = InputOrigin(
+                uri=source.uri,
+                version_id=read.version_id,
+                etag=read.etag,
+            )
+    else:
+        content = resolver.read(
+            source.uri,
+            max_bytes=policy.max_bytes,
+        )
 
     if len(content) > policy.max_bytes:
         raise input_too_large(source.uri, policy.max_bytes)
@@ -301,6 +350,7 @@ def resolve_input(
         media_type=source.media_type,
         provenance=InputProvenance(
             uri=source.uri,
+            origin=origin,
             media_type=source.media_type,
             size_bytes=len(content),
             digest=digest,
@@ -444,6 +494,8 @@ __all__ = [
     "InputResolutionError",
     "InputResolver",
     "ResolvedInput",
+    "VersionedContent",
+    "VersionedInputResolver",
     "file_path",
     "file_uri",
     "input_too_large",
