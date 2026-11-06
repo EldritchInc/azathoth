@@ -70,3 +70,26 @@ returns the `Extraction` an anchor made from the text names, and
 `store(store)` keeps the JSON. `SegmentedText.load(store, digest)` reads it
 back, returns `None` when the store lacks it, and raises `ExtractionError`
 when the content there is not a segmented text.
+
+## Checking Citations
+
+`verify_citation(segmented, segment_id=..., quote=..., origin=...)` checks
+one citation against the segment it names, and only that segment, and
+returns a `CitationCheck`: the `status`, the `segment_id` and `quote` as
+cited, how many `occurrences` of the quote the segment holds, and, when it
+was found, the `anchor`.
+
+`CitationStatus` is one of:
+
+- `verified`, found exactly;
+- `verified_normalized`, found once both are normalized: NFC, curly quotes
+  and dashes as plain ones (`PLAIN_PUNCTUATION`), whitespace runs as one
+  space, and the quote trimmed. Matching is case-sensitive;
+- `quote_not_found`, not in the segment, or empty;
+- `unknown_segment`, no segment of that ID.
+
+A found quote is anchored at its first occurrence by the source's own text,
+with up to `QUOTE_CONTEXT_LENGTH` (32) code points of the extraction's text
+around it, its position, and, on a PDF page, a fragment of the page and its
+box as a `viewrect`. `VERIFIED_STATUSES` are the two found statuses. A check
+holds an anchor and at least one occurrence exactly when it is one of them.

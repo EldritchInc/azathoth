@@ -8,6 +8,11 @@ from pydantic import ValidationError
 from azathoth.citations import (
     FRAGMENT_SPECIFICATIONS,
     PDF_FRAGMENT_SPECIFICATION,
+    PLAIN_PUNCTUATION,
+    QUOTE_CONTEXT_LENGTH,
+    BoundingBox,
+    CitationCheck,
+    CitationStatus,
     Extraction,
     FragmentSelector,
     Segment,
@@ -15,6 +20,7 @@ from azathoth.citations import (
     SourceAnchor,
     TextPositionSelector,
     TextQuoteSelector,
+    verify_citation,
 )
 from azathoth.inputs import content_bytes_digest
 
@@ -138,3 +144,58 @@ def test_the_adr_says_how_segment_ids_read_and_boxes_measure() -> None:
 
 def test_the_adr_says_extractions_store_as_canonical_json() -> None:
     assert "canonical JSON, with sorted keys and no insignificant whitespace" in prose()
+
+
+def test_the_adr_names_every_status() -> None:
+    for status in CitationStatus:
+        assert f"- `{status.value}`:" in text(), status
+
+
+def test_the_adr_states_the_context_length() -> None:
+    assert QUOTE_CONTEXT_LENGTH == 32
+    assert "up to 32 Unicode code points before and after it" in prose()
+
+
+def test_the_adr_states_the_normalization() -> None:
+    assert set(PLAIN_PUNCTUATION.values()) == {"'", '"', "-"}
+    assert "curly quotes as plain `'` and `\"`, and dashes and the minus sign as `-`" in prose()
+    assert "Matching stays case-sensitive" in prose()
+
+
+def test_the_adr_shows_the_viewrect_a_check_builds() -> None:
+    segmented = SegmentedText(
+        tool="segment_pdf",
+        version="1.3.0",
+        source_digest=DIGEST,
+        media_type="application/pdf",
+        text="Received on December 14.",
+        segments=(
+            Segment(
+                id="p3.s12",
+                start=0,
+                end=24,
+                page=3,
+                bbox=BoundingBox(left=72.0, top=144.5, width=310.25, height=14.0),
+            ),
+        ),
+    )
+
+    anchor = verify_citation(segmented, segment_id="p3.s12", quote="December").anchor
+
+    assert anchor is not None
+
+    fragment = anchor.selectors[2]
+
+    assert isinstance(fragment, FragmentSelector)
+    assert fragment.model_dump_json().replace('":"', '": "').replace('","', '", "') in text()
+
+
+def test_the_adr_shows_a_check_as_it_is_recorded() -> None:
+    assert list(CitationCheck.model_fields) == [
+        "status",
+        "segment_id",
+        "quote",
+        "occurrences",
+        "anchor",
+    ]
+    assert '"status": "verified_normalized"' in text()

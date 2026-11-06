@@ -208,7 +208,7 @@ def test_a_segmented_text_may_have_no_segments() -> None:
         ),
         pytest.param(
             (),
-            "Café",
+            "Cafe\u0301",
             "An extraction's text is in Unicode normalization form NFC.",
             id="not-nfc",
         ),

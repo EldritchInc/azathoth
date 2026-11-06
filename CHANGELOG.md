@@ -48,6 +48,13 @@ release dates are on the
   canonical JSON, so its digest names it, and an anchor can be checked again
   from the content store alone
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **A citation is checked against the segment it names, with no model
+  involved.** A quote found exactly is `verified`; one found only after
+  normalizing whitespace, quotes and dashes is `verified_normalized`; and
+  otherwise the check says `quote_not_found` or `unknown_segment`. A found
+  quote is anchored by the source's own text, its position, and on a PDF its
+  page and box
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
 
 ## 1.2.0
 

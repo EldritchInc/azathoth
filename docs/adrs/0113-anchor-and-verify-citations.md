@@ -158,6 +158,63 @@ the same digest. That digest is the extraction's identity: the `digest` of
 an anchor's `extraction`. Any anchor can then be checked again, from the
 content store alone, against exactly the text it was made from.
 
+### Checking a citation
+
+A citation names a segment and quotes it. Azathoth looks for the quote in
+that segment only, never elsewhere in the document, so a citation cannot
+borrow a sentence from a page it does not name. Checking it records one of
+four statuses:
+
+- `verified`: the quote is in the segment exactly;
+- `verified_normalized`: the quote is in the segment once both are
+  normalized, as described below;
+- `quote_not_found`: the segment exists, and the quote is not in it, or is
+  empty;
+- `unknown_segment`: the extraction has no segment of that ID.
+
+Models routinely re-flow whitespace and straighten punctuation, so a
+check that demanded byte-for-byte equality would fail citations that are
+plainly right. One normalization is applied, and only after an exact search
+fails: Unicode NFC; curly quotes as plain `'` and `"`, and dashes and the
+minus sign as `-`; every run of whitespace, line breaks and non-breaking
+spaces included, as one space; and the quote's own surrounding whitespace
+dropped. Matching stays case-sensitive: a change of case can change
+meaning. A normalized match has its own status, so a step can still demand
+exact quotes.
+
+A found quote is anchored at its first occurrence in the segment, and the
+check records how many times the quote occurs there. The anchor holds the
+source's own text, never the quote as cited:
+
+- a `TextQuoteSelector` with the source's exact text, and up to 32 Unicode
+  code points before and after it, from the extraction's whole text rather
+  than the segment alone, as a reader's tool searches the whole document;
+- a `TextPositionSelector` with its span in the extraction's text;
+- for a segment of a PDF page, a `FragmentSelector` naming the page, and the
+  segment's box as a `viewrect`, in points to the hundredth:
+
+```json
+{"type": "FragmentSelector", "value": "page=3&viewrect=72,144.5,310.25,14", "conformsTo": "http://tools.ietf.org/rfc/rfc3778"}
+```
+
+The origin is the one the source's input recorded (ADR 0112). It is given to
+the check by whoever checks it; neither the citation nor the extraction
+holds it.
+
+A check is recorded as it was cited and as it was found:
+
+```json
+{
+  "status": "verified_normalized",
+  "segment_id": "p3.s12",
+  "quote": "received on December 14",
+  "occurrences": 1,
+  "anchor": {"…": "…"}
+}
+```
+
+A failed check holds no anchor and no occurrences.
+
 ## Consequences
 
 - Places in content have one shape everywhere they will be recorded: in run
@@ -165,8 +222,10 @@ content store alone, against exactly the text it was made from.
   over MCP.
 - A process tool reading a cited value reads standard selectors, in plain
   JSON, with no Azathoth import.
-- Nothing is recorded yet. The models are the vocabulary the later
-  decisions of 1.3 record and check.
+- Nothing is recorded yet. The models and the check are the vocabulary
+  the later decisions of 1.3 record. Whatever records a check must not take
+  a citation a tool or a model returns as verified on its word: it checks
+  it again against the stored extraction, by digest.
 
 ## Alternatives Considered
 
