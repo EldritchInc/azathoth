@@ -238,9 +238,21 @@ always has.
 ## Consequences
 
 - A PDF or image can be the input of `workflow run` and `workflow invoke`,
-  and of a job envelope by `s3://` or inline. Nothing yet reads it: a prompt that
-  binds the workflow input renders the handle as JSON, as it renders any
-  value.
+  and of a job envelope by `s3://` or inline. Nothing yet reads it: a prompt
+  that binds the workflow input renders the handle as JSON, as it renders
+  any value.
+- `invocation show` prints an input's provenance after the input, under
+  `Input Provenance`, whenever the invocation recorded one, so the version
+  of an `s3://` object and an inline input's origin can be read back.
+- A run given binary content cannot become a benchmark case yet. A case
+  would hold only the handle, which names content in one deployment's store;
+  how cases carry content is decided with benchmarks of citations. The
+  refusal goes by the run's recorded media type, so an ordinary JSON input
+  shaped like a handle is not refused:
+
+  ```text
+  Run <RUN_ID> received application/pdf content, which a benchmark case cannot hold yet.
+  ```
 - The database schema is unchanged. Binary content is stored in
   `content_blobs`, as text content is, and an inline input's provenance is
   an event payload, which gains only fields that are left out when absent.

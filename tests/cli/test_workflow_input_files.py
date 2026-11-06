@@ -574,3 +574,72 @@ def test_invoke_refuses_a_missing_file_and_records_no_invocation(
         )
         == ()
     )
+
+
+PDF = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n"
+
+
+def test_run_gives_a_pdf_file_to_the_workflow_as_a_content_handle(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = write(tmp_path / "claim.pdf", PDF)
+
+    run_status(capsys, "workflow", "run", str(WORKFLOW_ID), "--input-file", str(path))
+
+    context = initial_context(database)
+    digest = content_bytes_digest(PDF)
+
+    assert context.events[0].payload == {
+        "input": {
+            "content": {
+                "digest": digest,
+                "media_type": "application/pdf",
+                "size_bytes": len(PDF),
+            }
+        }
+    }
+    assert context.events[1].payload == resolved_payload(path, "application/pdf", PDF)
+    assert SQLiteContentStore(database).get(digest) == PDF
+
+
+def test_run_refuses_a_file_that_is_not_what_its_extension_says(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = write(tmp_path / "claim.pdf", CONTENT)
+
+    status, output, errors = run_status(
+        capsys,
+        "workflow",
+        "run",
+        str(WORKFLOW_ID),
+        "--input-file",
+        str(path),
+    )
+
+    assert (status, output, errors) == (
+        1,
+        "",
+        f"Input {file_uri(path)}: Content is not application/pdf: "
+        "no PDF header in its first 1024 bytes.\n",
+    )
+    assert SQLiteWorkflowRunRepository(database).runs_for_workflow(WORKFLOW_ID) == ()
+    assert not SQLiteContentStore(database).contains(content_bytes_digest(CONTENT))
+
+
+def test_the_media_type_help_names_every_accepted_media_type(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit):
+        main(("workflow", "run", "--help"))
+
+    help_text = " ".join(capsys.readouterr().out.split())
+
+    assert "Workflow input read from a JSON, text, PDF or image file." in help_text
+    assert (
+        "Media type of --input-file: application/json, a text/* type, application/pdf, "
+        "image/jpeg, image/png or image/webp." in help_text
+    )

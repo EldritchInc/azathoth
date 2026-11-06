@@ -27,6 +27,11 @@ release dates are on the
   bytes as the input's origin, so evidence names the exact object even after
   the key is overwritten
   ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **`invocation show` prints an input's provenance.** Its URI or inline
+  origin, version, media type, size and digest follow the input under
+  `Input Provenance`. A run given a PDF or image cannot become a benchmark
+  case yet, and `benchmark add-case --from-run` says so
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
 
 ## 1.2.0
 

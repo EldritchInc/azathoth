@@ -783,6 +783,15 @@ and always has a media type (ADR 0096):
 {"uri": "file:///Users/you/chapter.md", "media_type": "text/markdown"}
 ```
 
+A PDF or an image (`application/pdf`, `image/png`, `image/jpeg`,
+`image/webp`) is binary content: it is checked against its media type's
+signature, kept, and given to the workflow as a content handle naming its
+digest, media type and size, never as its bytes (ADR 0112):
+
+```json
+{"content": {"digest": "<SHA-256>", "media_type": "application/pdf", "size_bytes": 482113}}
+```
+
 References are resolved at the edge, by the command that received them,
 before the run starts, so steps only ever see values. JSON content is parsed
 and text content becomes a string. Each entry point decides which URI
@@ -792,8 +801,12 @@ capped, at 10 MiB unless a worker sets its own cap of up to 100 MiB.
 
 The resolved content is kept in a content-addressed store, by the SHA-256
 digest of its bytes, and the run records a `workflow.input.resolved` event
-with the reference's URI, media type, size and digest. An inline input
-records exactly the `workflow.input.received` event it always has. The
+with the reference's URI, media type, size and digest, and, for `s3://`,
+the `VersionId` and `ETag` of the object read. A job's inline input may hold
+a document as base64, and any inline input may name its `origin`, where its
+content durably lives; an inline input that is binary or names an origin is
+recorded too, marked `inline`. Any other inline input records exactly the
+`workflow.input.received` event it always has. The
 store is a table in the database, or, with `AZATHOTH_CONTENT_STORE`, a
 bucket in S3. The CLI accepts local files:
 

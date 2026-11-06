@@ -1,4 +1,4 @@
-"""Benchmark cases built from the evidence of recorded workflow runs."""
+"""Benchmark cases built from the evidence of recorded workflow runs (ADR 0112)."""
 
 from collections.abc import Iterable
 
@@ -10,12 +10,16 @@ from azathoth.evaluation import (
     OutcomeComparison,
     json_schema_validator,
 )
+from azathoth.inputs import is_binary_media_type
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.feedback import (
     WorkflowRunFeedback,
     WorkflowRunFeedbackDisposition,
 )
-from azathoth.workflows.input import WORKFLOW_INPUT_EVENT_TYPE
+from azathoth.workflows.input import (
+    WORKFLOW_INPUT_EVENT_TYPE,
+    WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
+)
 
 SOURCE_RUN_METADATA_KEY = "source_run_id"
 SOURCE_FEEDBACK_METADATA_KEY = "source_feedback_id"
@@ -33,9 +37,13 @@ def workflow_run_input(
     The input is the payload of the run's single canonical workflow input
     event. A received JSON null is input like any other value.
 
+    A run given binary content is refused, as its recorded provenance says:
+    its input is a content handle, and a benchmark case cannot carry the
+    content it names yet (ADR 0112).
+
     Raises:
-        BenchmarkCaseSourceError: The run received no workflow input, or
-            received it more than once.
+        BenchmarkCaseSourceError: The run received no workflow input,
+            received it more than once, or received binary content.
     """
 
     events = tuple(
@@ -49,6 +57,19 @@ def workflow_run_input(
 
     if len(events) > 1:
         raise BenchmarkCaseSourceError(f"Run {run.id} received workflow input more than once.")
+
+    for event in run.initial_context.events:
+        media_type = event.payload.get("media_type")
+
+        if (
+            event.event_type == WORKFLOW_INPUT_RESOLVED_EVENT_TYPE
+            and isinstance(media_type, str)
+            and is_binary_media_type(media_type)
+        ):
+            raise BenchmarkCaseSourceError(
+                f"Run {run.id} received {media_type} content, which a benchmark case "
+                "cannot hold yet."
+            )
 
     return events[0].payload["input"]
 

@@ -9,6 +9,7 @@ from azathoth.cli.rendering._json import render_json_value
 from azathoth.cli.rendering.lineage import render_lineage_lines
 from azathoth.cli.rendering.resumes import render_resume_lines
 from azathoth.workflows import (
+    WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
     ProductionInvocation,
     ProductionInvocationErrorCode,
     ProductionInvocationFailure,
@@ -64,7 +65,9 @@ def render_production_invocation(
 ) -> str:
     """Render the full recorded history of one production invocation.
 
-    An invocation started through a job envelope names its idempotency key
+    An input that has provenance, a reference or an inline input that is
+    binary or names an origin, is followed by it (ADR 0112). An invocation
+    started through a job envelope names its idempotency key
     and request digest (ADR 0097). An invocation started by a step of another
     run names its depth, the parent step and the root run (ADR 0104). One
     whose run was resumed names how often, after its run (ADR 0105).
@@ -103,6 +106,16 @@ def render_production_invocation(
             render_json_value(production_invocation_input(invocation)),
         )
     )
+
+    provenance = production_invocation_input_provenance(invocation)
+
+    if provenance is not None:
+        lines.extend(
+            (
+                "Input Provenance:",
+                render_json_value(provenance),
+            )
+        )
 
     if isinstance(
         result,
@@ -157,6 +170,18 @@ def production_invocation_input(
     for event in invocation.initial_context.events:
         if event.event_type == PRODUCTION_INVOCATION_EVENT_TYPE:
             return event.payload.get("input")
+
+    return None
+
+
+def production_invocation_input_provenance(
+    invocation: ProductionInvocation,
+) -> JsonValue:
+    """Return the input provenance recorded on one invocation, or None (ADR 0112)."""
+
+    for event in invocation.initial_context.events:
+        if event.event_type == WORKFLOW_INPUT_RESOLVED_EVENT_TYPE:
+            return dict(event.payload)
 
     return None
 

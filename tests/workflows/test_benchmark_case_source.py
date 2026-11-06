@@ -1,4 +1,4 @@
-"""Tests for building benchmark cases from recorded workflow runs."""
+"""Tests for building benchmark cases from recorded workflow runs (ADR 0112)."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -8,6 +8,7 @@ from pydantic import JsonValue
 
 from azathoth.context import Context, ContextEvent
 from azathoth.evaluation import OutcomeComparison
+from azathoth.inputs import InputProvenance, ResolvedInput, content_bytes_digest
 from azathoth.workflows import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
@@ -21,6 +22,7 @@ from azathoth.workflows import (
     WorkflowStepStatus,
     benchmark_case_from_run,
     create_workflow_input_event,
+    create_workflow_input_events,
     latest_corrected_output,
     workflow_run_input,
 )
@@ -170,6 +172,84 @@ def test_workflow_run_input_rejects_input_received_more_than_once() -> None:
         )
 
     assert str(raised.value) == f"Run {RUN_ID} received workflow input more than once."
+
+
+def resolved_events(
+    media_type: str,
+    value: JsonValue,
+    *,
+    inline: bool = False,
+) -> tuple[ContextEvent, ...]:
+    """Create the events of one input resolved with provenance."""
+
+    return create_workflow_input_events(
+        ResolvedInput(
+            value=value,
+            media_type=media_type,
+            provenance=InputProvenance(
+                uri=None if inline else "file:///claims/claim-0412.pdf",
+                inline=inline,
+                media_type=media_type,
+                size_bytes=8,
+                digest=content_bytes_digest(b"%PDF-1.7"),
+            ),
+        ),
+        producer="azathoth.test",
+        occurred_at=STARTED_AT,
+    )
+
+
+@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("media_type", ["application/pdf", "image/png"])
+def test_workflow_run_input_refuses_a_run_given_binary_content(
+    media_type: str,
+    inline: bool,
+) -> None:
+    handle: JsonValue = {
+        "content": {
+            "digest": content_bytes_digest(b"%PDF-1.7"),
+            "media_type": media_type,
+            "size_bytes": 8,
+        }
+    }
+
+    with pytest.raises(BenchmarkCaseSourceError) as raised:
+        workflow_run_input(create_run(*resolved_events(media_type, handle, inline=inline)))
+
+    assert str(raised.value) == (
+        f"Run {RUN_ID} received {media_type} content, which a benchmark case cannot hold yet."
+    )
+
+
+def test_workflow_run_input_accepts_a_run_given_a_text_reference() -> None:
+    run = create_run(*resolved_events("text/plain", "the old ones wait"))
+
+    assert workflow_run_input(run) == "the old ones wait"
+
+
+def test_workflow_run_input_accepts_json_that_only_looks_like_a_content_handle() -> None:
+    lookalike: JsonValue = {
+        "content": {
+            "digest": content_bytes_digest(b"%PDF-1.7"),
+            "media_type": "application/pdf",
+            "size_bytes": 8,
+        }
+    }
+
+    assert workflow_run_input(create_run(input_event(lookalike))) == lookalike
+
+
+def test_workflow_run_input_reads_binary_media_types_only_from_the_resolved_event() -> None:
+    run = create_run(
+        input_event(),
+        ContextEvent(
+            event_type="ticket.attachment.listed",
+            payload={"media_type": "application/pdf"},
+            producer="azathoth.test",
+        ),
+    )
+
+    assert workflow_run_input(run) == INPUT
 
 
 def test_latest_corrected_output_is_none_without_feedback() -> None:

@@ -2641,6 +2641,26 @@ Result:
 `Caller Metadata` appears only when metadata was recorded. `Input` is the
 payload the caller supplied to `workflow invoke`.
 
+An input that has provenance is followed by it: one given by reference, such
+as `--input-file` or a worker's `s3://`, and an inline job input that holds
+a document or names an origin (ADR 0112). An `s3://` input names the object
+version it was read from:
+
+```text
+Input Provenance:
+{
+  "uri": "s3://claims-intake/2026/11/claim-0412.pdf",
+  "origin": {
+    "uri": "s3://claims-intake/2026/11/claim-0412.pdf",
+    "version_id": "3HL4kqtJlcpXroDTDmJ.rmSpXd3dIbrHY",
+    "etag": "9b2cf535f27731c974343645a3985328"
+  },
+  "media_type": "application/pdf",
+  "size_bytes": 482113,
+  "digest": "<SHA-256>"
+}
+```
+
 An invocation started by [`job run`](#run-a-job) also names its idempotency
 key and request digest, right after `Run ID`:
 
@@ -3747,6 +3767,9 @@ no workflow input
 workflow input received more than once
     Run <RUN_ID> received workflow input more than once.
 
+a PDF or image input, which a case cannot hold yet (ADR 0112)
+    Run <RUN_ID> received application/pdf content, which a benchmark case cannot hold yet.
+
 no --expected and no corrected output
     Run <RUN_ID> has no corrected output; pass --expected.
 
@@ -4065,17 +4088,31 @@ azathoth workflow run <WORKFLOW_ID> --input-file notes.log --media-type text/pla
 .txt                text/plain         decoded into a string
 .md, .markdown      text/markdown      decoded into a string
 .csv                text/csv           decoded into a string
+.pdf                application/pdf    kept, given as a content handle
+.png                image/png          kept, given as a content handle
+.jpg, .jpeg         image/jpeg         kept, given as a content handle
+.webp               image/webp         kept, given as a content handle
 ```
 
 `--media-type` gives any other file its media type, or overrides the one its
-extension implies. It accepts `application/json` and any `text/*` type, as a
+extension implies. It accepts `application/json`, any `text/*` type,
+`application/pdf`, `image/jpeg`, `image/png` and `image/webp`, as a
 lowercase `type/subtype` with no parameters; any other value is a usage
-error. Content is UTF-8, and a leading byte order mark is dropped.
+error. Text content is UTF-8, and a leading byte order mark is dropped.
+
+A PDF or an image is never decoded (ADR 0112). Its content must carry its
+media type's signature, and the workflow receives a content handle naming
+it instead of its bytes:
+
+```json
+{"content": {"digest": "<SHA-256>", "media_type": "application/pdf", "size_bytes": 482113}}
+```
 
 The file is resolved before anything else happens:
 
 1. its content is read, up to 10 MiB;
-2. it is decoded as its media type;
+2. it is decoded as its media type, or, for a PDF or an image, checked
+   against its media type's signature;
 3. its bytes are saved in the configured database's content store, keyed by
    their SHA-256 digest, once however many runs read them;
 4. the run, or production invocation, starts.
@@ -4099,6 +4136,7 @@ command prints why and exits with status 1:
 Input file:///Users/you/missing.md does not exist.
 Input file:///Users/you/huge.txt is larger than the limit of 10485760 bytes.
 Input file:///Users/you/request.json: Content is not valid JSON: Expecting value.
+Input file:///Users/you/claim.pdf: Content is not application/pdf: no PDF header in its first 1024 bytes.
 Cannot tell the media type of notes.log from its extension; give it with --media-type.
 --media-type requires --input-file.
 ```
