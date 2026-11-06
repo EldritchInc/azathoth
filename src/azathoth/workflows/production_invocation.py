@@ -164,8 +164,9 @@ def create_production_invocation(
     workflow input therefore renders identically when optimized against a
     benchmark and when invoked in production.
 
-    When the input was resolved from a reference, its provenance follows as
-    a `workflow.input.resolved` event (ADR 0096). An invocation started
+    When the input has provenance, from a reference or an inline input that
+    is binary or names an origin, it follows as a `workflow.input.resolved`
+    event (ADR 0096, ADR 0112). An invocation started
     through a job envelope records its idempotency (ADR 0097). An invocation
     started by a step of another run records its lineage last, as a
     `workflow.lineage.received` event (ADR 0104).

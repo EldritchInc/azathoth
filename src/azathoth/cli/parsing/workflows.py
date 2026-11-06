@@ -402,8 +402,8 @@ def _add_input_file_arguments(
         default=None,
         metavar="FILE",
         help=(
-            "Workflow input read from a JSON or text file. Its media type comes "
-            "from its extension unless --media-type gives it."
+            "Workflow input read from a JSON, text, PDF or image file. Its media type "
+            "comes from its extension unless --media-type gives it."
         ),
     )
 
@@ -413,7 +413,10 @@ def _add_input_file_arguments(
         type=media_type,
         default=None,
         metavar="TYPE",
-        help="Media type of --input-file: application/json or a text/* type.",
+        help=(
+            "Media type of --input-file: application/json, a text/* type, application/pdf, "
+            "image/jpeg, image/png or image/webp."
+        ),
     )
 
 

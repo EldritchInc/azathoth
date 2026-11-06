@@ -2,11 +2,13 @@
 
 `azathoth.inputs` describes the external input a workflow is given
 (ADR 0096). An input is either an inline value or a reference to content,
-and always has a media type:
+and always has a media type. A PDF or an image is binary content, given to
+the workflow as a content handle (ADR 0112):
 
 ```json
 {"value": {"text": "the old ones wait"}, "media_type": "application/json"}
 {"uri": "file:///Users/you/chapter.md", "media_type": "text/markdown"}
+{"uri": "s3://claims-intake/2026/11/claim-0412.pdf", "media_type": "application/pdf"}
 ```
 
 ```python
@@ -22,7 +24,10 @@ from azathoth.inputs import (
 ## Sources
 
 `InlineInput` holds its content. Its media type defaults to
-`application/json`, and a `text/*` media type requires a string value.
+`application/json`, a `text/*` media type requires a string value, and a
+binary media type requires standard, padded base64 with no whitespace. Any
+inline input may name its `origin`, an `InputOrigin` (see
+[Binary Content](#binary-content)).
 
 `ReferenceInput` names its content by URI, and must state its media type.
 The URI needs a scheme; a Windows drive letter is not one. Which schemes may
@@ -31,7 +36,8 @@ the source.
 
 The shape is closed. `decode_input_source(data)` reads one source from JSON
 and raises `InputSourceError` when the data holds both or neither of `value`
-and `uri`, or any key other than `media_type`. `WorkflowInputSource` is the
+and `uri`, a `uri` with an `origin`, or any key other than `media_type` and,
+beside `value`, `origin`. `WorkflowInputSource` is the
 same union as a pydantic type, so a model can embed a source and parse it by
 its key.
 
@@ -41,9 +47,12 @@ A media type is a lowercase `type/subtype` with no parameters.
 `validate_media_type` accepts:
 
 - `application/json`, decoded by parsing JSON;
-- any `text/*` type, decoded as a string.
+- any `text/*` type, decoded as a string;
+- `application/pdf`, `image/png`, `image/jpeg` and `image/webp`
+  (`BINARY_MEDIA_TYPES`), never decoded: their content is kept and named by
+  a content handle.
 
-Binary media types are rejected until multimodal inputs arrive.
+Any other media type is refused, naming those accepted.
 
 `decode_content(content, media_type)` turns resolved bytes into the value a
 workflow receives. Content is UTF-8, and a leading byte order mark is
@@ -51,8 +60,8 @@ dropped. JSON content may not contain `NaN` or infinities, which are not
 JSON. Failures raise `InputContentError`.
 
 `infer_media_type(name)` maps the extensions `.json`, `.txt`, `.md`,
-`.markdown` and `.csv` to their media types, and returns `None` for any
-other.
+`.markdown`, `.csv`, `.pdf`, `.png`, `.jpg`, `.jpeg` and `.webp` to their
+media types, and returns `None` for any other.
 
 ## Resolving at the Edge
 
@@ -86,7 +95,8 @@ at most one byte past the cap. `file_uri(path)` makes a path absolute and
 returns its URI.
 
 `resolve_input` returns a `ResolvedInput`: the value and its media type. An
-inline value is used as it is. A reference is read, checked against the cap,
+inline JSON or text value naming no origin is used as it is; any other
+inline input is resolved as [Binary Content](#binary-content) describes. A reference is read, checked against the cap,
 decoded as its media type, and saved in the content store; its
 `InputProvenance` records the URI, media type, size and digest. A scheme the
 policy does not accept is refused before anything is read, and nothing is
@@ -96,6 +106,49 @@ stored for content that is refused. Every refusal raises
 The CLI resolves `workflow run --input-file` and `workflow invoke
 --input-file` under `azathoth.cli.CLI_INPUT_POLICY`, which accepts `file://`
 only.
+
+## Binary Content
+
+Binary content is checked against its media type's signature before it is
+kept (`check_binary_signature`): a PDF's `%PDF-` header within its first
+1024 bytes, a PNG's signature, a JPEG's start-of-image marker, or a RIFF
+container holding `WEBP`. It is never decoded. It is stored, and the
+workflow receives a `ContentRef` as its value:
+
+```json
+{"content": {"digest": "<SHA-256>", "media_type": "application/pdf", "size_bytes": 482113}}
+```
+
+`content_ref_from_value(value)` returns the `ContentRef` a value is, or
+`None` when it is not exactly one. A handle names content; it does not grant
+it. Whatever reads content through a handle first checks that the digest was
+recorded by a `workflow.input.resolved` event of its own run or lineage.
+
+An inline input may hold binary content as base64, and any inline input may
+name where its content durably lives:
+
+```json
+{
+  "value": "JVBERi0xLjcK",
+  "media_type": "application/pdf",
+  "origin": {"uri": "s3://claims-intake/2026/11/claim-0412.pdf", "etag": "9b2cf535"}
+}
+```
+
+`resolve_inline_input` checks base64 against the cap by its encoded length,
+four characters for every three bytes, before decoding it, and by its size
+after. An inline input that is binary, or names an origin, has an
+`InputProvenance` marked `inline`, with no URI and with its origin; its
+content is stored, a JSON value in its canonical form. An origin's `uri` is
+an absolute URI with no fragment, of at most 2048 characters, and only an
+`s3://` origin may name a `version_id` and an `etag`. An origin is recorded
+as given, never read; a reference may not name one.
+
+A resolver that reads versions offers `read_versioned` beside `read`, and is
+a `VersionedInputResolver`. It returns `VersionedContent`: the bytes, and
+the version ID and ETag of the object that held them, which `resolve_input`
+records as the reference's origin. `S3InputResolver` is one;
+`FileInputResolver` is not, so a `file://` reference records no origin.
 
 ## S3 References
 
@@ -126,7 +179,10 @@ names an object, and the provenance's digest pins exactly which bytes ran.
 The media type is the reference's own; S3's `Content-Type` is ignored.
 
 An allowed object is read with one ranged GET of at most the cap plus one
-byte, so an object beyond the cap is refused without downloading it. Each
+byte, so an object beyond the cap is refused without downloading it. The
+GET's `VersionId` and `ETag` are recorded as the reference's origin, naming
+the exact object read; an empty object, which has no range to read, is read
+once more, plainly, for them (ADR 0112). Each
 refusal is an `InputResolutionError`, which an entry point reports to the
 request's caller:
 
@@ -179,8 +235,10 @@ counts the words of a file this way.
 
 `azathoth.workflows.create_workflow_input_events(resolved, producer=...)`
 turns a resolved input into a run's initial events: the canonical
-`workflow.input.received` event with the value, followed, for a reference
-only, by a `workflow.input.resolved` event holding its provenance.
+`workflow.input.received` event with the value, followed, for an input that
+has provenance, by a `workflow.input.resolved` event holding it. A reference
+always has provenance; an inline input has it when it is binary or names an
+origin (ADR 0112).
 
 ## Content Store
 
@@ -243,4 +301,5 @@ with the same `resolve_input`, under the policy of the entry point that
 received it (ADR 0097). `azathoth job run` uses the CLI's policy, `file://`
 only. A request's digest names a reference by its URI and media type, never
 by its content, so a retried request is recognized without reading the
-content again.
+content again. An inline input's `origin` is part of the digest; one that
+names none digests exactly as it did before inputs could name one.

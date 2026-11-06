@@ -6,6 +6,33 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+### Documents In
+
+- **A workflow's input can be a PDF or an image.** `application/pdf`,
+  `image/png`, `image/jpeg` and `image/webp` join JSON and `text/*`, by
+  reference from the CLI or a worker. The content is checked against its
+  media type's signature, kept in the content store, and given to the
+  workflow as a content handle naming its digest, media type and size
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **A job's inline input can hold a document as base64, and name its
+  origin.** Any inline input may name where its content durably lives, such
+  as an S3 object with its version ID and ETag; the origin is recorded with
+  the input's digest in the run's `workflow.input.resolved` event. A request
+  that names no origin digests exactly as before
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **An `s3://` input records the object version it was read from.** A
+  worker records the `VersionId` and `ETag` of the response that held the
+  bytes as the input's origin, so evidence names the exact object even after
+  the key is overwritten
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+- **`invocation show` prints an input's provenance.** Its URI or inline
+  origin, version, media type, size and digest follow the input under
+  `Input Provenance`. A run given a PDF or image cannot become a benchmark
+  case yet, and `benchmark add-case --from-run` says so
+  ([ADR 0112](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0112-accept-binary-inputs.md)).
+
 ## 1.2.0
 
 Azathoth 1.2 serves workflows to AI clients. `azathoth-mcp`, a new package

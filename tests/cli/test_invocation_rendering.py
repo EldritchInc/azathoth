@@ -1,4 +1,4 @@
-"""Tests for human-readable production invocation history rendering."""
+"""Tests for human-readable production invocation history rendering (ADR 0112)."""
 
 from datetime import UTC, datetime
 from uuid import UUID
@@ -10,6 +10,7 @@ from azathoth.cli import (
     render_production_invocation_summaries,
 )
 from azathoth.context import Context
+from azathoth.inputs import InputOrigin, InputProvenance, content_bytes_digest
 from azathoth.workflows import (
     ProductionInvocation,
     ProductionInvocationErrorCode,
@@ -208,3 +209,62 @@ def test_invocation_without_recorded_input_renders_null_input() -> None:
     )
 
     assert rendered.endswith("Input:\nnull")
+
+
+def test_an_invocation_with_input_provenance_renders_it_after_its_input() -> None:
+    digest = content_bytes_digest(b"%PDF-1.7")
+    handle: JsonValue = {
+        "content": {"digest": digest, "media_type": "application/pdf", "size_bytes": 8}
+    }
+    uri = "s3://claims-intake/2026/11/claim-0412.pdf"
+
+    invocation = create_production_invocation(
+        workflow_id=WORKFLOW_ID,
+        payload=handle,
+        input_provenance=InputProvenance(
+            uri=uri,
+            origin=InputOrigin(uri=uri, version_id="3HL4kqtJlcpXroDTDmJ", etag="9b2cf535"),
+            media_type="application/pdf",
+            size_bytes=8,
+            digest=digest,
+        ),
+    ).model_copy(update={"created_at": CREATED_AT})
+
+    rendered = render_production_invocation(invocation, result=None, run_id=None)
+
+    assert rendered.endswith(
+        "\n".join(
+            (
+                "Input:",
+                "{",
+                '  "content": {',
+                f'    "digest": "{digest}",',
+                '    "media_type": "application/pdf",',
+                '    "size_bytes": 8',
+                "  }",
+                "}",
+                "Input Provenance:",
+                "{",
+                f'  "uri": "{uri}",',
+                '  "origin": {',
+                f'    "uri": "{uri}",',
+                '    "version_id": "3HL4kqtJlcpXroDTDmJ",',
+                '    "etag": "9b2cf535"',
+                "  },",
+                '  "media_type": "application/pdf",',
+                '  "size_bytes": 8,',
+                f'  "digest": "{digest}"',
+                "}",
+            )
+        )
+    )
+
+
+def test_an_invocation_without_input_provenance_renders_none() -> None:
+    rendered = render_production_invocation(
+        create_invocation({"text": "hello"}),
+        result=None,
+        run_id=None,
+    )
+
+    assert "Input Provenance:" not in rendered

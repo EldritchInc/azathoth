@@ -66,8 +66,8 @@ def test_json_content_rejects_non_finite_numbers(
 
 
 def test_unsupported_media_types_are_rejected() -> None:
-    with pytest.raises(InputContentError, match="Media type 'image/png' is not supported"):
-        decode_content(b"\x89PNG", "image/png")
+    with pytest.raises(InputContentError, match="Media type 'image/gif' is not supported"):
+        decode_content(b"GIF89a", "image/gif")
 
 
 def test_input_content_error_is_a_value_error() -> None:
@@ -95,7 +95,7 @@ def test_media_types_are_inferred_from_known_extensions(
 
 @pytest.mark.parametrize(
     "name",
-    ["scan.pdf", "photo.png", "README", "notes.", ".json"],
+    ["animation.gif", "archive.zip", "README", "notes.", ".json"],
 )
 def test_unknown_extensions_infer_no_media_type(
     name: str,

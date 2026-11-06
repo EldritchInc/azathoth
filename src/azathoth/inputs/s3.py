@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict
 
-from azathoth.inputs.resolution import InputResolutionError, input_too_large
+from azathoth.inputs.resolution import InputResolutionError, VersionedContent, input_too_large
 
 S3_SCHEME: Final = "s3"
 """The scheme of references to objects in Amazon S3."""
@@ -127,7 +127,7 @@ def s3_object(
 
 
 class S3InputResolver:
-    """Read `s3://` references inside the allowed locations."""
+    """Read `s3://` references inside the allowed locations, with their versions."""
 
     def __init__(
         self,
@@ -166,6 +166,39 @@ class S3InputResolver:
                 installed.
         """
 
+        return self._read(uri, max_bytes=max_bytes, versioned=False).content
+
+    def read_versioned(
+        self,
+        uri: str,
+        *,
+        max_bytes: int,
+    ) -> VersionedContent:
+        """Return an allowed object's content, with the version ID and ETag that held it.
+
+        Both come from the response that held the bytes, so they name exactly
+        the object read. An empty object has no range to read, so it is read
+        once more, plainly, for its version (ADR 0112).
+
+        Raises:
+            InputResolutionError: The URI names no object, lies outside the
+                allowed locations, or the object is missing, may not be read,
+                or is larger than `max_bytes`.
+            InputUnavailableError: S3 could not be reached, or boto3 is not
+                installed.
+        """
+
+        return self._read(uri, max_bytes=max_bytes, versioned=True)
+
+    def _read(
+        self,
+        uri: str,
+        *,
+        max_bytes: int,
+        versioned: bool,
+    ) -> VersionedContent:
+        """Read an allowed object within the cap, plainly again for an empty one's version."""
+
         bucket, key = s3_object(uri)
 
         if not any(location.allows(bucket, key) for location in self.allowed):
@@ -175,28 +208,13 @@ class S3InputResolver:
                 f"Input {uri} is not in an allowed location; allowed: {allowed}."
             )
 
-        botocore_exceptions = _import("botocore.exceptions")
-        client = self._reader()
+        response = self._get(uri, bucket, key, ranged_to=max_bytes)
 
-        try:
-            response = client.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{max_bytes}")
-        except botocore_exceptions.ClientError as exc:
-            error = exc.response.get("Error", {})
-            code = str(error.get("Code", "Unknown"))
+        if response is None:
+            if not versioned:
+                return VersionedContent(content=b"")
 
-            if code == EMPTY_RANGE_CODE:
-                return b""
-
-            if code in MISSING_OBJECT_CODES:
-                raise InputResolutionError(f"Input {uri} does not exist.") from exc
-
-            raise InputResolutionError(
-                f"Unable to read input {uri}: {code}: {error.get('Message', '')}"
-            ) from exc
-        except botocore_exceptions.BotoCoreError as exc:
-            raise InputUnavailableError(
-                f"Unable to reach S3 for input {uri}: {type(exc).__name__}: {exc}"
-            ) from exc
+            response = self._get(uri, bucket, key, ranged_to=None)
 
         stream = response["Body"]
 
@@ -208,7 +226,51 @@ class S3InputResolver:
         if len(content) > max_bytes:
             raise input_too_large(uri, max_bytes)
 
-        return content
+        etag = str(response.get("ETag") or "").strip('"')
+        version_id = response.get("VersionId")
+
+        return VersionedContent(
+            content=content,
+            version_id=str(version_id) if version_id else None,
+            etag=etag or None,
+        )
+
+    def _get(
+        self,
+        uri: str,
+        bucket: str,
+        key: str,
+        *,
+        ranged_to: int | None,
+    ) -> Any:
+        """Get the object, up to one byte past `ranged_to` when given.
+
+        Returns None when a ranged get finds the object empty.
+        """
+
+        botocore_exceptions = _import("botocore.exceptions")
+        client = self._reader()
+        parameters = {} if ranged_to is None else {"Range": f"bytes=0-{ranged_to}"}
+
+        try:
+            return client.get_object(Bucket=bucket, Key=key, **parameters)
+        except botocore_exceptions.ClientError as exc:
+            error = exc.response.get("Error", {})
+            code = str(error.get("Code", "Unknown"))
+
+            if code == EMPTY_RANGE_CODE and ranged_to is not None:
+                return None
+
+            if code in MISSING_OBJECT_CODES:
+                raise InputResolutionError(f"Input {uri} does not exist.") from exc
+
+            raise InputResolutionError(
+                f"Unable to read input {uri}: {code}: {error.get('Message', '')}"
+            ) from exc
+        except botocore_exceptions.BotoCoreError as exc:
+            raise InputUnavailableError(
+                f"Unable to reach S3 for input {uri}: {type(exc).__name__}: {exc}"
+            ) from exc
 
     def _reader(
         self,

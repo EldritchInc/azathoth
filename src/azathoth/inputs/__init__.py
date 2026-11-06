@@ -1,11 +1,23 @@
 """External workflow inputs: inline values or references, with media types."""
 
+from azathoth.inputs.content import (
+    CONTENT_REF_KEY,
+    ContentRef,
+    content_ref_from_value,
+)
 from azathoth.inputs.media import (
+    BINARY_MEDIA_TYPES,
+    JPEG_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
     MEDIA_TYPES_BY_EXTENSION,
+    PDF_MEDIA_TYPE,
+    PNG_MEDIA_TYPE,
+    WEBP_MEDIA_TYPE,
     InputContentError,
+    check_binary_signature,
     decode_content,
     infer_media_type,
+    is_binary_media_type,
     is_supported_media_type,
     is_text_media_type,
     validate_media_type,
@@ -19,9 +31,12 @@ from azathoth.inputs.resolution import (
     InputResolutionError,
     InputResolver,
     ResolvedInput,
+    VersionedContent,
+    VersionedInputResolver,
     file_path,
     file_uri,
     input_too_large,
+    resolve_inline_input,
     resolve_input,
 )
 from azathoth.inputs.s3 import (
@@ -43,7 +58,10 @@ from azathoth.inputs.s3_store import (
     s3_content_client,
 )
 from azathoth.inputs.source import (
+    MAX_ORIGIN_URI_LENGTH,
+    ORIGIN_ON_REFERENCE_MESSAGE,
     InlineInput,
+    InputOrigin,
     InputSourceError,
     ReferenceInput,
     WorkflowInputSource,
@@ -59,6 +77,22 @@ from azathoth.inputs.store import (
 )
 
 __all__ = [
+    "VersionedContent",
+    "VersionedInputResolver",
+    "MAX_ORIGIN_URI_LENGTH",
+    "ORIGIN_ON_REFERENCE_MESSAGE",
+    "InputOrigin",
+    "resolve_inline_input",
+    "BINARY_MEDIA_TYPES",
+    "CONTENT_REF_KEY",
+    "JPEG_MEDIA_TYPE",
+    "PDF_MEDIA_TYPE",
+    "PNG_MEDIA_TYPE",
+    "WEBP_MEDIA_TYPE",
+    "ContentRef",
+    "check_binary_signature",
+    "content_ref_from_value",
+    "is_binary_media_type",
     "CONTENT_STORE_VARIABLE",
     "CONTENT_TABLES",
     "MISSING_CONTENT_STORE_EXTRA_MESSAGE",
