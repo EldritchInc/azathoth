@@ -1,8 +1,15 @@
-"""Source anchors and citations: where in exactly which content something is (ADR 0113)."""
+"""Source anchors, segments and citations: where in which content something is (ADR 0113)."""
 
 from azathoth.citations.anchors import (
     Extraction,
     SourceAnchor,
+)
+from azathoth.citations.segments import (
+    SEGMENT_ID,
+    BoundingBox,
+    ExtractionError,
+    Segment,
+    SegmentedText,
 )
 from azathoth.citations.selectors import (
     FRAGMENT_SELECTOR,
@@ -23,9 +30,14 @@ __all__ = [
     "MEDIA_FRAGMENT_SPECIFICATION",
     "PDF_FRAGMENT_SPECIFICATION",
     "TEXT_POSITION_SELECTOR",
+    "SEGMENT_ID",
     "TEXT_QUOTE_SELECTOR",
+    "BoundingBox",
     "Extraction",
+    "ExtractionError",
     "FragmentSelector",
+    "Segment",
+    "SegmentedText",
     "Selector",
     "SourceAnchor",
     "TextPositionSelector",

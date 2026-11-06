@@ -46,3 +46,27 @@ must select text of the same length, and a fragment must suit the content: a
 PDF fragment for a PDF, a media fragment for an image.
 
 An anchor's dump leaves out an `origin` and an `extraction` it does not have.
+
+## Segments
+
+A document tool divides content into segments, and its whole output is a
+`SegmentedText`: the tool and its version, the source's digest and media
+type, the text it extracted, and its `Segment`s.
+
+- A segment's `id` is `s<N>`, or `p<PAGE>.s<N>` on a page, counting from 1.
+- `start` and `end` count code points of the extraction's text, `start`
+  included and `end` not.
+- A segment on a page names its `page`, and may name its `bbox`, a
+  `BoundingBox` of `left`, `top`, `width` and `height` in points from the
+  page's top-left corner.
+
+The text is in NFC. Segments are in order, do not overlap, lie within the
+text and are named once each. A source with no text has no segments.
+
+`segment(id)` finds a segment and `segment_text(segment)` returns what it
+spans. `canonical_bytes()` is the canonical JSON the content store keeps,
+with sorted keys and no padding, and `digest()` names it. `extraction()`
+returns the `Extraction` an anchor made from the text names, and
+`store(store)` keeps the JSON. `SegmentedText.load(store, digest)` reads it
+back, returns `None` when the store lacks it, and raises `ExtractionError`
+when the content there is not a segmented text.

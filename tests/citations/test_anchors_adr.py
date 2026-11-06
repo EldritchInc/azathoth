@@ -10,6 +10,8 @@ from azathoth.citations import (
     PDF_FRAGMENT_SPECIFICATION,
     Extraction,
     FragmentSelector,
+    Segment,
+    SegmentedText,
     SourceAnchor,
     TextPositionSelector,
     TextQuoteSelector,
@@ -101,3 +103,38 @@ def test_the_adr_quotes_the_refusal_of_a_quote_and_position_that_disagree() -> N
         )
 
     assert_quoted(validation_message(raised.value))
+
+
+def test_the_adr_quotes_the_refusal_of_text_not_in_nfc() -> None:
+    with pytest.raises(ValidationError) as raised:
+        SegmentedText(
+            tool="segment_text",
+            version="1.3.0",
+            source_digest=DIGEST,
+            media_type="text/plain",
+            text="Cafe\u0301",
+        )
+
+    assert_quoted(validation_message(raised.value))
+
+
+def test_the_adr_shows_a_valid_segment() -> None:
+    assert Segment.model_validate(
+        {
+            "id": "p3.s12",
+            "start": 18234,
+            "end": 18311,
+            "page": 3,
+            "bbox": {"left": 72.0, "top": 144.5, "width": 310.25, "height": 14.0},
+        }
+    )
+    assert '"id": "p3.s12"' in text()
+
+
+def test_the_adr_says_how_segment_ids_read_and_boxes_measure() -> None:
+    assert "`s<N>`, or `p<PAGE>.s<N>` for a segment on a page" in prose()
+    assert "in points from the page's top-left corner" in prose()
+
+
+def test_the_adr_says_extractions_store_as_canonical_json() -> None:
+    assert "canonical JSON, with sorted keys and no insignificant whitespace" in prose()

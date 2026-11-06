@@ -42,6 +42,12 @@ release dates are on the
   content's digest and origin, and the extraction whose text its selectors
   count
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **An extraction is the text a tool took from a source, and its
+  segments.** Each segment has an ID a model can cite, its span of the text,
+  and, on a PDF, its page and bounding box. The whole output is stored as
+  canonical JSON, so its digest names it, and an anchor can be checked again
+  from the content store alone
+  ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
 
 ## 1.2.0
 

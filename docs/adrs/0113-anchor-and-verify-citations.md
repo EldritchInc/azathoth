@@ -111,6 +111,53 @@ for a PDF, a media fragment for an image.
 A FragmentSelector conforming to http://tools.ietf.org/rfc/rfc3778 cannot locate image/png content.
 ```
 
+### Segments, and the extraction that stores them
+
+A document tool divides content into segments: spans of the text it
+extracted, each with an ID a model cites. Its whole output is a segmented
+text: the tool and its version, the source's digest and media type, the
+text, and the segments in order.
+
+```json
+{
+  "tool": "segment_pdf",
+  "version": "1.3.0",
+  "source_digest": "<SHA-256 of the PDF>",
+  "media_type": "application/pdf",
+  "text": "…",
+  "segments": [
+    {"id": "p3.s12", "start": 18234, "end": 18311, "page": 3, "bbox": {"left": 72.0, "top": 144.5, "width": 310.25, "height": 14.0}}
+  ]
+}
+```
+
+- A segment's ID is `s<N>`, or `p<PAGE>.s<N>` for a segment on a page,
+  counting from 1. IDs are unique within one extraction, and short enough
+  to cite in a prompt; an anchor always names its extraction, so they never
+  need to be unique beyond it.
+- `start` and `end` count Unicode code points of the extraction's text,
+  `start` included and `end` not, as selectors do. Segments are in order, do
+  not overlap, and lie within the text.
+- A segment on a page names its page, and may name its bounding box: a
+  rectangle in points from the page's top-left corner, the frame a PDF
+  fragment's `viewrect` uses.
+- A source with no text, such as a scanned page with no text layer, has no
+  segments: its text is never guessed.
+
+The text is in Unicode normalization form NFC, which the Web Annotation
+model asks of the text positions count, so a position counts what a reader
+sees rather than how it happened to be encoded:
+
+```text
+An extraction's text is in Unicode normalization form NFC.
+```
+
+A segmented text is stored in the content store as canonical JSON, with
+sorted keys and no insignificant whitespace, so the same output always has
+the same digest. That digest is the extraction's identity: the `digest` of
+an anchor's `extraction`. Any anchor can then be checked again, from the
+content store alone, against exactly the text it was made from.
+
 ## Consequences
 
 - Places in content have one shape everywhere they will be recorded: in run
