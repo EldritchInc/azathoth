@@ -14,6 +14,7 @@ from azathoth.tools.content import (
     lineage_runs,
     providing_tool_content,
     received_content,
+    received_origin,
 )
 from azathoth.tools.definition import (
     ToolDefinition,
@@ -112,6 +113,7 @@ __all__ = [
     "kept_extractions",
     "lineage_runs",
     "received_content",
+    "received_origin",
     "TOOL_TABLES",
     "SqlToolRepository",
     "InMemoryToolRepository",

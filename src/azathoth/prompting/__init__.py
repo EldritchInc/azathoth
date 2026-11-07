@@ -3,7 +3,20 @@
 from azathoth.prompting.candidates import (
     generate_prompt_candidates,
 )
-from azathoth.prompting.content import read_prompt_content, render_extraction
+from azathoth.prompting.citations import (
+    CITATION_KEYS,
+    CITATIONS_RESOURCE_KIND,
+    CitationCheckError,
+    CitationPolicy,
+    CitedSource,
+    check_citations,
+)
+from azathoth.prompting.content import (
+    extraction_source,
+    kept_extraction,
+    read_prompt_content,
+    render_extraction,
+)
 from azathoth.prompting.context_candidates import (
     generate_context_prompt_candidates,
 )
@@ -73,4 +86,12 @@ __all__ = [
     "read_prompt_content",
     "render_extraction",
     "render_prompt_value",
+    "CITATION_KEYS",
+    "CITATIONS_RESOURCE_KIND",
+    "CitationCheckError",
+    "CitationPolicy",
+    "CitedSource",
+    "check_citations",
+    "extraction_source",
+    "kept_extraction",
 ]

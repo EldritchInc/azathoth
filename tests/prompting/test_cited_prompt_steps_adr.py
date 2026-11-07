@@ -1,16 +1,29 @@
 """Tests that ADR 0116 quotes the real rendering and refusals of extractions in prompts."""
 
+import asyncio
 from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import JsonValue, ValidationError
 
 from azathoth.citations import ExtractionHandle, Segment, SegmentedText
 from azathoth.context import Context, LineageRun, LineageStep, StepLineage, running_step
 from azathoth.inputs import InMemoryContentStore, content_bytes_digest
-from azathoth.prompting import render_extraction
-from azathoth.providers import PromptContentError
+from azathoth.prompting import (
+    CitationCheckError,
+    CitationPolicy,
+    CitedSource,
+    ContextPromptStrategy,
+    ContextPromptStrategySpec,
+    PromptOutputFormat,
+    PromptTemplate,
+    check_citations,
+    render_extraction,
+)
+from azathoth.providers import DeterministicLanguageModel, PromptContentError
+from azathoth.strategies import StrategyMetadata
 from azathoth.tools import ToolContentAccess, providing_tool_content
 
 ROOT = Path(__file__).parents[2]
@@ -89,6 +102,63 @@ def refusal(
     return str(raised.value)
 
 
+def citation_refusal(
+    output: JsonValue,
+    *,
+    shown: str = "<SOURCE>",
+) -> str:
+    """Return the message checking one reply's citations against the claim is refused with."""
+
+    with pytest.raises(CitationCheckError) as raised:
+        check_citations(
+            output,
+            sources={shown: CitedSource(segmented=CLAIM)},
+            policy=CitationPolicy(),
+            store=InMemoryContentStore(),
+            strategy_name="<NAME>",
+        )
+
+    return str(raised.value)
+
+
+def specification_refusal() -> str:
+    """Return the message a cited specification with text output is refused with."""
+
+    with pytest.raises(ValidationError) as raised:
+        ContextPromptStrategySpec.model_validate(
+            {
+                "metadata": {
+                    "id": str(RUN),
+                    "name": "<NAME>",
+                    "description": "Cite.",
+                    "version": "1.0.0",
+                },
+                "template": {"text": "Cite."},
+                "model_selection": {"provider": "test", "model": "citing"},
+                "citations": {},
+            }
+        )
+
+    return raised.value.errors()[0]["msg"].removeprefix("Value error, ")
+
+
+def storeless_refusal() -> str:
+    """Return the message a cited step with no content store is refused with."""
+
+    strategy = ContextPromptStrategy(
+        metadata=StrategyMetadata(id=RUN, name="<NAME>", description="Cite.", version="1.0.0"),
+        template=PromptTemplate(text="Cite."),
+        language_model=DeterministicLanguageModel(response_text="{}"),
+        output_format=PromptOutputFormat.JSON,
+        citations=CitationPolicy(),
+    )
+
+    with pytest.raises(PromptContentError) as raised:
+        asyncio.run(strategy.run(Context()))
+
+    return str(raised.value)
+
+
 DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
     (
         "Prompt strategy '<NAME>' shows extraction <DIGEST>, which this run cannot give: "
@@ -111,6 +181,37 @@ DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
         "Prompt strategy '<NAME>' shows extraction <DIGEST>, but its handle does not describe "
         "the extraction the content store holds.",
         lambda: refusal(lambda: render(HANDLE.model_copy(update={"version": "2.0.0"}))),
+    ),
+    (
+        "Prompt strategy '<NAME>' checks citations, which only a JSON reply holds; its "
+        "output format is text.",
+        specification_refusal,
+    ),
+    (
+        "Prompt strategy '<NAME>' cites source '<SOURCE>', which its prompt does not show.",
+        lambda: citation_refusal(
+            [{"source": "<SOURCE>", "segment": "p1.s1", "quote": "x"}],
+            shown="claim",
+        ),
+    ),
+    (
+        "Prompt strategy '<NAME>' cites '<QUOTE>' from segment <SEGMENT> of source "
+        "'<SOURCE>', which the segment does not hold.",
+        lambda: citation_refusal(
+            [{"source": "<SOURCE>", "segment": "p1.s2", "quote": "<QUOTE>"}]
+        ).replace("p1.s2", "<SEGMENT>"),
+    ),
+    (
+        "Prompt strategy '<NAME>' cites segment <SEGMENT> of source '<SOURCE>', which has "
+        "no such segment.",
+        lambda: citation_refusal(
+            [{"source": "<SOURCE>", "segment": "p9.s9", "quote": "x"}]
+        ).replace("p9.s9", "<SEGMENT>"),
+    ),
+    (
+        "Prompt strategy '<NAME>' checks citations, which this run cannot keep: it has no "
+        "content store.",
+        storeless_refusal,
     ),
 ]
 """Each refusal ADR 0116 quotes, and what produces it."""

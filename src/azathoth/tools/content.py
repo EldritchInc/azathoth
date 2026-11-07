@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Final
 from uuid import UUID
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from azathoth.context import MAX_WORKFLOW_DEPTH, Context, LineageError, lineage_of
 from azathoth.inputs import (
@@ -28,6 +28,7 @@ from azathoth.inputs import (
     PNG_MEDIA_TYPE,
     WEBP_MEDIA_TYPE,
     ContentStore,
+    InputOrigin,
     content_bytes_digest,
     content_ref_from_value,
 )
@@ -160,6 +161,41 @@ def lineage_runs(
         current = lineage.parent.run_id if lineage is not None else None
 
     return runs
+
+
+def received_origin(
+    digest: str,
+    run_id: UUID,
+    *,
+    initial_context: Callable[[UUID], Context | None],
+) -> InputOrigin | None:
+    """Return where content one run, or a run above it, received durably lives, if known.
+
+    The nearest run that received the content says: the origin an inline
+    input named, or else the URI a reference was read from (ADR 0116). A URI
+    that cannot be an origin, and content received without either, has none.
+    """
+
+    for _, context in lineage_runs(run_id, initial_context=initial_context):
+        for event in context.by_type(INPUT_RESOLVED_EVENT_TYPE):
+            if event.payload.get("digest") != digest:
+                continue
+
+            origin = event.payload.get("origin")
+            uri = event.payload.get("uri")
+
+            try:
+                if origin is not None:
+                    return InputOrigin.model_validate(origin)
+
+                if isinstance(uri, str):
+                    return InputOrigin(uri=uri)
+            except ValidationError:
+                return None
+
+            return None
+
+    return None
 
 
 def kept_extractions(
@@ -309,4 +345,5 @@ __all__ = [
     "lineage_runs",
     "providing_tool_content",
     "received_content",
+    "received_origin",
 ]

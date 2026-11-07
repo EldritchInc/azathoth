@@ -656,6 +656,37 @@ The variable's name is the source's. Only an extraction a step of the run,
 or of a run above it, kept is shown; a handle a step wrote itself is
 refused.
 
+### Cited Prompt Steps
+
+A context-prompt step that replies in JSON becomes a cited step by naming a
+`citations` policy (ADR 0116):
+
+```json
+"specification": {
+  "template": {
+    "text": "{claim}\n\nWhen was the claim received? Reply in JSON as {{\"received\": \"...\", \"citations\": [{{\"source\": \"claim\", \"segment\": \"<SEGMENT ID>\", \"quote\": \"<EXACT WORDS>\"}}]}}, quoting the segment word for word.",
+    "bindings": [{"variable_name": "claim", "input_name": "claim"}]
+  },
+  "model_selection": {"provider": "openrouter", "model": "openai/gpt-4.1-mini"},
+  "output_format": "json",
+  "citations": {"on_unverified": "fail"}
+}
+```
+
+Every object of the reply whose keys are exactly `source`, `segment` and
+`quote` is a citation, wherever it stands. Each is checked against the
+extraction it names, with no model involved, and replaced by its check: the
+citation, its `status`, and, when its quote was found, its `anchor`. The
+engine adds no instructions of its own, so the template says how to cite;
+the one above is a start.
+
+Under `fail`, the default, a citation whose quote is not in its segment, or
+of a segment the source does not have, fails the attempt, and the step's
+retry policy asks again. Under `keep`, every check is kept and the step goes
+on. A citation of a source the prompt did not show always fails. Every
+check is kept in the content store and named by the step's `citations`
+resource.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

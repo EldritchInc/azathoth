@@ -111,6 +111,14 @@ release dates are on the
   segments as `[p1.s2] text` inside a `source` named by the variable. Only
   an extraction a step of the run, or of a run above it, kept is shown
   ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **A cited step's citations are checked before anything relies on them.**
+  A JSON prompt step naming a `citations` policy has every
+  `{"source", "segment", "quote"}` in its reply checked against the
+  extraction it names and replaced by its check, with an anchor naming the
+  source's origin. A citation not verified fails the attempt, so the step
+  asks again, unless the policy keeps it, and every check is kept in the
+  content store and recorded as the step's `citations` resource
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Fixes
 

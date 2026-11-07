@@ -112,4 +112,5 @@ def _build_candidate(
         ),
         output_format=specification.output_format,
         model_input_modalities=model_metadata.input_modalities,
+        citations=specification.citations,
     )

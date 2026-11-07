@@ -122,23 +122,12 @@ def _read(
     return read
 
 
-def render_extraction(
-    variable: str,
+def kept_extraction(
     handle: ExtractionHandle,
     *,
     strategy_name: str | None = None,
-) -> str:
-    """Return the text an extraction bound to one template variable renders as.
-
-    The extraction's segments are rendered in order, each as its ID in
-    brackets and its text, separated by blank lines, inside a `source`
-    element named by the variable, which a citation names as its source:
-
-        <source name="claim">
-        [p1.s1] Claim 0412.
-
-        [p1.s2] Received on December 14.
-        </source>
+) -> SegmentedText:
+    """Return the extraction one handle names, if a step of the run or a run above it kept it.
 
     Raises:
         PromptContentError: There is no content access or no running step,
@@ -182,6 +171,26 @@ def render_extraction(
             "extraction the content store holds."
         )
 
+    return segmented
+
+
+def extraction_source(
+    variable: str,
+    segmented: SegmentedText,
+) -> str:
+    """Return the text an extraction renders as under one variable's name.
+
+    The extraction's segments are rendered in order, each as its ID in
+    brackets and its text, separated by blank lines, inside a `source`
+    element named by the variable, which a citation names as its source:
+
+        <source name="claim">
+        [p1.s1] Claim 0412.
+
+        [p1.s2] Received on December 14.
+        </source>
+    """
+
     segments = "\n\n".join(
         f"[{segment.id}] {segmented.segment_text(segment)}" for segment in segmented.segments
     )
@@ -190,7 +199,25 @@ def render_extraction(
     return f'<source name="{variable}">\n{body}</source>'
 
 
+def render_extraction(
+    variable: str,
+    handle: ExtractionHandle,
+    *,
+    strategy_name: str | None = None,
+) -> str:
+    """Return the text an extraction bound to one template variable renders as.
+
+    Raises:
+        PromptContentError: The extraction cannot be rendered; see
+            `kept_extraction`.
+    """
+
+    return extraction_source(variable, kept_extraction(handle, strategy_name=strategy_name))
+
+
 __all__ = [
+    "extraction_source",
+    "kept_extraction",
     "read_prompt_content",
     "render_extraction",
 ]
