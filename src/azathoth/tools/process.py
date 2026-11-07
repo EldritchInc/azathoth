@@ -92,10 +92,18 @@ class ProcessToolExecutor:
                 ) from exc
             finally:
                 #
-                # A timed-out or cancelled tool never outlives its step.
+                # A timed-out or cancelled tool never outlives its step. Its
+                # stdin is closed before it is waited for: a tool cancelled
+                # before communicate() wrote its inputs still has that pipe
+                # open, and on Pythons without gh-119710 waiting for a process
+                # also waits for every one of its pipes to close.
                 #
                 if process.returncode is None:
                     process.kill()
+
+                    if process.stdin is not None:
+                        process.stdin.close()
+
                     await process.wait()
 
         if process.returncode != 0:
