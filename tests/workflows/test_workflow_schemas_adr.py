@@ -8,7 +8,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from azathoth.workflows import WorkflowSpecification, decode_workflow_document
+from azathoth.workflows import (
+    WorkflowSpecification,
+    decode_workflow_document,
+    input_contract_failure,
+    output_contract_failure,
+)
+from tests.workflows.test_invocation_contract import INPUT_SCHEMA, INVOCATION_ID, OUTPUT_SCHEMA
 from tests.workflows.test_promotion import WORKFLOW_ID, create_workflow
 
 ROOT = Path(__file__).parents[2]
@@ -34,6 +40,28 @@ def refusal(
     )
 
 
+def broken_input() -> str:
+    """Return the message of an input that breaks its schema, its violations held."""
+
+    failure = input_contract_failure(invocation_id=INVOCATION_ID, schema=INPUT_SCHEMA, received={})
+
+    assert failure is not None
+
+    return failure.message.replace("$: 'ticket' is a required property", "<VIOLATIONS>")
+
+
+def broken_result() -> str:
+    """Return the message of a result that breaks its schema, its violations held."""
+
+    failure = output_contract_failure(
+        invocation_id=INVOCATION_ID, schema=OUTPUT_SCHEMA, result="failure"
+    )
+
+    assert failure is not None
+
+    return failure.message.replace("$: 'failure' is not one of ['success']", "<VIOLATIONS>")
+
+
 DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
     (
         "The workflow's input schema is not usable: <REASON>",
@@ -47,6 +75,14 @@ DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
         "Workflow <WORKFLOW_ID> has an output schema, which describes its result, but "
         "declares no result.",
         lambda: refusal(result=None, output_schema=True),
+    ),
+    (
+        "The workflow's input does not match its input schema: <VIOLATIONS>.",
+        broken_input,
+    ),
+    (
+        "The workflow's result does not match its output schema: <VIOLATIONS>.",
+        broken_result,
     ),
 ]
 """Each refusal ADR 0118 quotes, and what produces it."""
@@ -81,8 +117,20 @@ def test_the_adr_quotes_no_text_the_tests_do_not_check() -> None:
     assert quoted == {documented for documented, _ in DOCUMENTED}
 
 
+def test_the_adr_shows_the_real_failure_of_a_broken_input() -> None:
+    (_, shown) = decision_blocks("json")
+    failure = input_contract_failure(invocation_id=INVOCATION_ID, schema=INPUT_SCHEMA, received={})
+
+    assert failure is not None
+    assert json.loads(shown) == {
+        "code": failure.error_code.value,
+        "message": failure.message,
+        "metadata": failure.metadata,
+    }
+
+
 def test_the_adr_shows_schemas_a_workflow_accepts() -> None:
-    (shown,) = decision_blocks("json")
+    (shown, _) = decision_blocks("json")
     schemas = {
         key: value
         for key, value in json.loads(shown).items()

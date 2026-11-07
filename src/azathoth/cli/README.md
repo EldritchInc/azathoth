@@ -938,7 +938,19 @@ Steps: 2
 ```
 
 `workflow production` shows the promoted workflow's schemas after its
-deployment, since every invocation is checked against them. A document whose
+deployment, since every invocation is checked against them: an input that
+breaks the input schema fails with `invalid_input` before any run starts,
+and a result that breaks the output schema fails with `invalid_output`, its
+run kept, so `invocation show` names the run that produced it. Each
+message names every violation by its JSON path, and the failure's metadata
+lists them as `violations`:
+
+```text
+The workflow's input does not match its input schema: $: 'ticket' is a required property.
+```
+
+`workflow run` is not checked, so a workflow can be run while its contract
+is still being written. A document whose
 schema is not a JSON Schema is refused by `workflow import`, saying why:
 
 ```text
@@ -2918,7 +2930,9 @@ result` prints it.
 
 A job that did not succeed carries an `error` with a `code`, a `message` and
 `metadata`. A failed job carries the same code `workflow invoke` reports,
-such as `workflow_not_deployed` or `timeout`. A rejected one carries
+such as `workflow_not_deployed` or `timeout`, or `invalid_input` and
+`invalid_output` when the promoted workflow's input or output schema was
+broken (ADR 0118). A rejected one carries
 `invalid_request`, `unsupported_version`, `idempotency_conflict` or
 `invalid_input`. An unsupported version names the versions that would be
 accepted:

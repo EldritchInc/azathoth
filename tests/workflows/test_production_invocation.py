@@ -257,6 +257,7 @@ def test_production_invocation_error_codes_are_stable() -> None:
         "tool_unavailable",
         "workflow_execution_failed",
         "timeout",
+        "invalid_output",
     )
 
 

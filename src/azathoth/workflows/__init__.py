@@ -69,6 +69,11 @@ from azathoth.workflows.confidence import (
     WorkflowStepConfidenceError,
     step_confidence,
 )
+from azathoth.workflows.contract import (
+    VIOLATIONS_METADATA_KEY,
+    input_contract_failure,
+    output_contract_failure,
+)
 from azathoth.workflows.document import (
     WorkflowDocumentError,
     decode_workflow_document,
@@ -474,6 +479,7 @@ __all__ = [
     "RunResumePoint",
     "finished_run",
     "journal_resumes",
+    "input_contract_failure",
     "journaled_citations",
     "judge_citations",
     "journaled_extractions",
@@ -571,6 +577,7 @@ __all__ = [
     "SOURCE_FEEDBACK_METADATA_KEY",
     "SOURCE_RUN_METADATA_KEY",
     "SOURCE_URI_METADATA_KEY",
+    "VIOLATIONS_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WORKFLOW_INPUT_RESOLVED_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
@@ -694,6 +701,7 @@ __all__ = [
     "historical_model_usages",
     "historical_tool_usages",
     "latest_corrected_output",
+    "output_contract_failure",
     "recorded_citation_checks",
     "run_citation_score",
     "materialize_workflow_candidate",

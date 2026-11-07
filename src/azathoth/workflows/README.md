@@ -165,6 +165,21 @@ what it was. Materialization and promotion carry the schemas with the rest
 of the specification, so a production state holds the ones its invocations
 are checked against.
 
+`invoke_production_workflow` checks the input against the promoted input
+schema before any run starts, and `complete_production_invocation` checks
+the emitted `result` against the output schema once the run has produced
+it. `input_contract_failure` and `output_contract_failure` return the
+`ProductionInvocationFailure` of a broken contract, `invalid_input` or
+`invalid_output`, with every violation in its message and under
+`VIOLATIONS_METADATA_KEY` (`violations`) in its metadata:
+
+```text
+The workflow's input does not match its input schema: <VIOLATIONS>.
+The workflow's result does not match its output schema: <VIOLATIONS>.
+```
+
+A broken result's run is kept and associated with the invocation.
+
 ## Workflow Steps
 
 A workflow is composed from `WorkflowStepSpecification` values.

@@ -15,6 +15,7 @@ from azathoth.tools import (
     ToolImplementationResolver,
     ToolResolver,
 )
+from azathoth.workflows.contract import input_contract_failure
 from azathoth.workflows.production import WorkflowProductionState
 from azathoth.workflows.production_execution import (
     complete_production_invocation,
@@ -65,6 +66,9 @@ async def invoke_production_workflow(
     An invocation started by a step of another run passes its lineage, which
     the invocation records in its initial context (ADR 0104).
 
+    An input that breaks the promoted workflow's input schema fails the
+    invocation with `invalid_input` before any run starts (ADR 0118).
+
     Raises:
         IdempotencyKeyInUseError: The idempotency key is already recorded on
             another invocation. Nothing is saved and nothing runs.
@@ -108,6 +112,19 @@ async def invoke_production_workflow(
         )
 
         return result
+
+    refused = input_contract_failure(
+        invocation_id=invocation.id,
+        schema=production_state.specification.input_schema,
+        received=payload,
+    )
+
+    if refused is not None:
+        invocation_repository.save_result(
+            refused,
+        )
+
+        return refused
 
     return await complete_production_invocation(
         invocation=invocation,

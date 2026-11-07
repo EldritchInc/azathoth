@@ -186,6 +186,14 @@ release dates are on the
   production` print them; a workflow without them reads and digests as
   before
   ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
+- **Every production invocation is checked against its workflow's
+  contract.** `workflow invoke`, jobs, workers, MCP calls and child
+  workflows share one check against the promoted schemas: an input that
+  breaks the input schema fails with `invalid_input` before any run starts,
+  and a result that breaks the output schema fails with the new
+  `invalid_output`, its run kept. Each names every violation by its JSON
+  path, and lists them in its metadata
+  ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
 - **`workflow import` says why a document is refused** when the workflow
   states a reason, such as a schema that is not a JSON Schema
   ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
