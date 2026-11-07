@@ -870,6 +870,26 @@ A recorded run becomes a benchmark case only deliberately, through
   description=None)` builds a case of one resolved input, such as a file's,
   naming its URI under `SOURCE_URI_METADATA_KEY` (`source_uri`).
 
+A case whose expected outcome names `citations` is judged on what its run
+cited too (ADR 0117), by `workflows/citation_evaluation.py`:
+
+- `recorded_citation_checks(run, store)` returns every check the run's
+  cited steps kept, in step order, read from their `citations` records, and
+  raises `CitationEvidenceError` when there is no store, a record is gone,
+  or what it holds is not a record of checks.
+- `judge_citations(outcome, expectation, checks)` returns the case's
+  evaluation: passed only if the outcome passed, every required segment was
+  met by a verified check, and, under `fail`, every check verified. Its
+  score is the outcome's times the fraction of required segments met and,
+  under `fail`, of checks verified, held below its threshold when its
+  citations fail, and it adds evidence labelled `CITATIONS_EVIDENCE_LABEL`
+  (`citations`).
+- `unreadable_citations(outcome, message)` fails a case whose run's checks
+  cannot be read, naming why.
+
+`WorkflowBenchmarkRunner` reads the checks from the content store its
+runner gives its steps, `WorkflowRunner.content`.
+
 `benchmark_case_context(case)` is the initial context a case's run is
 given: its input, then, when the case names provenance, the
 `workflow.input.resolved` event recording it, both from

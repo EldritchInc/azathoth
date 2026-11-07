@@ -1,6 +1,7 @@
 """Domain models describing expected outcomes and completed evaluations."""
 
 from enum import StrEnum
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -8,6 +9,8 @@ from pydantic import (
     ConfigDict,
     Field,
     JsonValue,
+    SerializerFunctionWrapHandler,
+    model_serializer,
     model_validator,
 )
 
@@ -30,14 +33,79 @@ class EvaluationStatus(StrEnum):
     FAILED = "failed"
 
 
+class CitedSegment(BaseModel):
+    """One segment of one source a result must cite, by the names a cited step uses."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source: str = Field(min_length=1)
+    segment: str = Field(min_length=1)
+
+
+class CitationExpectation(BaseModel):
+    """The citations a case's run must have made and verified (ADR 0117).
+
+    Each required segment is met by a verified check, of that source and
+    segment, that a cited step of the run kept. Under `on_unverified`
+    `fail`, the default, any check the run kept that did not verify fails
+    the case too; under `ignore`, only the required segments count.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    require: tuple[CitedSegment, ...] = ()
+    on_unverified: Literal["fail", "ignore"] = "fail"
+
+    @model_validator(mode="after")
+    def reject_repeated_segments(self) -> "CitationExpectation":
+        """Reject a segment required more than once.
+
+        Raises:
+            ValueError: Two required segments name the same source and segment.
+        """
+
+        seen: set[CitedSegment] = set()
+
+        for cited in self.require:
+            if cited in seen:
+                raise ValueError(
+                    f"Citation expectation requires segment {cited.segment} of source "
+                    f"{cited.source!r} more than once."
+                )
+
+            seen.add(cited)
+
+        return self
+
+
 class ExpectedOutcome(BaseModel):
-    """A result that a candidate strategy is expected to produce."""
+    """A result that a candidate strategy is expected to produce.
+
+    `citations` names what the result's run must cite (ADR 0117). An outcome
+    without it serializes without it, so no existing dataset's digest
+    changes.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     description: str = Field(min_length=1)
     value: JsonValue
     comparison: OutcomeComparison
+    citations: CitationExpectation | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_citations(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, JsonValue]:
+        """Leave out `citations` when the outcome names none."""
+
+        serialized = cast(dict[str, JsonValue], handler(self))
+
+        if self.citations is None:
+            serialized.pop("citations", None)
+
+        return serialized
 
     @model_validator(mode="after")
     def validate_schema_expectation(self) -> "ExpectedOutcome":

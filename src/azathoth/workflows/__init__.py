@@ -51,6 +51,13 @@ from azathoth.workflows.candidate_rebuild import (
 )
 from azathoth.workflows.catalog import WorkflowCatalog
 from azathoth.workflows.catalog_loader import WorkflowCatalogLoader
+from azathoth.workflows.citation_evaluation import (
+    CITATIONS_EVIDENCE_LABEL,
+    CitationEvidenceError,
+    judge_citations,
+    recorded_citation_checks,
+    unreadable_citations,
+)
 from azathoth.workflows.condition import (
     WorkflowCondition,
     WorkflowConditionEvaluationError,
@@ -442,6 +449,7 @@ from azathoth.workflows.value import (
 
 __all__ = [
     "BENCHMARK_INPUT_PRODUCER",
+    "CITATIONS_EVIDENCE_LABEL",
     "PRODUCTION_INVOCATION_RUN_TABLES",
     "RUN_CHILD_TABLES",
     "RUN_JOURNAL_TABLES",
@@ -463,6 +471,7 @@ __all__ = [
     "finished_run",
     "journal_resumes",
     "journaled_citations",
+    "judge_citations",
     "journaled_extractions",
     "journaled_initial_context",
     "resume_point",
@@ -506,6 +515,7 @@ __all__ = [
     "WORKFLOW_RUN_FEEDBACK_TABLES",
     "WORKFLOW_RUN_TABLES",
     "BenchmarkCaseSourceError",
+    "CitationEvidenceError",
     "IdempotencyKeyInUseError",
     "InMemoryProductionInvocationRepository",
     "InMemoryProductionInvocationRunRepository",
@@ -679,6 +689,7 @@ __all__ = [
     "historical_model_usages",
     "historical_tool_usages",
     "latest_corrected_output",
+    "recorded_citation_checks",
     "materialize_workflow_candidate",
     "model_usage_report",
     "production_model_usages",
@@ -702,6 +713,7 @@ __all__ = [
     "validate_idempotency_key",
     "workflow_result",
     "workflow_result_produced",
+    "unreadable_citations",
     "workflow_run_input",
     "workflow_run_input_provenance",
     "workflow_uses_model",

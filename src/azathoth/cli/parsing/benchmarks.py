@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.parsing.common import (
+    cited_segment,
     json_value,
     media_type,
     positive_integer,
@@ -38,6 +39,8 @@ BENCHMARK_RUN_ACTION = "run"
 BENCHMARK_SHOW_ACTION = "show"
 
 BENCHMARK_CASE_COMPARISON_ATTRIBUTE = "benchmark_case_comparison"
+BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE = "benchmark_case_on_unverified"
+BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE = "benchmark_case_required_citations"
 BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE = "benchmark_case_description"
 BENCHMARK_CASE_EXPECTED_ATTRIBUTE = "benchmark_case_expected"
 BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE = "benchmark_case_source_run_id"
@@ -246,6 +249,30 @@ def add_benchmark_parser(
         help=(
             "Expected value as JSON. Defaults to the corrected output of the "
             "run's latest bad feedback that carries one."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--require-citation",
+        dest=BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE,
+        action="append",
+        type=cited_segment,
+        default=None,
+        metavar="SOURCE:SEGMENT",
+        help=(
+            "Segment the case's run must cite and verify, such as claim:p1.s2. Repeat for "
+            "each segment."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--on-unverified",
+        dest=BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE,
+        choices=("fail", "ignore"),
+        default=None,
+        help=(
+            "Whether a citation the case's run kept that did not verify fails the case. "
+            "Defaults to fail when the case names citations."
         ),
     )
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 from uuid import UUID
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from azathoth.cli.benchmark_cases import SuppliedExpectedValue
 from azathoth.cli.inputs import WorkflowInputFile
@@ -18,6 +18,8 @@ from azathoth.cli.parsing import (
     BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE,
     BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
     BENCHMARK_CASE_ID_ATTRIBUTE,
+    BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE,
+    BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE,
     BENCHMARK_CASE_SHOW_ACTION,
     BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
     BENCHMARK_CASES_ACTION,
@@ -43,7 +45,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_INPUT_FILE_ATTRIBUTE,
     WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
 )
-from azathoth.evaluation.models import OutcomeComparison
+from azathoth.evaluation.models import CitationExpectation, CitedSegment, OutcomeComparison
 
 BenchmarkAddCaseHandler = Callable[..., int]
 BenchmarkIdentifierHandler = Callable[[UUID], int]
@@ -180,6 +182,16 @@ def dispatch_benchmark_command(
 
             return 1
 
+        try:
+            citations = _case_citations(arguments)
+        except ValidationError as exc:
+            print(
+                str(exc.errors()[0]["msg"]).removeprefix("Value error, "),
+                file=sys.stderr,
+            )
+
+            return 1
+
         return add_benchmark_case(
             cast(
                 UUID,
@@ -188,6 +200,7 @@ def dispatch_benchmark_command(
                     BENCHMARK_ID_ATTRIBUTE,
                 ),
             ),
+            citations=citations,
             run_id=cast(
                 UUID | None,
                 getattr(
@@ -314,6 +327,35 @@ def _benchmark_revision(
             BENCHMARK_REVISION_ATTRIBUTE,
             None,
         ),
+    )
+
+
+def _case_citations(
+    arguments: Namespace,
+) -> CitationExpectation | None:
+    """Return what a new benchmark case's run must cite, if the case names it (ADR 0117).
+
+    Raises:
+        ValidationError: A segment is required more than once.
+    """
+
+    required = cast(
+        list[CitedSegment] | None,
+        getattr(arguments, BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE, None),
+    )
+    on_unverified = cast(
+        str | None,
+        getattr(arguments, BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE, None),
+    )
+
+    if required is None and on_unverified is None:
+        return None
+
+    return CitationExpectation.model_validate(
+        {
+            "require": required or [],
+            "on_unverified": on_unverified or "fail",
+        }
     )
 
 

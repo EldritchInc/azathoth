@@ -253,6 +253,14 @@ class WorkflowRunner:
         self._children = children
         self._content = content
 
+    @property
+    def content(
+        self,
+    ) -> ToolContentAccess | None:
+        """Return the content access this runner gives its steps, if any (ADR 0114)."""
+
+        return self._content
+
     def _providing_content(
         self,
     ) -> contextlib.AbstractContextManager[object]:

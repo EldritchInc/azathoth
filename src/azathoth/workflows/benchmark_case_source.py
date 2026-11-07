@@ -6,6 +6,7 @@ from pydantic import JsonValue, ValidationError
 
 from azathoth.evaluation import (
     BenchmarkCase,
+    CitationExpectation,
     ExpectedOutcome,
     OutcomeComparison,
     json_schema_validator,
@@ -112,15 +113,17 @@ def benchmark_case_from_run(
     expected: JsonValue,
     description: str | None = None,
     feedback: WorkflowRunFeedback | None = None,
+    citations: CitationExpectation | None = None,
 ) -> BenchmarkCase:
     """Return a new benchmark case replaying one recorded run's input.
 
     The case holds the run's input with the provenance it was resolved
     with, so a document the run was given is given to the case's run as it
     was (ADR 0117). The case expects the given value under the given
-    comparison. A blank or absent description becomes one naming the source
-    run. The case metadata records the source run, and the feedback whose
-    corrected output supplied the expected value when there is one.
+    comparison, and the run's citations, when given, to meet them. A blank or
+    absent description becomes one naming the source run. The case metadata
+    records the source run, and the feedback whose corrected output supplied
+    the expected value when there is one.
 
     Raises:
         BenchmarkCaseSourceError: The run did not receive workflow input
@@ -149,6 +152,7 @@ def benchmark_case_from_run(
             expected=expected,
             description=description,
             default_description=f"Added from run {run.id}.",
+            citations=citations,
         ),
         metadata=metadata,
     )
@@ -160,6 +164,7 @@ def benchmark_case_from_input(
     comparison: OutcomeComparison,
     expected: JsonValue,
     description: str | None = None,
+    citations: CitationExpectation | None = None,
 ) -> BenchmarkCase:
     """Return a new benchmark case of one resolved input, such as a file's (ADR 0117).
 
@@ -193,6 +198,7 @@ def benchmark_case_from_input(
             expected=expected,
             description=description,
             default_description=f"Added from {source}.",
+            citations=citations,
         ),
         metadata=metadata,
     )
@@ -222,6 +228,7 @@ def _expected_outcome(
     expected: JsonValue,
     description: str | None,
     default_description: str,
+    citations: CitationExpectation | None,
 ) -> ExpectedOutcome:
     """Return the outcome a new case expects, describing it by default.
 
@@ -244,6 +251,7 @@ def _expected_outcome(
         description=normalized_description or default_description,
         value=expected,
         comparison=comparison,
+        citations=citations,
     )
 
 

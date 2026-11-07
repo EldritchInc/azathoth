@@ -24,6 +24,12 @@ from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
 )
+from azathoth.workflows.citation_evaluation import (
+    CitationEvidenceError,
+    judge_citations,
+    recorded_citation_checks,
+    unreadable_citations,
+)
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.input import (
     create_workflow_input_event,
@@ -454,7 +460,11 @@ class WorkflowBenchmarkRunner:
         result: WorkflowResultReference,
         steps: tuple[WorkflowCandidateStep, ...],
     ) -> EvaluationResult:
-        """Judge one case's run on its declared result.
+        """Judge one case's run on its declared result, and on what it cited.
+
+        A case naming a citation expectation is judged on the checks the
+        run's cited steps kept too, read from the runner's content store
+        (ADR 0117).
 
         Raises:
             WorkflowResultError: A successful run did not produce its declared
@@ -486,10 +496,25 @@ class WorkflowBenchmarkRunner:
         except WorkflowResultError as exc:
             raise WorkflowResultError(f"Benchmark case {case.id}: {exc}") from exc
 
-        return await self._evaluator.evaluate(
+        outcome = await self._evaluator.evaluate(
             case.expected,
             actual,
         )
+
+        if case.expected.citations is None:
+            return outcome
+
+        content = self._runner.content
+
+        try:
+            checks = recorded_citation_checks(
+                run,
+                content.store if content is not None else None,
+            )
+        except CitationEvidenceError as exc:
+            return unreadable_citations(outcome, str(exc))
+
+        return judge_citations(outcome, case.expected.citations, checks)
 
 
 class WorkflowBenchmarkComparator:

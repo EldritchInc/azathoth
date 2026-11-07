@@ -472,3 +472,203 @@ def test_a_document_case_runs_as_its_run_did_and_one_whose_content_is_gone_fails
     )
     assert kept.input_provenance is not None
     assert passed.initial_context.events[1].payload == kept.input_provenance.model_dump(mode="json")
+
+
+HAND_WRITTEN = {
+    "received": "December 14",
+    "citations": [
+        {"source": "claim", "segment": "p1.s2"},
+        {"source": "claim", "segment": "p2.s1"},
+    ],
+}
+"""The answer the cited step gives, written by hand: each citation by its segment."""
+
+
+def cited_case(
+    capsys: pytest.CaptureFixture[str],
+    *options: str,
+) -> UUID:
+    """Add a case from a run on the claim's PDF, naming some citation options; return the run."""
+
+    run_id, _ = answered(capsys)
+
+    status, _, err = run(
+        "benchmark",
+        "add-case",
+        BENCHMARK_ID,
+        "--from-run",
+        str(run_id),
+        "--comparison",
+        "exact",
+        "--expected",
+        json.dumps(HAND_WRITTEN),
+        *options,
+        capsys=capsys,
+    )
+
+    assert status == 0, err
+
+    return run_id
+
+
+@pytest.mark.parametrize(
+    ("options", "passed"),
+    [
+        pytest.param(
+            ("--require-citation", "claim:p1.s2", "--on-unverified", "ignore"), 1, id="met"
+        ),
+        pytest.param(("--require-citation", "claim:p1.s2"), 0, id="an-unverified-citation"),
+        pytest.param(
+            ("--require-citation", "claim:p2.s1", "--on-unverified", "ignore"), 0, id="missing"
+        ),
+        pytest.param((), 1, id="no-expectation"),
+    ],
+)
+def test_a_cited_case_is_judged_by_its_answer_and_the_checks_its_run_kept(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+    options: tuple[str, ...],
+    passed: int,
+) -> None:
+    cited_case(capsys, *options)
+
+    status, out, err = run(
+        "benchmark", "run", BENCHMARK_ID, "--workflow", WORKFLOW_ID, capsys=capsys
+    )
+
+    assert status == 0, err
+    assert f"Cases Run: 1\nCases Passed: {passed}\n" in out
+    assert "Run failures: 0\n" in out
+
+
+def test_a_cited_case_names_its_citations_and_provenance_when_shown(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cited_case(capsys, "--require-citation", "claim:p1.s2", "--require-citation", "claim:p2.s1")
+
+    (case,) = cases(database)
+
+    assert case.expected.citations is not None
+    assert [(cited.source, cited.segment) for cited in case.expected.citations.require] == [
+        ("claim", "p1.s2"),
+        ("claim", "p2.s1"),
+    ]
+
+    status, out, err = run("benchmark", "case-show", BENCHMARK_ID, str(case.id), capsys=capsys)
+
+    assert status == 0, err
+    assert "Input Provenance:\n" in out
+    assert f'"uri": "{file_uri(tmp_path / "claim.pdf")}"' in out
+    assert (
+        "  Comparison: exact\n"
+        "  Citations:\n"
+        "    Require: claim p1.s2\n"
+        "    Require: claim p2.s1\n"
+        "    On Unverified: fail\n"
+    ) in out
+
+    status, out, err = run("benchmark", "show", BENCHMARK_ID, capsys=capsys)
+
+    assert status == 0, err
+    assert "Cases: 1\nCited Cases: 1\n" in out
+
+
+def test_a_case_naming_only_a_policy_requires_no_segment(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cited_case(capsys, "--on-unverified", "ignore")
+
+    (case,) = cases(database)
+
+    assert case.expected.citations is not None
+    assert (case.expected.citations.require, case.expected.citations.on_unverified) == (
+        (),
+        "ignore",
+    )
+
+
+def test_a_case_naming_no_citations_shows_none(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    status, _, err = run(
+        "benchmark",
+        "add-case",
+        BENCHMARK_ID,
+        "--input-file",
+        "claim.pdf",
+        "--comparison",
+        "exact",
+        "--expected",
+        "1",
+        capsys=capsys,
+    )
+
+    assert status == 0, err
+
+    (case,) = cases(database)
+    status, out, _ = run("benchmark", "case-show", BENCHMARK_ID, str(case.id), capsys=capsys)
+
+    assert "Citations:" not in out
+    assert case.expected.citations is None
+
+    status, out, _ = run("benchmark", "show", BENCHMARK_ID, capsys=capsys)
+
+    assert "Cited Cases:" not in out
+
+
+def test_a_segment_required_twice_is_refused_and_nothing_is_added(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    status, out, err = run(
+        "benchmark",
+        "add-case",
+        BENCHMARK_ID,
+        "--input-file",
+        "claim.pdf",
+        "--comparison",
+        "exact",
+        "--expected",
+        "1",
+        "--require-citation",
+        "claim:p1.s2",
+        "--require-citation",
+        "claim:p1.s2",
+        capsys=capsys,
+    )
+
+    assert (status, out) == (1, "")
+    assert err == (
+        "Citation expectation requires segment p1.s2 of source 'claim' more than once.\n"
+    )
+    assert cases(database) == ()
+
+
+@pytest.mark.parametrize("value", ["claim", ":p1.s2", "claim:"])
+def test_a_required_citation_names_a_source_and_a_segment(
+    value: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(
+            (
+                "benchmark",
+                "add-case",
+                BENCHMARK_ID,
+                "--input-file",
+                "claim.pdf",
+                "--comparison",
+                "exact",
+                "--require-citation",
+                value,
+            )
+        )
+
+    assert raised.value.code == 2
+    assert (
+        f"Expected SOURCE:SEGMENT, such as claim:p1.s2, got {value!r}." in capsys.readouterr().err
+    )

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from pydantic import JsonValue
 
+from azathoth.evaluation.citations import compared_value
 from azathoth.evaluation.exact import ExactMatchEvaluator
 from azathoth.evaluation.models import (
     EvaluationResult,
@@ -113,11 +114,23 @@ class OutcomeEvaluator:
         expected: ExpectedOutcome,
         actual: JsonValue,
     ) -> EvaluationResult:
-        """Evaluate one actual value with the evaluator for its comparison."""
+        """Evaluate one actual value with the evaluator for its comparison.
+
+        Before an exact, normalized or semantic comparison, every citation
+        and check in the expected and actual values compares as the segment
+        it cites (ADR 0117). A schema comparison validates the actual value
+        as it is.
+        """
 
         self.require_supported(expected.comparison)
 
+        if expected.comparison is OutcomeComparison.SCHEMA:
+            return await self._evaluators[expected.comparison].evaluate(
+                expected,
+                actual,
+            )
+
         return await self._evaluators[expected.comparison].evaluate(
-            expected,
-            actual,
+            expected.model_copy(update={"value": compared_value(expected.value)}),
+            compared_value(actual),
         )

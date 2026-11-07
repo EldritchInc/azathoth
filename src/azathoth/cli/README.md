@@ -184,6 +184,8 @@ azathoth
     │   ├── --media-type <TYPE>
     │   ├── --comparison exact|normalized|semantic|schema
     │   ├── --expected <JSON>
+    │   ├── --require-citation <SOURCE:SEGMENT>   (repeat for each segment)
+    │   ├── --on-unverified fail|ignore
     │   └── --description <TEXT>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
@@ -3868,6 +3870,67 @@ no --expected
 
 --media-type without --input-file
     --media-type requires --input-file.
+```
+
+# Cited Cases
+
+A case can hold its run to citing the right segments (ADR 0117). Name each
+segment the run must cite with `--require-citation`, as the source a cited
+step names and the segment's ID:
+
+```bash
+azathoth benchmark add-case <BENCHMARK_ID> \
+    --from-run <RUN_ID> \
+    --comparison exact \
+    --expected '{"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}' \
+    --require-citation claim:p1.s2
+```
+
+A required segment is met by a verified check, of that source and segment,
+that a cited step of the case's run kept, read from the content store, not
+from the result. By default any check the run kept that did not verify
+fails the case too; `--on-unverified ignore` counts only the required
+segments. `--on-unverified` alone names an expectation requiring no
+segment.
+
+Before an exact, normalized or semantic comparison, every citation and
+check in the expected value and the result compares as the segment it
+cites, `{"source", "segment"}`, so an expected value names citations by
+segment and is met however the model words its quote. A schema comparison
+validates the result as it is.
+
+A cited case passes only if its outcome and its citations both pass. Its
+score is the outcome's, times the fraction of required segments met and,
+unless ignored, the fraction of checks that verified. Its evaluation adds
+`citations` evidence, which `run show` prints with the rest:
+
+```text
+Evaluator: exact-match 2.0.0
+Status: failed
+Score: 0.500000 (threshold 1.000000)
+Reason: Actual value exactly matched expected value. Citations: 1 of 2 required citations verified; 2 of 3 citations verified. Missing: segment p2.s1 of 'claim'.
+Evidence: expected = {"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}
+Evidence: actual = {"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}
+Evidence: citations = {"required": 2, "missing": [{"source": "claim", "segment": "p2.s1"}], "checks": 3, "verified": 2, "unverified": 1, "on_unverified": "ignore"}
+```
+
+`benchmark case-show` lists a case's input provenance and its required
+citations, and `benchmark show` counts its cited cases:
+
+```text
+Expected:
+  Description: Added from run <RUN_ID>.
+  Comparison: exact
+  Citations:
+    Require: claim p1.s2
+    On Unverified: fail
+```
+
+A required segment is named once, and a value that is not `SOURCE:SEGMENT`
+is refused by the parser:
+
+```text
+Citation expectation requires segment p1.s2 of source 'claim' more than once.
 ```
 
 Benchmark, comparison and optimization runs journal as `workflow run` does

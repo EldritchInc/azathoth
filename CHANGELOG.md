@@ -145,6 +145,18 @@ release dates are on the
   `segment_pdf` reads a case's PDF and a cited step keeps its checks. A case
   whose content the store no longer holds is judged as a failed run
   ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **A case can require its run to cite the right segments.** An expected
+  outcome names the segments its run must cite and whether an unverified
+  citation fails it; `benchmark add-case --require-citation claim:p1.s2`
+  and `--on-unverified` name them. Each is judged from the checks the run's
+  cited steps kept, never from the result, and the case's evaluation
+  records how many were met
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Results that cite compare by what they cite.** Before an exact,
+  normalized or semantic comparison, every citation and check compares as
+  `{source, segment}`, so an expected answer names its citations by segment
+  however the model words its quote
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 
 ### Fixes
 

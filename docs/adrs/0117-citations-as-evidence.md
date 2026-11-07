@@ -79,6 +79,73 @@ a step of the case's run kept, and its checks are kept and recorded. A case
 whose content the store no longer holds fails the steps that read it, and
 is judged as any failed run is (ADR 0073); the benchmark goes on.
 
+### A case names the segments its run must cite
+
+A case's expected outcome may name a citation expectation: the segments its
+run must cite, by the source and segment a cited step names, and whether a
+citation that did not verify fails the case:
+
+```json
+"expected": {
+  "description": "Received on December 14, citing the claim.",
+  "value": {"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]},
+  "comparison": "exact",
+  "citations": {"require": [{"source": "claim", "segment": "p1.s2"}], "on_unverified": "fail"}
+}
+```
+
+`on_unverified` is `fail`, the default, or `ignore`. A segment is required
+once:
+
+```text
+Citation expectation requires segment <SEGMENT> of source '<SOURCE>' more than once.
+```
+
+An outcome without an expectation serializes without one, so no existing
+dataset's digest changes. `benchmark add-case` names one with
+`--require-citation SOURCE:SEGMENT`, repeated for each segment, and
+`--on-unverified`.
+
+### Results compare by what they cite
+
+A check's anchor names digests and offsets, and its quote is whatever the
+model quoted, so a result citing the right segment in slightly different
+words, or a check made against a newer extraction, would never be equal to
+the one expected. Before an exact, normalized or semantic comparison, every
+citation and every check in either value, an object holding a source, a
+segment and a quote and no key a check does not have, compares as
+`{source, segment}`. A case judges the answer and what it cited; its
+expectation judges whether the citations verified. A schema comparison
+validates the result as it is, since a schema may constrain a check's
+status.
+
+### What the run cited is read from its records
+
+Whether a case's run met its expectation is read from the checks its cited
+steps kept, named by their `citations` resources (ADR 0116), never from the
+result, which any later step could have written. A required segment is met
+by a verified check, `verified` or `verified_normalized`, of that source and
+segment. Under `fail`, any check that did not verify fails the case too;
+under `ignore`, only the required segments count.
+
+A case passes only if its outcome passed and its citations did. Its score is
+the outcome's score, times the fraction of required segments met and, under
+`fail`, the fraction of checks that verified; a case its citations fail
+scores below its threshold. Its evaluation keeps the outcome's evidence, and
+adds the `citations` evidence the expectation was judged on, and its reason
+says how:
+
+```text
+The result matched. Citations: 1 of 2 required citations verified; 2 of 3 citations verified. Missing: segment p2.s1 of 'claim'.
+```
+
+A record the run's checks cannot be read from fails the case, naming why:
+
+```text
+Run <RUN_ID> kept citation records, which cannot be read: it has no content store.
+Run <RUN_ID> kept citation record <DIGEST>, which the content store no longer holds.
+```
+
 ## Consequences
 
 - A benchmark of documents is built the way any benchmark is: from runs
@@ -92,6 +159,10 @@ is judged as any failed run is (ADR 0073); the benchmark goes on.
   its documents there too.
 - ADR 0112's refusal of a run given binary content as a case's source is
   lifted.
+- A benchmark can hold a workflow to citing the right segments, and to
+  citing nothing that is not there, on the engine's checks alone.
+- A case written by hand names citations by their segments, so it does not
+  break when a model words a quote differently.
 
 ## Alternatives Considered
 
@@ -101,6 +172,18 @@ Rejected. A dataset would grow by every document it holds, in every
 revision, and the same bytes would be kept twice: once in the store and
 once in the dataset. A digest names the content exactly, and the store
 already keeps it.
+
+### Judge citations from the result
+
+Rejected. A result is a step's value, and a later step can write
+`verified` into it. The records are the engine's own, kept as the check was
+made.
+
+### Average a case's outcome and citations
+
+Rejected. A case citing nothing it was asked to, beside a right answer,
+would pass on the answer alone at any threshold below 1. A product, held
+below the threshold when citations fail, cannot be averaged away.
 
 ### Run cases with an in-memory journal
 

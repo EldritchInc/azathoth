@@ -17,6 +17,12 @@ from azathoth.evaluation.benchmark_revision import (
     BenchmarkDatasetRevision,
     earliest_identical_benchmark_revision,
 )
+from azathoth.evaluation.citations import (
+    CHECK_KEYS,
+    CITED_KEYS,
+    compared_value,
+    is_cited,
+)
 from azathoth.evaluation.exact import ExactMatchEvaluator
 from azathoth.evaluation.json_equality import (
     JsonDifference,
@@ -44,6 +50,8 @@ from azathoth.evaluation.memory_judge_repository import (
     require_judge_rotation_repository,
 )
 from azathoth.evaluation.models import (
+    CitationExpectation,
+    CitedSegment,
     EvaluationEvidence,
     EvaluationResult,
     EvaluationStatus,
@@ -90,6 +98,8 @@ from azathoth.evaluation.sqlite_judge_repository import (
 
 __all__ = [
     "BENCHMARK_TABLES",
+    "CHECK_KEYS",
+    "CITED_KEYS",
     "JUDGE_ROTATION_TABLES",
     "SqlBenchmarkRepository",
     "SqlJudgeRotationRepository",
@@ -103,6 +113,8 @@ __all__ = [
     "BenchmarkDatasetRevision",
     "BenchmarkDocumentError",
     "BenchmarkRepository",
+    "CitationExpectation",
+    "CitedSegment",
     "EvaluationEvidence",
     "EvaluationResult",
     "EvaluationStatus",
@@ -127,6 +139,7 @@ __all__ = [
     "SemanticEvaluator",
     "SemanticJudgingError",
     "UnsupportedComparisonError",
+    "compared_value",
     "decode_benchmark_document",
     "default_comparison_evaluators",
     "earliest_identical_benchmark_revision",
@@ -136,6 +149,7 @@ __all__ = [
     "json_schema_validator",
     "json_schema_violations",
     "json_type_name",
+    "is_cited",
     "judge_call_count",
     "judge_calls_cost_usd",
     "json_values_equal",

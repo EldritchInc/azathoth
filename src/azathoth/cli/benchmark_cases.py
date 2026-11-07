@@ -12,6 +12,7 @@ from azathoth.cli.persistence import repositories
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkCaseConflictError,
+    CitationExpectation,
     OutcomeComparison,
 )
 from azathoth.inputs import (
@@ -48,6 +49,7 @@ def add_benchmark_case(
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None = None,
     description: str | None = None,
+    citations: CitationExpectation | None = None,
 ) -> int:
     """Append a case replaying one recorded run's input, or one file, as a new revision.
 
@@ -60,7 +62,7 @@ def add_benchmark_case(
     A case from a file holds the file's content, kept in the content store as
     `workflow run --input-file` keeps it, and needs a supplied value. The
     benchmark need not belong to any one workflow, because any workflow can
-    run against any benchmark.
+    run against any benchmark. Either case may name what its run must cite.
 
     Nothing is written to the benchmark when any check fails. Only durable
     state is read, so the runtime is never loaded and no provider credentials
@@ -88,6 +90,7 @@ def add_benchmark_case(
             comparison=comparison,
             expected=expected,
             description=description,
+            citations=citations,
         )
     else:
         assert run_id is not None
@@ -98,6 +101,7 @@ def add_benchmark_case(
             comparison=comparison,
             expected=expected,
             description=description,
+            citations=citations,
         )
 
     if case is None:
@@ -130,6 +134,7 @@ def _case_from_run(
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None,
     description: str | None,
+    citations: CitationExpectation | None,
 ) -> BenchmarkCase | None:
     """Return the case replaying one recorded run's input, or report why there is none."""
 
@@ -179,6 +184,7 @@ def _case_from_run(
             expected=expected_value,
             description=description,
             feedback=feedback,
+            citations=citations,
         )
     except BenchmarkCaseSourceError as exc:
         print(
@@ -209,6 +215,7 @@ def _case_from_file(
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None,
     description: str | None,
+    citations: CitationExpectation | None,
 ) -> BenchmarkCase | None:
     """Return the case of one input file, keeping its content, or report why there is none."""
 
@@ -231,6 +238,7 @@ def _case_from_file(
             comparison=comparison,
             expected=expected.value,
             description=description,
+            citations=citations,
         )
     except (
         InputSourceError,

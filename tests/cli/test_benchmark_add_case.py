@@ -21,6 +21,7 @@ from azathoth.cli.parsing import BENCHMARK_CASE_EXPECTED_ATTRIBUTE
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
+    CitationExpectation,
     ExpectedOutcome,
     OutcomeComparison,
     SQLiteBenchmarkRepository,
@@ -784,9 +785,11 @@ def capture_add_case(
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,
+        citations: CitationExpectation | None,
     ) -> int:
         calls.append(
             {
+                "citations": citations,
                 "benchmark_id": benchmark_id,
                 "run_id": run_id,
                 "input_file": input_file,
@@ -834,6 +837,7 @@ def test_cli_add_case_dispatches_the_complete_request(
 
     assert calls == [
         {
+            "citations": None,
             "benchmark_id": BENCHMARK_ID,
             "run_id": RUN_ID,
             "input_file": None,
@@ -921,6 +925,7 @@ def test_add_case_dispatch_converts_the_comparison() -> None:
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,
+        citations: CitationExpectation | None,
     ) -> int:
         received.append(comparison)
 

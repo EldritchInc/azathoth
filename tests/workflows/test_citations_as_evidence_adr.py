@@ -12,12 +12,26 @@ from azathoth.cli.benchmark_cases import SuppliedExpectedValue, add_benchmark_ca
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
+    CitationExpectation,
+    ExpectedOutcome,
     OutcomeComparison,
     SQLiteBenchmarkRepository,
 )
-from azathoth.inputs import InputProvenance, ResolvedInput, content_bytes_digest
-from azathoth.workflows import SQLiteWorkflowRunRepository, create_workflow_input_events
+from azathoth.inputs import (
+    InMemoryContentStore,
+    InputProvenance,
+    ResolvedInput,
+    content_bytes_digest,
+)
+from azathoth.workflows import (
+    CitationEvidenceError,
+    SQLiteWorkflowRunRepository,
+    create_workflow_input_events,
+    judge_citations,
+    recorded_citation_checks,
+)
 from tests.workflows.test_benchmark_case_source import create_run
+from tests.workflows.test_citation_judging import check, kept_run, outcome, record_of, required
 
 ROOT = Path(__file__).parents[2]
 
@@ -111,6 +125,46 @@ def documented_blocks(
     return [block.split("```", 1)[0] for block in decision.split(f"```{language}\n")[1:]]
 
 
+def repeated_refusal() -> str:
+    """Return the message an expectation requiring one segment twice is refused with."""
+
+    with pytest.raises(ValidationError) as raised:
+        CitationExpectation.model_validate(
+            {"require": [{"source": "claim", "segment": "p1.s2"}] * 2}
+        )
+
+    return (
+        str(raised.value.errors()[0]["msg"])
+        .removeprefix("Value error, ")
+        .replace("p1.s2", "<SEGMENT>")
+        .replace("'claim'", "'<SOURCE>'")
+    )
+
+
+def judged_reason() -> str:
+    """Return the reason of a case missing one of its two required citations."""
+
+    return judge_citations(
+        outcome(),
+        required("p1.s2", "p2.s1", on_unverified="ignore"),
+        [check("p1.s2"), check("p2.s1", "quote_not_found"), check("p2.s1", source="other")],
+    ).reason
+
+
+def unreadable(
+    *,
+    store: InMemoryContentStore | None,
+) -> str:
+    """Return why the checks of a run that kept one record cannot be read from a store."""
+
+    run, _ = kept_run([[check("p1.s2")]])
+
+    with pytest.raises(CitationEvidenceError) as raised:
+        recorded_citation_checks(run, store)
+
+    return str(raised.value).replace(str(run.id), "<RUN_ID>").replace(record_of(run), DIGEST)
+
+
 DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Benchmark case <CASE_ID> names application/pdf content <DIGEST> as its input "
@@ -120,6 +174,23 @@ DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Run <RUN_ID> received content <DIGEST>, which the content store no longer holds.",
         store_refusal,
+    ),
+    (
+        "Citation expectation requires segment <SEGMENT> of source '<SOURCE>' more than once.",
+        lambda **_: repeated_refusal(),
+    ),
+    (
+        "The result matched. Citations: 1 of 2 required citations verified; 2 of 3 citations "
+        "verified. Missing: segment p2.s1 of 'claim'.",
+        lambda **_: judged_reason(),
+    ),
+    (
+        "Run <RUN_ID> kept citation records, which cannot be read: it has no content store.",
+        lambda **_: unreadable(store=None),
+    ),
+    (
+        "Run <RUN_ID> kept citation record <DIGEST>, which the content store no longer holds.",
+        lambda **_: unreadable(store=InMemoryContentStore()),
     ),
 ]
 """Each refusal ADR 0117 quotes, and what produces it."""
@@ -149,10 +220,14 @@ def test_the_adr_quotes_no_text_the_tests_do_not_check() -> None:
 
 
 def test_the_adr_shows_a_case_the_model_accepts() -> None:
-    (case,) = documented_blocks("json")
+    case, expected = documented_blocks("json")
     shown = json.loads(case.replace("<SHA-256>", DIGEST).replace("482113", str(len(PDF))))
 
     assert BenchmarkCase.model_validate(shown).input_provenance == PROVENANCE
+
+    outcome_shown = ExpectedOutcome.model_validate(json.loads("{" + expected + "}")["expected"])
+
+    assert outcome_shown.citations == required("p1.s2")
 
 
 def test_the_adr_is_listed_in_the_index() -> None:
