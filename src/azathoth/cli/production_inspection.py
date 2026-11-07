@@ -6,15 +6,19 @@ from uuid import UUID
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
+    RecordedCitations,
     render_production_invocation,
     render_production_invocation_summaries,
     render_workflow_production,
     render_workflow_revision_summaries,
 )
+from azathoth.persistence.repositories import Repositories
+from azathoth.prompting import CitationCheckError, stored_citation_checks
 from azathoth.workflows import (
     ProductionInvocationResult,
     active_production_revision,
     journal_resumes,
+    journaled_citations,
 )
 
 
@@ -180,7 +184,9 @@ def show_invocation(
     """Show one production invocation with its input, outcome, and run.
 
     An incomplete invocation names the run its journal records, and an
-    invocation whose run was resumed names how often (ADR 0105).
+    invocation whose run was resumed names how often (ADR 0105). Every check
+    a cited step of the run kept is read from the content store and shown
+    (ADR 0116).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -197,8 +203,9 @@ def show_invocation(
 
         return 1
 
-    association = repositories(configuration).invocation_runs.get(invocation_id)
-    journal = repositories(configuration).run_journal
+    stored = repositories(configuration)
+    association = stored.invocation_runs.get(invocation_id)
+    journal = stored.run_journal
 
     #
     # A run that never finished is not associated yet, but its journal
@@ -208,16 +215,46 @@ def show_invocation(
         association.run_id if association is not None else journal.invocation_run_id(invocation_id)
     )
 
+    try:
+        citations = [] if run_id is None else _recorded_citations(stored, run_id)
+    except CitationCheckError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
     print(
         render_production_invocation(
             invocation,
             result=invocation_repository.result(invocation_id),
             run_id=run_id,
             resumes=0 if run_id is None else journal_resumes(journal.entries(run_id)),
+            citations=citations,
         )
     )
 
     return 0
+
+
+def _recorded_citations(
+    stored: Repositories,
+    run_id: UUID,
+) -> list[RecordedCitations]:
+    """Return every citations record a run's cited steps kept, with the checks it holds.
+
+    The content store is opened only for a run that kept one.
+
+    Raises:
+        CitationCheckError: A record's content is not a record of checks.
+    """
+
+    return [
+        RecordedCitations(
+            step_id=step_id,
+            record=digest,
+            checks=stored_citation_checks(stored.content, digest),
+        )
+        for step_id, digest in journaled_citations(stored.run_journal, run_id)
+    ]
 
 
 def _is_configured(

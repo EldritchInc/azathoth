@@ -298,6 +298,38 @@ def _record(
     )
 
 
+def stored_citation_checks(
+    store: ContentStore,
+    digest: str,
+) -> tuple[dict[str, JsonValue], ...] | None:
+    """Return the checks a kept citations record holds, in order, or None if it is not kept.
+
+    Raises:
+        CitationCheckError: The content under the digest is not a record of
+            citation checks.
+    """
+
+    content = store.get(digest)
+
+    if content is None:
+        return None
+
+    try:
+        record: Any = json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        record = None
+
+    if (
+        not isinstance(record, dict)
+        or set(record) != {"checks"}
+        or not isinstance(record["checks"], list)
+        or not all(isinstance(check, dict) for check in record["checks"])
+    ):
+        raise CitationCheckError(f"Content {digest} is not a record of citation checks.")
+
+    return tuple(cast(list[dict[str, JsonValue]], record["checks"]))
+
+
 def _is_citation(
     value: dict[str, JsonValue],
 ) -> bool:
@@ -378,4 +410,5 @@ __all__ = [
     "CitedSource",
     "check_citations",
     "check_native_citations",
+    "stored_citation_checks",
 ]

@@ -212,6 +212,22 @@ before sending anything:
 OpenRouter model '<MODEL>' cannot return native citations; cite segments in the reply instead.
 ```
 
+### What a run cited is shown, and can be checked again
+
+`azathoth invocation show` ends with every check each cited step of the
+invocation's run kept, read from the records its journal names: the step,
+its record, and each check's status, source, segment and quote. A record
+is read back as the checks it holds, and content under a record's digest
+that holds none is refused:
+
+```text
+Content <DIGEST> is not a record of citation checks.
+```
+
+Each check that found its quote names, in its anchor, the extraction it was
+checked against, so it can be checked again from the content store alone,
+with nothing the step said.
+
 ## Consequences
 
 - A model step can be shown a document's segments by the IDs it may cite,

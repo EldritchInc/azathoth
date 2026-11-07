@@ -125,6 +125,12 @@ release dates are on the
   it names, of the extraction the step also shows, and the step outputs its
   text with the checks, kept and recorded as any cited step's
   ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **`invocation show` prints every check a cited step kept.** After the
+  result, each cited step of the invocation's run names its record and
+  lists its checks, one line each: the status, the source, the segment and
+  the quote. A record is read back with `stored_citation_checks`, and each
+  check can be verified again from the content store alone
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Fixes
 

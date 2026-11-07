@@ -713,6 +713,12 @@ segments on the pages it names, and the step outputs
 extraction is refused, since there would be nothing to check against.
 OpenRouter returns no native citations.
 
+`azathoth invocation show` prints every check a cited step of the
+invocation's run kept, and `journaled_citations` names each step's record
+in a run's journal. `stored_citation_checks` reads a record back from the
+content store, and each check's anchor names the extraction it can be
+verified against again.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

@@ -31,6 +31,7 @@ from azathoth.prompting import (
     check_citations,
     check_native_citations,
     render_extraction,
+    stored_citation_checks,
 )
 from azathoth.providers import (
     DeterministicLanguageModel,
@@ -263,6 +264,18 @@ def openrouter_refusal() -> str:
     return str(raised.value)
 
 
+def record_refusal() -> str:
+    """Return the message reading back content that is not a record of checks is refused with."""
+
+    store = InMemoryContentStore()
+    digest = store.put(b"{}")
+
+    with pytest.raises(CitationCheckError) as raised:
+        stored_citation_checks(store, digest)
+
+    return str(raised.value).replace(digest, DIGEST)
+
+
 DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
     (
         "Prompt strategy '<NAME>' shows extraction <DIGEST>, which this run cannot give: "
@@ -345,6 +358,10 @@ DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
         "OpenRouter model '<MODEL>' cannot return native citations; cite segments in the "
         "reply instead.",
         openrouter_refusal,
+    ),
+    (
+        "Content <DIGEST> is not a record of citation checks.",
+        record_refusal,
     ),
 ]
 """Each refusal ADR 0116 quotes, and what produces it."""

@@ -11,6 +11,7 @@ from azathoth.prompting.citations import (
     CitedSource,
     check_citations,
     check_native_citations,
+    stored_citation_checks,
 )
 from azathoth.prompting.content import (
     extraction_source,
@@ -94,6 +95,7 @@ __all__ = [
     "CitedSource",
     "check_citations",
     "check_native_citations",
+    "stored_citation_checks",
     "extraction_source",
     "kept_extraction",
 ]
