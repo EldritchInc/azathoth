@@ -522,6 +522,15 @@ request holding a PDF pins OpenRouter's file parser to
 OpenRouter never extracts its text with a paid OCR service instead (ADR
 0115). Every piece's bytes are found before anything is sent.
 
+A prompt may ask its provider for `native_citations` of the documents it
+shows (ADR 0116), and a `ModelResponse` carries them as provider-neutral
+`NativeCitation`s: the document, counted from 0 among those the prompt
+showed, the quoted text, the pages when the provider names them, and the
+part of the reply it supports. Bedrock turns citations on for every
+document and reads them from the reply's `citationsContent` blocks, whose
+text is part of the answer. OpenRouter's chat completions return none, so
+`openrouter_request` refuses a prompt that asks.
+
 `OpenRouterModelRegistryLoader` constructs executable OpenRouter language model
 implementations for OpenRouter models represented in a `ModelCatalog`.
 

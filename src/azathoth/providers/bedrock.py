@@ -19,7 +19,13 @@ from azathoth.providers.bedrock_configuration import BEDROCK_PROVIDER
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.content import prompt_content_bytes
 from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
-from azathoth.providers.models import ModelPricing, ModelResponse, Prompt, TextPart
+from azathoth.providers.models import (
+    ModelPricing,
+    ModelResponse,
+    NativeCitation,
+    Prompt,
+    TextPart,
+)
 from azathoth.providers.registry import LanguageModelRegistry
 
 BLOCKED_STOP_REASONS: Final = frozenset({"guardrail_intervened", "content_filtered"})
@@ -47,12 +53,111 @@ BEDROCK_IMAGE_FORMATS: Final[Mapping[str, str]] = {
 """The Converse `format` of each image media type Azathoth accepts."""
 
 
+class _Text(BaseModel):
+    """A piece of text, of a reply or of a cited source."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str = ""
+
+
+class _Span(BaseModel):
+    """Where in which document a citation lies: a range of pages, characters or chunks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    document_index: int = Field(alias="documentIndex", ge=0)
+    start: int | None = None
+    end: int | None = None
+
+
+class _Location(BaseModel):
+    """Where a citation lies; Azathoth reads the document locations."""
+
+    model_config = ConfigDict(frozen=True)
+
+    document_page: _Span | None = Field(default=None, alias="documentPage")
+    document_char: _Span | None = Field(default=None, alias="documentChar")
+    document_chunk: _Span | None = Field(default=None, alias="documentChunk")
+
+
+class _Citation(BaseModel):
+    """One citation Converse returned of a document the prompt showed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_content: tuple[_Text, ...] = Field(default=(), alias="sourceContent")
+    location: _Location | None = None
+
+
+class _CitationsContent(BaseModel):
+    """Generated text and the citations that support it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    content: tuple[_Text, ...] = ()
+    citations: tuple[_Citation, ...] = ()
+
+
 class _ContentBlock(BaseModel):
-    """One block of a reply's message; only text blocks are part of the answer."""
+    """One block of a reply's message: text, or text with its citations, is the answer."""
 
     model_config = ConfigDict(frozen=True)
 
     text: str | None = None
+    citations_content: _CitationsContent | None = Field(default=None, alias="citationsContent")
+
+    def answer(
+        self,
+    ) -> str:
+        """Return the part of the answer this block holds."""
+
+        if self.text is not None:
+            return self.text
+
+        if self.citations_content is not None:
+            return "".join(piece.text for piece in self.citations_content.content)
+
+        return ""
+
+    def native_citations(
+        self,
+    ) -> list[NativeCitation]:
+        """Return this block's citations of the prompt's documents, provider-neutral."""
+
+        if self.citations_content is None:
+            return []
+
+        supports = self.answer()
+        cited: list[NativeCitation] = []
+
+        for citation in self.citations_content.citations:
+            location = citation.location
+            quote = " ".join(piece.text for piece in citation.source_content if piece.text)
+
+            if location is None or not quote:
+                continue
+
+            span = location.document_page or location.document_char or location.document_chunk
+
+            if span is None:
+                continue
+
+            pages = (
+                (span.start, span.end if span.end is not None else span.start)
+                if location.document_page is not None and span.start is not None
+                else None
+            )
+            cited.append(
+                NativeCitation(
+                    document=span.document_index,
+                    quote=quote,
+                    pages=pages,
+                    supports=supports,
+                )
+            )
+
+        return cited
 
 
 class _Message(BaseModel):
@@ -103,7 +208,9 @@ class BedrockLanguageModel:
     """Complete prompts with one Bedrock model, or inference profile, through Converse.
 
     The prompt is sent as one user message, with no inference settings. The
-    answer is the reply's text blocks, joined. Its cost is its tokens at the
+    answer is the reply's text, joined, whether in text blocks or in blocks
+    of text with the citations that support it (ADR 0116), which the
+    response carries as native citations. Its cost is its tokens at the
     model's price, or unknown when the model is not priced.
     """
 
@@ -164,8 +271,11 @@ class BedrockLanguageModel:
         output_tokens = reply.usage.output_tokens
 
         return ModelResponse(
-            text="".join(
-                block.text for block in reply.output.message.content if block.text is not None
+            text="".join(block.answer() for block in reply.output.message.content),
+            citations=tuple(
+                citation
+                for block in reply.output.message.content
+                for citation in block.native_citations()
             ),
             provider=BEDROCK_PROVIDER,
             model=self._model,
@@ -260,15 +370,16 @@ def bedrock_content(
                     f"{BEDROCK_MAX_DOCUMENT_BYTES} bytes; content {shown.digest} is {len(data)}."
                 )
 
-            blocks.append(
-                {
-                    "document": {
-                        "format": "pdf",
-                        "name": f"document-{documents}",
-                        "source": {"bytes": data},
-                    }
-                }
-            )
+            document: dict[str, object] = {
+                "format": "pdf",
+                "name": f"document-{documents}",
+                "source": {"bytes": data},
+            }
+
+            if prompt.native_citations:
+                document["citations"] = {"enabled": True}
+
+            blocks.append({"document": document})
             continue
 
         images += 1

@@ -1,11 +1,12 @@
 """Human-readable production invocation history rendering."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from uuid import UUID
 
 from pydantic import JsonValue
 
 from azathoth.cli.rendering._json import render_json_value
+from azathoth.cli.rendering.citations import RecordedCitations, render_citation_lines
 from azathoth.cli.rendering.lineage import render_lineage_lines
 from azathoth.cli.rendering.resumes import render_resume_lines
 from azathoth.workflows import (
@@ -62,6 +63,7 @@ def render_production_invocation(
     result: ProductionInvocationResult | None,
     run_id: UUID | None,
     resumes: int = 0,
+    citations: Sequence[RecordedCitations] = (),
 ) -> str:
     """Render the full recorded history of one production invocation.
 
@@ -70,7 +72,8 @@ def render_production_invocation(
     started through a job envelope names its idempotency key
     and request digest (ADR 0097). An invocation started by a step of another
     run names its depth, the parent step and the root run (ADR 0104). One
-    whose run was resumed names how often, after its run (ADR 0105).
+    whose run was resumed names how often, after its run (ADR 0105). One
+    whose run had cited steps ends with every check they kept (ADR 0116).
     """
 
     lines = [
@@ -141,6 +144,8 @@ def render_production_invocation(
                     render_json_value(result.metadata),
                 )
             )
+
+    lines.extend(render_citation_lines(citations))
 
     return "\n".join(lines)
 

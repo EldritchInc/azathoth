@@ -6,8 +6,10 @@ import secrets
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from azathoth.citations import SegmentedText, extraction_handle_from_value
 from azathoth.context import Context
 from azathoth.inputs import ContentRef, content_ref_from_value
+from azathoth.prompting.content import extraction_source, kept_extraction
 from azathoth.prompting.exceptions import (
     ModelBindingMismatchError,
     PromptBindingEventNotFoundError,
@@ -111,10 +113,42 @@ class PromptTemplate(BaseModel):
     text: str = Field(min_length=1)
     bindings: tuple[PromptBinding | PromptInputBinding, ...] = ()
 
-    def render(self, context: Context) -> Prompt:
+    def render(
+        self,
+        context: Context,
+        *,
+        strategy_name: str | None = None,
+    ) -> Prompt:
         """Render this template using values resolved from context.
 
+        A variable bound to an extraction handle renders the extraction's
+        segments, by their IDs, for a model to cite (ADR 0116); its refusals
+        name the strategy, when one is given.
+
         Raises:
+            PromptContentError: A variable is bound to an extraction this run
+                cannot give.
+            PromptBindingEventNotFoundError: An event-field binding has no
+                matching context event.
+            PromptBindingFieldNotFoundError: The matching event lacks the
+                bound field.
+            PromptBindingInputNotFoundError: An input binding has no bound
+                workflow input with its name.
+        """
+
+        return self.render_with_sources(context, strategy_name=strategy_name)[0]
+
+    def render_with_sources(
+        self,
+        context: Context,
+        *,
+        strategy_name: str | None = None,
+    ) -> tuple[Prompt, dict[str, SegmentedText]]:
+        """Render this template, and return the extractions it showed by variable (ADR 0116).
+
+        Raises:
+            PromptContentError: A variable is bound to an extraction this run
+                cannot give.
             PromptBindingEventNotFoundError: An event-field binding has no
                 matching context event.
             PromptBindingFieldNotFoundError: The matching event lacks the
@@ -124,11 +158,12 @@ class PromptTemplate(BaseModel):
         """
 
         values: dict[str, str] = {}
-        contents = _ContentMarkers()
+        contents = _ContentMarkers(strategy_name=strategy_name)
 
         for binding in self.bindings:
             if isinstance(binding, PromptInputBinding):
                 values[binding.variable_name] = contents.render(
+                    binding.variable_name,
                     _bound_input_value(context, binding),
                 )
 
@@ -151,10 +186,11 @@ class PromptTemplate(BaseModel):
                 )
 
             values[binding.variable_name] = contents.render(
+                binding.variable_name,
                 event.payload[binding.field_name],
             )
 
-        return contents.prompt(self.text.format_map(values))
+        return contents.prompt(self.text.format_map(values)), dict(contents.sources)
 
 
 class _ContentMarkers:
@@ -166,20 +202,36 @@ class _ContentMarkers:
 
     def __init__(
         self,
+        *,
+        strategy_name: str | None = None,
     ) -> None:
+        self._strategy_name = strategy_name
+        self.sources: dict[str, SegmentedText] = {}
         self._token = secrets.token_hex(16)
         self._contents: list[ContentRef] = []
         self._pattern = re.compile(f"\x00{self._token}:([0-9]+)\x00")
 
     def render(
         self,
+        variable: str,
         value: object,
     ) -> str:
-        """Return the text a bound value contributes, or the marker of the content it is."""
+        """Return the text a bound value contributes, or the marker of the content it is.
+
+        An extraction handle contributes the extraction's segments.
+        """
 
         content = content_ref_from_value(value) if isinstance(value, dict) else None
 
         if content is None:
+            extraction = extraction_handle_from_value(value) if isinstance(value, dict) else None
+
+            if extraction is not None:
+                segmented = kept_extraction(extraction, strategy_name=self._strategy_name)
+                self.sources[variable] = segmented
+
+                return extraction_source(variable, segmented)
+
             return render_prompt_value(value)
 
         self._contents.append(content)

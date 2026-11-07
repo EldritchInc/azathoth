@@ -2690,6 +2690,33 @@ Message: Workflow timed out.
 
 A pending invocation renders neither.
 
+An invocation whose run had [cited steps](../workflows/README.md#cited-prompt-steps)
+ends with every check they kept (ADR 0116). Each step names its record in
+the content store, then each check, in the order its reply held them: the
+status, the source, the segment, and the quote. A provider's own citation
+also names its pages, and one that no segment verified names `-` for its
+segment:
+
+```text
+Citations:
+Step <STEP_ID>: 2 citations, record <SHA-256>
+  verified claim p1.s2 'December 14'
+  quote_not_found claim p2.s1 'Denied.'
+```
+
+A record the content store no longer holds is named as such:
+
+```text
+Step <STEP_ID>: record <SHA-256> is not in the content store.
+```
+
+Content under a record's digest that is not a record of checks fails the
+command:
+
+```text
+Content <SHA-256> is not a record of citation checks.
+```
+
 The `Run ID` continues into run inspection:
 
 ```bash

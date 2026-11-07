@@ -100,6 +100,7 @@ from azathoth.workflows import (
     WorkflowRunEvaluationRepository,
     WorkflowRunFeedbackRepository,
     WorkflowRunRepository,
+    journaled_extractions,
     journaled_initial_context,
 )
 
@@ -419,10 +420,11 @@ class Repositories:
     def tool_content(
         self,
     ) -> ToolContentAccess:
-        """Return what tools' content inputs are given from (ADR 0114).
+        """Return what tools' content inputs and prompts are given from (ADR 0114).
 
-        The content is this content store's, and a run's received content is
-        read from the initial contexts its journal and its ancestors' record.
+        The content is this content store's, a run's received content is read
+        from the initial contexts its journal and its ancestors' record, and
+        the extractions it kept from its journal's committed layers (ADR 0116).
         """
 
         journal = self.run_journal
@@ -430,6 +432,7 @@ class Repositories:
         return ToolContentAccess(
             store=self.content,
             initial_context=lambda run_id: journaled_initial_context(journal, run_id),
+            kept_extractions=lambda run_id: journaled_extractions(journal, run_id),
         )
 
 

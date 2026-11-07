@@ -106,6 +106,31 @@ release dates are on the
   `segment_text` makes one segment per paragraph, deterministically, under
   a version of its own that changes only when its output does
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **A model step is shown an extraction's segments by the IDs it may
+  cite.** A template variable bound to an extraction handle renders its
+  segments as `[p1.s2] text` inside a `source` named by the variable. Only
+  an extraction a step of the run, or of a run above it, kept is shown
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **A cited step's citations are checked before anything relies on them.**
+  A JSON prompt step naming a `citations` policy has every
+  `{"source", "segment", "quote"}` in its reply checked against the
+  extraction it names and replaced by its check, with an anchor naming the
+  source's origin. A citation not verified fails the attempt, so the step
+  asks again, unless the policy keeps it, and every check is kept in the
+  content store and recorded as the step's `citations` resource
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **A Bedrock model's own citations of a PDF are checked the same way.** A
+  text prompt step whose policy is `{"native": true}` has Bedrock cite the
+  PDFs it shows; each citation is checked against the segments, on the pages
+  it names, of the extraction the step also shows, and the step outputs its
+  text with the checks, kept and recorded as any cited step's
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **`invocation show` prints every check a cited step kept.** After the
+  result, each cited step of the invocation's run names its record and
+  lists its checks, one line each: the status, the source, the segment and
+  the quote. A record is read back with `stored_citation_checks`, and each
+  check can be verified again from the content store alone
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Fixes
 

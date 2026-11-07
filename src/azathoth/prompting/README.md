@@ -101,7 +101,10 @@ from azathoth.prompting import (
     PromptTemplate,
     PromptingError,
     generate_prompt_candidates,
+    CitationPolicy,
+    check_citations,
     read_prompt_content,
+    render_extraction,
 )
 ```
 
@@ -971,6 +974,39 @@ the run, or a run above it, received it under that media type, and the
 content store holds it under its digest, at its size. It reads each piece
 once. The bytes are given to the provider for the length of the call, and
 only there; a prompt that fails a check never reaches a model.
+
+# Showing Extractions
+
+A variable whose value is exactly one extraction handle renders the
+extraction's segments, by the IDs a model may cite (ADR 0116):
+
+```text
+<source name="claim">
+[p1.s1] Claim 0412.
+
+[p1.s2] Received on December 14.
+</source>
+```
+
+The variable names the source. `render_extraction` renders one, and only one
+a step of the run, or of a run above it, kept: the content access names the
+extractions each run's journal records keeping.
+
+# Cited Steps
+
+A `ContextPromptStrategySpec` with JSON output may name a `CitationPolicy`
+as `citations` (ADR 0116). `render_with_sources` renders its template and
+returns the extractions it showed, by variable. After the reply is parsed,
+`check_citations` finds every object of exactly `source`, `segment` and
+`quote`, checks it with `verify_citation` against the source's extraction,
+and replaces it with its check, the anchor naming the source's origin as
+`received_origin` finds it. The checks are kept in the content store as
+canonical JSON, `{"checks": [...]}`, and recorded as a
+`CITATIONS_RESOURCE_KIND` resource counting each status.
+
+`on_unverified` `fail`, the default, raises `CitationCheckError` for the
+first citation not verified; `keep` keeps every check. A citation of a
+source the prompt did not show always raises.
 
 # Prompt Rendering Errors
 

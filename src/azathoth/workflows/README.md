@@ -638,6 +638,87 @@ Prompt strategy '<NAME>' shows content <DIGEST> as <MEDIA_TYPE>, but model <MODE
 
 `azathoth model show <MODEL>` prints a model's input modalities.
 
+### Prompt Steps Read Extractions
+
+A context-prompt step bound to an extraction handle, such as the output of
+`segment_pdf`, is shown the extraction's segments by their IDs, so a model
+can cite them (ADR 0116):
+
+```text
+<source name="claim">
+[p1.s1] Claim 0412.
+
+[p1.s2] Received on December 14.
+</source>
+```
+
+The variable's name is the source's. Only an extraction a step of the run,
+or of a run above it, kept is shown; a handle a step wrote itself is
+refused.
+
+### Cited Prompt Steps
+
+A context-prompt step that replies in JSON becomes a cited step by naming a
+`citations` policy (ADR 0116):
+
+```json
+"specification": {
+  "template": {
+    "text": "{claim}\n\nWhen was the claim received? Reply in JSON as {{\"received\": \"...\", \"citations\": [{{\"source\": \"claim\", \"segment\": \"<SEGMENT ID>\", \"quote\": \"<EXACT WORDS>\"}}]}}, quoting the segment word for word.",
+    "bindings": [{"variable_name": "claim", "input_name": "claim"}]
+  },
+  "model_selection": {"provider": "openrouter", "model": "openai/gpt-4.1-mini"},
+  "output_format": "json",
+  "citations": {"on_unverified": "fail"}
+}
+```
+
+Every object of the reply whose keys are exactly `source`, `segment` and
+`quote` is a citation, wherever it stands. Each is checked against the
+extraction it names, with no model involved, and replaced by its check: the
+citation, its `status`, and, when its quote was found, its `anchor`. The
+engine adds no instructions of its own, so the template says how to cite;
+the one above is a start.
+
+Under `fail`, the default, a citation whose quote is not in its segment, or
+of a segment the source does not have, fails the attempt, and the step's
+retry policy asks again. Under `keep`, every check is kept and the step goes
+on. A citation of a source the prompt did not show always fails. Every
+check is kept in the content store and named by the step's `citations`
+resource.
+
+A step shown a PDF can instead have its model cite it natively, when the
+model does: on Bedrock, a model that reads documents with citations returns
+its answer as text, with the passages and pages that support it. The step
+replies in text, shows the PDF and its extraction both, and names a native
+policy (ADR 0116):
+
+```json
+"specification": {
+  "template": {
+    "text": "{document}\n\n{claim}\n\nWhen was the claim received?",
+    "bindings": [
+      {"variable_name": "document", "event_type": "workflow.input.received", "field_name": "input"},
+      {"variable_name": "claim", "input_name": "claim"}
+    ]
+  },
+  "model_selection": {"provider": "bedrock", "model": "us.anthropic.claude-sonnet-4-20250514-v1:0"},
+  "citations": {"native": true}
+}
+```
+
+Each citation the model returns is checked against the extraction's
+segments on the pages it names, and the step outputs
+`{"text": ..., "citations": [...]}`. A step that shows a PDF without its
+extraction is refused, since there would be nothing to check against.
+OpenRouter returns no native citations.
+
+`azathoth invocation show` prints every check a cited step of the
+invocation's run kept, and `journaled_citations` names each step's record
+in a run's journal. `stored_citation_checks` reads a record back from the
+content store, and each check's anchor names the extraction it can be
+verified against again.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

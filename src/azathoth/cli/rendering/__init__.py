@@ -8,6 +8,10 @@ from azathoth.cli.rendering.benchmark_executions import (
 from azathoth.cli.rendering.benchmarks import (
     render_workflow_benchmark_result,
 )
+from azathoth.cli.rendering.citations import (
+    RecordedCitations,
+    render_citation_lines,
+)
 from azathoth.cli.rendering.evaluations import render_workflow_run_evaluations
 from azathoth.cli.rendering.experiments import (
     render_workflow_experiment,
@@ -71,8 +75,10 @@ __all__ = [
     "STEP_RECORD_TYPE",
     "WORKFLOW_EXECUTION_FAILED_CODE",
     "OutputRecord",
+    "RecordedCitations",
     "WorkflowRunSource",
     "production_invocation_record",
+    "render_citation_lines",
     "render_model_usage_report",
     "render_output_record",
     "render_job_result",
