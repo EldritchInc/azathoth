@@ -69,6 +69,14 @@ from azathoth.tools.implementation_resolution import (
     ToolImplementationResolver,
 )
 from azathoth.tools.matching import ToolMatcher
+from azathoth.tools.mcp_binding import (
+    MCP_SCHEMA_DIGEST_PATTERN,
+    MCP_TOOL_RUNTIME,
+    McpCredentials,
+    McpServer,
+    McpToolBinding,
+    mcp_schema_digest,
+)
 from azathoth.tools.memory_repository import (
     InMemoryToolRepository,
     require_tool_repository,
@@ -122,6 +130,8 @@ __all__ = [
     "ENVIRONMENT_PREFIX_WILDCARD",
     "LINEAGE_ENVIRONMENT_VARIABLE",
     "MANAGED_ENVIRONMENT_VARIABLES",
+    "MCP_SCHEMA_DIGEST_PATTERN",
+    "MCP_TOOL_RUNTIME",
     "POSIX_BASE_ENVIRONMENT",
     "PROCESS_TOOL_RUNTIME",
     "PROCESS_TOOL_TIMEOUT_ENVIRONMENT_VARIABLE",
@@ -130,6 +140,9 @@ __all__ = [
     "TRACESTATE_ENVIRONMENT_VARIABLE",
     "TRACE_CONTEXT_ENVIRONMENT_VARIABLES",
     "WINDOWS_BASE_ENVIRONMENT",
+    "McpCredentials",
+    "McpServer",
+    "McpToolBinding",
     "ProcessToolExecutor",
     "PythonToolExecutor",
     "RuntimeToolExecutor",
@@ -164,6 +177,7 @@ __all__ = [
     "default_tool_executors",
     "earliest_identical_tool_revision",
     "encode_tool_document",
+    "mcp_schema_digest",
     "process_tool_environment",
     "require_tool_repository",
     "supported_tool_runtimes",

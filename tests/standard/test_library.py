@@ -196,6 +196,7 @@ def test_standard_tool_sources_never_import_azathoth(
     for implementation in decode_tool_document(
         (STANDARD_TOOLS / name).read_text(encoding="utf-8")
     ).implementations:
+        assert implementation.source is not None
         assert "import azathoth" not in implementation.source
         assert "from azathoth" not in implementation.source
 

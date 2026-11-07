@@ -11,6 +11,9 @@ production revision as a recorded invocation, exactly as `job run` does, and
 returns the invocation's ID with its result, so whatever an agent did can be
 traced to its runs and evidence.
 
+To go the other way, and call a tool another MCP server serves from a
+workflow step, see [Calling MCP Tools](mcp-tools.md).
+
 The server runs in one of two ways:
 
 - over **stdio**, for one local client that starts it;

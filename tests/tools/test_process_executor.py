@@ -316,6 +316,7 @@ def test_default_runtime_executor_runs_process_tools() -> None:
 
 def test_process_is_a_supported_tool_runtime() -> None:
     assert supported_tool_runtimes() == (
+        "mcp",
         "process",
         "python",
     )

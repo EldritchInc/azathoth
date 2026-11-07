@@ -603,6 +603,7 @@ def test_loop_preparation_tools_take_their_child_workflow_as_an_input(
     assert implementation.tool_version == "1.1.0"
     assert implementation.version == implementation_version
     assert str(implementation.id) == implementation_id
+    assert implementation.source is not None
     assert "e1000000-" not in implementation.source
 
 

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from azathoth.context import LineageRun, LineageStep, StepLineage, encode_step_lineage
 from tests.deploy.template import defaults, properties, resolve
-from tests.standard.harness import standard_implementation, standard_tool_failure
+from tests.standard.harness import standard_implementation, standard_source, standard_tool_failure
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -36,7 +36,7 @@ def script(
 
     namespace: dict[str, Any] = {"__name__": name}
 
-    exec(compile(standard_implementation(name).source, name, "exec"), namespace)
+    exec(compile(standard_source(name), name, "exec"), namespace)
 
     return namespace
 

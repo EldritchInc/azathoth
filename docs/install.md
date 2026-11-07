@@ -474,6 +474,29 @@ segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[docu
 The [standard tools](../src/azathoth/standard/README.md#segment_pdf)
 describe what it extracts.
 
+## Optional: Calling MCP Tools
+
+A workflow step can call a tool another MCP server serves. Azathoth reaches
+it with the MCP SDK, an optional extra; `azathoth-mcp` installs it too.
+Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[mcp]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[mcp]"
+```
+
+Without it, a step that calls an MCP tool fails and says so:
+
+```text
+MCP tools need the mcp package, which is not installed; install azathoth-ai[mcp].
+```
+
+[Calling MCP Tools](mcp-tools.md) walks through writing, importing and
+calling one.
+
 ## Optional: Tracing With OpenTelemetry
 
 Azathoth can send a trace of every workflow it runs to the tracing backend

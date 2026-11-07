@@ -25,6 +25,7 @@ from tests.standard.harness import (
     run_standard_tool,
     standard_document,
     standard_implementation,
+    standard_source,
     standard_tool_failure,
 )
 from tests.standard.pdf_builder import Page, Text, pdf_document
@@ -405,7 +406,7 @@ def run_without_site_packages(
     """Run segment_pdf's source with a Python that cannot import pdfminer."""
 
     script = tmp_path / "segment_pdf.py"
-    script.write_text(standard_implementation("segment_pdf").source, encoding="utf-8")
+    script.write_text(standard_source("segment_pdf"), encoding="utf-8")
 
     return subprocess.run(
         [sys.executable, "-S", "-I", str(script)],
@@ -441,7 +442,7 @@ def script() -> dict[str, Any]:
 
     namespace: dict[str, Any] = {"__name__": "segment_pdf"}
 
-    exec(compile(standard_implementation("segment_pdf").source, "segment_pdf", "exec"), namespace)
+    exec(compile(standard_source("segment_pdf"), "segment_pdf", "exec"), namespace)
 
     return namespace
 

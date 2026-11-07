@@ -126,7 +126,10 @@ def test_grants_must_be_unique() -> None:
 def test_only_process_implementations_grant_variables() -> None:
     with pytest.raises(
         ValidationError,
-        match="Only process tool implementations may grant environment variables",
+        match=(
+            "Only process tool implementations, and MCP ones whose server they start, "
+            "may grant environment variables."
+        ),
     ):
         create_implementation(environment=("HOME",), runtime=PYTHON_TOOL_RUNTIME)
 

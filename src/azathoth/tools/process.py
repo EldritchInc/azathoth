@@ -69,7 +69,7 @@ class ProcessToolExecutor:
             script = Path(directory) / "tool"
 
             script.write_text(
-                implementation.source,
+                self._require_source(implementation),
                 encoding="utf-8",
             )
 
@@ -137,6 +137,19 @@ class ProcessToolExecutor:
             )
 
         return implementation.command
+
+    @staticmethod
+    def _require_source(
+        implementation: ToolImplementation,
+    ) -> str:
+        """Return the source of a process implementation."""
+
+        if implementation.source is None:
+            raise ToolExecutionError(
+                f"Tool implementation {implementation.id} does not declare a source."
+            )
+
+        return implementation.source
 
     @staticmethod
     def _environment(

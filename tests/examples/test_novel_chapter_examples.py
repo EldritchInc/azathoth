@@ -404,4 +404,5 @@ def test_prepare_revision_takes_its_workflow_id_as_an_input() -> None:
     assert "revision_workflow_id" in required
     assert (implementation.tool_version, implementation.version) == ("1.1.0", "1.1.0")
     assert str(implementation.id) == "e1000000-0000-4000-8000-000000000203"
+    assert implementation.source is not None
     assert "e1000000-" not in implementation.source

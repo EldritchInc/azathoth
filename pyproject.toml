@@ -71,9 +71,13 @@ worker = [
 documents = [
     "pdfminer.six>=20260107",
 ]
+mcp = [
+    "mcp>=2.3,<3",
+]
 dev = [
     "boto3>=1.39,<2",
     "build",
+    "mcp>=2.3,<3",
     "mypy",
     "opentelemetry-api>=1.27,<2",
     "opentelemetry-sdk>=1.27,<2",

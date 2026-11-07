@@ -42,6 +42,18 @@ def standard_implementation(
     return implementation
 
 
+def standard_source(
+    name: str,
+) -> str:
+    """Return the source of a standard tool's one implementation, which every one has."""
+
+    source = standard_implementation(name).source
+
+    assert source is not None
+
+    return source
+
+
 def run_standard_tool(
     name: str,
     inputs: dict[str, JsonValue],

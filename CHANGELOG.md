@@ -203,6 +203,32 @@ release dates are on the
   its `result` held to the workflow's output schema
   ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
 
+### Calling MCP Tools
+
+- **A tool implementation can bind a tool an MCP server serves.** An `mcp`
+  implementation names its server, by the command of a stdio server or the
+  URL of an HTTP one, the remote tool, the digest of that tool's schemas
+  when it was pinned, and the variable holding an HTTP server's bearer
+  token; it runs no source. `tool implementation show` prints the binding,
+  and every other implementation reads and digests as before
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+- **A tool step calls the MCP tool it is bound to.** Each call connects
+  anew, over stdio or streamable HTTP, and calls the tool only while its
+  schemas match the pin; its output is the tool's structured content, or
+  its text. A stdio server gets only the variables its implementation
+  grants, and an HTTP server the bearer token its authorization variable
+  holds, with the step's trace context. Install `azathoth-ai[mcp]` to call
+  MCP tools
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+- **`azathoth tool from-mcp` writes an MCP tool's document.** It lists a
+  server's tools and prints the named tool's document, its definition
+  taking the tool's name, description and schemas and its implementation
+  pinned to them, ready for `tool import`; writing it again for a tool
+  whose schemas changed shows a new implementation
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+  The new [Calling MCP Tools](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp-tools.md)
+  guide walks through one, with an example server in `examples/mcp`.
+
 ### Fixes
 
 - **Workflows with tool steps can be compared and optimized.** A tool step

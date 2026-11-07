@@ -10,6 +10,7 @@ from azathoth.cli.parsing import (
     TOOL_ACTION_ATTRIBUTE,
     TOOL_DOCUMENT_ATTRIBUTE,
     TOOL_EXPORT_ACTION,
+    TOOL_FROM_MCP_ACTION,
     TOOL_HISTORY_ACTION,
     TOOL_HISTORY_LIMIT_ATTRIBUTE,
     TOOL_HISTORY_VERSION_ATTRIBUTE,
@@ -20,6 +21,12 @@ from azathoth.cli.parsing import (
     TOOL_IMPORT_ACTION,
     TOOL_INSTALL_STANDARD_ACTION,
     TOOL_LIST_ACTION,
+    TOOL_MCP_AUTHORIZATION_ATTRIBUTE,
+    TOOL_MCP_COMMAND_ATTRIBUTE,
+    TOOL_MCP_GRANTS_ATTRIBUTE,
+    TOOL_MCP_TIMEOUT_ATTRIBUTE,
+    TOOL_MCP_TOOL_ATTRIBUTE,
+    TOOL_MCP_URL_ATTRIBUTE,
     TOOL_REVISION_ATTRIBUTE,
     TOOL_SHOW_ACTION,
     TOOL_TEST_CASE_ID_ATTRIBUTE,
@@ -37,6 +44,7 @@ ToolInstallHandler = Callable[[], int]
 ToolListHandler = Callable[[], int]
 ToolVersionHandler = Callable[..., int]
 ToolHistoryHandler = Callable[..., int]
+ToolFromMcpHandler = Callable[..., int]
 
 
 def dispatch_tool_command(
@@ -55,6 +63,7 @@ def dispatch_tool_command(
     show_tool_test_case: ToolIdentifierHandler,
     tool_usage: ToolIdentifierHandler,
     verify_tool: ToolVersionHandler,
+    tool_from_mcp: ToolFromMcpHandler,
 ) -> int | None:
     """Dispatch one parsed tool command."""
 
@@ -226,6 +235,20 @@ def dispatch_tool_command(
                     TOOL_ID_ATTRIBUTE,
                 ),
             )
+        )
+
+    if action == TOOL_FROM_MCP_ACTION:
+        timeout = cast(int | None, getattr(arguments, TOOL_MCP_TIMEOUT_ATTRIBUTE, None))
+
+        return tool_from_mcp(
+            tool=cast(str, getattr(arguments, TOOL_MCP_TOOL_ATTRIBUTE)),
+            url=cast(str | None, getattr(arguments, TOOL_MCP_URL_ATTRIBUTE, None)),
+            command=tuple(cast(list[str], getattr(arguments, TOOL_MCP_COMMAND_ATTRIBUTE, []))),
+            authorization=cast(
+                str | None, getattr(arguments, TOOL_MCP_AUTHORIZATION_ATTRIBUTE, None)
+            ),
+            grants=tuple(cast(list[str], getattr(arguments, TOOL_MCP_GRANTS_ATTRIBUTE, []))),
+            timeout_seconds=float(timeout) if timeout is not None else None,
         )
 
     if action == TOOL_VERIFY_ACTION:

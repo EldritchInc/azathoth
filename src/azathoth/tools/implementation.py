@@ -13,6 +13,8 @@ from pydantic import (
     model_validator,
 )
 
+from azathoth.tools.mcp_binding import MCP_TOOL_RUNTIME, McpToolBinding
+
 PROCESS_TOOL_RUNTIME = "process"
 """The runtime name of tool implementations executed as subprocesses."""
 
@@ -70,9 +72,15 @@ class ToolImplementation(BaseModel):
     an implementation that leaves them unset serializes without them, so its
     documents and content digests are unchanged.
 
+    An MCP implementation runs no source: it declares the binding of the
+    tool an MCP server serves that it calls, and may declare a timeout
+    (ADR 0119). Every other implementation declares a source, and none
+    declares a binding; one without a binding serializes without it.
+
     A process implementation may also grant itself environment variables
     beyond the base environment every process tool receives: exact names, or
-    prefixes ending in `*` (ADR 0099). An implementation without grants
+    prefixes ending in `*` (ADR 0099), and so may an MCP implementation
+    whose server it starts over stdio. An implementation without grants
     serializes without them.
 
     A process implementation may name some of its inputs content inputs: each
@@ -94,7 +102,7 @@ class ToolImplementation(BaseModel):
     version: str = Field(default="1.0.0", min_length=1)
     runtime: str = Field(min_length=1)
     entrypoint: str = Field(default="run", min_length=1)
-    source: str = Field(min_length=1)
+    source: str | None = Field(default=None, min_length=1)
 
     command: tuple[str, ...] | None = Field(
         default=None,
@@ -111,6 +119,44 @@ class ToolImplementation(BaseModel):
     content_inputs: tuple[str, ...] = ()
 
     extraction_output: str | None = None
+
+    mcp: McpToolBinding | None = None
+
+    @model_validator(mode="after")
+    def validate_mcp_binding(self) -> Self:
+        """Require a binding and no source of MCP implementations, and the reverse of others.
+
+        Raises:
+            ValueError: An MCP implementation declares no binding, or a
+                source or an entrypoint; another declares a binding, or no
+                source.
+        """
+
+        if self.runtime == MCP_TOOL_RUNTIME:
+            if self.mcp is None:
+                raise ValueError("MCP tool implementations must declare an MCP binding.")
+
+            if self.source is not None:
+                raise ValueError(
+                    "An MCP tool implementation runs the tool its binding names, so it "
+                    "declares no source."
+                )
+
+            if "entrypoint" in self.model_fields_set:
+                raise ValueError(
+                    "An MCP tool implementation runs the tool its binding names, so it "
+                    "declares no entrypoint."
+                )
+
+            return self
+
+        if self.mcp is not None:
+            raise ValueError("Only MCP tool implementations may declare an MCP binding.")
+
+        if self.source is None:
+            raise ValueError("Tool implementations other than MCP ones must declare a source.")
+
+        return self
 
     @model_validator(mode="after")
     def validate_extraction_output(self) -> Self:
@@ -176,8 +222,17 @@ class ToolImplementation(BaseModel):
         if not self.environment:
             return self
 
-        if self.runtime != PROCESS_TOOL_RUNTIME:
-            raise ValueError("Only process tool implementations may grant environment variables.")
+        if self.runtime == MCP_TOOL_RUNTIME:
+            if self.mcp is not None and not self.mcp.server.is_stdio:
+                raise ValueError(
+                    "An MCP tool implementation whose server is reached over HTTP starts no "
+                    "process, so it may not grant environment variables."
+                )
+        elif self.runtime != PROCESS_TOOL_RUNTIME:
+            raise ValueError(
+                "Only process tool implementations, and MCP ones whose server they start, "
+                "may grant environment variables."
+            )
 
         for grant in self.environment:
             if _ENVIRONMENT_GRANT.fullmatch(grant) is None:
@@ -210,7 +265,10 @@ class ToolImplementation(BaseModel):
 
     @model_validator(mode="after")
     def validate_process_configuration(self) -> Self:
-        """Require a command for process implementations, and only for them."""
+        """Require a command for process implementations, and only for them.
+
+        A timeout is a process or an MCP implementation's.
+        """
 
         if self.runtime == PROCESS_TOOL_RUNTIME:
             if self.command is None:
@@ -221,8 +279,11 @@ class ToolImplementation(BaseModel):
 
             return self
 
-        if self.command is not None or self.timeout_seconds is not None:
-            raise ValueError("Only process tool implementations may declare a command or timeout.")
+        if self.command is not None:
+            raise ValueError("Only process tool implementations may declare a command.")
+
+        if self.timeout_seconds is not None and self.runtime != MCP_TOOL_RUNTIME:
+            raise ValueError("Only process and MCP tool implementations may declare a timeout.")
 
         return self
 
@@ -231,13 +292,24 @@ class ToolImplementation(BaseModel):
         self,
         handler: SerializerFunctionWrapHandler,
     ) -> dict[str, Any]:
-        """Serialize the implementation, omitting unset process-only fields."""
+        """Serialize the implementation, omitting unset optional fields.
+
+        An MCP implementation is serialized without an entrypoint, which it
+        cannot declare.
+        """
 
         serialized: dict[str, Any] = handler(self)
 
         for name in _PROCESS_ONLY_FIELDS:
             if serialized.get(name) is None:
                 serialized.pop(name, None)
+
+        for name in ("source", "mcp"):
+            if serialized.get(name) is None:
+                serialized.pop(name, None)
+
+        if self.runtime == MCP_TOOL_RUNTIME:
+            serialized.pop("entrypoint", None)
 
         for name in ("environment", "content_inputs", "extraction_output"):
             if not serialized.get(name):

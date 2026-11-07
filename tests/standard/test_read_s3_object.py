@@ -25,6 +25,7 @@ from azathoth.inputs import InputContentError, decode_content
 from tests.standard.harness import (
     standard_document,
     standard_implementation,
+    standard_source,
     standard_tool_failure,
 )
 
@@ -62,7 +63,7 @@ def script() -> dict[str, Any]:
     """Load the tool's source as a module that does not run, and return its names."""
 
     namespace: dict[str, Any] = {"__name__": "read_s3_object"}
-    source = standard_implementation("read_s3_object").source
+    source = standard_source("read_s3_object")
 
     exec(compile(source, "read_s3_object", "exec"), namespace)
 
@@ -440,7 +441,7 @@ def test_without_boto3_the_tool_process_fails_with_that_message(
     shadow.mkdir()
     (shadow / "boto3.py").write_text('raise ImportError("No module named boto3")\n')
     tool = tmp_path / "tool"
-    tool.write_text(standard_implementation("read_s3_object").source, encoding="utf-8")
+    tool.write_text(standard_source("read_s3_object"), encoding="utf-8")
 
     completed = subprocess.run(
         (sys.executable, str(tool)),

@@ -10,7 +10,7 @@ from pydantic import JsonValue
 
 from tests.standard.harness import (
     run_standard_tool,
-    standard_implementation,
+    standard_source,
     standard_tool_failure,
 )
 
@@ -39,7 +39,7 @@ def run_without_site_packages(
     """Run validate_json's source with a Python that cannot import jsonschema."""
 
     script = tmp_path / "validate_json.py"
-    script.write_text(standard_implementation("validate_json").source, encoding="utf-8")
+    script.write_text(standard_source("validate_json"), encoding="utf-8")
 
     return subprocess.run(
         [sys.executable, "-S", "-I", str(script)],

@@ -100,6 +100,7 @@ def dispatch(
         show_tool_test_case=unused,
         tool_usage=unused,
         verify_tool=unused,
+        tool_from_mcp=unused,
     )
 
 
