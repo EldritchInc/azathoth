@@ -1,21 +1,50 @@
-"""Run language models on Amazon Bedrock, through Converse (ADR 0103)."""
+"""Run language models on Amazon Bedrock, through Converse (ADR 0103).
+
+A prompt of text is one Converse text block, as it always was. A prompt of
+parts is a list of blocks in order (ADR 0115): text as `text`, an image as an
+`image` block and a PDF as a `document` block, each holding its raw bytes.
+Converse's documented limits on images and documents are checked before
+anything is sent.
+"""
 
 import asyncio
+from collections.abc import Mapping
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from azathoth.inputs import PDF_MEDIA_TYPE
 from azathoth.providers.bedrock_client import BedrockClient, BedrockClientError
 from azathoth.providers.bedrock_configuration import BEDROCK_PROVIDER
 from azathoth.providers.catalog import ModelCatalog
-from azathoth.providers.exceptions import ModelExecutionError
-from azathoth.providers.models import ModelPricing, ModelResponse, Prompt
+from azathoth.providers.content import prompt_content_bytes
+from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
+from azathoth.providers.models import ModelPricing, ModelResponse, Prompt, TextPart
 from azathoth.providers.registry import LanguageModelRegistry
 
 BLOCKED_STOP_REASONS: Final = frozenset({"guardrail_intervened", "content_filtered"})
 """The stop reasons of a reply that is not an answer."""
 
 TOKENS_PER_MILLION: Final = 1_000_000
+
+BEDROCK_MAX_IMAGES: Final = 20
+"""The most images Converse takes in one message."""
+
+BEDROCK_MAX_DOCUMENTS: Final = 5
+"""The most documents Converse takes in one message."""
+
+BEDROCK_MAX_IMAGE_BYTES: Final = 3_750_000
+"""The largest image Converse takes: 3.75 MB, read as decimal megabytes, the stricter."""
+
+BEDROCK_MAX_DOCUMENT_BYTES: Final = 4_500_000
+"""The largest document Converse takes: 4.5 MB, read as decimal megabytes, the stricter."""
+
+BEDROCK_IMAGE_FORMATS: Final[Mapping[str, str]] = {
+    "image/png": "png",
+    "image/jpeg": "jpeg",
+    "image/webp": "webp",
+}
+"""The Converse `format` of each image media type Azathoth accepts."""
 
 
 class _ContentBlock(BaseModel):
@@ -99,12 +128,19 @@ class BedrockLanguageModel:
         """Complete a rendered prompt through Converse.
 
         Raises:
+            PromptContentError: The prompt shows content whose bytes were not
+                given; nothing is sent.
+            UnsupportedModelRequestError: The prompt shows more images or
+                documents than Converse takes, one larger than it takes, or a
+                document with no text beside it; nothing is sent.
             ModelExecutionError: The call failed, its reply is not a Converse
                 reply, or a guardrail or content filter stopped it.
         """
 
+        content = bedrock_content(self._model, prompt)
+
         try:
-            raw = await asyncio.to_thread(self._client.converse, self._model, prompt.text)
+            raw = await asyncio.to_thread(self._client.converse, self._model, content)
         except BedrockClientError as exc:
             detail = str(exc).rstrip(".")
 
@@ -183,8 +219,103 @@ class BedrockModelRegistryLoader:
         return LanguageModelRegistry(models=models)
 
 
+def bedrock_content(
+    model: str,
+    prompt: Prompt,
+) -> list[dict[str, object]]:
+    """Return the Converse content blocks that send one prompt to one Bedrock model.
+
+    Documents are named `document-<N>` in the order the prompt shows them: a
+    neutral name, as Bedrock asks, since a model may read a document's name
+    as an instruction.
+
+    Raises:
+        PromptContentError: The prompt shows content whose bytes were not
+            given.
+        UnsupportedModelRequestError: The prompt breaks one of Converse's
+            limits on images and documents.
+    """
+
+    if not prompt.parts:
+        return [{"text": prompt.text}]
+
+    blocks: list[dict[str, object]] = []
+    images = 0
+    documents = 0
+
+    for part in prompt.parts:
+        if isinstance(part, TextPart):
+            blocks.append({"text": part.text})
+            continue
+
+        shown = part.content
+        data = prompt_content_bytes(shown, model=f"{BEDROCK_PROVIDER}/{model}")
+
+        if shown.media_type == PDF_MEDIA_TYPE:
+            documents += 1
+
+            if len(data) > BEDROCK_MAX_DOCUMENT_BYTES:
+                raise UnsupportedModelRequestError(
+                    f"Bedrock model {model!r} is shown documents of at most "
+                    f"{BEDROCK_MAX_DOCUMENT_BYTES} bytes; content {shown.digest} is {len(data)}."
+                )
+
+            blocks.append(
+                {
+                    "document": {
+                        "format": "pdf",
+                        "name": f"document-{documents}",
+                        "source": {"bytes": data},
+                    }
+                }
+            )
+            continue
+
+        images += 1
+
+        if len(data) > BEDROCK_MAX_IMAGE_BYTES:
+            raise UnsupportedModelRequestError(
+                f"Bedrock model {model!r} is shown images of at most "
+                f"{BEDROCK_MAX_IMAGE_BYTES} bytes; content {shown.digest} is {len(data)}."
+            )
+
+        blocks.append(
+            {
+                "image": {
+                    "format": BEDROCK_IMAGE_FORMATS[shown.media_type],
+                    "source": {"bytes": data},
+                }
+            }
+        )
+
+    if images > BEDROCK_MAX_IMAGES:
+        raise UnsupportedModelRequestError(
+            f"Bedrock model {model!r} is shown at most {BEDROCK_MAX_IMAGES} images in one "
+            f"prompt; this one shows {images}."
+        )
+
+    if documents > BEDROCK_MAX_DOCUMENTS:
+        raise UnsupportedModelRequestError(
+            f"Bedrock model {model!r} is shown at most {BEDROCK_MAX_DOCUMENTS} documents in "
+            f"one prompt; this one shows {documents}."
+        )
+
+    if documents and not any("text" in block for block in blocks):
+        raise UnsupportedModelRequestError(
+            f"Bedrock model {model!r} is shown a document only beside text; this prompt has none."
+        )
+
+    return blocks
+
+
 __all__ = [
+    "BEDROCK_IMAGE_FORMATS",
+    "BEDROCK_MAX_DOCUMENTS",
+    "BEDROCK_MAX_DOCUMENT_BYTES",
+    "BEDROCK_MAX_IMAGES",
+    "BEDROCK_MAX_IMAGE_BYTES",
     "BLOCKED_STOP_REASONS",
     "BedrockLanguageModel",
     "BedrockModelRegistryLoader",
+    "bedrock_content",
 ]

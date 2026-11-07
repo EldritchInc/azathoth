@@ -1,4 +1,9 @@
-"""Turning Amazon Bedrock on, and pricing its models (ADR 0103)."""
+"""Turning Amazon Bedrock on, and pricing its models (ADR 0103).
+
+The pricing document may also say which input modalities a model takes
+beyond those Bedrock reports, such as `file` for one that reads PDFs through
+Converse; Bedrock's model listing says nothing of documents (ADR 0115).
+"""
 
 import json
 import os
@@ -8,7 +13,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from azathoth.providers.models import ModelPricing
+from azathoth.providers.models import ModelModality, ModelPricing
 
 BEDROCK_PROVIDER: Final = "bedrock"
 """The provider of every Bedrock model, as in `bedrock/<model id>`."""
@@ -49,6 +54,10 @@ class BedrockPricing(BaseModel):
     A model the document does not price has unknown pricing. A priced model
     the region does not offer is never looked up, so one document may serve
     several regions.
+
+    `input_modalities` adds, by model ID, input modalities a model takes
+    that Bedrock does not report, such as `file` for a model that reads PDFs
+    through Converse (ADR 0115). It never takes away one Bedrock reports.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -58,6 +67,18 @@ class BedrockPricing(BaseModel):
     models: Mapping[Annotated[str, Field(min_length=1)], ModelPricing] = Field(
         default_factory=dict,
     )
+
+    input_modalities: Mapping[Annotated[str, Field(min_length=1)], frozenset[ModelModality]] = (
+        Field(default_factory=dict)
+    )
+
+    def added_input_modalities(
+        self,
+        model_id: str,
+    ) -> frozenset[ModelModality]:
+        """Return the input modalities the document adds to one model's, or none."""
+
+        return self.input_modalities.get(model_id, frozenset())
 
     def price(
         self,

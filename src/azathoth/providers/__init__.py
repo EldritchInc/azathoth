@@ -1,9 +1,15 @@
 """Language model provider abstractions."""
 
 from azathoth.providers.bedrock import (
+    BEDROCK_IMAGE_FORMATS,
+    BEDROCK_MAX_DOCUMENT_BYTES,
+    BEDROCK_MAX_DOCUMENTS,
+    BEDROCK_MAX_IMAGE_BYTES,
+    BEDROCK_MAX_IMAGES,
     BLOCKED_STOP_REASONS,
     BedrockLanguageModel,
     BedrockModelRegistryLoader,
+    bedrock_content,
 )
 from azathoth.providers.bedrock_client import (
     AWS_DEFAULT_REGION_VARIABLE,
@@ -31,10 +37,16 @@ from azathoth.providers.bedrock_configuration import (
 from azathoth.providers.bedrock_directory import BedrockModelDirectory
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
+from azathoth.providers.content import (
+    CONTENT_MODALITIES,
+    giving_prompt_content,
+    prompt_content_bytes,
+)
 from azathoth.providers.deterministic import DeterministicLanguageModel
 from azathoth.providers.exceptions import (
     ModelDiscoveryError,
     ModelExecutionError,
+    PromptContentError,
     UnsupportedModelRequestError,
 )
 from azathoth.providers.execution import ModelExecutor
@@ -51,6 +63,7 @@ from azathoth.providers.memory_repository import (
     require_model_repository,
 )
 from azathoth.providers.models import (
+    ContentPart,
     ModelCapability,
     ModelMetadata,
     ModelModality,
@@ -58,8 +71,14 @@ from azathoth.providers.models import (
     ModelRequest,
     ModelResponse,
     Prompt,
+    PromptPart,
+    TextPart,
 )
-from azathoth.providers.openrouter import OpenRouterLanguageModel
+from azathoth.providers.openrouter import (
+    OPENROUTER_PDF_ENGINE,
+    OpenRouterLanguageModel,
+    openrouter_request,
+)
 from azathoth.providers.openrouter_directory import (
     OpenRouterModelDirectory,
 )
@@ -125,6 +144,12 @@ from azathoth.providers.sqlite_repository import SQLiteModelRepository
 __all__ = [
     "AWS_DEFAULT_REGION_VARIABLE",
     "AWS_REGION_VARIABLE",
+    "BEDROCK_IMAGE_FORMATS",
+    "BEDROCK_MAX_DOCUMENTS",
+    "BEDROCK_MAX_DOCUMENT_BYTES",
+    "BEDROCK_MAX_IMAGES",
+    "BEDROCK_MAX_IMAGE_BYTES",
+    "CONTENT_MODALITIES",
     "BLOCKED_STOP_REASONS",
     "BedrockLanguageModel",
     "BedrockModelRegistryLoader",
@@ -142,16 +167,19 @@ __all__ = [
     "BedrockPricing",
     "BedrockUnavailableError",
     "Boto3BedrockClient",
+    "bedrock_content",
     "bedrock_enabled",
     "boto3_driver",
     "configure_bedrock",
     "load_bedrock_pricing",
     "MODEL_PORTFOLIO_TABLES",
     "MODEL_TABLES",
+    "OPENROUTER_PDF_ENGINE",
     "PROVIDER_MODEL_OBSERVATION_TABLES",
     "SqlModelPortfolioRepository",
     "SqlModelRepository",
     "SqlProviderModelObservationRepository",
+    "ContentPart",
     "DeterministicLanguageModel",
     "InMemoryModelRepository",
     "InMemoryModelPortfolioRepository",
@@ -181,6 +209,8 @@ __all__ = [
     "OpenRouterModelDirectory",
     "OpenRouterModelRegistryLoader",
     "Prompt",
+    "PromptContentError",
+    "PromptPart",
     "ProviderModel",
     "ProviderModelCatalogSynchronizer",
     "ProviderModelDirectory",
@@ -191,9 +221,13 @@ __all__ = [
     "SQLiteModelRepository",
     "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
+    "TextPart",
     "UnsupportedModelRequestError",
+    "giving_prompt_content",
     "model_catalog_for_portfolio",
     "model_metadata_from_provider_model",
+    "openrouter_request",
+    "prompt_content_bytes",
     "require_model_portfolio_repository",
     "require_model_repository",
     "require_provider_model_observation_repository",

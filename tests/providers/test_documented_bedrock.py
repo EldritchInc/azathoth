@@ -11,6 +11,7 @@ from azathoth.providers import (
     MISSING_BEDROCK_EXTRA_MESSAGE,
     MISSING_REGION_MESSAGE,
     BedrockPricing,
+    ModelModality,
 )
 from azathoth.standard import standard_tool_documents
 
@@ -71,11 +72,22 @@ def test_the_documented_pricing_document_is_a_valid_one(
     guide: Path,
     heading: str,
 ) -> None:
-    (document,) = json_blocks(section(guide, heading))
+    documents = json_blocks(section(guide, heading))
+
+    assert documents
+
+    for document in documents:
+        pricing = BedrockPricing.model_validate(document)
+
+        assert pricing.price("amazon.nova-pro-v1:0") is not None
+
+
+def test_the_documented_pdf_reading_model_reads_files() -> None:
+    (_, document) = json_blocks(section(BEDROCK_GUIDE, "## 4. Price Your Models"))
 
     pricing = BedrockPricing.model_validate(document)
 
-    assert pricing.price("amazon.nova-pro-v1:0") is not None
+    assert pricing.added_input_modalities("amazon.nova-pro-v1:0") == frozenset({ModelModality.FILE})
 
 
 def test_the_iam_policy_allows_exactly_the_calls_azathoth_makes() -> None:

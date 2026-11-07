@@ -52,6 +52,33 @@ release dates are on the
   with pdfminer.six, which the new `documents` extra installs, and the
   container image includes
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **A model step can be shown the documents and images its run received.**
+  A template variable bound to a content handle shows the model that content
+  where the variable stands, beside the template's text, as a prompt of
+  parts. The engine reads the bytes from the content store as the prompt is
+  sent, only for content the run, or a run above it, received, and no event
+  or run holds them. A prompt of text is unchanged
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **OpenRouter models are shown images and PDFs in OpenRouter's own
+  parts.** An image is sent as an `image_url` and a PDF as a `file`, in the
+  prompt's order, and a PDF is read by the model itself: the request pins
+  OpenRouter's PDF engine to `native`, so no paid OCR service reads it in
+  the model's place
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **Bedrock models are shown images and PDFs as Converse blocks.** An image
+  is an `image` block and a PDF a `document` block named neutrally, in the
+  prompt's order. Converse's limits, 20 images of 3.75 MB and 5 documents of
+  4.5 MB, with text beside any document, are checked before anything is
+  sent. Bedrock does not say which models read documents, so the pricing
+  document may add `file` to a model's input modalities under
+  `input_modalities`
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **A model is shown only what its catalog says it reads.** A step that
+  shows content declares `image` or `file` among its required input
+  modalities, and portfolio selection chooses only models that take them.
+  Whatever model a step is bound to, its rendered prompt is checked against
+  the model's catalog entry before the model is called
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 
 ### Evidence Out
 
@@ -79,6 +106,14 @@ release dates are on the
   `segment_text` makes one segment per paragraph, deterministically, under
   a version of its own that changes only when its output does
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+
+### Fixes
+
+- **A command stopped as a process tool starts no longer hangs.** A tool
+  cancelled before it was given its inputs is killed, its stdin closed, and
+  only then waited for. On a Python without CPython's gh-119710 fix, waiting
+  for it with its stdin still open never returned, so a run stopped by
+  SIGTERM could keep its lease and never exit.
 
 ## 1.2.0
 

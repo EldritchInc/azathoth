@@ -271,10 +271,43 @@ def test_converse_sends_the_text_as_one_user_message(
         },
     )
 
-    reply = boto3_client.converse(NOVA_PRO, "How many?")
+    reply = boto3_client.converse(NOVA_PRO, [{"text": "How many?"}])
 
     assert reply["stopReason"] == "end_turn"
     assert reply["usage"] == CONVERSE_REPLY["usage"]
+
+
+def test_converse_sends_images_and_documents_in_the_shape_converse_defines(
+    boto3_client: Boto3BedrockClient,
+    runtime: Any,
+) -> None:
+    #
+    # botocore validates every parameter against Converse's own service
+    # model before the stub answers, so a block of the wrong shape fails here.
+    #
+    content: list[dict[str, object]] = [
+        {"text": "Compare:"},
+        {"document": {"format": "pdf", "name": "document-1", "source": {"bytes": b"%PDF-1.7"}}},
+        {"image": {"format": "webp", "source": {"bytes": b"RIFF....WEBP"}}},
+    ]
+    runtime.add_response(
+        "converse",
+        CONVERSE_REPLY,
+        {"modelId": NOVA_PRO, "messages": [{"role": "user", "content": content}]},
+    )
+
+    assert boto3_client.converse(NOVA_PRO, content)["stopReason"] == "end_turn"
+
+
+def test_a_block_converse_does_not_define_is_refused_by_botocore(
+    boto3_client: Boto3BedrockClient,
+    runtime: Any,
+) -> None:
+    with pytest.raises(BedrockClientError):
+        boto3_client.converse(
+            NOVA_PRO,
+            [{"image": {"format": "tiff", "source": {"bytes": b"II*\x00"}}}],
+        )
 
 
 def test_foundation_models_are_listed(
@@ -317,7 +350,7 @@ def test_an_aws_error_becomes_a_client_error_with_its_code(
     )
 
     with pytest.raises(BedrockClientError) as raised:
-        boto3_client.converse(NOVA_PRO, "How many?")
+        boto3_client.converse(NOVA_PRO, [{"text": "How many?"}])
 
     assert raised.value.code == "AccessDeniedException"
     assert raised.value.message == "You don't have access to the model."
@@ -335,7 +368,7 @@ def test_a_botocore_error_becomes_a_client_error_named_for_it(
     monkeypatch.setattr(boto3_client._runtime, "converse", no_credentials)
 
     with pytest.raises(BedrockClientError) as raised:
-        boto3_client.converse(NOVA_PRO, "How many?")
+        boto3_client.converse(NOVA_PRO, [{"text": "How many?"}])
 
     assert raised.value.code == "NoCredentialsError"
     assert raised.value.message == "Unable to locate credentials"

@@ -3,6 +3,7 @@
 from azathoth.prompting.candidates import (
     generate_prompt_candidates,
 )
+from azathoth.prompting.content import read_prompt_content
 from azathoth.prompting.context_candidates import (
     generate_context_prompt_candidates,
 )
@@ -69,5 +70,6 @@ __all__ = [
     "generate_context_prompt_candidates",
     "generate_prompt_candidates",
     "parse_json_reply",
+    "read_prompt_content",
     "render_prompt_value",
 ]

@@ -101,6 +101,7 @@ from azathoth.prompting import (
     PromptTemplate,
     PromptingError,
     generate_prompt_candidates,
+    read_prompt_content,
 )
 ```
 
@@ -940,6 +941,36 @@ True / None / 18                  true / null / 18
 
 Structured values therefore reach the model as JSON, never as Python
 representations.
+
+# Showing Content
+
+A variable whose value is exactly one content handle shows the model that
+content where the variable stands (ADR 0115). The rendered prompt is then a
+prompt of parts, its text around the content:
+
+```text
+Here is the claim form:
+{form}
+and the photo of the damage:
+{photo}
+Does the photo match the damage the form describes?
+```
+
+renders, with `form` and `photo` bound to handles, as five parts: text, the
+PDF, text, the photo, text. A variable used twice shows its content twice. A
+list of handles, or a handle with more keys, renders as JSON, as any other
+value does, and a template that shows no content renders text.
+
+A fixed prompt cannot show content, since a handle written into a workflow
+document would name content no run was given; `PromptStrategySpec` refuses
+one.
+
+Before a model is called, `read_prompt_content` checks each piece of
+content a prompt shows as a tool's content inputs are checked (ADR 0114):
+the run, or a run above it, received it under that media type, and the
+content store holds it under its digest, at its size. It reads each piece
+once. The bytes are given to the provider for the length of the call, and
+only there; a prompt that fails a check never reaches a model.
 
 # Prompt Rendering Errors
 

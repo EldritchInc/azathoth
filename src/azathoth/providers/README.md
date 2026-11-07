@@ -447,7 +447,17 @@ and executable registry presence before a model can actually execute.
 
 ## Provider-Neutral Requests and Responses
 
-`Prompt` represents rendered prompt text sent to a language model.
+`Prompt` represents a rendered prompt sent to a language model: its `text`,
+or, when it shows the model content, its `parts`, text and content in order
+(ADR 0115). A `TextPart` holds text, and a `ContentPart` is a content handle;
+a prompt holds one or the other, never both, and a prompt of text serializes
+as it always did.
+
+A prompt names its content and never holds its bytes. The engine checks and
+reads them before the model is called, and gives them to the provider for
+the length of the call with `giving_prompt_content`; a provider reads each
+by digest with `prompt_content_bytes`, which raises `PromptContentError` for
+content it was not given. The deterministic model reads them the same way.
 
 `ModelRequest` represents a provider-neutral request.
 
@@ -503,6 +513,15 @@ provider-neutral `ProviderModel` values.
 `OpenRouterLanguageModel` translates prompt execution into provider-neutral
 `ModelResponse` evidence.
 
+`openrouter_request` builds the request a prompt is sent as. A prompt of
+text is one user message of text. A prompt of parts is one user message of
+OpenRouter content parts, in order: `text`, `image_url` with a data URL for
+an image, and `file` with a data URL for a PDF, named `document-<N>.pdf`. A
+request holding a PDF pins OpenRouter's file parser to
+`OPENROUTER_PDF_ENGINE`, `native`, so the model reads the PDF itself and
+OpenRouter never extracts its text with a paid OCR service instead (ADR
+0115). Every piece's bytes are found before anything is sent.
+
 `OpenRouterModelRegistryLoader` constructs executable OpenRouter language model
 implementations for OpenRouter models represented in a `ModelCatalog`.
 
@@ -545,7 +564,13 @@ The integration has five parts:
   and returns the reply's text blocks, joined, with its tokens, Bedrock's
   latency and its cost at the model's price, or `None` unpriced. A reply
   that a guardrail or content filter stopped (`BLOCKED_STOP_REASONS`) is a
-  `ModelExecutionError`, never an answer.
+  `ModelExecutionError`, never an answer. `bedrock_content` builds the
+  message's blocks: text as `text`, an image as an `image` block and a PDF
+  as a `document` block named `document-<N>`, each with its raw bytes (ADR
+  0115). It refuses, before anything is sent, a prompt of more than
+  `BEDROCK_MAX_IMAGES` images or `BEDROCK_MAX_DOCUMENTS` documents, one
+  larger than `BEDROCK_MAX_IMAGE_BYTES` or `BEDROCK_MAX_DOCUMENT_BYTES`, or a
+  document with no text beside it.
 - `BedrockModelRegistryLoader` builds one for each Bedrock model of a
   catalog, at its catalog price.
 
@@ -562,6 +587,11 @@ The pricing document keys each model by its Bedrock ID:
   }
 }
 ```
+
+It may also add input modalities Bedrock does not report, by model ID,
+under `input_modalities`, such as `["file"]` for a model that reads PDFs
+through Converse; Bedrock's listing says nothing of documents. They are
+added to what Bedrock reports and never take one away (ADR 0115).
 
 Every test reaches Bedrock through a fake `BedrockClient`, so none needs AWS.
 

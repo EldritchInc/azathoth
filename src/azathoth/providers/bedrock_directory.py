@@ -240,7 +240,9 @@ class BedrockModelDirectory:
     ) -> ProviderModel:
         """Return one listed model, with the modalities of the model it runs on."""
 
-        input_modalities = _modalities(model.input_modalities)
+        input_modalities = _modalities(
+            model.input_modalities
+        ) | self._configuration.pricing.added_input_modalities(model_id)
 
         capabilities: set[ModelCapability] = set()
 

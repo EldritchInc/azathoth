@@ -1,6 +1,6 @@
 """A fake `BedrockClient`, so Bedrock is tested with no network and no account."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from azathoth.providers import BedrockClientError
@@ -12,7 +12,9 @@ class FakeBedrockClient:
 
     `inference_profile_pages` holds one list of profiles per page; every page
     but the last carries a `nextToken` naming the next. `replies` holds, per
-    model ID, the Converse replies or errors to give, in order.
+    model ID, the Converse replies or errors to give, in order. `calls`
+    records each Converse call with its text blocks joined, and `contents`
+    its content blocks.
     """
 
     foundation_models: list[dict[str, object]] = field(default_factory=list)
@@ -24,13 +26,17 @@ class FakeBedrockClient:
     )
     listing_error: BedrockClientError | None = None
     calls: list[tuple[str, ...]] = field(default_factory=list)
+    contents: list[list[Mapping[str, object]]] = field(default_factory=list)
 
     def converse(
         self,
         model_id: str,
-        text: str,
+        content: Sequence[Mapping[str, object]],
     ) -> Mapping[str, object]:
+        text = "".join(str(block["text"]) for block in content if "text" in block)
+
         self.calls.append(("converse", model_id, text))
+        self.contents.append(list(content))
 
         reply = self.replies[model_id].pop(0)
 

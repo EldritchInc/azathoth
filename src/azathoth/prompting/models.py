@@ -1,17 +1,20 @@
 """Domain models for rendering prompts from structured context."""
 
 import json
+import re
+import secrets
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.context import Context
+from azathoth.inputs import ContentRef, content_ref_from_value
 from azathoth.prompting.exceptions import (
     ModelBindingMismatchError,
     PromptBindingEventNotFoundError,
     PromptBindingFieldNotFoundError,
     PromptBindingInputNotFoundError,
 )
-from azathoth.providers import ModelResponse, Prompt
+from azathoth.providers import ContentPart, ModelResponse, Prompt, PromptPart, TextPart
 
 
 class ModelBinding(BaseModel):
@@ -96,6 +99,11 @@ class PromptTemplate(BaseModel):
 
     Template text is formatted with `str.format_map`, so literal braces, such
     as an example JSON reply, must be doubled: `{{"verdict": "pass"}}`.
+
+    A variable whose value is exactly one content handle shows the model that
+    content where the variable stands: the prompt is rendered as parts, its
+    text around the content (ADR 0115). A template that shows no content is
+    rendered as text, as it always was.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -116,10 +124,11 @@ class PromptTemplate(BaseModel):
         """
 
         values: dict[str, str] = {}
+        contents = _ContentMarkers()
 
         for binding in self.bindings:
             if isinstance(binding, PromptInputBinding):
-                values[binding.variable_name] = render_prompt_value(
+                values[binding.variable_name] = contents.render(
                     _bound_input_value(context, binding),
                 )
 
@@ -141,13 +150,65 @@ class PromptTemplate(BaseModel):
                     f"prompt variable {binding.variable_name!r}."
                 )
 
-            values[binding.variable_name] = render_prompt_value(
+            values[binding.variable_name] = contents.render(
                 event.payload[binding.field_name],
             )
 
-        return Prompt(
-            text=self.text.format_map(values),
-        )
+        return contents.prompt(self.text.format_map(values))
+
+
+class _ContentMarkers:
+    """Stand markers in for content handles while a template is formatted, then split it.
+
+    Each marker holds a random token drawn for this one rendering, so no
+    text a bound value carries can stand for content.
+    """
+
+    def __init__(
+        self,
+    ) -> None:
+        self._token = secrets.token_hex(16)
+        self._contents: list[ContentRef] = []
+        self._pattern = re.compile(f"\x00{self._token}:([0-9]+)\x00")
+
+    def render(
+        self,
+        value: object,
+    ) -> str:
+        """Return the text a bound value contributes, or the marker of the content it is."""
+
+        content = content_ref_from_value(value) if isinstance(value, dict) else None
+
+        if content is None:
+            return render_prompt_value(value)
+
+        self._contents.append(content)
+
+        return f"\x00{self._token}:{len(self._contents) - 1}\x00"
+
+    def prompt(
+        self,
+        text: str,
+    ) -> Prompt:
+        """Return the formatted text as a prompt: of parts, if any marker survived in it."""
+
+        parts: list[PromptPart] = []
+        position = 0
+
+        for match in self._pattern.finditer(text):
+            if match.start() > position:
+                parts.append(TextPart(text=text[position : match.start()]))
+
+            parts.append(ContentPart(content=self._contents[int(match.group(1))]))
+            position = match.end()
+
+        if not parts:
+            return Prompt(text=text)
+
+        if position < len(text):
+            parts.append(TextPart(text=text[position:]))
+
+        return Prompt(parts=tuple(parts))
 
 
 def _bound_input_value(

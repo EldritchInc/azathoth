@@ -4,10 +4,11 @@ import json
 
 from pydantic import JsonValue
 
+from azathoth.prompting.content import read_prompt_content
 from azathoth.prompting.exceptions import PromptOutputFormatError
 from azathoth.prompting.models import ModelBinding
 from azathoth.prompting.output_format import PromptOutputFormat, parse_json_reply
-from azathoth.providers import LanguageModel, Prompt
+from azathoth.providers import LanguageModel, Prompt, giving_prompt_content
 from azathoth.strategies import (
     StrategyExecutionMetrics,
     StrategyOutcome,
@@ -25,15 +26,21 @@ async def execute_prompt(
 ) -> StrategyOutcome:
     """Execute a prompt and translate its response into a strategy outcome.
 
-    With JSON output, the reply is parsed into the outcome's output.
+    With JSON output, the reply is parsed into the outcome's output. The
+    content a prompt shows is checked and read before the model is called,
+    and given to its provider for the length of the call (ADR 0115).
 
     Raises:
+        PromptContentError: The prompt shows content this run cannot give.
         ModelBindingMismatchError: The response came from another model.
         PromptOutputFormatError: The reply is not valid JSON when JSON output
             is declared.
     """
 
-    response = await language_model.complete(prompt)
+    contents = await read_prompt_content(prompt, strategy_name=strategy_name)
+
+    with giving_prompt_content(contents):
+        response = await language_model.complete(prompt)
 
     if model_binding is not None:
         model_binding.validate_response(response)
