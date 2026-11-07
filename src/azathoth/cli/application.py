@@ -52,6 +52,7 @@ from azathoth.cli.judges import (
     list_judges,
     remove_judge,
 )
+from azathoth.cli.mcp_tools import tool_from_mcp
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
@@ -366,6 +367,7 @@ def _dispatch(
             show_tool_test_case=show_tool_test_case,
             tool_usage=tool_usage,
             verify_tool=verify_tool,
+            tool_from_mcp=tool_from_mcp,
         )
 
     return None

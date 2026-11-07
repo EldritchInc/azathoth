@@ -220,6 +220,12 @@ release dates are on the
   holds, with the step's trace context. Install `azathoth-ai[mcp]` to call
   MCP tools
   ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+- **`azathoth tool from-mcp` writes an MCP tool's document.** It lists a
+  server's tools and prints the named tool's document, its definition
+  taking the tool's name, description and schemas and its implementation
+  pinned to them, ready for `tool import`; writing it again for a tool
+  whose schemas changed shows a new implementation
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
 
 ### Fixes
 

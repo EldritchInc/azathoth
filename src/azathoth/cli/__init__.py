@@ -59,6 +59,7 @@ from azathoth.cli.judges import (
     list_judges,
     remove_judge,
 )
+from azathoth.cli.mcp_tools import tool_from_mcp
 from azathoth.cli.models import (
     authorize_model,
     deauthorize_model,
@@ -234,6 +235,7 @@ __all__ = [
     "show_tool_test_case",
     "show_workflow",
     "show_workflow_production",
+    "tool_from_mcp",
     "tool_usage",
     "verify_tool",
 ]

@@ -87,6 +87,17 @@ class McpCallResult(BaseModel):
     content: tuple[McpContentBlock, ...] = ()
 
 
+class McpListedTool(BaseModel):
+    """One tool as a server lists it: its name, description and schemas."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    description: str | None = None
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any] | None = None
+
+
 class PinnedCall(BaseModel):
     """What a call found.
 
@@ -168,6 +179,47 @@ class McpToolExecutor:
             raise ToolExecutionError(f"{name} could not be called: {_tail(_reason(exc))}") from exc
 
         return _output(binding, called)
+
+    async def served_tool(
+        self,
+        implementation: ToolImplementation,
+    ) -> McpListedTool | None:
+        """Return the tool an implementation's binding names as its server lists it now, if it does.
+
+        Nothing is called and the pin is not checked: this is how a binding
+        is written, and how its drift is seen.
+
+        Raises:
+            UnsupportedToolRuntimeError: The implementation is not an MCP
+                implementation.
+            McpUnavailableError: The SDK is not installed.
+            ToolExecutionError: An authorization variable is not set, or the
+                server could not be reached or did not list its tools in
+                time.
+        """
+
+        binding = self._require_binding(implementation)
+        connection = self._connection(implementation, binding)
+        client = _client_module()
+        connect = self._connect if self._connect is not None else client.server_target
+        server = f"MCP server {binding.server.describe()}"
+
+        try:
+            async with asyncio.timeout(implementation.timeout_seconds):
+                listed: McpListedTool | None = await client.listed_tool(
+                    connect(connection), tool=binding.tool
+                )
+        except TimeoutError as exc:
+            raise ToolExecutionError(
+                f"{server} did not list its tools within "
+                f"{implementation.timeout_seconds:g} seconds."
+            ) from exc
+        except Exception as exc:
+            raise ToolExecutionError(
+                f"{server} could not be listed: {_tail(_reason(exc))}"
+            ) from exc
+
+        return listed
 
     @staticmethod
     def _require_binding(
@@ -315,6 +367,7 @@ __all__ = [
     "McpConnection",
     "McpConnector",
     "McpContentBlock",
+    "McpListedTool",
     "McpToolExecutor",
     "McpUnavailableError",
     "PinnedCall",

@@ -17,7 +17,13 @@ from mcp.client.streamable_http import streamable_http_client
 
 from azathoth import __version__
 from azathoth.tools.mcp_binding import mcp_schema_digest
-from azathoth.tools.mcp_execution import McpCallResult, McpConnection, McpContentBlock, PinnedCall
+from azathoth.tools.mcp_execution import (
+    McpCallResult,
+    McpConnection,
+    McpContentBlock,
+    McpListedTool,
+    PinnedCall,
+)
 
 CLIENT_NAME = "azathoth"
 """The name Azathoth gives itself to the servers it calls."""
@@ -102,6 +108,29 @@ async def call_pinned(
     return PinnedCall(served_digest=served, result=_result(result))
 
 
+async def listed_tool(
+    target: Any,
+    *,
+    tool: str,
+) -> McpListedTool | None:
+    """Return one tool as a server lists it, reading every page, if it lists one."""
+
+    identity = Implementation(name=CLIENT_NAME, version=__version__)
+
+    async with Client(target, client_info=identity) as client:
+        listed = await _listed(client, tool)
+
+    if listed is None:
+        return None
+
+    return McpListedTool(
+        name=listed.name,
+        description=listed.description,
+        input_schema=listed.input_schema,
+        output_schema=listed.output_schema,
+    )
+
+
 async def _listed(
     client: Client,
     tool: str,
@@ -145,5 +174,6 @@ __all__ = [
     "CLIENT_NAME",
     "HTTP_TIMEOUT",
     "call_pinned",
+    "listed_tool",
     "server_target",
 ]

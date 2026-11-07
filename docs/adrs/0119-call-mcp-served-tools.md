@@ -118,6 +118,26 @@ implementation runs. Where it is not installed, the step fails saying so:
 MCP tools need the mcp package, which is not installed; install azathoth-ai[mcp].
 ```
 
+### A binding is written from what the server lists
+
+`azathoth tool from-mcp` writes the tool document of one tool a server
+serves. It is named the tool and the server, by `--url` or by a command
+after `--`, and the credentials, grants and timeout its implementation
+should keep. It lists the server's tools, and prints a document whose
+definition takes the tool's name, description and schemas, and whose one
+implementation is pinned to the digest of those schemas as they are served
+now. A tool that names no output schema is given the schema of its text,
+an object holding one string, `text`. Listing is given the timeout named,
+or 30 seconds.
+
+The command stores nothing. Tools are never edited in place: the operator
+reads the document and imports it with `tool import`, as any tool document
+is imported, and `tool verify` runs whatever test cases they add. The
+document's identifiers are derived from the server and the tool, and the
+implementation's from its pin too, so writing the document again names the
+same tool, and a tool whose schemas changed is a new implementation of it,
+imported as the tool's next revision.
+
 ## Consequences
 
 - A capability served over MCP becomes a tool like any other: it is

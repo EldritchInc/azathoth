@@ -13,6 +13,7 @@ TOOL_COMMAND = "tool"
 TOOL_ACTION_ATTRIBUTE = "tool_action"
 
 TOOL_EXPORT_ACTION = "export"
+TOOL_FROM_MCP_ACTION = "from-mcp"
 TOOL_HISTORY_ACTION = "history"
 TOOL_IMPLEMENTATIONS_ACTION = "implementations"
 TOOL_IMPLEMENTATION_SHOW_ACTION = "implementation-show"
@@ -27,6 +28,12 @@ TOOL_VERIFY_ACTION = "verify"
 TOOL_VERSIONS_ACTION = "versions"
 
 TOOL_DOCUMENT_ATTRIBUTE = "tool_document"
+TOOL_MCP_AUTHORIZATION_ATTRIBUTE = "tool_mcp_authorization"
+TOOL_MCP_COMMAND_ATTRIBUTE = "tool_mcp_command"
+TOOL_MCP_GRANTS_ATTRIBUTE = "tool_mcp_grants"
+TOOL_MCP_TIMEOUT_ATTRIBUTE = "tool_mcp_timeout_seconds"
+TOOL_MCP_TOOL_ATTRIBUTE = "tool_mcp_tool"
+TOOL_MCP_URL_ATTRIBUTE = "tool_mcp_url"
 TOOL_HISTORY_LIMIT_ATTRIBUTE = "tool_history_limit"
 TOOL_HISTORY_VERSION_ATTRIBUTE = "tool_history_version"
 TOOL_REVISION_ATTRIBUTE = "tool_revision"
@@ -148,6 +155,60 @@ def add_tool_parser(
         default=None,
         metavar="NUMBER",
         help="Imported revision to export. Defaults to the latest.",
+    )
+
+    tool_from_mcp_parser = tool_actions.add_parser(
+        TOOL_FROM_MCP_ACTION,
+        help="Print the tool document of a tool an MCP server serves, pinned to its schemas.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        "--tool",
+        dest=TOOL_MCP_TOOL_ATTRIBUTE,
+        required=True,
+        metavar="NAME",
+        help="The name the server lists the tool under.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        "--url",
+        dest=TOOL_MCP_URL_ATTRIBUTE,
+        default=None,
+        metavar="URL",
+        help="The URL of a server reached over streamable HTTP.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        "--authorization",
+        dest=TOOL_MCP_AUTHORIZATION_ATTRIBUTE,
+        default=None,
+        metavar="VARIABLE",
+        help="The variable holding an HTTP server's bearer token.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        "--grant",
+        dest=TOOL_MCP_GRANTS_ATTRIBUTE,
+        action="append",
+        default=[],
+        metavar="VARIABLE",
+        help="A variable a stdio server is given, or a prefix ending in '*'. Repeatable.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        "--timeout-seconds",
+        dest=TOOL_MCP_TIMEOUT_ATTRIBUTE,
+        type=positive_integer,
+        default=None,
+        metavar="SECONDS",
+        help="How long each call may take, and listing the tools now. Listing defaults to 30.",
+    )
+
+    tool_from_mcp_parser.add_argument(
+        TOOL_MCP_COMMAND_ATTRIBUTE,
+        nargs="*",
+        metavar="COMMAND",
+        help="After --, the command that starts a stdio server.",
     )
 
     tool_versions_parser = tool_actions.add_parser(
