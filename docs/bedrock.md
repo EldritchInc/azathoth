@@ -203,6 +203,13 @@ Converse takes at most 20 images of up to 3.75 MB and 5 PDFs of up to
 4.5 MB in one prompt, and a PDF only beside some text; a prompt that shows
 more is refused before it is sent.
 
+A model that cites the documents it reads can cite them for a step whose
+`citations` policy is native: Azathoth turns citations on for each PDF the
+prompt shows, and checks every citation the model returns against the
+extraction of that PDF the step also shows. The
+[workflows guide](../src/azathoth/workflows/README.md#cited-prompt-steps)
+shows how.
+
 ## 5. Find and Authorize Models
 
 List the models your region offers:

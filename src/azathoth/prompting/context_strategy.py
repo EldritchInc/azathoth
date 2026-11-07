@@ -1,10 +1,20 @@
 """Context-aware language-model-backed strategies."""
 
 import asyncio
+from typing import cast
 
+from pydantic import JsonValue
+
+from azathoth.citations import SegmentedText
 from azathoth.context import Context, active_step_lineage
-from azathoth.prompting.citations import CitationPolicy, CitedSource, check_citations
-from azathoth.prompting.execution import execute_prompt
+from azathoth.inputs import PDF_MEDIA_TYPE
+from azathoth.prompting.citations import (
+    CitationPolicy,
+    CitedSource,
+    check_citations,
+    check_native_citations,
+)
+from azathoth.prompting.execution import execute_prompt_response
 from azathoth.prompting.models import ModelBinding, PromptTemplate
 from azathoth.prompting.output_format import PromptOutputFormat
 from azathoth.providers import (
@@ -107,8 +117,14 @@ class ContextPromptStrategy:
             strategy_name=self._metadata.name,
         )
         self._require_readable_content(prompt)
+        native = self._citations is not None and self._citations.native
+        documents: list[str] = []
 
-        outcome = await execute_prompt(
+        if native:
+            prompt = prompt.model_copy(update={"native_citations": True})
+            documents = self._require_extractions_of_documents(prompt, shown)
+
+        outcome, response = await execute_prompt_response(
             prompt=prompt,
             language_model=self._language_model,
             model_binding=self._model_binding,
@@ -139,18 +155,58 @@ class ContextPromptStrategy:
             )
             for variable, segmented in shown.items()
         }
-        output, record = await asyncio.to_thread(
-            check_citations,
-            outcome.output,
-            sources=sources,
-            policy=self._citations,
-            store=access.store,
-            strategy_name=self._metadata.name,
-        )
+        output: JsonValue
+
+        if native:
+            checks, record = await asyncio.to_thread(
+                check_native_citations,
+                response.citations,
+                documents=documents,
+                sources=sources,
+                policy=self._citations,
+                store=access.store,
+                strategy_name=self._metadata.name,
+            )
+            output = {"text": outcome.output, "citations": cast(list[JsonValue], checks)}
+        else:
+            output, record = await asyncio.to_thread(
+                check_citations,
+                outcome.output,
+                sources=sources,
+                policy=self._citations,
+                store=access.store,
+                strategy_name=self._metadata.name,
+            )
 
         return outcome.model_copy(
             update={"output": output, "resources": (*outcome.resources, record)},
         )
+
+    def _require_extractions_of_documents(
+        self,
+        prompt: Prompt,
+        shown: dict[str, SegmentedText],
+    ) -> list[str]:
+        """Return the digests of the documents a natively cited prompt shows, in order.
+
+        Raises:
+            PromptContentError: A document the prompt shows has no extraction
+                the prompt also shows, to check its citations against.
+        """
+
+        documents = [
+            content.digest for content in prompt.contents() if content.media_type == PDF_MEDIA_TYPE
+        ]
+        extracted = {segmented.source_digest for segmented in shown.values()}
+
+        for digest in documents:
+            if digest not in extracted:
+                raise PromptContentError(
+                    f"Prompt strategy {self._metadata.name!r} asks for native citations of "
+                    f"content {digest}, but shows no extraction of it to check them against."
+                )
+
+        return documents
 
     def _require_readable_content(
         self,

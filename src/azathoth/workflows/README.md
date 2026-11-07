@@ -687,6 +687,32 @@ on. A citation of a source the prompt did not show always fails. Every
 check is kept in the content store and named by the step's `citations`
 resource.
 
+A step shown a PDF can instead have its model cite it natively, when the
+model does: on Bedrock, a model that reads documents with citations returns
+its answer as text, with the passages and pages that support it. The step
+replies in text, shows the PDF and its extraction both, and names a native
+policy (ADR 0116):
+
+```json
+"specification": {
+  "template": {
+    "text": "{document}\n\n{claim}\n\nWhen was the claim received?",
+    "bindings": [
+      {"variable_name": "document", "event_type": "workflow.input.received", "field_name": "input"},
+      {"variable_name": "claim", "input_name": "claim"}
+    ]
+  },
+  "model_selection": {"provider": "bedrock", "model": "us.anthropic.claude-sonnet-4-20250514-v1:0"},
+  "citations": {"native": true}
+}
+```
+
+Each citation the model returns is checked against the extraction's
+segments on the pages it names, and the step outputs
+`{"text": ..., "citations": [...]}`. A step that shows a PDF without its
+extraction is refused, since there would be nothing to check against.
+OpenRouter returns no native citations.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

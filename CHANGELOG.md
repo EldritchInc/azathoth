@@ -119,6 +119,12 @@ release dates are on the
   asks again, unless the policy keeps it, and every check is kept in the
   content store and recorded as the step's `citations` resource
   ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
+- **A Bedrock model's own citations of a PDF are checked the same way.** A
+  text prompt step whose policy is `{"native": true}` has Bedrock cite the
+  PDFs it shows; each citation is checked against the segments, on the pages
+  it names, of the extraction the step also shows, and the step outputs its
+  text with the checks, kept and recorded as any cited step's
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Fixes
 

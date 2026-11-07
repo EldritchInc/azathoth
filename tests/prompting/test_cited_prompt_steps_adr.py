@@ -9,20 +9,37 @@ import pytest
 from pydantic import JsonValue, ValidationError
 
 from azathoth.citations import ExtractionHandle, Segment, SegmentedText
-from azathoth.context import Context, LineageRun, LineageStep, StepLineage, running_step
-from azathoth.inputs import InMemoryContentStore, content_bytes_digest
+from azathoth.context import (
+    Context,
+    ContextEvent,
+    LineageRun,
+    LineageStep,
+    StepLineage,
+    running_step,
+)
+from azathoth.inputs import ContentRef, InMemoryContentStore, content_bytes_digest
 from azathoth.prompting import (
+    WORKFLOW_INPUT_BOUND_EVENT_TYPE,
     CitationCheckError,
     CitationPolicy,
     CitedSource,
     ContextPromptStrategy,
     ContextPromptStrategySpec,
+    PromptInputBinding,
     PromptOutputFormat,
     PromptTemplate,
     check_citations,
+    check_native_citations,
     render_extraction,
 )
-from azathoth.providers import DeterministicLanguageModel, PromptContentError
+from azathoth.providers import (
+    DeterministicLanguageModel,
+    NativeCitation,
+    Prompt,
+    PromptContentError,
+    UnsupportedModelRequestError,
+    openrouter_request,
+)
 from azathoth.strategies import StrategyMetadata
 from azathoth.tools import ToolContentAccess, providing_tool_content
 
@@ -159,6 +176,93 @@ def storeless_refusal() -> str:
     return str(raised.value)
 
 
+def native_refusal(
+    citation: NativeCitation,
+    *,
+    documents: tuple[str, ...] = (CLAIM.source_digest,),
+) -> str:
+    """Return the message checking one native citation against the claim is refused with."""
+
+    with pytest.raises(CitationCheckError) as raised:
+        check_native_citations(
+            [citation],
+            documents=documents,
+            sources={"<SOURCE>": CitedSource(segmented=CLAIM)},
+            policy=CitationPolicy(native=True),
+            store=InMemoryContentStore(),
+            strategy_name="<NAME>",
+        )
+
+    return str(raised.value)
+
+
+def native_specification_refusal() -> str:
+    """Return the message a natively cited specification with JSON output is refused with."""
+
+    with pytest.raises(ValidationError) as raised:
+        ContextPromptStrategySpec.model_validate(
+            {
+                "metadata": {
+                    "id": str(RUN),
+                    "name": "<NAME>",
+                    "description": "Cite.",
+                    "version": "1.0.0",
+                },
+                "template": {"text": "Cite."},
+                "model_selection": {"provider": "test", "model": "citing"},
+                "output_format": "json",
+                "citations": {"native": True},
+            }
+        )
+
+    return raised.value.errors()[0]["msg"].removeprefix("Value error, ")
+
+
+def missing_extraction_refusal() -> str:
+    """Return the message a natively cited prompt showing a PDF without its extraction gets."""
+
+    pdf = b"%PDF-1.7"
+    handle = ContentRef(
+        digest=content_bytes_digest(pdf), media_type="application/pdf", size_bytes=len(pdf)
+    )
+    strategy = ContextPromptStrategy(
+        metadata=StrategyMetadata(id=RUN, name="<NAME>", description="Cite.", version="1.0.0"),
+        template=PromptTemplate(
+            text="{document}",
+            bindings=(PromptInputBinding(variable_name="document", input_name="document"),),
+        ),
+        language_model=DeterministicLanguageModel(),
+        citations=CitationPolicy(native=True),
+    )
+    context = Context(
+        events=(
+            ContextEvent(
+                event_type=WORKFLOW_INPUT_BOUND_EVENT_TYPE,
+                payload={"name": "document", "value": handle.to_value()},
+                producer="workflow-runner",
+            ),
+        )
+    )
+
+    with pytest.raises(PromptContentError) as raised:
+        asyncio.run(strategy.run(context))
+
+    #
+    # The table names the claim's extraction as <DIGEST>; this refusal names
+    # the PDF shown, so its digest stands in for the placeholder the same way.
+    #
+    return str(raised.value).replace(handle.digest, DIGEST)
+
+
+def openrouter_refusal() -> str:
+    """Return the message an OpenRouter model asked for native citations refuses with."""
+
+    with pytest.raises(UnsupportedModelRequestError) as raised:
+        openrouter_request("<MODEL>", Prompt(text="Cite.", native_citations=True))
+
+    return str(raised.value)
+
+
 DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
     (
         "Prompt strategy '<NAME>' shows extraction <DIGEST>, which this run cannot give: "
@@ -212,6 +316,35 @@ DOCUMENTED: list[tuple[str, Callable[[], str]]] = [
         "Prompt strategy '<NAME>' checks citations, which this run cannot keep: it has no "
         "content store.",
         storeless_refusal,
+    ),
+    (
+        "Prompt strategy '<NAME>' checks native citations, which its model returns beside a "
+        "text reply; its output format is json.",
+        native_specification_refusal,
+    ),
+    (
+        "Prompt strategy '<NAME>' asks for native citations of content <DIGEST>, but shows no "
+        "extraction of it to check them against.",
+        missing_extraction_refusal,
+    ),
+    (
+        "Prompt strategy '<NAME>' was cited by its model from document <INDEX>, which its "
+        "prompt does not show.",
+        lambda: native_refusal(
+            NativeCitation(document=1, quote="x"),
+        ).replace("document 1", "document <INDEX>"),
+    ),
+    (
+        "Prompt strategy '<NAME>' was cited by its model quoting '<QUOTE>' from source "
+        "'<SOURCE>', which no segment<WHERE> holds.",
+        lambda: native_refusal(NativeCitation(document=0, quote="<QUOTE>")).replace(
+            "which no segment holds", "which no segment<WHERE> holds"
+        ),
+    ),
+    (
+        "OpenRouter model '<MODEL>' cannot return native citations; cite segments in the "
+        "reply instead.",
+        openrouter_refusal,
     ),
 ]
 """Each refusal ADR 0116 quotes, and what produces it."""

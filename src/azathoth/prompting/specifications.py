@@ -99,13 +99,23 @@ class ContextPromptStrategySpec(BaseModel):
     def require_json_for_citations(
         self,
     ) -> Self:
-        """Require a JSON reply of a cited step, since only one can hold citations.
+        """Require a JSON reply of a cited step, and a text reply of a natively cited one.
 
         Raises:
-            ValueError: The step checks citations, but its output is text.
+            ValueError: The step checks its reply's citations, but its output
+                is text, or its provider's, but its output is JSON.
         """
 
-        if self.citations is not None and self.output_format is not PromptOutputFormat.JSON:
+        if self.citations is None:
+            return self
+
+        if self.citations.native and self.output_format is not PromptOutputFormat.TEXT:
+            raise ValueError(
+                f"Prompt strategy {self.metadata.name!r} checks native citations, which its "
+                "model returns beside a text reply; its output format is json."
+            )
+
+        if not self.citations.native and self.output_format is not PromptOutputFormat.JSON:
             raise ValueError(
                 f"Prompt strategy {self.metadata.name!r} checks citations, which only a JSON "
                 "reply holds; its output format is text."

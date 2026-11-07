@@ -10,6 +10,7 @@ from azathoth.prompting.citations import (
     CitationPolicy,
     CitedSource,
     check_citations,
+    check_native_citations,
 )
 from azathoth.prompting.content import (
     extraction_source,
@@ -92,6 +93,7 @@ __all__ = [
     "CitationPolicy",
     "CitedSource",
     "check_citations",
+    "check_native_citations",
     "extraction_source",
     "kept_extraction",
 ]

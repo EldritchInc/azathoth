@@ -146,6 +146,72 @@ keep one, so a cited step there fails:
 Prompt strategy '<NAME>' checks citations, which this run cannot keep: it has no content store.
 ```
 
+### A provider's own citations are checked as a reply's are
+
+Some models cite the documents they are shown themselves: Bedrock's
+Converse, given a document with citations turned on, returns its answer as
+text beside the passages that support it, each with the document and the
+pages or characters it came from. A policy may ask for those instead of
+citations in a JSON reply, with `native`:
+
+```json
+"citations": {"native": true}
+```
+
+Such a step replies in text, which the provider's citations stand beside:
+
+```text
+Prompt strategy '<NAME>' checks native citations, which its model returns beside a text reply; its output format is json.
+```
+
+The prompt asks its provider to cite, and Bedrock turns citations on for
+every document the prompt shows. A provider's citation is turned into one
+of Azathoth's: the document it names, counted among the documents the
+prompt showed, the passages it quotes, joined as one quote, and the pages it
+names, if it names them, from the first to the last, both included. A
+citation by characters or chunks names no pages, since a provider counts
+them in text it extracted itself, which Azathoth never saw. A citation of
+the web, or with no quote, is not one of the prompt's documents and is
+passed over.
+
+A provider quotes the PDF, not an extraction of it, so a citation is checked
+against the extraction of the same document that the prompt also shows:
+among the segments on the pages the citation names, or every segment when
+it names none, the first that holds the quote verifies it. A step that asks
+for native citations must show an extraction of every document it shows,
+or there is nothing to check against, and it is refused before its model is
+called:
+
+```text
+Prompt strategy '<NAME>' asks for native citations of content <DIGEST>, but shows no extraction of it to check them against.
+```
+
+The step outputs its reply's text and the checks, each the citation as
+checked, the segment that verified it, or none, the pages it named, and the
+part of the reply it supports:
+
+```json
+{"text": "It was received on December 14.", "citations": [{"source": "claim", "segment": "p3.s1", "quote": "Received on December 14.", "status": "verified", "pages": [3, 3], "supports": "on December 14", "anchor": {"...": "..."}}]}
+```
+
+The policy treats unverified citations, and the record keeps the checks, as
+for citations in a reply. A citation of a document the prompt did not show
+always fails:
+
+```text
+Prompt strategy '<NAME>' was cited by its model from document <INDEX>, which its prompt does not show.
+Prompt strategy '<NAME>' was cited by its model quoting '<QUOTE>' from source '<SOURCE>', which no segment<WHERE> holds.
+```
+
+`<WHERE>` is ` on page <PAGE>`, ` on pages <FIRST> to <LAST>`, or nothing
+when the citation named no pages. OpenRouter's chat completions return no
+citations of documents, so an OpenRouter model asked for them refuses
+before sending anything:
+
+```text
+OpenRouter model '<MODEL>' cannot return native citations; cite segments in the reply instead.
+```
+
 ## Consequences
 
 - A model step can be shown a document's segments by the IDs it may cite,
@@ -158,6 +224,9 @@ Prompt strategy '<NAME>' checks citations, which this run cannot keep: it has no
   model that cites what is not there is asked again.
 - Every check a run made is in its content store, named by a step's
   resource, and can be checked again from the store alone.
+- A model that cites the PDFs it is shown is held to the same check, against
+  the segments of the extraction the step also shows, so its citations and
+  a reply's are records of one kind.
 
 ## Alternatives Considered
 
@@ -184,3 +253,17 @@ whose support vanished would read as one that never needed any. Under
 Rejected. A list at a fixed path flattens claims and their support into two
 lists a later step must pair again. A citation found wherever it stands
 keeps each claim with its own.
+
+### Trust a provider's own citations
+
+Rejected. A provider's citation is the provider's word: its quote comes from
+text it extracted itself, which no one checked, and its pages from its own
+reading of the PDF. Checking it against the run's own extraction makes it
+the engine's record, as any citation is.
+
+### Check a provider's citations by its character offsets
+
+Rejected. A provider counts characters in its own extraction of the
+document, which Azathoth never sees; an offset there names nothing in an
+extraction of Azathoth's. Pages, which both read from the PDF, are checked;
+characters are not.

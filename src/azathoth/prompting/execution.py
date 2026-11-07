@@ -8,7 +8,7 @@ from azathoth.prompting.content import read_prompt_content
 from azathoth.prompting.exceptions import PromptOutputFormatError
 from azathoth.prompting.models import ModelBinding
 from azathoth.prompting.output_format import PromptOutputFormat, parse_json_reply
-from azathoth.providers import LanguageModel, Prompt, giving_prompt_content
+from azathoth.providers import LanguageModel, ModelResponse, Prompt, giving_prompt_content
 from azathoth.strategies import (
     StrategyExecutionMetrics,
     StrategyOutcome,
@@ -25,6 +25,33 @@ async def execute_prompt(
     strategy_name: str | None = None,
 ) -> StrategyOutcome:
     """Execute a prompt and translate its response into a strategy outcome.
+
+    See `execute_prompt_response`, which also returns the response.
+    """
+
+    outcome, _ = await execute_prompt_response(
+        prompt=prompt,
+        language_model=language_model,
+        model_binding=model_binding,
+        output_format=output_format,
+        strategy_name=strategy_name,
+    )
+
+    return outcome
+
+
+async def execute_prompt_response(
+    *,
+    prompt: Prompt,
+    language_model: LanguageModel,
+    model_binding: ModelBinding | None,
+    output_format: PromptOutputFormat = PromptOutputFormat.TEXT,
+    strategy_name: str | None = None,
+) -> tuple[StrategyOutcome, ModelResponse]:
+    """Execute a prompt; return its strategy outcome and the model's response.
+
+    The response carries what the outcome does not, such as the provider's
+    own citations (ADR 0116).
 
     With JSON output, the reply is parsed into the outcome's output. The
     content a prompt shows is checked and read before the model is called,
@@ -58,7 +85,7 @@ async def execute_prompt(
 
             raise PromptOutputFormatError(message) from exc
 
-    return StrategyOutcome(
+    outcome = StrategyOutcome(
         output=output,
         resources=(
             (
@@ -80,3 +107,5 @@ async def execute_prompt(
             estimated_cost_usd=response.estimated_cost_usd,
         ),
     )
+
+    return outcome, response

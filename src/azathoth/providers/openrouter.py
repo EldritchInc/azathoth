@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from azathoth.inputs import PDF_MEDIA_TYPE
 from azathoth.providers.content import prompt_content_bytes
-from azathoth.providers.exceptions import ModelExecutionError
+from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
 from azathoth.providers.models import ModelResponse, Prompt, TextPart
 from azathoth.providers.openrouter_models import OpenRouterConfiguration
 
@@ -152,9 +152,17 @@ def openrouter_request(
     """Return the chat completion request that sends one prompt to one OpenRouter model.
 
     Raises:
+        UnsupportedModelRequestError: The prompt asks for native citations,
+            which OpenRouter's chat completions do not return.
         PromptContentError: The prompt shows content whose bytes were not
             given.
     """
+
+    if prompt.native_citations:
+        raise UnsupportedModelRequestError(
+            f"OpenRouter model {model!r} cannot return native citations; cite segments in "
+            "the reply instead."
+        )
 
     content: JsonValue = prompt.text
     documents = 0

@@ -109,12 +109,17 @@ class Prompt(BaseModel):
     both, so a prompt says what it holds once. A prompt of text serializes
     without parts, and a prompt of parts without text, so a text prompt's
     documents and digests are what they were.
+
+    `native_citations` asks the provider to cite the documents the prompt
+    shows in its own way, beside the reply (ADR 0116); a prompt that does not
+    ask serializes without it.
     """
 
     model_config = ConfigDict(frozen=True)
 
     text: str = ""
     parts: tuple[PromptPart, ...] = ()
+    native_citations: bool = False
 
     @model_validator(mode="after")
     def require_text_or_content(
@@ -157,6 +162,9 @@ class Prompt(BaseModel):
         else:
             serialized.pop("parts", None)
 
+        if not self.native_citations:
+            serialized.pop("native_citations", None)
+
         return serialized
 
     def contents(
@@ -187,12 +195,33 @@ class ModelRequest(BaseModel):
     max_output_tokens: int | None = Field(default=None, gt=0)
 
 
+class NativeCitation(BaseModel):
+    """A citation a provider returned of a document its prompt showed (ADR 0116).
+
+    `document` counts the documents the prompt showed, in order, from 0.
+    `quote` is the text the provider says the document holds; `pages`, when
+    the provider says, the first and last pages it lies on, as the provider
+    numbers them. `supports` is the part of the reply the citation supports.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    document: int = Field(ge=0)
+    quote: str = Field(min_length=1)
+    pages: tuple[int, int] | None = None
+    supports: str = ""
+
+
 class ModelResponse(BaseModel):
     """The response returned by a language model.
 
     `estimated_cost_usd` is None when the cost is unknown, such as for a
     Bedrock model its operator has not priced (ADR 0103). Unknown is never
-    free.
+    free. `citations` are the provider's own, when the prompt asked for them
+    (ADR 0116).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -210,3 +239,5 @@ class ModelResponse(BaseModel):
     latency_ms: int
 
     estimated_cost_usd: float | None
+
+    citations: tuple[NativeCitation, ...] = ()
