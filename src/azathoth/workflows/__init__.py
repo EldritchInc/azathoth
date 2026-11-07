@@ -328,9 +328,11 @@ from azathoth.workflows.scorecard import (
     WorkflowScorecard,
 )
 from azathoth.workflows.scoring import (
+    CITED_RATIONALE,
     WorkflowScorer,
     WorkflowScoringPolicy,
     aggregate_workflow_scorecards,
+    run_citation_score,
 )
 from azathoth.workflows.sql_benchmark_execution_repository import (
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
@@ -450,6 +452,7 @@ from azathoth.workflows.value import (
 __all__ = [
     "BENCHMARK_INPUT_PRODUCER",
     "CITATIONS_EVIDENCE_LABEL",
+    "CITED_RATIONALE",
     "PRODUCTION_INVOCATION_RUN_TABLES",
     "RUN_CHILD_TABLES",
     "RUN_JOURNAL_TABLES",
@@ -690,6 +693,7 @@ __all__ = [
     "historical_tool_usages",
     "latest_corrected_output",
     "recorded_citation_checks",
+    "run_citation_score",
     "materialize_workflow_candidate",
     "model_usage_report",
     "production_model_usages",

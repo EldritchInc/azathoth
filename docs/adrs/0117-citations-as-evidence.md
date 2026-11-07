@@ -146,6 +146,24 @@ Run <RUN_ID> kept citation records, which cannot be read: it has no content stor
 Run <RUN_ID> kept citation record <DIGEST>, which the content store no longer holds.
 ```
 
+### A run is scored on what it cited
+
+A scorecard gains a citation score: the fraction of every citation the
+run's cited steps checked that verified, read from the counts each step's
+`citations` resource records. A run whose cited steps checked no citation
+scores 0, since it cited nothing, so a candidate cannot climb by citing
+less. A run with no cited step has no citation score.
+
+A run with a citation score has an overall score that is the mean of five
+dimensions, quality, reliability, latency, cost and citations; any other
+run's is the mean of four, as it always was, so no existing ranking
+changes. A candidate's scorecard across a benchmark's cases takes the mean
+citation score of the cases that have one. Experiments, comparisons and
+optimization rank on the overall score, so each prefers, all else equal,
+the candidate whose citations verify. A scorecard without a citation score
+serializes without one, and every scorecard renders its citation score, when
+it has one, after its cost.
+
 ## Consequences
 
 - A benchmark of documents is built the way any benchmark is: from runs
@@ -163,6 +181,8 @@ Run <RUN_ID> kept citation record <DIGEST>, which the content store no longer ho
   citing nothing that is not there, on the engine's checks alone.
 - A case written by hand names citations by their segments, so it does not
   break when a model words a quote differently.
+- Optimization prefers the candidate whose citations verify, and a model
+  that cites less, or cites what is not there, ranks lower for it.
 
 ## Alternatives Considered
 
@@ -184,6 +204,12 @@ made.
 Rejected. A case citing nothing it was asked to, beside a right answer,
 would pass on the answer alone at any threshold below 1. A product, held
 below the threshold when citations fail, cannot be averaged away.
+
+### Score citations in every scorecard
+
+Rejected. A fifth dimension in every overall score would change every
+existing ranking, and give a workflow that cites nothing a score for
+citing.
 
 ### Run cases with an in-memory journal
 

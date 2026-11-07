@@ -152,6 +152,12 @@ release dates are on the
   cited steps kept, never from the result, and the case's evaluation
   records how many were met
   ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Cited runs are scored on their citations.** A scorecard gains a
+  citation score, the fraction of a run's checked citations that verified,
+  and a cited run's overall score is the mean of five dimensions, so
+  comparisons, experiments and optimization prefer candidates whose
+  citations verify. Runs with no cited step score as they always did
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 - **Results that cite compare by what they cite.** Before an exact,
   normalized or semantic comparison, every citation and check compares as
   `{source, segment}`, so an expected answer names its citations by segment

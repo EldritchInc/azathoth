@@ -1785,6 +1785,11 @@ target cost
 These are scoring inputs used during the empirical workflow optimization
 session.
 
+A candidate whose cited steps kept their checks is scored on its citations
+too, the fraction that verified, and renders a `Citations:` line after
+`Cost:` in comparisons, experiments and optimization sessions; its overall
+score is then the mean of five dimensions (ADR 0117).
+
 They are not silently persisted as production policy by the CLI command.
 
 # Optimization Lifecycle

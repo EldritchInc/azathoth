@@ -978,6 +978,15 @@ Candidates can be ordered through:
 - `WorkflowRanking`
 - `RankedWorkflow`
 
+A run whose cited steps kept their checks is also scored on them (ADR 0117):
+`run_citation_score(run)` is the fraction of the citations its `citations`
+resources count that verified, 0 when they counted none, and `None` for a
+run with no cited step. `WorkflowScorecard.citation_score` holds it, and the
+overall score is then the mean of five dimensions instead of four, with
+`CITED_RATIONALE` as its rationale. `aggregate_workflow_scorecards` takes the
+mean citation score of the scorecards that have one. A scorecard without a
+citation score serializes without it.
+
 Scoring and ranking describe empirical preference.
 
 They do not confer production authority.

@@ -132,6 +132,11 @@ def _append_observation(
             f"Reliability: {scorecard.reliability_score:.6f}",
             f"Latency: {scorecard.latency_score:.6f}",
             f"Cost: {scorecard.cost_score:.6f}",
+            *(
+                (f"Citations: {scorecard.citation_score:.6f}",)
+                if scorecard.citation_score is not None
+                else ()
+            ),
             f"Overall: {scorecard.overall_score:.6f}",
         )
     )
