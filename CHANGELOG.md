@@ -177,6 +177,19 @@ release dates are on the
   however the model words its quote
   ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 
+### Workflow Contracts
+
+- **A workflow declares the JSON Schemas of its input and its result.**
+  `input_schema` describes what the workflow receives, a document as its
+  content handle, and `output_schema` its declared result. Both travel into
+  production with the promoted workflow, and `workflow show` and `workflow
+  production` print them; a workflow without them reads and digests as
+  before
+  ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
+- **`workflow import` says why a document is refused** when the workflow
+  states a reason, such as a schema that is not a JSON Schema
+  ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
+
 ### Fixes
 
 - **Workflows with tool steps can be compared and optimized.** A tool step

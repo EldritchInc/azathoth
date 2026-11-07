@@ -138,6 +138,33 @@ The domain field is optional so that workflows stored before results existed
 still decode. Operations that need an answer reject a workflow without one
 explicitly rather than guessing which output matters.
 
+## Workflow Input and Output Schemas
+
+A specification may declare the JSON Schemas of its contract (ADR 0118):
+
+```json
+"result": {"name": "summary"},
+"input_schema": {"type": "object", "properties": {"ticket": {"type": "string"}}, "required": ["ticket"]},
+"output_schema": {"type": "string", "maxLength": 600}
+```
+
+`input_schema` describes the value the workflow receives, the payload of its
+`workflow.input.received` event after resolution, so a PDF or an image is its
+content handle. `output_schema` describes the declared result, so a workflow
+with one must declare a result. Each is any valid JSON Schema, in its own
+`$schema` dialect or Draft 2020-12, checked when the specification is built:
+
+```text
+The workflow's input schema is not usable: <REASON>
+The workflow's output schema is not usable: <REASON>
+Workflow <WORKFLOW_ID> has an output schema, which describes its result, but declares no result.
+```
+
+A specification without schemas serializes without them, so its digest is
+what it was. Materialization and promotion carry the schemas with the rest
+of the specification, so a production state holds the ones its invocations
+are checked against.
+
 ## Workflow Steps
 
 A workflow is composed from `WorkflowStepSpecification` values.

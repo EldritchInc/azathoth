@@ -918,6 +918,33 @@ A name-only result renders as:
 Result: output answer (first producer in step order)
 ```
 
+A workflow that declares an input or output schema (ADR 0118) shows it right
+after its result:
+
+```text
+Result: output summary (first producer in step order)
+Input Schema:
+{
+  "type": "object",
+  "required": [
+    "ticket"
+  ]
+}
+Output Schema:
+{
+  "type": "string"
+}
+Steps: 2
+```
+
+`workflow production` shows the promoted workflow's schemas after its
+deployment, since every invocation is checked against them. A document whose
+schema is not a JSON Schema is refused by `workflow import`, saying why:
+
+```text
+Workflow document is not a valid WorkflowSpecification. The workflow's input schema is not usable: A JSON Schema must be an object or a boolean.
+```
+
 A workflow stored before declared results existed renders:
 
 ```text

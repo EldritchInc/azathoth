@@ -140,3 +140,4 @@ requests that made it:
 - [ADR 0115: Multimodal Prompts](0115-multimodal-prompts.md)
 - [ADR 0116: Cited Prompt Steps](0116-cited-prompt-steps.md)
 - [ADR 0117: Citations as Evidence](0117-citations-as-evidence.md)
+- [ADR 0118: Workflow Input and Output Schemas](0118-workflow-input-and-output-schemas.md)

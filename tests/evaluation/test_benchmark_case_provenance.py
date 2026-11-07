@@ -1,5 +1,6 @@
 """Tests that a benchmark case names where its input came from (ADR 0117)."""
 
+import warnings
 from uuid import UUID
 
 import pytest
@@ -108,3 +109,17 @@ def test_a_case_whose_provenance_names_a_json_file_holds_any_value() -> None:
 
 def test_a_case_without_provenance_may_hold_json_shaped_like_a_handle() -> None:
     assert BenchmarkCase(id=CASE_ID, input=handle(), expected=EXPECTED).input == handle()
+
+
+def test_a_case_dumps_as_python_values_without_warnings() -> None:
+    case = BenchmarkCase(
+        id=CASE_ID, input=handle(), input_provenance=provenance(), expected=EXPECTED
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+
+        dumped = case.model_dump()
+
+    assert dumped["id"] == CASE_ID
+    assert BenchmarkCase.model_validate(dumped) == case
