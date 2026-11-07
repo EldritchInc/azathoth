@@ -260,5 +260,6 @@ def test_persisted_tool_source_is_not_application_code(
     assert implementation is not None
     assert implementation.runtime == "python"
     assert implementation.entrypoint == "run"
+    assert implementation.source is not None
     assert "def run(text):" in implementation.source
     assert "word_count" in implementation.source

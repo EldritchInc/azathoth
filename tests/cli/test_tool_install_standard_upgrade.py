@@ -262,6 +262,7 @@ def test_the_current_revisions_keep_their_ids_and_drop_only_the_depth_grant() ->
         assert implementation.environment == tuple(
             grant for grant in previous.environment if grant != "AZATHOTH_WORKFLOW_DEPTH"
         )
+        assert implementation.source is not None
         assert "AZATHOTH_WORKFLOW_DEPTH" not in implementation.source
 
 
@@ -439,6 +440,8 @@ def test_the_resume_revisions_keep_their_ids_grants_and_definitions() -> None:
         assert implementation.id == previous.id
         assert implementation.environment == previous.environment
         assert implementation.timeout_seconds == previous.timeout_seconds
+        assert implementation.source is not None
+        assert previous.source is not None
         assert "--idempotency-key" in implementation.source
         assert "--idempotency-key" not in previous.source
 

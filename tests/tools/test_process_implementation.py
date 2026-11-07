@@ -105,7 +105,7 @@ def test_process_implementation_rejects_a_non_positive_timeout() -> None:
 def test_python_implementation_rejects_a_command() -> None:
     with pytest.raises(
         ValidationError,
-        match="Only process tool implementations may declare a command or timeout.",
+        match="Only process tool implementations may declare a command.",
     ):
         ToolImplementation(
             tool_id=TOOL_ID,
@@ -119,7 +119,7 @@ def test_python_implementation_rejects_a_command() -> None:
 def test_python_implementation_rejects_a_timeout() -> None:
     with pytest.raises(
         ValidationError,
-        match="Only process tool implementations may declare a command or timeout.",
+        match="Only process and MCP tool implementations may declare a timeout.",
     ):
         ToolImplementation(
             tool_id=TOOL_ID,

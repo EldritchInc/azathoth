@@ -113,6 +113,11 @@ class PythonToolExecutor:
     ) -> dict[str, Any]:
         """Compile and load trusted implementation source."""
 
+        if implementation.source is None:
+            raise ToolExecutionError(
+                f"Tool implementation {implementation.id} does not declare a source."
+            )
+
         namespace: dict[str, Any] = {
             "__builtins__": _PYTHON_BUILTINS.copy(),
         }

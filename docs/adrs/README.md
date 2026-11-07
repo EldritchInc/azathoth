@@ -141,3 +141,4 @@ requests that made it:
 - [ADR 0116: Cited Prompt Steps](0116-cited-prompt-steps.md)
 - [ADR 0117: Citations as Evidence](0117-citations-as-evidence.md)
 - [ADR 0118: Workflow Input and Output Schemas](0118-workflow-input-and-output-schemas.md)
+- [ADR 0119: Call MCP-Served Tools](0119-call-mcp-served-tools.md)

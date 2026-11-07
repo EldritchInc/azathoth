@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from tests.standard.harness import standard_implementation
+from tests.standard.harness import standard_source
 
 LEGACY_ENCODINGS = ("cp1252", "ascii")
 
@@ -73,7 +73,7 @@ def run_with_encoding(
     """Run one standard tool's source with its standard streams in a legacy encoding."""
 
     script = tmp_path / f"{name}.py"
-    script.write_text(standard_implementation(name).source, encoding="utf-8")
+    script.write_text(standard_source(name), encoding="utf-8")
 
     return subprocess.run(
         [sys.executable, str(script)],

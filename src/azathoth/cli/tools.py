@@ -255,7 +255,9 @@ def _print_tool_implementation(
     print(f"Tool Version: {implementation.tool_version}")
     print(f"Implementation Version: {implementation.version}")
     print(f"Runtime: {implementation.runtime}")
-    print(f"Entrypoint: {implementation.entrypoint}")
+
+    if implementation.mcp is None:
+        print(f"Entrypoint: {implementation.entrypoint}")
 
     if implementation.command is not None:
         print(f"Command: {shlex.join(implementation.command)}")
@@ -266,8 +268,17 @@ def _print_tool_implementation(
     if implementation.environment:
         print(f"Environment: {', '.join(implementation.environment)}")
 
-    print("Source:")
-    print(implementation.source)
+    if implementation.mcp is not None:
+        print(f"MCP Server: {implementation.mcp.server.describe()}")
+        print(f"MCP Tool: {implementation.mcp.tool}")
+        print(f"Schema Digest: {implementation.mcp.schema_digest}")
+
+        if implementation.mcp.credentials.authorization is not None:
+            print(f"Authorization: {implementation.mcp.credentials.authorization}")
+
+    if implementation.source is not None:
+        print("Source:")
+        print(implementation.source)
 
 
 def _print_tool_test_case(

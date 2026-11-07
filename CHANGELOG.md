@@ -203,6 +203,16 @@ release dates are on the
   its `result` held to the workflow's output schema
   ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
 
+### Calling MCP Tools
+
+- **A tool implementation can bind a tool an MCP server serves.** An `mcp`
+  implementation names its server, by the command of a stdio server or the
+  URL of an HTTP one, the remote tool, the digest of that tool's schemas
+  when it was pinned, and the variable holding an HTTP server's bearer
+  token; it runs no source. `tool implementation show` prints the binding,
+  and every other implementation reads and digests as before
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+
 ### Fixes
 
 - **Workflows with tool steps can be compared and optimized.** A tool step
