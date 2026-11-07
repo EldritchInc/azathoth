@@ -3,6 +3,7 @@ from azathoth.workflows.attempt import (
     WorkflowStepFailure,
 )
 from azathoth.workflows.benchmark import (
+    BENCHMARK_INPUT_PRODUCER,
     WorkflowBenchmarkCandidateScorecard,
     WorkflowBenchmarkCaseResult,
     WorkflowBenchmarkComparator,
@@ -14,14 +15,18 @@ from azathoth.workflows.benchmark import (
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
+    benchmark_case_context,
 )
 from azathoth.workflows.benchmark_case_source import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
+    SOURCE_URI_METADATA_KEY,
     BenchmarkCaseSourceError,
+    benchmark_case_from_input,
     benchmark_case_from_run,
     latest_corrected_output,
     workflow_run_input,
+    workflow_run_input_provenance,
 )
 from azathoth.workflows.benchmark_execution_repository import (
     WorkflowBenchmarkExecutionRepository,
@@ -436,6 +441,7 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "BENCHMARK_INPUT_PRODUCER",
     "PRODUCTION_INVOCATION_RUN_TABLES",
     "RUN_CHILD_TABLES",
     "RUN_JOURNAL_TABLES",
@@ -549,6 +555,7 @@ __all__ = [
     "RUN_FAILURE_EVALUATOR_VERSION",
     "SOURCE_FEEDBACK_METADATA_KEY",
     "SOURCE_RUN_METADATA_KEY",
+    "SOURCE_URI_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WORKFLOW_INPUT_RESOLVED_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
@@ -650,6 +657,8 @@ __all__ = [
     "WorkflowValueResolutionError",
     "active_production_revision",
     "aggregate_workflow_scorecards",
+    "benchmark_case_context",
+    "benchmark_case_from_input",
     "benchmark_case_from_run",
     "complete_production_invocation",
     "combine_observers",
@@ -694,6 +703,7 @@ __all__ = [
     "workflow_result",
     "workflow_result_produced",
     "workflow_run_input",
+    "workflow_run_input_provenance",
     "workflow_uses_model",
     "workflow_uses_tool",
     "workflows_using_model",

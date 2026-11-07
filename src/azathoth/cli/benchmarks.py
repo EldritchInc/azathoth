@@ -12,6 +12,7 @@ from azathoth.cli.benchmark_checks import (
     results_declared,
 )
 from azathoth.cli.benchmark_execution import (
+    case_runner,
     compare_configured_benchmarks,
     execute_configured_benchmark,
 )
@@ -461,6 +462,7 @@ def run_benchmark(
                 workflow_id=workflow_id,
                 dataset=dataset,
                 recorder=_benchmark_recorder(configuration),
+                workflow_runner=case_runner(repositories(configuration)),
             )
         )
     except (
@@ -544,6 +546,7 @@ def compare_benchmarks(
                     target_cost_usd=target_cost_usd,
                 ),
                 recorder=recorder,
+                workflow_runner=case_runner(repositories(configuration)),
             )
         )
     except (

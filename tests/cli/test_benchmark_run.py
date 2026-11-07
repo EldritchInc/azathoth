@@ -23,6 +23,7 @@ from azathoth.workflows import (
     WorkflowBenchmarkEvidenceRecorder,
     WorkflowBenchmarkResult,
     WorkflowGenerationError,
+    WorkflowRunner,
 )
 
 BENCHMARK_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -107,6 +108,8 @@ def test_benchmark_run_executes_persisted_dataset(
 
     recorders: list[WorkflowBenchmarkEvidenceRecorder] = []
 
+    runners: list[WorkflowRunner] = []
+
     result = WorkflowBenchmarkResult(
         dataset_id=BENCHMARK_ID,
     )
@@ -117,7 +120,9 @@ def test_benchmark_run_executes_persisted_dataset(
         workflow_id: UUID,
         dataset: BenchmarkDataset,
         recorder: WorkflowBenchmarkEvidenceRecorder,
+        workflow_runner: WorkflowRunner,
     ) -> WorkflowBenchmarkResult:
+        runners.append(workflow_runner)
         calls.append(
             (
                 runtime,
@@ -169,6 +174,10 @@ def test_benchmark_run_executes_persisted_dataset(
         recorder.executions,
         SQLiteWorkflowBenchmarkExecutionRepository,
     )
+
+    (runner,) = runners
+
+    assert isinstance(runner, WorkflowRunner)
 
     assert captured.err == ""
 

@@ -132,6 +132,20 @@ release dates are on the
   check can be verified again from the content store alone
   ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
+### Evidence in Benchmarks
+
+- **A benchmark case can hold a document.** A case names its input's
+  provenance, as a run records it, and a case given a PDF or an image holds
+  its handle, with the content kept in the content store by digest.
+  `benchmark add-case --from-run` takes a run given a document, and
+  `benchmark add-case --input-file` makes a case straight from a file
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Benchmark, comparison and optimization runs read documents.** Every case
+  runs with the database's journal and content, as `workflow run` does, so
+  `segment_pdf` reads a case's PDF and a cited step keeps its checks. A case
+  whose content the store no longer holds is judged as a failed run
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+
 ### Fixes
 
 - **A command stopped as a process tool starts no longer hangs.** A tool

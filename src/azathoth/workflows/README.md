@@ -852,7 +852,11 @@ A recorded run becomes a benchmark case only deliberately, through
 
 - `workflow_run_input(run)` returns the payload of the run's single
   `workflow.input.received` event, and raises `BenchmarkCaseSourceError` when
-  the run received none or more than one.
+  the run received none or more than one. A run given a PDF or an image
+  returns its content handle (ADR 0117).
+- `workflow_run_input_provenance(run)` returns the provenance of the run's
+  `workflow.input.resolved` event, or `None` for an inline JSON or text
+  input.
 - `latest_corrected_output(feedback)` returns the latest bad feedback that
   carries a corrected output, latest by `created_at` with ties going to the
   later record. Good feedback never supplies a value.
@@ -860,7 +864,18 @@ A recorded run becomes a benchmark case only deliberately, through
   feedback=None)` builds a new case replaying the run's input. Its metadata
   names the source run under `SOURCE_RUN_METADATA_KEY` (`source_run_id`) and,
   when given, the feedback under `SOURCE_FEEDBACK_METADATA_KEY`
-  (`source_feedback_id`). A schema comparison requires a valid JSON Schema.
+  (`source_feedback_id`). The case holds the run's input provenance. A
+  schema comparison requires a valid JSON Schema.
+- `benchmark_case_from_input(resolved, *, comparison, expected,
+  description=None)` builds a case of one resolved input, such as a file's,
+  naming its URI under `SOURCE_URI_METADATA_KEY` (`source_uri`).
+
+`benchmark_case_context(case)` is the initial context a case's run is
+given: its input, then, when the case names provenance, the
+`workflow.input.resolved` event recording it, both from
+`BENCHMARK_INPUT_PRODUCER` (`azathoth.benchmark`). A case's content is read
+from the content store by digest, so a runner given the content and a
+journal runs a document case as the run it came from ran.
 
 ## Experiments
 

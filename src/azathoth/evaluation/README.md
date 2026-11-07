@@ -1232,11 +1232,18 @@ Conceptually:
 BenchmarkCase
 ├── id
 ├── input
+├── input_provenance   (optional)
 ├── expected
 └── metadata
 ```
 
 Its input is JSON-compatible.
+
+Its `input_provenance` is an `InputProvenance`, where the input was read
+from and which content it was, as a run records it (ADR 0117). A case whose
+provenance names a PDF or an image gives exactly that content's handle as
+its input; the content stays in the content store. A case without
+provenance serializes without it.
 
 Its expected value is an `ExpectedOutcome`.
 

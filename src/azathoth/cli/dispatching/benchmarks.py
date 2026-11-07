@@ -1,5 +1,6 @@
 """Benchmark command dispatch for the Azathoth CLI."""
 
+import sys
 from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
@@ -9,6 +10,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.benchmark_cases import SuppliedExpectedValue
+from azathoth.cli.inputs import WorkflowInputFile
 from azathoth.cli.parsing import (
     BENCHMARK_ACTION_ATTRIBUTE,
     BENCHMARK_ADD_CASE_ACTION,
@@ -38,6 +40,8 @@ from azathoth.cli.parsing import (
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
+    WORKFLOW_INPUT_FILE_ATTRIBUTE,
+    WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
 )
 from azathoth.evaluation.models import OutcomeComparison
 
@@ -166,6 +170,16 @@ def dispatch_benchmark_command(
         )
 
     if action == BENCHMARK_ADD_CASE_ACTION:
+        input_file = _case_input_file(arguments)
+
+        if input_file is None and getattr(arguments, WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE, None):
+            print(
+                "--media-type requires --input-file.",
+                file=sys.stderr,
+            )
+
+            return 1
+
         return add_benchmark_case(
             cast(
                 UUID,
@@ -175,12 +189,14 @@ def dispatch_benchmark_command(
                 ),
             ),
             run_id=cast(
-                UUID,
+                UUID | None,
                 getattr(
                     arguments,
                     BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
+                    None,
                 ),
             ),
+            input_file=input_file,
             comparison=OutcomeComparison(
                 cast(
                     str,
@@ -298,6 +314,22 @@ def _benchmark_revision(
             BENCHMARK_REVISION_ATTRIBUTE,
             None,
         ),
+    )
+
+
+def _case_input_file(
+    arguments: Namespace,
+) -> WorkflowInputFile | None:
+    """Return the file a new benchmark case is read from, if one was given (ADR 0117)."""
+
+    path = cast(Path | None, getattr(arguments, WORKFLOW_INPUT_FILE_ATTRIBUTE, None))
+
+    if path is None:
+        return None
+
+    return WorkflowInputFile(
+        path=path,
+        media_type=cast(str | None, getattr(arguments, WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE, None)),
     )
 
 

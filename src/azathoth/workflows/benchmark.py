@@ -15,6 +15,7 @@ from azathoth.evaluation import (
     judge_call_count,
     judge_calls_cost_usd,
 )
+from azathoth.inputs import ResolvedInput
 from azathoth.revisions import (
     CONTENT_DIGEST_PATTERN,
     content_digest,
@@ -26,6 +27,7 @@ from azathoth.workflows.candidate import (
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.input import (
     create_workflow_input_event,
+    create_workflow_input_events,
 )
 from azathoth.workflows.ranker import WorkflowRanker
 from azathoth.workflows.result import (
@@ -45,6 +47,43 @@ from azathoth.workflows.scoring import (
     aggregate_workflow_scorecards,
 )
 from azathoth.workflows.value import WorkflowResultReference
+
+BENCHMARK_INPUT_PRODUCER = "azathoth.benchmark"
+"""The producer of the input events a benchmark case's run receives."""
+
+
+def benchmark_case_context(
+    case: BenchmarkCase,
+) -> Context:
+    """Return the initial context a benchmark case's run is given.
+
+    A case with input provenance is received as the run it came from received
+    it: its input, then a `workflow.input.resolved` event recording the
+    provenance (ADR 0117). A case's content is read from the content store by
+    digest, as any run's is, so content the store does not hold fails the
+    steps that read it, and the case is judged on that run.
+    """
+
+    if case.input_provenance is None:
+        return Context(
+            events=(
+                create_workflow_input_event(
+                    case.input,
+                    producer=BENCHMARK_INPUT_PRODUCER,
+                ),
+            )
+        )
+
+    return Context(
+        events=create_workflow_input_events(
+            ResolvedInput(
+                value=case.input,
+                media_type=case.input_provenance.media_type,
+                provenance=case.input_provenance,
+            ),
+            producer=BENCHMARK_INPUT_PRODUCER,
+        )
+    )
 
 
 class WorkflowBenchmarkCaseResult(BaseModel):
@@ -378,14 +417,7 @@ class WorkflowBenchmarkRunner:
                     f"Workflow {candidate.metadata.id} does not declare a result."
                 )
 
-            context = Context(
-                events=(
-                    create_workflow_input_event(
-                        case.input,
-                        producer="azathoth.benchmark",
-                    ),
-                )
-            )
+            context = benchmark_case_context(case)
 
             run = await self._runner.run_recording_failures(
                 candidate,

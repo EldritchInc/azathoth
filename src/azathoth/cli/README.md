@@ -180,6 +180,8 @@ azathoth
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── add-case <BENCHMARK_ID>
     │   ├── --from-run <RUN_ID>
+    │   ├── --input-file <FILE>   (instead of --from-run)
+    │   ├── --media-type <TYPE>
     │   ├── --comparison exact|normalized|semantic|schema
     │   ├── --expected <JSON>
     │   └── --description <TEXT>
@@ -3752,6 +3754,13 @@ The new case replays the run's input: the payload of its
 `workflow.input.received` event. Configured runs given `--input`, production
 invocations, and benchmark and optimization runs all have one.
 
+A run whose input was resolved, from `--input-file`, `s3://` or a job's
+inline content, also gives the case its provenance, the payload of its
+`workflow.input.resolved` event, as `input_provenance` (ADR 0117). A run
+given a PDF or an image gives the content's handle, which the case's run
+reads from the content store by digest, as the run did. The content store
+must still hold it.
+
 The expected value is `--expected` when given, and `--expected null` expects
 JSON null. Otherwise it is the corrected output of the run's latest bad
 feedback that carries one, latest by feedback time with ties going to the
@@ -3799,14 +3808,14 @@ no workflow input
 workflow input received more than once
     Run <RUN_ID> received workflow input more than once.
 
-a PDF or image input, which a case cannot hold yet (ADR 0112)
-    Run <RUN_ID> received application/pdf content, which a benchmark case cannot hold yet.
-
 no --expected and no corrected output
     Run <RUN_ID> has no corrected output; pass --expected.
 
 a schema comparison whose value is not a JSON Schema
     Expected value cannot be used with comparison 'schema': <REASON>
+
+a PDF or image the content store no longer holds
+    Run <RUN_ID> received content <DIGEST>, which the content store no longer holds.
 
 an existing case with the same input, comparison, and value
     Benchmark dataset <BENCHMARK_ID> already contains case <CASE_ID> with this input and expected outcome.
@@ -3821,6 +3830,51 @@ or optimized against.
 
 `benchmark add-case` reads and writes durable state only. It never loads the
 runtime and needs no provider credentials.
+
+# Add a Case From a File
+
+A file can become a case without a run first, with `--input-file` in place
+of `--from-run` (ADR 0117):
+
+```bash
+azathoth benchmark add-case <BENCHMARK_ID> \
+    --input-file claim-0412.pdf \
+    --comparison exact \
+    --expected '{"received": "December 14"}'
+```
+
+The file is read as [`workflow run --input-file`](#input-files) reads it:
+JSON, text, a PDF or an image, with its media type from its extension
+unless `--media-type` gives it, and its content kept in the content store.
+The case holds what a run given the file would receive, its handle for a
+PDF or an image, and the file's provenance, so the case's run receives it
+as that run would.
+
+`--expected` is required, since a file has no feedback. The description
+defaults to `Added from <FILE_URI>.`, and the metadata names the file:
+
+```json
+{
+  "source_uri": "file:///claims/claim-0412.pdf"
+}
+```
+
+Besides the checks a case from a run shares, a file that cannot be read
+fails with the message `workflow run --input-file` gives, and:
+
+```text
+no --expected
+    A case read from --input-file needs --expected.
+
+--media-type without --input-file
+    --media-type requires --input-file.
+```
+
+Benchmark, comparison and optimization runs journal as `workflow run` does
+and are given the database's content, so a case's PDF is read by
+`segment_pdf` and a cited step is shown the extraction a step of the case's
+run kept. A case whose content the store does not hold fails the steps that
+read it, and is judged as a failed run; the benchmark goes on.
 
 Execute one configured workflow against a dataset with:
 

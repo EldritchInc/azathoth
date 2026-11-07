@@ -7,13 +7,22 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.inputs import WorkflowInputFile, resolve_input_file
 from azathoth.cli.persistence import repositories
 from azathoth.evaluation import (
+    BenchmarkCase,
     BenchmarkCaseConflictError,
     OutcomeComparison,
 )
+from azathoth.inputs import (
+    ContentStore,
+    InputResolutionError,
+    InputSourceError,
+    is_binary_media_type,
+)
 from azathoth.workflows import (
     BenchmarkCaseSourceError,
+    benchmark_case_from_input,
     benchmark_case_from_run,
     latest_corrected_output,
     workflow_run_input,
@@ -34,20 +43,28 @@ class SuppliedExpectedValue:
 def add_benchmark_case(
     benchmark_id: UUID,
     *,
-    run_id: UUID,
+    run_id: UUID | None = None,
+    input_file: WorkflowInputFile | None = None,
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None = None,
     description: str | None = None,
 ) -> int:
-    """Append a case replaying one recorded run's input as a new benchmark revision.
+    """Append a case replaying one recorded run's input, or one file, as a new revision.
 
-    The case expects the supplied value. Without one, it expects the corrected
-    output of the run's latest bad feedback that carries a correction; good
-    feedback never supplies a value. The benchmark need not belong to the
-    run's workflow, because any workflow can run against any benchmark.
+    A case from a run expects the supplied value. Without one, it expects the
+    corrected output of the run's latest bad feedback that carries a
+    correction; good feedback never supplies a value. A run given a PDF or an
+    image becomes a case holding its handle and provenance, as long as the
+    content store still holds the content (ADR 0117).
 
-    Nothing is written when any check fails. Only durable state is read, so
-    the runtime is never loaded and no provider credentials are needed.
+    A case from a file holds the file's content, kept in the content store as
+    `workflow run --input-file` keeps it, and needs a supplied value. The
+    benchmark need not belong to any one workflow, because any workflow can
+    run against any benchmark.
+
+    Nothing is written to the benchmark when any check fails. Only durable
+    state is read, so the runtime is never loaded and no provider credentials
+    are needed.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -64,6 +81,58 @@ def add_benchmark_case(
 
         return 1
 
+    if input_file is not None:
+        case = _case_from_file(
+            input_file,
+            configuration=configuration,
+            comparison=comparison,
+            expected=expected,
+            description=description,
+        )
+    else:
+        assert run_id is not None
+
+        case = _case_from_run(
+            run_id,
+            configuration=configuration,
+            comparison=comparison,
+            expected=expected,
+            description=description,
+        )
+
+    if case is None:
+        return 1
+
+    try:
+        extended = dataset.with_case(case)
+    except BenchmarkCaseConflictError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    revision = benchmarks.save(extended)
+
+    print(
+        f"Added benchmark case {case.id} to benchmark dataset {benchmark_id} "
+        f"revision {revision.number}."
+    )
+
+    return 0
+
+
+def _case_from_run(
+    run_id: UUID,
+    *,
+    configuration: CliRuntimeConfiguration,
+    comparison: OutcomeComparison,
+    expected: SuppliedExpectedValue | None,
+    description: str | None,
+) -> BenchmarkCase | None:
+    """Return the case replaying one recorded run's input, or report why there is none."""
+
     run = repositories(configuration).runs.get(run_id)
 
     if run is None:
@@ -72,7 +141,7 @@ def add_benchmark_case(
             file=sys.stderr,
         )
 
-        return 1
+        return None
 
     try:
         workflow_run_input(run)
@@ -82,7 +151,7 @@ def add_benchmark_case(
             file=sys.stderr,
         )
 
-        return 1
+        return None
 
     feedback = None
 
@@ -99,7 +168,7 @@ def add_benchmark_case(
                 file=sys.stderr,
             )
 
-            return 1
+            return None
 
         expected_value = feedback.corrected_output
 
@@ -111,27 +180,84 @@ def add_benchmark_case(
             description=description,
             feedback=feedback,
         )
+    except BenchmarkCaseSourceError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
 
-        extended = dataset.with_case(case)
+        return None
+
+    if not _content_kept(case, repositories(configuration).content):
+        assert case.input_provenance is not None
+
+        print(
+            f"Run {run_id} received content {case.input_provenance.digest}, which the "
+            "content store no longer holds.",
+            file=sys.stderr,
+        )
+
+        return None
+
+    return case
+
+
+def _case_from_file(
+    input_file: WorkflowInputFile,
+    *,
+    configuration: CliRuntimeConfiguration,
+    comparison: OutcomeComparison,
+    expected: SuppliedExpectedValue | None,
+    description: str | None,
+) -> BenchmarkCase | None:
+    """Return the case of one input file, keeping its content, or report why there is none."""
+
+    if expected is None:
+        print(
+            "A case read from --input-file needs --expected.",
+            file=sys.stderr,
+        )
+
+        return None
+
+    try:
+        resolved = resolve_input_file(
+            input_file,
+            store=repositories(configuration).content,
+        )
+
+        return benchmark_case_from_input(
+            resolved,
+            comparison=comparison,
+            expected=expected.value,
+            description=description,
+        )
     except (
+        InputSourceError,
+        InputResolutionError,
         BenchmarkCaseSourceError,
-        BenchmarkCaseConflictError,
     ) as exc:
         print(
             str(exc),
             file=sys.stderr,
         )
 
-        return 1
+        return None
 
-    revision = benchmarks.save(extended)
 
-    print(
-        f"Added benchmark case {case.id} to benchmark dataset {benchmark_id} "
-        f"revision {revision.number}."
+def _content_kept(
+    case: BenchmarkCase,
+    store: ContentStore,
+) -> bool:
+    """Return whether the content store holds the content a case is given, if any."""
+
+    provenance = case.input_provenance
+
+    return (
+        provenance is None
+        or not is_binary_media_type(provenance.media_type)
+        or store.contains(provenance.digest)
     )
-
-    return 0
 
 
 __all__ = [

@@ -1,4 +1,4 @@
-"""Tests for building benchmark cases from recorded workflow runs (ADR 0112)."""
+"""Tests for building benchmark cases from recorded workflow runs and inputs (ADR 0112, 0117)."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -12,6 +12,7 @@ from azathoth.inputs import InputProvenance, ResolvedInput, content_bytes_digest
 from azathoth.workflows import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
+    SOURCE_URI_METADATA_KEY,
     WORKFLOW_INPUT_EVENT_TYPE,
     BenchmarkCaseSourceError,
     WorkflowMetadata,
@@ -20,11 +21,13 @@ from azathoth.workflows import (
     WorkflowRunFeedbackDisposition,
     WorkflowStepRun,
     WorkflowStepStatus,
+    benchmark_case_from_input,
     benchmark_case_from_run,
     create_workflow_input_event,
     create_workflow_input_events,
     latest_corrected_output,
     workflow_run_input,
+    workflow_run_input_provenance,
 )
 
 RUN_ID = UUID("44444444-4444-4444-4444-444444444444")
@@ -199,26 +202,132 @@ def resolved_events(
     )
 
 
-@pytest.mark.parametrize("inline", [False, True])
-@pytest.mark.parametrize("media_type", ["application/pdf", "image/png"])
-def test_workflow_run_input_refuses_a_run_given_binary_content(
+def handle_of(
     media_type: str,
-    inline: bool,
-) -> None:
-    handle: JsonValue = {
+    content: bytes = b"%PDF-1.7",
+) -> JsonValue:
+    """Return the handle of some content as one media type."""
+
+    return {
         "content": {
-            "digest": content_bytes_digest(b"%PDF-1.7"),
+            "digest": content_bytes_digest(content),
             "media_type": media_type,
-            "size_bytes": 8,
+            "size_bytes": len(content),
         }
     }
 
-    with pytest.raises(BenchmarkCaseSourceError) as raised:
-        workflow_run_input(create_run(*resolved_events(media_type, handle, inline=inline)))
 
-    assert str(raised.value) == (
-        f"Run {RUN_ID} received {media_type} content, which a benchmark case cannot hold yet."
+@pytest.mark.parametrize("inline", [False, True])
+@pytest.mark.parametrize("media_type", ["application/pdf", "image/png"])
+def test_a_run_given_binary_content_becomes_a_case_holding_its_handle_and_provenance(
+    media_type: str,
+    inline: bool,
+) -> None:
+    run = create_run(*resolved_events(media_type, handle_of(media_type), inline=inline))
+    case = benchmark_case_from_run(run, comparison=OutcomeComparison.EXACT, expected=1)
+
+    assert workflow_run_input(run) == handle_of(media_type)
+    assert case.input == handle_of(media_type)
+    assert case.input_provenance == workflow_run_input_provenance(run)
+    assert case.input_provenance is not None
+    assert (case.input_provenance.inline, case.input_provenance.media_type) == (
+        inline,
+        media_type,
     )
+
+
+def test_a_run_given_inline_json_records_no_provenance() -> None:
+    run = create_run(input_event())
+
+    assert workflow_run_input_provenance(run) is None
+    assert (
+        benchmark_case_from_run(
+            run, comparison=OutcomeComparison.EXACT, expected=1
+        ).input_provenance
+        is None
+    )
+
+
+def test_a_run_whose_provenance_names_other_content_than_its_input_is_refused() -> None:
+    run = create_run(*resolved_events("application/pdf", handle_of("application/pdf", b"%PDF-2.0")))
+
+    with pytest.raises(BenchmarkCaseSourceError) as raised:
+        benchmark_case_from_run(run, comparison=OutcomeComparison.EXACT, expected=1)
+
+    assert str(raised.value).endswith(
+        f"names application/pdf content {content_bytes_digest(b'%PDF-1.7')} as its input "
+        "provenance, but its input is not that content's handle."
+    )
+
+
+def test_a_resolved_file_becomes_a_case_naming_where_it_was_read_from() -> None:
+    (_, resolved_event) = resolved_events("application/pdf", handle_of("application/pdf"))
+    provenance = InputProvenance.model_validate(resolved_event.payload)
+    case = benchmark_case_from_input(
+        ResolvedInput(
+            value=handle_of("application/pdf"),
+            media_type="application/pdf",
+            provenance=provenance,
+        ),
+        comparison=OutcomeComparison.EXACT,
+        expected={"received": "December 14"},
+    )
+
+    assert case.input == handle_of("application/pdf")
+    assert case.input_provenance == provenance
+    assert case.expected.description == "Added from file:///claims/claim-0412.pdf."
+    assert case.metadata == {SOURCE_URI_METADATA_KEY: "file:///claims/claim-0412.pdf"}
+
+
+def test_an_input_without_provenance_becomes_a_case_from_an_inline_input() -> None:
+    case = benchmark_case_from_input(
+        ResolvedInput(value=INPUT, media_type="application/json"),
+        comparison=OutcomeComparison.EXACT,
+        expected=1,
+        description="  Counts.  ",
+    )
+
+    assert (case.input_provenance, case.metadata, case.expected.description) == (
+        None,
+        {},
+        "Counts.",
+    )
+    assert (
+        benchmark_case_from_input(
+            ResolvedInput(value=INPUT, media_type="application/json"),
+            comparison=OutcomeComparison.EXACT,
+            expected=1,
+        ).expected.description
+        == "Added from an inline input."
+    )
+
+
+def test_an_inline_input_with_provenance_names_no_uri() -> None:
+    (_, resolved_event) = resolved_events(
+        "application/pdf", handle_of("application/pdf"), inline=True
+    )
+    case = benchmark_case_from_input(
+        ResolvedInput(
+            value=handle_of("application/pdf"),
+            media_type="application/pdf",
+            provenance=InputProvenance.model_validate(resolved_event.payload),
+        ),
+        comparison=OutcomeComparison.EXACT,
+        expected=1,
+    )
+
+    assert (case.metadata, case.expected.description) == ({}, "Added from an inline input.")
+
+
+def test_a_resolved_input_with_an_invalid_schema_expectation_is_refused() -> None:
+    with pytest.raises(BenchmarkCaseSourceError) as raised:
+        benchmark_case_from_input(
+            ResolvedInput(value=INPUT, media_type="application/json"),
+            comparison=OutcomeComparison.SCHEMA,
+            expected=3,
+        )
+
+    assert str(raised.value).startswith("Expected value cannot be used with comparison 'schema'")
 
 
 def test_workflow_run_input_accepts_a_run_given_a_text_reference() -> None:
@@ -448,6 +557,10 @@ def test_benchmark_case_from_run_records_the_source_feedback() -> None:
         SOURCE_RUN_METADATA_KEY: str(RUN_ID),
         SOURCE_FEEDBACK_METADATA_KEY: str(FIRST_FEEDBACK_ID),
     }
+
+
+def test_benchmark_case_source_uri_metadata_key() -> None:
+    assert SOURCE_URI_METADATA_KEY == "source_uri"
 
 
 def test_benchmark_case_source_metadata_keys() -> None:
