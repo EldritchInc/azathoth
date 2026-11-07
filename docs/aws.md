@@ -330,6 +330,29 @@ an S3 lifecycle rule on that prefix. The children of a map run in the same
 task as their parent, four at a time here, so a large file is counted by one
 worker; more jobs, not more chunks, are what add workers.
 
+### Links to Cited Pages
+
+A run that cited an S3 document records the object version it read (ADR
+0112), so `invocation show --links` follows each verified citation with a
+link to its page in exactly that version: a presigned GET, signed with your
+own AWS credentials, valid for an hour unless
+`AZATHOTH_LINK_EXPIRY_SECONDS` says otherwise, up to seven days (ADR 0117).
+Your credentials must be able to read the object:
+
+```bash
+export AZATHOTH_LINK_EXPIRY_SECONDS=900
+azathoth invocation show <INVOCATION_ID> --links
+```
+
+```powershell
+$env:AZATHOTH_LINK_EXPIRY_SECONDS = "900"
+azathoth invocation show <INVOCATION_ID> --links
+```
+
+A link expires, so it is made each time it is asked for and never kept;
+`invocation annotations <INVOCATION_ID>` names the document by its
+`s3://` URI and version instead, which do not.
+
 ## 9. Scaling and Stopping
 
 The service runs `MinTasks` workers, adds one while `ScaleOutBacklog`

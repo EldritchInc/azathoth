@@ -165,6 +165,12 @@ release dates are on the
   for a reviewer's annotation tools; the same checks always export to the
   same bytes
   ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **A citation links to its page.** `azathoth invocation show --links`
+  follows each verified citation with a link to its document at its page:
+  the origin for `https` and `file` documents, and a presigned GET of the
+  exact object version for `s3://` ones, valid for
+  `AZATHOTH_LINK_EXPIRY_SECONDS`, an hour by default
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 - **Results that cite compare by what they cite.** Before an exact,
   normalized or semantic comparison, every citation and check compares as
   `{source, segment}`, so an expected answer names its citations by segment

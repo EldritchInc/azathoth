@@ -1,6 +1,6 @@
 """Human-readable production invocation history rendering."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -64,6 +64,7 @@ def render_production_invocation(
     run_id: UUID | None,
     resumes: int = 0,
     citations: Sequence[RecordedCitations] = (),
+    link: Callable[[Mapping[str, JsonValue]], str | None] | None = None,
 ) -> str:
     """Render the full recorded history of one production invocation.
 
@@ -73,7 +74,8 @@ def render_production_invocation(
     and request digest (ADR 0097). An invocation started by a step of another
     run names its depth, the parent step and the root run (ADR 0104). One
     whose run was resumed names how often, after its run (ADR 0105). One
-    whose run had cited steps ends with every check they kept (ADR 0116).
+    whose run had cited steps ends with every check they kept (ADR 0116),
+    each with its link when `link` gives one (ADR 0117).
     """
 
     lines = [
@@ -145,7 +147,7 @@ def render_production_invocation(
                 )
             )
 
-    lines.extend(render_citation_lines(citations))
+    lines.extend(render_citation_lines(citations, link=link))
 
     return "\n".join(lines)
 

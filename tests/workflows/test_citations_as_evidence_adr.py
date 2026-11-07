@@ -8,7 +8,14 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue, ValidationError
 
-from azathoth.citations import CitationRecord, citation_annotations
+from azathoth.citations import (
+    LINK_EXPIRY_VARIABLE,
+    CitationRecord,
+    LinkResolutionError,
+    S3LinkResolver,
+    citation_annotations,
+    link_expiry_seconds,
+)
 from azathoth.cli.annotations import (
     AnnotationExportError,
     export_invocation_annotations,
@@ -26,6 +33,7 @@ from azathoth.evaluation import (
 from azathoth.inputs import (
     InMemoryContentStore,
     InputProvenance,
+    InputUnavailableError,
     ResolvedInput,
     content_bytes_digest,
 )
@@ -214,6 +222,27 @@ def gone_record_refusal(
     )
 
 
+def expiry_refusal() -> str:
+    """Return the message an expiry that is not one is refused with."""
+
+    with pytest.raises(LinkResolutionError) as raised:
+        link_expiry_seconds({LINK_EXPIRY_VARIABLE: "<VALUE>"})
+
+    return str(raised.value)
+
+
+def boto3_refusal() -> str:
+    """Return what an s3:// link without boto3 says."""
+
+    def missing() -> object:
+        raise InputUnavailableError("no boto3")
+
+    with pytest.raises(LinkResolutionError) as raised:
+        S3LinkResolver(client_factory=missing).link(anchor())
+
+    return str(raised.value)
+
+
 DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Benchmark case <CASE_ID> names application/pdf content <DIGEST> as its input "
@@ -248,6 +277,15 @@ DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Citation record <DIGEST> of step <STEP_ID> is not in the content store.",
         gone_record_refusal,
+    ),
+    (
+        "AZATHOTH_LINK_EXPIRY_SECONDS must be a whole number of seconds from 1 to 604800, "
+        "not '<VALUE>'.",
+        lambda **_: expiry_refusal(),
+    ),
+    (
+        "Links to s3:// documents need boto3, which is not installed; install azathoth-ai[worker].",
+        lambda **_: boto3_refusal(),
     ),
 ]
 """Each refusal ADR 0117 quotes, and what produces it."""

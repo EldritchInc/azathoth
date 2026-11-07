@@ -109,6 +109,7 @@ azathoth
 │
 ├── invocation
 │   ├── show <INVOCATION_ID>
+│   │   └── --links
 │   ├── annotations <INVOCATION_ID>
 │   └── resume <INVOCATION_ID>
 │       └── --output <FORMAT>
@@ -2716,6 +2717,32 @@ Citations:
 Step <STEP_ID>: 2 citations, record <SHA-256>
   verified claim p1.s2 'December 14'
   quote_not_found claim p2.s1 'Denied.'
+```
+
+With `--links`, each verified check is followed by a link to its page in
+its document (ADR 0117):
+
+```bash
+azathoth invocation show <INVOCATION_ID> --links
+```
+
+```text
+  verified claim p1.s2 'December 14'
+    https://claims-intake.s3.amazonaws.com/2026/11/claim-0412.pdf?versionId=<VERSION_ID>&...#page=1
+```
+
+The link is made by the resolver of the document's origin: an `https`,
+`http` or `file` origin is the link, with `#page=N` from the check's PDF
+fragment; an `s3://` origin becomes a presigned GET of the object version
+the run read, signed with your AWS credentials and valid for
+`AZATHOTH_LINK_EXPIRY_SECONDS`, one hour by default and seven days at
+most. A document with no origin, or of another scheme, has no link. Links
+expire, so they are made each time and never kept. These fail the command:
+
+```text
+AZATHOTH_LINK_EXPIRY_SECONDS must be a whole number of seconds from 1 to 604800, not '<VALUE>'.
+Links to s3:// documents need boto3, which is not installed; install azathoth-ai[worker].
+A link to <URI> could not be signed: <REASON>
 ```
 
 A record the content store no longer holds is named as such:

@@ -10,19 +10,21 @@ from azathoth.cli.parsing import (
     INVOCATION_ACTION_ATTRIBUTE,
     INVOCATION_ANNOTATIONS_ACTION,
     INVOCATION_ID_ATTRIBUTE,
+    INVOCATION_LINKS_ATTRIBUTE,
     INVOCATION_OUTPUT_ATTRIBUTE,
     INVOCATION_RESUME_ACTION,
     INVOCATION_SHOW_ACTION,
 )
 
 InvocationIdentifierHandler = Callable[[UUID], int]
+InvocationShowHandler = Callable[..., int]
 InvocationResumeHandler = Callable[..., int]
 
 
 def dispatch_invocation_command(
     arguments: Namespace,
     *,
-    show_invocation: InvocationIdentifierHandler,
+    show_invocation: InvocationShowHandler,
     resume_invocation: InvocationResumeHandler,
     export_invocation_annotations: InvocationIdentifierHandler,
 ) -> int | None:
@@ -45,7 +47,8 @@ def dispatch_invocation_command(
                     arguments,
                     INVOCATION_ID_ATTRIBUTE,
                 ),
-            )
+            ),
+            links=cast(bool, getattr(arguments, INVOCATION_LINKS_ATTRIBUTE, False)),
         )
 
     if action == INVOCATION_ANNOTATIONS_ACTION:

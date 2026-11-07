@@ -233,6 +233,27 @@ Invocation <INVOCATION_ID> has no run.
 Citation record <DIGEST> of step <STEP_ID> is not in the content store.
 ```
 
+### Links open the cited page
+
+`azathoth invocation show --links` follows each verified check with a link
+a person can open: its document, at the page its PDF fragment names, as
+`#page=N`, which PDF viewers follow. A link resolver for each scheme makes
+it from the anchor's origin. An `https`, `http` or `file` origin is a link
+already. An `s3://` origin becomes a presigned GET of the object version
+the run read, signed with the caller's own credentials and valid for an
+hour, or for `AZATHOTH_LINK_EXPIRY_SECONDS`, up to the seven days S3
+allows. An anchor with no origin, or of another scheme, has no link.
+
+A presigned link expires, so links are made only when asked for, never by
+default, since `invocation show` otherwise reads only durable state, and
+never kept: an annotation's source is the origin and its version, which do
+not expire. Custom resolvers are a library's to pass; the CLI has these.
+
+```text
+AZATHOTH_LINK_EXPIRY_SECONDS must be a whole number of seconds from 1 to 604800, not '<VALUE>'.
+Links to s3:// documents need boto3, which is not installed; install azathoth-ai[worker].
+```
+
 ## Consequences
 
 - A benchmark of documents is built the way any benchmark is: from runs
@@ -252,6 +273,8 @@ Citation record <DIGEST> of step <STEP_ID> is not in the content store.
   break when a model words a quote differently.
 - Optimization prefers the candidate whose citations verify, and a model
   that cites less, or cites what is not there, ranks lower for it.
+- A reviewer opens what a run cited at its page, in the version it read,
+  without being given access to the bucket's console.
 - A reviewer's annotation tools read what a run cited, where it is, in
   exactly which version of the document, with no Azathoth import.
 - A workflow with tool steps can be compared and optimized, and a parent's
@@ -284,6 +307,12 @@ below the threshold when citations fail, cannot be averaged away.
 Rejected. A fifth dimension in every overall score would change every
 existing ranking, and give a workflow that cites nothing a score for
 citing.
+
+### Keep presigned links in the export
+
+Rejected. A presigned link expires, so an annotation holding one would
+stop resolving, and it would carry a signature anyone it is shared with
+could use until then.
 
 ### Export a check's place in UTF-16 code units
 

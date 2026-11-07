@@ -115,3 +115,24 @@ def test_an_invocations_citations_come_last_even_after_a_failure() -> None:
         f"Step {STEP_ID}: 1 citation, record {RECORD}\n"
         "  verified claim p1.s2 'December 14'"
     )
+
+
+def test_a_check_its_link_names_is_followed_by_the_link() -> None:
+    linked = render_citation_lines(
+        [
+            RecordedCitations(
+                step_id=STEP_ID,
+                record=RECORD,
+                checks=(check(), check("quote_not_found", "p2.s1", "Denied.")),
+            )
+        ],
+        link=lambda kept: (
+            "https://claims.test/0412.pdf#page=1" if kept["status"] == "verified" else None
+        ),
+    )
+
+    assert linked[2:] == [
+        "  verified claim p1.s2 'December 14'",
+        "    https://claims.test/0412.pdf#page=1",
+        "  quote_not_found claim p2.s1 'Denied.'",
+    ]

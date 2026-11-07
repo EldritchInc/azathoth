@@ -1,4 +1,4 @@
-"""Tests that a run's and an invocation's citations export as Web Annotations (ADR 0117)."""
+"""Tests that a run's citations export as Web Annotations, and link to their pages (ADR 0117)."""
 
 import asyncio
 import json
@@ -327,3 +327,77 @@ def test_an_invocation_whose_run_has_not_finished_exports_its_run(
 
     assert status == 0, err
     assert json.loads(out)["label"] == f"Citations of run {unfinished.id}: 0 verified."
+
+
+def test_invocation_show_links_each_verified_citation_to_its_page(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    invocation_id, _ = invoked(database, capsys)
+
+    status, out, err = run("invocation", "show", str(invocation_id), "--links", capsys=capsys)
+
+    assert status == 0, err
+    assert out.endswith(
+        "  verified claim p1.s2 'December 14'\n"
+        f"    {file_uri(tmp_path / 'claim.pdf')}#page=1\n"
+        "  quote_not_found claim p2.s1 'Denied.'\n"
+    )
+
+    status, out, err = run("invocation", "show", str(invocation_id), capsys=capsys)
+
+    assert "#page=" not in out
+
+
+def test_invocation_show_refuses_links_that_expire_wrongly(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invocation_id, _ = invoked(database, capsys)
+
+    monkeypatch.setenv("AZATHOTH_LINK_EXPIRY_SECONDS", "0")
+
+    assert run("invocation", "show", str(invocation_id), "--links", capsys=capsys) == (
+        1,
+        "",
+        "AZATHOTH_LINK_EXPIRY_SECONDS must be a whole number of seconds from 1 to 604800, "
+        "not '0'.\n",
+    )
+
+    status, _, err = run("invocation", "show", str(invocation_id), capsys=capsys)
+
+    assert status == 0, err
+
+
+def test_invocation_show_links_no_check_that_did_not_verify(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invocation_id, run_id = invoked(database, capsys)
+    repositories = open_repositories(database)
+    ((_, digest),) = journaled_citations(repositories.run_journal, run_id)
+    kept = stored_citation_checks(repositories.content, digest)
+
+    assert kept is not None
+
+    #
+    # A check that did not verify is never anchored; one that somehow was is
+    # still not linked.
+    #
+    anchored = tuple(
+        {**check, "anchor": kept[0]["anchor"]} if check["status"] != "verified" else check
+        for check in kept
+    )
+
+    monkeypatch.setattr(
+        "azathoth.cli.production_inspection.stored_citation_checks",
+        lambda store, digest: anchored,
+    )
+
+    status, out, err = run("invocation", "show", str(invocation_id), "--links", capsys=capsys)
+
+    assert status == 0, err
+    assert out.count("#page=") == 1
