@@ -68,6 +68,7 @@ class JobErrorCode(StrEnum):
     TOOL_UNAVAILABLE = "tool_unavailable"
     WORKFLOW_EXECUTION_FAILED = "workflow_execution_failed"
     TIMEOUT = "timeout"
+    INVALID_OUTPUT = "invalid_output"
 
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_VERSION = "unsupported_version"

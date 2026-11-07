@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from uuid import UUID
 
+from azathoth.cli.rendering._json import render_json_value
 from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     FixedModelSelection,
@@ -22,7 +23,12 @@ def render_workflow_production(
     *,
     active_revision: WorkflowProductionRevision | None,
 ) -> str:
-    """Render the active production configuration of one workflow."""
+    """Render the active production configuration of one workflow.
+
+    The promoted workflow's input and output schemas, when it declares them,
+    follow its deployment, since every invocation is checked against them
+    (ADR 0118).
+    """
 
     workflow = state.specification.metadata
 
@@ -34,6 +40,13 @@ def render_workflow_production(
         "Deployed At: "
         + (active_revision.created_at.isoformat() if active_revision is not None else "unknown"),
     ]
+
+    for label, schema in (
+        ("Input Schema", state.specification.input_schema),
+        ("Output Schema", state.specification.output_schema),
+    ):
+        if schema is not None:
+            lines.extend((f"{label}:", render_json_value(schema)))
 
     for step_id, primary in _primary_models(state):
         lines.extend(

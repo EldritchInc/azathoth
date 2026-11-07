@@ -47,6 +47,7 @@ class ProductionInvocationErrorCode(StrEnum):
     TOOL_UNAVAILABLE = "tool_unavailable"
     WORKFLOW_EXECUTION_FAILED = "workflow_execution_failed"
     TIMEOUT = "timeout"
+    INVALID_OUTPUT = "invalid_output"
 
 
 def validate_idempotency_key(

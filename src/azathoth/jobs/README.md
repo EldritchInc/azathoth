@@ -83,7 +83,10 @@ job reports the same code as a failed `workflow invoke`, plus four codes only
 the envelope produces: `invalid_request`, `unsupported_version`,
 `idempotency_conflict` and `invocation_incomplete`. A request is rejected for
 one of the first three, or for `invalid_input` when its input cannot be
-resolved.
+resolved. An input that resolves but breaks the promoted workflow's input
+schema fails the job with `invalid_input` instead, and a result that breaks
+its output schema with `invalid_output`, since the invocation exists in both
+(ADR 0118).
 
 `replayed` is `true` when the result reports an invocation that an earlier
 request with the same key started, and nothing was run for this request.
