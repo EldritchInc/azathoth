@@ -52,6 +52,13 @@ release dates are on the
   with pdfminer.six, which the new `documents` extra installs, and the
   container image includes
   ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+- **A model step can be shown the documents and images its run received.**
+  A template variable bound to a content handle shows the model that content
+  where the variable stands, beside the template's text, as a prompt of
+  parts. The engine reads the bytes from the content store as the prompt is
+  sent, only for content the run, or a run above it, received, and no event
+  or run holds them. A prompt of text is unchanged
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 
 ### Evidence Out
 

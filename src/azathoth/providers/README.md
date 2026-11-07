@@ -447,7 +447,19 @@ and executable registry presence before a model can actually execute.
 
 ## Provider-Neutral Requests and Responses
 
-`Prompt` represents rendered prompt text sent to a language model.
+`Prompt` represents a rendered prompt sent to a language model: its `text`,
+or, when it shows the model content, its `parts`, text and content in order
+(ADR 0115). A `TextPart` holds text, and a `ContentPart` is a content handle;
+a prompt holds one or the other, never both, and a prompt of text serializes
+as it always did.
+
+A prompt names its content and never holds its bytes. The engine checks and
+reads them before the model is called, and gives them to the provider for
+the length of the call with `giving_prompt_content`; a provider reads each
+by digest with `prompt_content_bytes`, which raises `PromptContentError` for
+content it was not given. The deterministic model reads them the same way.
+Until OpenRouter and Bedrock send content in their own forms, each refuses a
+prompt of parts before sending anything.
 
 `ModelRequest` represents a provider-neutral request.
 

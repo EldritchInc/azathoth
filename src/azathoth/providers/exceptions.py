@@ -9,5 +9,9 @@ class UnsupportedModelRequestError(ModelExecutionError):
     """Raised when a model request requires unsupported execution behavior."""
 
 
+class PromptContentError(ModelExecutionError):
+    """Raised when content a prompt shows cannot be given to its model (ADR 0115)."""
+
+
 class ModelDiscoveryError(RuntimeError):
     """Raised when provider model discovery cannot complete."""

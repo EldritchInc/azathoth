@@ -599,6 +599,27 @@ step is constructed. Non-string values reach the prompt as JSON.
 A prompt step that declares `"output_format": "json"` outputs its parsed
 reply, so its output bindings may read fields of it by path.
 
+### Prompt Steps Show Content
+
+A context-prompt step shows a model a document or an image its run received
+by binding a template variable to the content handle (ADR 0115):
+
+```json
+"specification": {
+  "template": {
+    "text": "Here is the claim form:\n{form}\nWhat date was the claim received?",
+    "bindings": [
+      {"variable_name": "form", "event_type": "workflow.input.received", "field_name": "input"}
+    ]
+  }
+}
+```
+
+The model is shown the PDF where `{form}` stands, between the text around
+it. The engine reads its bytes from the content store as the prompt is sent,
+and only for content the run, or a run above it, received; no event or run
+holds them.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

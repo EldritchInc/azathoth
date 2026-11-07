@@ -137,3 +137,4 @@ requests that made it:
 - [ADR 0112: Accept Binary Inputs](0112-accept-binary-inputs.md)
 - [ADR 0113: Anchor and Verify Citations](0113-anchor-and-verify-citations.md)
 - [ADR 0114: Read Documents with Tools](0114-read-documents-with-tools.md)
+- [ADR 0115: Multimodal Prompts](0115-multimodal-prompts.md)

@@ -31,10 +31,12 @@ from azathoth.providers.bedrock_configuration import (
 from azathoth.providers.bedrock_directory import BedrockModelDirectory
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
+from azathoth.providers.content import giving_prompt_content, prompt_content_bytes
 from azathoth.providers.deterministic import DeterministicLanguageModel
 from azathoth.providers.exceptions import (
     ModelDiscoveryError,
     ModelExecutionError,
+    PromptContentError,
     UnsupportedModelRequestError,
 )
 from azathoth.providers.execution import ModelExecutor
@@ -51,6 +53,7 @@ from azathoth.providers.memory_repository import (
     require_model_repository,
 )
 from azathoth.providers.models import (
+    ContentPart,
     ModelCapability,
     ModelMetadata,
     ModelModality,
@@ -58,6 +61,8 @@ from azathoth.providers.models import (
     ModelRequest,
     ModelResponse,
     Prompt,
+    PromptPart,
+    TextPart,
 )
 from azathoth.providers.openrouter import OpenRouterLanguageModel
 from azathoth.providers.openrouter_directory import (
@@ -152,6 +157,7 @@ __all__ = [
     "SqlModelPortfolioRepository",
     "SqlModelRepository",
     "SqlProviderModelObservationRepository",
+    "ContentPart",
     "DeterministicLanguageModel",
     "InMemoryModelRepository",
     "InMemoryModelPortfolioRepository",
@@ -181,6 +187,8 @@ __all__ = [
     "OpenRouterModelDirectory",
     "OpenRouterModelRegistryLoader",
     "Prompt",
+    "PromptContentError",
+    "PromptPart",
     "ProviderModel",
     "ProviderModelCatalogSynchronizer",
     "ProviderModelDirectory",
@@ -191,9 +199,12 @@ __all__ = [
     "SQLiteModelRepository",
     "SQLiteModelPortfolioRepository",
     "SQLiteProviderModelObservationRepository",
+    "TextPart",
     "UnsupportedModelRequestError",
+    "giving_prompt_content",
     "model_catalog_for_portfolio",
     "model_metadata_from_provider_model",
+    "prompt_content_bytes",
     "require_model_portfolio_repository",
     "require_model_repository",
     "require_provider_model_observation_repository",

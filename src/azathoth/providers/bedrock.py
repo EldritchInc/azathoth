@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from azathoth.providers.bedrock_client import BedrockClient, BedrockClientError
 from azathoth.providers.bedrock_configuration import BEDROCK_PROVIDER
 from azathoth.providers.catalog import ModelCatalog
-from azathoth.providers.exceptions import ModelExecutionError
+from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
 from azathoth.providers.models import ModelPricing, ModelResponse, Prompt
 from azathoth.providers.registry import LanguageModelRegistry
 
@@ -99,9 +99,15 @@ class BedrockLanguageModel:
         """Complete a rendered prompt through Converse.
 
         Raises:
+            UnsupportedModelRequestError: The prompt shows content.
             ModelExecutionError: The call failed, its reply is not a Converse
                 reply, or a guardrail or content filter stopped it.
         """
+
+        if prompt.parts:
+            raise UnsupportedModelRequestError(
+                f"Bedrock model {self._model!r} cannot be shown content by this release."
+            )
 
         try:
             raw = await asyncio.to_thread(self._client.converse, self._model, prompt.text)

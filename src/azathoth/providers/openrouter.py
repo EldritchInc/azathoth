@@ -5,7 +5,7 @@ from time import perf_counter
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from azathoth.providers.exceptions import ModelExecutionError
+from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
 from azathoth.providers.models import ModelResponse, Prompt
 from azathoth.providers.openrouter_models import OpenRouterConfiguration
 
@@ -68,7 +68,17 @@ class OpenRouterLanguageModel:
         self,
         prompt: Prompt,
     ) -> ModelResponse:
-        """Complete a rendered prompt through OpenRouter."""
+        """Complete a rendered prompt through OpenRouter.
+
+        Raises:
+            UnsupportedModelRequestError: The prompt shows content.
+            ModelExecutionError: The request failed or its reply is invalid.
+        """
+
+        if prompt.parts:
+            raise UnsupportedModelRequestError(
+                f"OpenRouter model {self._model!r} cannot be shown content by this release."
+            )
 
         started_at = perf_counter()
 

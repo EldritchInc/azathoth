@@ -1,12 +1,13 @@
 """Model-independent specifications for prompt-backed strategies."""
 
-from typing import Any, Final, TypeAlias
+from typing import Any, Final, Self, TypeAlias
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     SerializerFunctionWrapHandler,
     model_serializer,
+    model_validator,
 )
 
 from azathoth.prompting.model_selection import ModelSelection
@@ -40,6 +41,29 @@ class PromptStrategySpec(BaseModel):
     prompt: Prompt
     model_selection: ModelSelection
     output_format: PromptOutputFormat = PromptOutputFormat.TEXT
+
+    @model_validator(mode="after")
+    def refuse_fixed_content(
+        self,
+    ) -> Self:
+        """Refuse a fixed prompt that shows content (ADR 0115).
+
+        Content reaches a prompt through a template variable bound to a
+        handle the run received; a handle written into a workflow document
+        would name content no run was ever given.
+
+        Raises:
+            ValueError: The fixed prompt holds content parts.
+        """
+
+        if self.prompt.parts:
+            raise ValueError(
+                f"Prompt strategy {self.metadata.name!r} shows content in a fixed prompt; "
+                "content reaches a prompt only through a template variable bound to a "
+                "content handle."
+            )
+
+        return self
 
     @model_serializer(mode="wrap")
     def serialize_without_text_output_format(

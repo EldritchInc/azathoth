@@ -1,5 +1,6 @@
 """Deterministic language model implementation."""
 
+from azathoth.providers.content import prompt_content_bytes
 from azathoth.providers.models import ModelResponse, Prompt
 
 
@@ -21,9 +22,20 @@ class DeterministicLanguageModel:
         self,
         prompt: Prompt,
     ) -> ModelResponse:
-        """Return a deterministic completion."""
+        """Return a deterministic completion.
 
-        prompt_tokens = len(prompt.text.split())
+        Content the prompt shows is read as a provider reads it, so a prompt
+        whose content was not given fails here as it would anywhere.
+
+        Raises:
+            PromptContentError: The bytes of content the prompt shows were
+                not given.
+        """
+
+        for content in prompt.contents():
+            prompt_content_bytes(content, model=f"{self._provider}/{self._model}")
+
+        prompt_tokens = len(" ".join(prompt.text_parts()).split())
         completion_tokens = len(self._response_text.split())
 
         return ModelResponse(
