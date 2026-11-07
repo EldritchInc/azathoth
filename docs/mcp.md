@@ -384,12 +384,12 @@ The container image holds the server too (see
 init process, with the exposure document's folder mounted:
 
 ```bash
-IMAGE=ghcr.io/eldritchinc/azathoth:1.2.0
+IMAGE=ghcr.io/eldritchinc/azathoth:1.3.0
 docker run -i --rm -v azathoth-data:/var/lib/azathoth -v "$PWD:/mcp:ro" --entrypoint /usr/bin/tini $IMAGE -- azathoth-mcp serve --exposure /mcp/exposure.json
 ```
 
 ```powershell
-$IMAGE = "ghcr.io/eldritchinc/azathoth:1.2.0"
+$IMAGE = "ghcr.io/eldritchinc/azathoth:1.3.0"
 docker run -i --rm -v azathoth-data:/var/lib/azathoth -v "${PWD}:/mcp:ro" --entrypoint /usr/bin/tini $IMAGE -- azathoth-mcp serve --exposure /mcp/exposure.json
 ```
 

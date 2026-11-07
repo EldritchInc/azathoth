@@ -509,8 +509,8 @@ git push origin v<version>
 For example:
 
 ```bash
-git tag -a v1.2.0 -m "Azathoth 1.2.0"
-git push origin v1.2.0
+git tag -a v1.3.0 -m "Azathoth 1.3.0"
+git push origin v1.3.0
 ```
 
 The workflow then builds, validates and publishes to PyPI, and then
@@ -613,6 +613,11 @@ Section 9 is the authority for what each step must show.
 A release that changes none of these, and changes the image only by adding
 what the stack does not run, as 1.2.0 added `azathoth-mcp`, is not deployed.
 Its changelog entry says so, so the release notes do.
+
+A release that changes one of them when no sandbox account is available, as
+1.3.0 did, is not deployed either. Section 9 allows it only on the record:
+the changelog entry says the release was not deployed and why, what was
+checked instead, and what that leaves unproven.
 
 ## Release Principle
 

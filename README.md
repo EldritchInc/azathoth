@@ -205,11 +205,13 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.2 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Azathoth 1.3 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
 Windows, all tested in CI. It runs models on OpenRouter and Amazon Bedrock,
 keeps its state in SQLite or PostgreSQL, ships as a signed container image
-for amd64 and arm64, deploys to AWS from one CloudFormation template, and
-serves promoted workflows to AI clients over MCP with `azathoth-mcp`.
+for amd64 and arm64, and deploys to AWS from one CloudFormation template. It
+reads PDFs and images and cites the passages its answers came from, serves
+promoted workflows to AI clients over MCP with `azathoth-mcp`, and calls
+tools other MCP servers serve.
 The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
 lists what each release added.
 

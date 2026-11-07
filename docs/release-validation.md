@@ -381,6 +381,13 @@ what the stack does not run, such as another distribution's command, is not
 deployed: nothing the deployment would exercise has changed. Its changelog
 entry says that it was not, so its release notes do.
 
+A release that does change one of these, but ships when no sandbox account
+is available, is not deployed because no sandbox was available. It is the
+one exception to this gate, and it is never silent: the release's changelog
+entry says it was not deployed and why, what the repository's checks did
+prove, and what only a deployment would have, so its release notes say so
+too. The next release that is deployed proves both.
+
 ## Release Candidate Checklist
 
 ```text
@@ -394,7 +401,8 @@ entry says that it was not, so its release notes do.
 [ ] CI's container job is green, and make container-test passed locally
 [ ] CI's postgres job is green, and make postgres-test passed locally
 [ ] the AWS stack validated and passed the sandbox deployment of section 9, or
-    the release changes nothing it runs, and its changelog entry says so
+    the release changes nothing it runs, or no sandbox was available, and its
+    changelog entry says which
 [ ] the TestPyPI trial published both distributions, installed them and passed
     the provider-free examples and the MCP check
 [ ] every link in README.md resolves, including https://eldritchinc.com/workwithus/
