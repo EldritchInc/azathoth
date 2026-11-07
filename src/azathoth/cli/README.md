@@ -1524,6 +1524,9 @@ Resource: tool <IMPLEMENTATION_ID> (implementation_digest=<SHA256>, runtime=pyth
 Attributes are sorted by name. Structured attribute values render as compact
 JSON.
 
+A tool step's estimated cost is its children's, `$0.000000` for a tool that
+starts none, since a tool calls no model (ADR 0117).
+
 A tool binding records the content digest of the implementation that ran.
 Implementation IDs stay stable across tool revisions while their source may
 change, so the digest is what pins the exact code a run executed.

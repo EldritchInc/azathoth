@@ -7,6 +7,7 @@ from pydantic import JsonValue
 from azathoth.context import Context, active_step_lineage
 from azathoth.revisions import content_digest
 from azathoth.strategies import (
+    StrategyExecutionMetrics,
     StrategyMetadata,
     StrategyOutcome,
     StrategyResourceBinding,
@@ -101,9 +102,15 @@ class ToolStrategy:
                 )
                 resources = (*resources, kept)
 
+        #
+        # A tool calls no model, so its own work costs nothing. A tool that
+        # starts child runs costs what they did, which the runner adds from
+        # their journals (ADR 0117).
+        #
         return StrategyOutcome(
             output=output,
             resources=resources,
+            metrics=StrategyExecutionMetrics(estimated_cost_usd=0.0),
         )
 
     @staticmethod

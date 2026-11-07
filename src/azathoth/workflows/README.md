@@ -987,6 +987,13 @@ overall score is then the mean of five dimensions instead of four, with
 mean citation score of the scorecards that have one. A scorecard without a
 citation score serializes without it.
 
+A step's cost includes the child runs it started (ADR 0117): a runner given
+a journal and the index of children adds to a successful attempt's
+estimated cost what every child run that attempt started cost, by
+`journaled_run_cost(journal, run_id)`, the sum of the costs its committed
+steps record. A child whose cost is unknown makes the step's unknown, and
+so the run unscoreable, as any unknown cost does.
+
 Scoring and ranking describe empirical preference.
 
 They do not confer production authority.

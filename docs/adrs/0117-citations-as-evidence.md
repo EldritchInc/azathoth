@@ -164,6 +164,22 @@ the candidate whose citations verify. A scorecard without a citation score
 serializes without one, and every scorecard renders its citation score, when
 it has one, after its cost.
 
+### A tool step states its cost, and a step costs its children
+
+A scorecard needs every executed step's cost, and a run with a step that
+states none cannot be scored, so an unknown cost is never taken as nothing.
+A tool step stated none, so no workflow with a tool, and no cited workflow,
+since it segments its document with one, could be compared or optimized.
+
+A tool calls no model, and its own work costs nothing: a tool step now says
+so, with an estimated cost of 0. A tool that starts child runs, such as
+`run_workflow`, costs what its children did: a runner given a journal and
+the index of children adds to a successful attempt's cost every child run
+that attempt started, summed from the costs the child's committed steps
+record. A child whose cost is unknown makes the step's unknown, and the run
+unscoreable, as before. A child started by an attempt that failed is not
+counted, since that attempt has no cost to add it to.
+
 ## Consequences
 
 - A benchmark of documents is built the way any benchmark is: from runs
@@ -183,6 +199,9 @@ it has one, after its cost.
   break when a model words a quote differently.
 - Optimization prefers the candidate whose citations verify, and a model
   that cites less, or cites what is not there, ranks lower for it.
+- A workflow with tool steps can be compared and optimized, and a parent's
+  score counts what its children spent; `run show` names a tool step's
+  cost, `$0.000000` when it starts no child.
 
 ## Alternatives Considered
 

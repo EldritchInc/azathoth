@@ -290,6 +290,7 @@ from azathoth.workflows.run_journal import (
     journaled_citations,
     journaled_extractions,
     journaled_initial_context,
+    journaled_run_cost,
 )
 from azathoth.workflows.run_lease import (
     LEASE_DURATION,
@@ -477,6 +478,7 @@ __all__ = [
     "judge_citations",
     "journaled_extractions",
     "journaled_initial_context",
+    "journaled_run_cost",
     "resume_point",
     "run_started",
     "JournalRunStarted",

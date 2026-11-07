@@ -15,6 +15,7 @@ from pydantic import JsonValue
 
 import azathoth.cli.bootstrap as cli_bootstrap
 from azathoth.cli import main
+from azathoth.cli.benchmark_execution import case_runner
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -672,3 +673,53 @@ def test_a_required_citation_names_a_source_and_a_segment(
     assert (
         f"Expected SOURCE:SEGMENT, such as claim:p1.s2, got {value!r}." in capsys.readouterr().err
     )
+
+
+OTHER_WORKFLOW_ID = "c1670000-0000-4000-8000-000000000003"
+
+
+def test_compared_document_workflows_are_scored_on_the_citations_their_runs_kept(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cited_case(capsys)
+
+    other: dict[str, Any] = cited_workflow().model_dump(mode="json")
+    other["metadata"]["id"] = OTHER_WORKFLOW_ID
+    other["metadata"]["name"] = "answer from a claim, again"
+    other["result"] = {"name": "answer"}
+
+    (tmp_path / "other.json").write_text(json.dumps(other), encoding="utf-8")
+
+    status, _, err = run("workflow", "import", "other.json", capsys=capsys)
+
+    assert status == 0, err
+
+    status, out, err = run(
+        "benchmark",
+        "compare",
+        BENCHMARK_ID,
+        "--workflow",
+        WORKFLOW_ID,
+        "--workflow",
+        OTHER_WORKFLOW_ID,
+        "--target-latency",
+        "60",
+        "--target-cost",
+        "1",
+        capsys=capsys,
+    )
+
+    assert status == 0, err
+    assert out.count("Cost: 1.000000\nCitations: 0.500000\nOverall: ") == 2
+
+
+def test_benchmark_cases_run_with_the_databases_journal_children_and_content(
+    database: Path,
+) -> None:
+    repositories = open_repositories(database)
+    runner = case_runner(repositories)
+
+    assert runner.children is repositories.run_children
+    assert runner.content is repositories.tool_content

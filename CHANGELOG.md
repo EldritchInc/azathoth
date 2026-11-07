@@ -166,6 +166,11 @@ release dates are on the
 
 ### Fixes
 
+- **Workflows with tool steps can be compared and optimized.** A tool step
+  stated no cost, so a run with one could not be scored; it now states
+  that its own work costs nothing, and a step that starts child runs, such
+  as `run_workflow`, costs what its children did, read from their journals
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 - **A command stopped as a process tool starts no longer hangs.** A tool
   cancelled before it was given its inputs is killed, its stdin closed, and
   only then waited for. On a Python without CPython's gh-119710 fix, waiting

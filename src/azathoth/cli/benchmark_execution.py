@@ -30,13 +30,16 @@ def case_runner(
 ) -> WorkflowRunner:
     """Return the runner benchmark cases and experiments run in (ADR 0117).
 
-    A case's run journals as any run does and is given the database's
-    content, so its tools read the documents it was given, and its prompts
-    the extractions its steps kept, as a run of `workflow run` would.
+    A case's run journals as any run does, indexes the children its steps
+    start, and is given the database's content, so its tools read the
+    documents it was given, its prompts the extractions its steps kept, and
+    a step that starts children costs what they did, as a run of `workflow
+    run` would.
     """
 
     return WorkflowRunner(
         journal=stored.run_journal,
+        children=stored.run_children,
         content=stored.tool_content,
     )
 
