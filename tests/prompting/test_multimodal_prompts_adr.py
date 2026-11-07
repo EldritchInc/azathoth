@@ -22,6 +22,8 @@ from azathoth.providers import (
     ContentPart,
     ModelExecutionError,
     Prompt,
+    TextPart,
+    giving_prompt_content,
     prompt_content_bytes,
 )
 from azathoth.tools import ToolContentAccess, providing_tool_content
@@ -172,13 +174,63 @@ def prompt_refusal(
     return raised.value.errors()[0]["msg"].removeprefix("Value error, ")
 
 
-def bedrock_refusal() -> str:
-    """Return the message Bedrock refuses a prompt of parts with."""
+def bedrock_refusal(
+    prompt: Prompt,
+    given: dict[str, bytes],
+) -> str:
+    """Return the message a Bedrock model refuses a prompt of parts with."""
 
-    with pytest.raises(ModelExecutionError) as raised:
-        asyncio.run(BedrockLanguageModel(FakeBedrockClient(), "<MODEL>").complete(SHOWING))
+    with giving_prompt_content(given), pytest.raises(ModelExecutionError) as raised:
+        asyncio.run(BedrockLanguageModel(FakeBedrockClient(), "<MODEL>").complete(prompt))
 
     return str(raised.value)
+
+
+def many(
+    count: int,
+    content: bytes,
+    media_type: str,
+) -> tuple[Prompt, dict[str, bytes]]:
+    """Return a prompt of text and some distinct pieces of one kind of content."""
+
+    pieces = [content + bytes([index]) for index in range(count)]
+    handles = [
+        ContentRef(digest=content_bytes_digest(piece), media_type=media_type, size_bytes=len(piece))
+        for piece in pieces
+    ]
+
+    return (
+        Prompt(parts=(TextPart(text="Look:"), *(ContentPart(content=shown) for shown in handles))),
+        {shown.digest: piece for shown, piece in zip(handles, pieces, strict=True)},
+    )
+
+
+def oversized(
+    content: bytes,
+    media_type: str,
+    limit: int,
+) -> tuple[Prompt, dict[str, bytes], str]:
+    """Return a prompt of text and one piece of content a byte over a limit, and its digest."""
+
+    piece = content + b"\x00" * (limit - len(content) + 1)
+    shown = ContentRef(
+        digest=content_bytes_digest(piece),
+        media_type=media_type,
+        size_bytes=len(piece),
+    )
+
+    return (
+        Prompt(parts=(TextPart(text="Look:"), ContentPart(content=shown))),
+        {shown.digest: piece},
+        shown.digest,
+    )
+
+
+PNG = b"\x89PNG\r\n\x1a\n"
+
+BIG_IMAGE = oversized(PNG, "image/png", 3_750_000)
+
+BIG_DOCUMENT = oversized(PDF, "application/pdf", 4_500_000)
 
 
 def missing_bytes() -> str:
@@ -259,8 +311,31 @@ DOCUMENTED: list[tuple[str, Callable[[], str], dict[str, str]]] = [
         {"<DIGEST>": DIGEST},
     ),
     (
-        "Bedrock model '<MODEL>' cannot be shown content by this release.",
-        bedrock_refusal,
+        "Bedrock model '<MODEL>' is shown at most 20 images in one prompt; this one shows <COUNT>.",
+        lambda: bedrock_refusal(*many(21, PNG, "image/png")),
+        {"<COUNT>": "21"},
+    ),
+    (
+        "Bedrock model '<MODEL>' is shown at most 5 documents in one prompt; this one shows "
+        "<COUNT>.",
+        lambda: bedrock_refusal(*many(6, PDF, "application/pdf")),
+        {"<COUNT>": "6"},
+    ),
+    (
+        "Bedrock model '<MODEL>' is shown images of at most 3750000 bytes; content <DIGEST> "
+        "is <SIZE>.",
+        lambda: bedrock_refusal(BIG_IMAGE[0], BIG_IMAGE[1]),
+        {"<DIGEST>": BIG_IMAGE[2], "<SIZE>": "3750001"},
+    ),
+    (
+        "Bedrock model '<MODEL>' is shown documents of at most 4500000 bytes; content "
+        "<DIGEST> is <SIZE>.",
+        lambda: bedrock_refusal(BIG_DOCUMENT[0], BIG_DOCUMENT[1]),
+        {"<DIGEST>": BIG_DOCUMENT[2], "<SIZE>": "4500001"},
+    ),
+    (
+        "Bedrock model '<MODEL>' is shown a document only beside text; this prompt has none.",
+        lambda: bedrock_refusal(SHOWING, {DOCUMENT.digest: PDF}),
         {},
     ),
 ]

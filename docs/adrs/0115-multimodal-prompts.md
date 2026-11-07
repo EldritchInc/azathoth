@@ -96,13 +96,6 @@ unchanged:
 Model <PROVIDER>/<MODEL> was not given the bytes of content <DIGEST>.
 ```
 
-Until a provider sends content in its own form, it refuses a prompt of
-parts before sending anything, rather than send its text alone:
-
-```text
-Bedrock model '<MODEL>' cannot be shown content by this release.
-```
-
 ### OpenRouter is sent content parts, and reads PDFs natively
 
 A prompt of text is sent to OpenRouter as it always was: one user message
@@ -132,6 +125,64 @@ OpenRouter documents no limit on the size of a part, so none is checked
 before sending; a request OpenRouter refuses fails as any failed request
 does. The request is built, and every piece's bytes found, before anything
 is sent, so a prompt whose bytes were not given sends nothing.
+
+### Bedrock is sent Converse blocks, within Converse's limits
+
+A prompt of text is sent to Bedrock as it always was: one user message of
+one text block. A prompt of parts is one user message of Converse content
+blocks, in order, each holding its raw bytes. Text is a `text` block, an
+image an `image` block of format `png`, `jpeg` or `webp`, and a PDF a
+`document` block of format `pdf`:
+
+```json
+[
+  {"text": "Here is the claim form:\n"},
+  {"document": {"format": "pdf", "name": "document-1", "source": {"bytes": "<BYTES>"}}},
+  {"text": "\nand the photo of the damage:\n"},
+  {"image": {"format": "jpeg", "source": {"bytes": "<BYTES>"}}}
+]
+```
+
+A document is named `document-<N>` in the order the prompt shows it.
+Bedrock warns that a model may read a document's name as an instruction and
+asks for a neutral one; a name drawn from the input, such as its file name,
+would put text from outside the workflow in front of the model unchecked.
+
+Converse takes at most 20 images, each at most 3.75 MB, and at most 5
+documents, each at most 4.5 MB, in one message, and a message holding a
+document must also hold text. Each is checked before anything is sent,
+taking a megabyte as a million bytes, the stricter reading; an image's
+dimensions, at most 8000 pixels a side, are left to Bedrock, since checking
+them would mean decoding the image:
+
+```text
+Bedrock model '<MODEL>' is shown at most 20 images in one prompt; this one shows <COUNT>.
+Bedrock model '<MODEL>' is shown at most 5 documents in one prompt; this one shows <COUNT>.
+Bedrock model '<MODEL>' is shown images of at most 3750000 bytes; content <DIGEST> is <SIZE>.
+Bedrock model '<MODEL>' is shown documents of at most 4500000 bytes; content <DIGEST> is <SIZE>.
+Bedrock model '<MODEL>' is shown a document only beside text; this prompt has none.
+```
+
+### The operator says which Bedrock models read documents
+
+Bedrock's model listing reports a model's input modalities as text, image,
+speech or video, and says nothing of documents, though Converse gives
+documents to many models. The operator's Bedrock pricing document (ADR
+0103) may therefore add input modalities by model ID, beside its prices:
+
+```json
+{
+  "version": 1,
+  "models": {},
+  "input_modalities": {"us.anthropic.claude-sonnet-4-20250514-v1:0": ["file"]}
+}
+```
+
+The modalities a document names are added to those Bedrock reports, and
+never take one away; a model it adds `image` to is one with vision. A model
+may be named without a price. Without the entry, a Bedrock model reads the
+images Bedrock says it reads, and no PDFs. The document's version is
+unchanged, since every document of version 1 still means what it meant.
 
 ## Consequences
 
@@ -166,6 +217,19 @@ checked, at a cost no step declared.
 Rejected. A provider would need the run, its lineage and the store, and
 would have to repeat the checks every tool's content inputs pass. The engine
 checks once, before any provider is called.
+
+### Name a Bedrock document after its file
+
+Rejected. A document's name is text the model reads, and Bedrock warns it
+may be read as an instruction. A file name comes from outside the workflow,
+so it is never put there.
+
+### Guess which Bedrock models read documents
+
+Rejected. Converse's support for documents differs by model and changes
+with Bedrock's releases, and a guess would send PDFs to models that refuse
+them, or keep them from models that read them. The operator, who chose the
+region and the models, says.
 
 ### Show content in a fixed prompt by digest
 

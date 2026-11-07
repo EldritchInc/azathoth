@@ -458,8 +458,6 @@ reads them before the model is called, and gives them to the provider for
 the length of the call with `giving_prompt_content`; a provider reads each
 by digest with `prompt_content_bytes`, which raises `PromptContentError` for
 content it was not given. The deterministic model reads them the same way.
-Until Bedrock sends content in its own form, it refuses a prompt of parts
-before sending anything.
 
 `ModelRequest` represents a provider-neutral request.
 
@@ -566,7 +564,13 @@ The integration has five parts:
   and returns the reply's text blocks, joined, with its tokens, Bedrock's
   latency and its cost at the model's price, or `None` unpriced. A reply
   that a guardrail or content filter stopped (`BLOCKED_STOP_REASONS`) is a
-  `ModelExecutionError`, never an answer.
+  `ModelExecutionError`, never an answer. `bedrock_content` builds the
+  message's blocks: text as `text`, an image as an `image` block and a PDF
+  as a `document` block named `document-<N>`, each with its raw bytes (ADR
+  0115). It refuses, before anything is sent, a prompt of more than
+  `BEDROCK_MAX_IMAGES` images or `BEDROCK_MAX_DOCUMENTS` documents, one
+  larger than `BEDROCK_MAX_IMAGE_BYTES` or `BEDROCK_MAX_DOCUMENT_BYTES`, or a
+  document with no text beside it.
 - `BedrockModelRegistryLoader` builds one for each Bedrock model of a
   catalog, at its catalog price.
 
@@ -583,6 +587,11 @@ The pricing document keys each model by its Bedrock ID:
   }
 }
 ```
+
+It may also add input modalities Bedrock does not report, by model ID,
+under `input_modalities`, such as `["file"]` for a model that reads PDFs
+through Converse; Bedrock's listing says nothing of documents. They are
+added to what Bedrock reports and never take one away (ADR 0115).
 
 Every test reaches Bedrock through a fake `BedrockClient`, so none needs AWS.
 

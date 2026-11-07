@@ -65,6 +65,14 @@ release dates are on the
   OpenRouter's PDF engine to `native`, so no paid OCR service reads it in
   the model's place
   ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **Bedrock models are shown images and PDFs as Converse blocks.** An image
+  is an `image` block and a PDF a `document` block named neutrally, in the
+  prompt's order. Converse's limits, 20 images of 3.75 MB and 5 documents of
+  4.5 MB, with text beside any document, are checked before anything is
+  sent. Bedrock does not say which models read documents, so the pricing
+  document may add `file` to a model's input modalities under
+  `input_modalities`
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 
 ### Evidence Out
 

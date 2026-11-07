@@ -9,17 +9,14 @@ from pydantic import JsonValue, ValidationError
 
 from azathoth.inputs import ContentRef, content_bytes_digest
 from azathoth.providers import (
-    BedrockLanguageModel,
     ContentPart,
     DeterministicLanguageModel,
     Prompt,
     PromptContentError,
     TextPart,
-    UnsupportedModelRequestError,
     giving_prompt_content,
     prompt_content_bytes,
 )
-from tests.providers.fake_bedrock import FakeBedrockClient
 
 PDF = b"%PDF-1.7\n%%EOF\n"
 
@@ -210,15 +207,3 @@ def test_the_deterministic_model_fails_on_content_it_was_not_given() -> None:
     assert str(raised.value) == (
         f"Model deterministic/deterministic was not given the bytes of content {PHOTO.digest}."
     )
-
-
-def test_bedrock_refuses_content_before_it_calls_converse() -> None:
-    client = FakeBedrockClient()
-
-    with pytest.raises(UnsupportedModelRequestError) as raised:
-        asyncio.run(BedrockLanguageModel(client, "amazon.nova-pro-v1:0").complete(SHOWING))
-
-    assert str(raised.value) == (
-        "Bedrock model 'amazon.nova-pro-v1:0' cannot be shown content by this release."
-    )
-    assert client.calls == []

@@ -1,9 +1,15 @@
 """Language model provider abstractions."""
 
 from azathoth.providers.bedrock import (
+    BEDROCK_IMAGE_FORMATS,
+    BEDROCK_MAX_DOCUMENT_BYTES,
+    BEDROCK_MAX_DOCUMENTS,
+    BEDROCK_MAX_IMAGE_BYTES,
+    BEDROCK_MAX_IMAGES,
     BLOCKED_STOP_REASONS,
     BedrockLanguageModel,
     BedrockModelRegistryLoader,
+    bedrock_content,
 )
 from azathoth.providers.bedrock_client import (
     AWS_DEFAULT_REGION_VARIABLE,
@@ -134,6 +140,11 @@ from azathoth.providers.sqlite_repository import SQLiteModelRepository
 __all__ = [
     "AWS_DEFAULT_REGION_VARIABLE",
     "AWS_REGION_VARIABLE",
+    "BEDROCK_IMAGE_FORMATS",
+    "BEDROCK_MAX_DOCUMENTS",
+    "BEDROCK_MAX_DOCUMENT_BYTES",
+    "BEDROCK_MAX_IMAGES",
+    "BEDROCK_MAX_IMAGE_BYTES",
     "BLOCKED_STOP_REASONS",
     "BedrockLanguageModel",
     "BedrockModelRegistryLoader",
@@ -151,6 +162,7 @@ __all__ = [
     "BedrockPricing",
     "BedrockUnavailableError",
     "Boto3BedrockClient",
+    "bedrock_content",
     "bedrock_enabled",
     "boto3_driver",
     "configure_bedrock",

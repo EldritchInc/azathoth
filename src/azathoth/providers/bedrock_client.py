@@ -6,7 +6,7 @@ boto3 is imported only when Bedrock is turned on.
 """
 
 import importlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -56,9 +56,12 @@ class BedrockClient(Protocol):
     def converse(
         self,
         model_id: str,
-        text: str,
+        content: Sequence[Mapping[str, object]],
     ) -> Mapping[str, object]:
-        """Send one user message to one model, through Converse.
+        """Send one user message of Converse content blocks to one model.
+
+        A prompt of text is one `{"text": ...}` block; content is shown as
+        `image` and `document` blocks holding raw bytes (ADR 0115).
 
         Raises:
             BedrockClientError: The call failed.
@@ -131,7 +134,7 @@ class Boto3BedrockClient:
     def converse(
         self,
         model_id: str,
-        text: str,
+        content: Sequence[Mapping[str, object]],
     ) -> Mapping[str, object]:
         return self._call(
             self._runtime.converse,
@@ -139,7 +142,7 @@ class Boto3BedrockClient:
             messages=[
                 {
                     "role": "user",
-                    "content": [{"text": text}],
+                    "content": [dict(block) for block in content],
                 },
             ],
         )

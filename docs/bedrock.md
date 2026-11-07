@@ -172,6 +172,37 @@ Workflow step <STEP_ID> ran model bedrock/<MODEL_ID>, whose cost is unknown; pri
 A priced model that your region does not offer is ignored, so one document
 can serve several regions. When AWS changes a price, change the document.
 
+### Models that read PDFs
+
+A workflow can show a model the PDFs and images its run received. Bedrock
+says which models read images, but not which read documents, so the same
+document says which do, by the same IDs, under `input_modalities`:
+
+```json
+{
+  "version": 1,
+  "models": {
+    "amazon.nova-pro-v1:0": {
+      "input_usd_per_million_tokens": 0.8,
+      "output_usd_per_million_tokens": 3.2
+    }
+  },
+  "input_modalities": {
+    "amazon.nova-pro-v1:0": ["file"]
+  }
+}
+```
+
+`file` is a model that reads PDFs. What you name is added to what Bedrock
+reports, never taken from it, and a model may be named without a price. A
+model you do not name reads no PDFs. Check
+[the models Converse supports](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+for document chat in your region before naming one.
+
+Converse takes at most 20 images of up to 3.75 MB and 5 PDFs of up to
+4.5 MB in one prompt, and a PDF only beside some text; a prompt that shows
+more is refused before it is sent.
+
 ## 5. Find and Authorize Models
 
 List the models your region offers:
