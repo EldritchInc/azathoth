@@ -73,6 +73,12 @@ release dates are on the
   document may add `file` to a model's input modalities under
   `input_modalities`
   ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **A model is shown only what its catalog says it reads.** A step that
+  shows content declares `image` or `file` among its required input
+  modalities, and portfolio selection chooses only models that take them.
+  Whatever model a step is bound to, its rendered prompt is checked against
+  the model's catalog entry before the model is called
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 
 ### Evidence Out
 

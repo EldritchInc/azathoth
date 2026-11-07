@@ -37,7 +37,11 @@ from azathoth.providers.bedrock_configuration import (
 from azathoth.providers.bedrock_directory import BedrockModelDirectory
 from azathoth.providers.catalog import ModelCatalog
 from azathoth.providers.catalog_loader import ModelCatalogLoader
-from azathoth.providers.content import giving_prompt_content, prompt_content_bytes
+from azathoth.providers.content import (
+    CONTENT_MODALITIES,
+    giving_prompt_content,
+    prompt_content_bytes,
+)
 from azathoth.providers.deterministic import DeterministicLanguageModel
 from azathoth.providers.exceptions import (
     ModelDiscoveryError,
@@ -145,6 +149,7 @@ __all__ = [
     "BEDROCK_MAX_DOCUMENT_BYTES",
     "BEDROCK_MAX_IMAGES",
     "BEDROCK_MAX_IMAGE_BYTES",
+    "CONTENT_MODALITIES",
     "BLOCKED_STOP_REASONS",
     "BedrockLanguageModel",
     "BedrockModelRegistryLoader",

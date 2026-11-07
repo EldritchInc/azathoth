@@ -184,6 +184,31 @@ may be named without a price. Without the entry, a Bedrock model reads the
 images Bedrock says it reads, and no PDFs. The document's version is
 unchanged, since every document of version 1 still means what it meant.
 
+### A model is shown only what its catalog says it reads
+
+Content is not known until a run renders its prompt, so it cannot choose
+candidates when they are generated. A step that shows content declares what
+its model must take, as any requirement is declared, and portfolio
+selection then generates only models whose catalog entries take it:
+
+```json
+"model_selection": {"requirements": {"required_input_modalities": ["text", "file"]}}
+```
+
+An image needs `image` and a PDF `file`. Whichever model a step is bound
+to, portfolio or fixed, a rendered prompt is checked against the input
+modalities its catalog entry names before the model is called, so a step
+that declares too little, or a fixed model that reads no images, fails
+there, never at the provider:
+
+```text
+Prompt strategy '<NAME>' shows content <DIGEST> as <MEDIA_TYPE>, but model <MODEL> does not take <MODALITY> input.
+```
+
+The catalog's modalities are the provider's: OpenRouter's directory reports
+`image` and `file` for the models that read them, and Bedrock's reports
+images, with documents added by the operator (above).
+
 ## Consequences
 
 - A model step can be shown the documents and images its run received, in
@@ -194,6 +219,8 @@ unchanged, since every document of version 1 still means what it meant.
   is called, whichever model it is bound to.
 - Every existing prompt, template and workflow document is unchanged, and
   so are their digests.
+- A step that shows content declares the modalities its model must take,
+  and a model whose catalog entry does not take them is never shown it.
 - A workflow cannot show a model reference content of its own, such as a
   sample form; that waits for a way to give a run content it did not
   receive as input.
@@ -230,6 +257,13 @@ Rejected. Converse's support for documents differs by model and changes
 with Bedrock's releases, and a guess would send PDFs to models that refuse
 them, or keep them from models that read them. The operator, who chose the
 region and the models, says.
+
+### Infer a step's modalities from its template
+
+Rejected. A template names variables, not what they will hold: the same
+step may be given a PDF in one run and text in another. Only the rendered
+prompt knows, so selection takes what the step declares, and the rendered
+prompt is checked.
 
 ### Show content in a fixed prompt by digest
 

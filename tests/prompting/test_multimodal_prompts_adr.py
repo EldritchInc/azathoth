@@ -8,7 +8,14 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from azathoth.context import Context, LineageRun, LineageStep, StepLineage, running_step
+from azathoth.context import (
+    Context,
+    ContextEvent,
+    LineageRun,
+    LineageStep,
+    StepLineage,
+    running_step,
+)
 from azathoth.inputs import (
     ContentRef,
     InMemoryContentStore,
@@ -16,16 +23,27 @@ from azathoth.inputs import (
     ResolvedInput,
     content_bytes_digest,
 )
-from azathoth.prompting import PromptStrategySpec, read_prompt_content
+from azathoth.prompting import (
+    WORKFLOW_INPUT_BOUND_EVENT_TYPE,
+    ContextPromptStrategy,
+    ModelBinding,
+    PromptInputBinding,
+    PromptStrategySpec,
+    PromptTemplate,
+    read_prompt_content,
+)
 from azathoth.providers import (
     BedrockLanguageModel,
     ContentPart,
+    DeterministicLanguageModel,
     ModelExecutionError,
+    ModelModality,
     Prompt,
     TextPart,
     giving_prompt_content,
     prompt_content_bytes,
 )
+from azathoth.strategies import StrategyMetadata
 from azathoth.tools import ToolContentAccess, providing_tool_content
 from azathoth.workflows import create_workflow_input_events
 from tests.providers.fake_bedrock import FakeBedrockClient
@@ -233,6 +251,40 @@ BIG_IMAGE = oversized(PNG, "image/png", 3_750_000)
 BIG_DOCUMENT = oversized(PDF, "application/pdf", 4_500_000)
 
 
+def unreadable_refusal() -> str:
+    """Return the message a model that does not read PDFs is refused one with."""
+
+    strategy = ContextPromptStrategy(
+        metadata=StrategyMetadata(
+            id=RUN,
+            name="<NAME>",
+            description="Show a document.",
+            version="1.0.0",
+        ),
+        template=PromptTemplate(
+            text="Read {document}",
+            bindings=(PromptInputBinding(variable_name="document", input_name="document"),),
+        ),
+        language_model=DeterministicLanguageModel(),
+        model_binding=ModelBinding(identifier="<MODEL>"),
+        model_input_modalities=frozenset({ModelModality.TEXT}),
+    )
+    context = Context(
+        events=(
+            ContextEvent(
+                event_type=WORKFLOW_INPUT_BOUND_EVENT_TYPE,
+                payload={"name": "document", "value": DOCUMENT.to_value()},
+                producer="workflow-runner",
+            ),
+        )
+    )
+
+    with pytest.raises(ModelExecutionError) as raised:
+        asyncio.run(strategy.run(context))
+
+    return str(raised.value)
+
+
 def missing_bytes() -> str:
     """Return the message a provider gives for bytes it was not given."""
 
@@ -304,6 +356,12 @@ DOCUMENTED: list[tuple[str, Callable[[], str], dict[str, str]]] = [
             Prompt(parts=(ContentPart(content=DOCUMENT.model_copy(update={"size_bytes": 1})),))
         ),
         {"<DIGEST>": DIGEST, "<SIZE>": "1", "<ACTUAL>": str(len(PDF))},
+    ),
+    (
+        "Prompt strategy '<NAME>' shows content <DIGEST> as <MEDIA_TYPE>, but model <MODEL> "
+        "does not take <MODALITY> input.",
+        unreadable_refusal,
+        {"<DIGEST>": DIGEST, "<MEDIA_TYPE>": "application/pdf", "<MODALITY>": "file"},
     ),
     (
         "Model <PROVIDER>/<MODEL> was not given the bytes of content <DIGEST>.",

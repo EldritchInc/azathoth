@@ -10,9 +10,27 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from types import MappingProxyType
+from typing import Final
 
-from azathoth.inputs import ContentRef
+from azathoth.inputs import (
+    JPEG_MEDIA_TYPE,
+    PDF_MEDIA_TYPE,
+    PNG_MEDIA_TYPE,
+    WEBP_MEDIA_TYPE,
+    ContentRef,
+)
 from azathoth.providers.exceptions import PromptContentError
+from azathoth.providers.models import ModelModality
+
+CONTENT_MODALITIES: Final[Mapping[str, ModelModality]] = MappingProxyType(
+    {
+        PNG_MEDIA_TYPE: ModelModality.IMAGE,
+        JPEG_MEDIA_TYPE: ModelModality.IMAGE,
+        WEBP_MEDIA_TYPE: ModelModality.IMAGE,
+        PDF_MEDIA_TYPE: ModelModality.FILE,
+    }
+)
+"""The input modality a model must take to be shown content of each media type."""
 
 _GIVEN_CONTENT: ContextVar[Mapping[str, bytes]] = ContextVar(
     "azathoth_prompt_content",
@@ -60,6 +78,7 @@ def prompt_content_bytes(
 
 
 __all__ = [
+    "CONTENT_MODALITIES",
     "giving_prompt_content",
     "prompt_content_bytes",
 ]
