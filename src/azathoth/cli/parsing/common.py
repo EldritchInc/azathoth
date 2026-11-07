@@ -6,6 +6,7 @@ from typing import cast
 
 from pydantic import JsonValue
 
+from azathoth.evaluation.models import CitedSegment
 from azathoth.inputs import validate_media_type
 from azathoth.workflows import validate_idempotency_key
 
@@ -64,6 +65,24 @@ def media_type(
         return validate_media_type(value)
     except ValueError as exc:
         raise ArgumentTypeError(str(exc)) from exc
+
+
+def cited_segment(
+    value: str,
+) -> CitedSegment:
+    """Parse one `SOURCE:SEGMENT` command-line value naming a segment to cite (ADR 0117).
+
+    Raises:
+        ArgumentTypeError: The value is not a source and a segment, both
+            non-empty, separated by a colon.
+    """
+
+    source, separator, segment = value.partition(":")
+
+    if not separator or not source or not segment:
+        raise ArgumentTypeError(f"Expected SOURCE:SEGMENT, such as claim:p1.s2, got {value!r}.")
+
+    return CitedSegment(source=source, segment=segment)
 
 
 def positive_integer(

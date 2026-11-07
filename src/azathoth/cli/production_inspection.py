@@ -1,8 +1,19 @@
 """Production deployment and invocation inspection commands for the Azathoth CLI."""
 
 import sys
+from collections.abc import Callable, Mapping
 from uuid import UUID
 
+from pydantic import JsonValue
+
+from azathoth.citations import (
+    VERIFIED_STATUSES,
+    LinkResolutionError,
+    SourceAnchor,
+    default_link_resolvers,
+    link_expiry_seconds,
+    resolve_link,
+)
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
@@ -180,13 +191,18 @@ def list_workflow_invocations(
 
 def show_invocation(
     invocation_id: UUID,
+    *,
+    links: bool = False,
 ) -> int:
     """Show one production invocation with its input, outcome, and run.
 
     An incomplete invocation names the run its journal records, and an
     invocation whose run was resumed names how often (ADR 0105). Every check
     a cited step of the run kept is read from the content store and shown
-    (ADR 0116).
+    (ADR 0116). With `links`, each verified check is followed by a link to
+    its place in its document, made by the resolver of its origin's scheme;
+    an `s3://` link is presigned, and valid for `AZATHOTH_LINK_EXPIRY_SECONDS`
+    (ADR 0117).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -222,17 +238,48 @@ def show_invocation(
 
         return 1
 
-    print(
-        render_production_invocation(
+    try:
+        rendered = render_production_invocation(
             invocation,
             result=invocation_repository.result(invocation_id),
             run_id=run_id,
             resumes=0 if run_id is None else journal_resumes(journal.entries(run_id)),
             citations=citations,
+            link=_check_link() if links else None,
         )
-    )
+    except LinkResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(rendered)
 
     return 0
+
+
+def _check_link() -> Callable[[Mapping[str, JsonValue]], str | None]:
+    """Return what links a kept check to its place, by its origin's resolver (ADR 0117).
+
+    Only a verified check is anchored, so only one is linked.
+
+    Raises:
+        LinkResolutionError: `AZATHOTH_LINK_EXPIRY_SECONDS` is not valid.
+    """
+
+    resolvers = default_link_resolvers(expires_in=link_expiry_seconds())
+    verified = frozenset(status.value for status in VERIFIED_STATUSES)
+
+    def link(
+        check: Mapping[str, JsonValue],
+    ) -> str | None:
+        anchor = check.get("anchor")
+
+        if check.get("status") not in verified or not isinstance(anchor, dict):
+            return None
+
+        return resolve_link(SourceAnchor.model_validate(anchor), resolvers)
+
+    return link
 
 
 def _recorded_citations(

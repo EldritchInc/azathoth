@@ -139,3 +139,4 @@ requests that made it:
 - [ADR 0114: Read Documents with Tools](0114-read-documents-with-tools.md)
 - [ADR 0115: Multimodal Prompts](0115-multimodal-prompts.md)
 - [ADR 0116: Cited Prompt Steps](0116-cited-prompt-steps.md)
+- [ADR 0117: Citations as Evidence](0117-citations-as-evidence.md)

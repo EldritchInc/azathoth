@@ -16,10 +16,12 @@ from azathoth.cli import (
     main,
 )
 from azathoth.cli.dispatching import dispatch_benchmark_command
+from azathoth.cli.inputs import WorkflowInputFile
 from azathoth.cli.parsing import BENCHMARK_CASE_EXPECTED_ATTRIBUTE
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
+    CitationExpectation,
     ExpectedOutcome,
     OutcomeComparison,
     SQLiteBenchmarkRepository,
@@ -778,15 +780,19 @@ def capture_add_case(
     def fake_add_benchmark_case(
         benchmark_id: UUID,
         *,
-        run_id: UUID,
+        run_id: UUID | None,
+        input_file: WorkflowInputFile | None,
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,
+        citations: CitationExpectation | None,
     ) -> int:
         calls.append(
             {
+                "citations": citations,
                 "benchmark_id": benchmark_id,
                 "run_id": run_id,
+                "input_file": input_file,
                 "comparison": comparison,
                 "expected": expected,
                 "description": description,
@@ -831,8 +837,10 @@ def test_cli_add_case_dispatches_the_complete_request(
 
     assert calls == [
         {
+            "citations": None,
             "benchmark_id": BENCHMARK_ID,
             "run_id": RUN_ID,
+            "input_file": None,
             "comparison": OutcomeComparison.SEMANTIC,
             "expected": SuppliedExpectedValue(
                 value=expected_value,
@@ -912,10 +920,12 @@ def test_add_case_dispatch_converts_the_comparison() -> None:
     def add_case(
         benchmark_id: UUID,
         *,
-        run_id: UUID,
+        run_id: UUID | None,
+        input_file: WorkflowInputFile | None,
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,
+        citations: CitationExpectation | None,
     ) -> int:
         received.append(comparison)
 
@@ -959,14 +969,15 @@ def test_add_case_dispatch_converts_the_comparison() -> None:
 
 
 @pytest.mark.parametrize(
-    "missing",
+    ("missing", "message"),
     (
-        "--from-run",
-        "--comparison",
+        ("--from-run", "one of the arguments --from-run --input-file is required"),
+        ("--comparison", "the following arguments are required: --comparison"),
     ),
 )
-def test_cli_add_case_requires_run_and_comparison(
+def test_cli_add_case_requires_a_source_and_a_comparison(
     missing: str,
+    message: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     options = {
@@ -989,7 +1000,7 @@ def test_cli_add_case_requires_run_and_comparison(
     captured = capsys.readouterr()
 
     assert raised.value.code == 2
-    assert f"the following arguments are required: {missing}" in captured.err
+    assert message in captured.err
 
 
 def test_cli_add_case_rejects_an_unknown_comparison(

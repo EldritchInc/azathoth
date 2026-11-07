@@ -241,15 +241,26 @@ def test_invocation_show_parser_records_identifier() -> None:
     assert arguments.invocation_id == INVOCATION_ID
 
 
+@pytest.mark.parametrize(
+    ("options", "links"),
+    [
+        pytest.param((), False, id="without-links"),
+        pytest.param(("--links",), True, id="with-links"),
+    ],
+)
 def test_cli_dispatches_invocation_show(
     monkeypatch: pytest.MonkeyPatch,
+    options: tuple[str, ...],
+    links: bool,
 ) -> None:
-    invocation_ids: list[UUID] = []
+    invocation_ids: list[tuple[UUID, bool]] = []
 
     def fake_show_invocation(
         invocation_id: UUID,
+        *,
+        links: bool,
     ) -> int:
-        invocation_ids.append(invocation_id)
+        invocation_ids.append((invocation_id, links))
 
         return 83
 
@@ -264,12 +275,13 @@ def test_cli_dispatches_invocation_show(
             "invocation",
             "show",
             str(INVOCATION_ID),
+            *options,
         )
     )
 
     assert result == 83
     assert invocation_ids == [
-        INVOCATION_ID,
+        (INVOCATION_ID, links),
     ]
 
 

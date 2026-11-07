@@ -127,3 +127,36 @@ segmented = segment_text(text, source_digest=content_bytes_digest(text.encode())
 
 check = verify_citation(segmented, segment_id="s2", quote="received on December 14")
 ```
+
+## Exporting Citations
+
+`citation_annotations(run_id, records, generator=...)` returns every
+verified check of a run's `CitationRecord`s (each a step's ID, its record's
+digest and the checks it holds) as one W3C Web Annotation
+`AnnotationCollection` (ADR 0117), in the `WEB_ANNOTATION_CONTEXT`. Each
+verified check with an anchor is an `Annotation` `highlighting` its
+anchor's place: its target's source is `anchor_source(anchor)`, the
+origin's URI, with an S3 `versionId` query when the origin names a version,
+or else `content_uri(digest)`, the content's RFC 6920 `ni:` URI
+(`CONTENT_URI_PREFIX`); its selectors are the anchor's. Its body names the
+step and run, and what a provider's citation supports; its generator is
+the given name, with `AZATHOTH_HOMEPAGE`. Every `id` is a `urn:uuid:` of a
+name-based UUID in `ANNOTATION_NAMESPACE`, so the same checks always give
+the same collection. Unverified checks are left out and counted in the
+label, and a collection with nothing in it has no page.
+
+## Linking to Citations
+
+A `LinkResolver` turns an anchor into a URL a person can open at the place
+it names (ADR 0117). `resolve_link(anchor, resolvers)` asks the resolver of
+the anchor's origin's scheme, and returns `None` for an anchor with no
+origin or of a scheme none reads. `default_link_resolvers(expires_in=...)`
+reads `http`, `https` and `file` with an `OriginLinkResolver`, whose link is
+the origin's URI, and `s3` with an `S3LinkResolver`, whose link is a
+presigned GET of the recorded object version, valid for `expires_in`
+seconds; boto3 is imported only when the first link is signed. Either adds
+`page_fragment(anchor)`, `#page=N` from the anchor's PDF fragment.
+`link_expiry_seconds()` reads `AZATHOTH_LINK_EXPIRY_SECONDS`
+(`LINK_EXPIRY_VARIABLE`): `DEFAULT_LINK_EXPIRY_SECONDS`, an hour, unless it
+says otherwise, and at most `MAX_LINK_EXPIRY_SECONDS`, seven days. A link
+that cannot be made raises `LinkResolutionError`.

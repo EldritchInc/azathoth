@@ -1232,11 +1232,18 @@ Conceptually:
 BenchmarkCase
 ├── id
 ├── input
+├── input_provenance   (optional)
 ├── expected
 └── metadata
 ```
 
 Its input is JSON-compatible.
+
+Its `input_provenance` is an `InputProvenance`, where the input was read
+from and which content it was, as a run records it (ADR 0117). A case whose
+provenance names a PDF or an image gives exactly that content's handle as
+its input; the content stays in the content store. A case without
+provenance serializes without it.
 
 Its expected value is an `ExpectedOutcome`.
 
@@ -1257,6 +1264,20 @@ workflow layer delivers it as the canonical `workflow.input.received` event,
 payload `{"input": <value>}`, the same event production invocations emit.
 
 # Benchmark Expected Outcome
+
+An `ExpectedOutcome` may name a `CitationExpectation` as `citations` (ADR
+0117): the `CitedSegment`s, each a `source` and a `segment`, its run must
+cite and verify, and `on_unverified`, `fail` by default or `ignore`, which
+says whether a citation the run kept that did not verify fails the case. A
+segment is required once. An outcome without one serializes without it.
+
+`OutcomeEvaluator` compares exact, normalized and semantic outcomes by what
+they cite: `compared_value(value)` turns every citation or check in a value,
+as `is_cited` tells them, into `{source, segment}`, in the expected value
+and the actual one alike. `CITED_KEYS` are the keys every citation holds,
+and `CHECK_KEYS` every key a check may hold. A schema comparison validates
+the actual value as it is. Whether the citations verified is judged by the
+workflow layer, from the checks the run kept.
 
 Every case carries:
 

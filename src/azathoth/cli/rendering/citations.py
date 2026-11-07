@@ -1,6 +1,6 @@
 """Human-readable rendering of the citations a run's cited steps checked (ADR 0116)."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import NamedTuple
 from uuid import UUID
 
@@ -17,13 +17,17 @@ class RecordedCitations(NamedTuple):
 
 def render_citation_lines(
     citations: Sequence[RecordedCitations],
+    *,
+    link: Callable[[Mapping[str, JsonValue]], str | None] | None = None,
 ) -> list[str]:
     """Return the lines naming every check each cited step of a run kept.
 
     Each step names its record and how many citations it checked, then each
     check in the order its reply held them: the status, the source, the
     segment, or `-` when none verified it, and the quote, with the pages a
-    provider's own citation named. A run with no cited step renders no lines.
+    provider's own citation named. With `link`, a check it links follows
+    with its link on a line of its own (ADR 0117). A run with no cited step
+    renders no lines.
     """
 
     if not citations:
@@ -44,7 +48,13 @@ def render_citation_lines(
             f"Step {recorded.step_id}: {count} citation{'' if count == 1 else 's'}, "
             f"record {recorded.record}"
         )
-        lines.extend(f"  {_render_check(check)}" for check in recorded.checks)
+        for check in recorded.checks:
+            lines.append(f"  {_render_check(check)}")
+
+            linked = link(check) if link is not None else None
+
+            if linked is not None:
+                lines.append(f"    {linked}")
 
     return lines
 

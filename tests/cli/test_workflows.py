@@ -40,6 +40,7 @@ from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateStep,
     WorkflowMetadata,
+    WorkflowRunner,
     WorkflowScoringPolicy,
     WorkflowSpecification,
     WorkflowStepSpecification,
@@ -651,3 +652,4 @@ def test_optimize_workflow_preserves_operator_optimization_inputs(
     assert received["runtime"] is runtime
     assert received["workflow_id"] == FIRST_WORKFLOW_ID
     assert received["max_generations"] == 4
+    assert isinstance(received["workflow_runner"], WorkflowRunner)

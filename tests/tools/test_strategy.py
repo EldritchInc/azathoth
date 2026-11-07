@@ -9,6 +9,7 @@ from pydantic import JsonValue
 from azathoth.context import Context, ContextEvent
 from azathoth.revisions import content_digest
 from azathoth.strategies import (
+    StrategyExecutionMetrics,
     StrategyMetadata,
     StrategyResourceBinding,
 )
@@ -277,4 +278,18 @@ def test_tool_strategy_records_resolved_implementation_resource() -> None:
                 "implementation_digest": content_digest(strategy.implementation),
             },
         ),
+    )
+
+
+def test_tool_strategy_states_that_its_own_work_costs_nothing() -> None:
+    outcome = asyncio.run(
+        create_strategy(
+            StubToolExecutor(),
+        ).run(
+            create_bound_input_context(),
+        )
+    )
+
+    assert outcome.metrics == StrategyExecutionMetrics(
+        estimated_cost_usd=0.0,
     )

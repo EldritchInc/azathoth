@@ -7,13 +7,17 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.parsing.common import (
+    cited_segment,
     json_value,
+    media_type,
     positive_integer,
 )
 from azathoth.cli.parsing.workflows import (
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
     WORKFLOW_ID_ATTRIBUTE,
+    WORKFLOW_INPUT_FILE_ATTRIBUTE,
+    WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
 )
 from azathoth.evaluation.models import OutcomeComparison
 
@@ -35,6 +39,8 @@ BENCHMARK_RUN_ACTION = "run"
 BENCHMARK_SHOW_ACTION = "show"
 
 BENCHMARK_CASE_COMPARISON_ATTRIBUTE = "benchmark_case_comparison"
+BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE = "benchmark_case_on_unverified"
+BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE = "benchmark_case_required_citations"
 BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE = "benchmark_case_description"
 BENCHMARK_CASE_EXPECTED_ATTRIBUTE = "benchmark_case_expected"
 BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE = "benchmark_case_source_run_id"
@@ -175,7 +181,10 @@ def add_benchmark_parser(
 
     benchmark_add_case_parser = benchmark_actions.add_parser(
         BENCHMARK_ADD_CASE_ACTION,
-        help="Append a case replaying one recorded run's input as a new benchmark revision.",
+        help=(
+            "Append a case replaying one recorded run's input, or one file, as a new "
+            "benchmark revision."
+        ),
     )
 
     benchmark_add_case_parser.add_argument(
@@ -185,13 +194,42 @@ def add_benchmark_parser(
         help="Benchmark dataset UUID to append the case to.",
     )
 
-    benchmark_add_case_parser.add_argument(
+    benchmark_case_sources = benchmark_add_case_parser.add_mutually_exclusive_group(
+        required=True,
+    )
+
+    benchmark_case_sources.add_argument(
         "--from-run",
         dest=BENCHMARK_CASE_SOURCE_RUN_ID_ATTRIBUTE,
         type=UUID,
-        required=True,
+        default=None,
         metavar="RUN_ID",
         help="Recorded run whose workflow input becomes the case input.",
+    )
+
+    benchmark_case_sources.add_argument(
+        "--input-file",
+        dest=WORKFLOW_INPUT_FILE_ATTRIBUTE,
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "File whose content becomes the case input: JSON, text, a PDF or an image, "
+            "kept in the content store. Its media type comes from its extension unless "
+            "--media-type gives it. Needs --expected."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--media-type",
+        dest=WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+        type=media_type,
+        default=None,
+        metavar="TYPE",
+        help=(
+            "Media type of --input-file: application/json, a text/* type, application/pdf, "
+            "image/jpeg, image/png or image/webp."
+        ),
     )
 
     benchmark_add_case_parser.add_argument(
@@ -211,6 +249,30 @@ def add_benchmark_parser(
         help=(
             "Expected value as JSON. Defaults to the corrected output of the "
             "run's latest bad feedback that carries one."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--require-citation",
+        dest=BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE,
+        action="append",
+        type=cited_segment,
+        default=None,
+        metavar="SOURCE:SEGMENT",
+        help=(
+            "Segment the case's run must cite and verify, such as claim:p1.s2. Repeat for "
+            "each segment."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--on-unverified",
+        dest=BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE,
+        choices=("fail", "ignore"),
+        default=None,
+        help=(
+            "Whether a citation the case's run kept that did not verify fails the case. "
+            "Defaults to fail when the case names citations."
         ),
     )
 

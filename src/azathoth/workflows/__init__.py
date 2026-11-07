@@ -3,6 +3,7 @@ from azathoth.workflows.attempt import (
     WorkflowStepFailure,
 )
 from azathoth.workflows.benchmark import (
+    BENCHMARK_INPUT_PRODUCER,
     WorkflowBenchmarkCandidateScorecard,
     WorkflowBenchmarkCaseResult,
     WorkflowBenchmarkComparator,
@@ -14,14 +15,18 @@ from azathoth.workflows.benchmark import (
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
+    benchmark_case_context,
 )
 from azathoth.workflows.benchmark_case_source import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
+    SOURCE_URI_METADATA_KEY,
     BenchmarkCaseSourceError,
+    benchmark_case_from_input,
     benchmark_case_from_run,
     latest_corrected_output,
     workflow_run_input,
+    workflow_run_input_provenance,
 )
 from azathoth.workflows.benchmark_execution_repository import (
     WorkflowBenchmarkExecutionRepository,
@@ -46,6 +51,13 @@ from azathoth.workflows.candidate_rebuild import (
 )
 from azathoth.workflows.catalog import WorkflowCatalog
 from azathoth.workflows.catalog_loader import WorkflowCatalogLoader
+from azathoth.workflows.citation_evaluation import (
+    CITATIONS_EVIDENCE_LABEL,
+    CitationEvidenceError,
+    judge_citations,
+    recorded_citation_checks,
+    unreadable_citations,
+)
 from azathoth.workflows.condition import (
     WorkflowCondition,
     WorkflowConditionEvaluationError,
@@ -278,6 +290,7 @@ from azathoth.workflows.run_journal import (
     journaled_citations,
     journaled_extractions,
     journaled_initial_context,
+    journaled_run_cost,
 )
 from azathoth.workflows.run_lease import (
     LEASE_DURATION,
@@ -316,9 +329,11 @@ from azathoth.workflows.scorecard import (
     WorkflowScorecard,
 )
 from azathoth.workflows.scoring import (
+    CITED_RATIONALE,
     WorkflowScorer,
     WorkflowScoringPolicy,
     aggregate_workflow_scorecards,
+    run_citation_score,
 )
 from azathoth.workflows.sql_benchmark_execution_repository import (
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
@@ -436,6 +451,9 @@ from azathoth.workflows.value import (
 )
 
 __all__ = [
+    "BENCHMARK_INPUT_PRODUCER",
+    "CITATIONS_EVIDENCE_LABEL",
+    "CITED_RATIONALE",
     "PRODUCTION_INVOCATION_RUN_TABLES",
     "RUN_CHILD_TABLES",
     "RUN_JOURNAL_TABLES",
@@ -457,8 +475,10 @@ __all__ = [
     "finished_run",
     "journal_resumes",
     "journaled_citations",
+    "judge_citations",
     "journaled_extractions",
     "journaled_initial_context",
+    "journaled_run_cost",
     "resume_point",
     "run_started",
     "JournalRunStarted",
@@ -500,6 +520,7 @@ __all__ = [
     "WORKFLOW_RUN_FEEDBACK_TABLES",
     "WORKFLOW_RUN_TABLES",
     "BenchmarkCaseSourceError",
+    "CitationEvidenceError",
     "IdempotencyKeyInUseError",
     "InMemoryProductionInvocationRepository",
     "InMemoryProductionInvocationRunRepository",
@@ -549,6 +570,7 @@ __all__ = [
     "RUN_FAILURE_EVALUATOR_VERSION",
     "SOURCE_FEEDBACK_METADATA_KEY",
     "SOURCE_RUN_METADATA_KEY",
+    "SOURCE_URI_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WORKFLOW_INPUT_RESOLVED_EVENT_TYPE",
     "WorkflowBenchmarkCandidateScorecard",
@@ -650,6 +672,8 @@ __all__ = [
     "WorkflowValueResolutionError",
     "active_production_revision",
     "aggregate_workflow_scorecards",
+    "benchmark_case_context",
+    "benchmark_case_from_input",
     "benchmark_case_from_run",
     "complete_production_invocation",
     "combine_observers",
@@ -670,6 +694,8 @@ __all__ = [
     "historical_model_usages",
     "historical_tool_usages",
     "latest_corrected_output",
+    "recorded_citation_checks",
+    "run_citation_score",
     "materialize_workflow_candidate",
     "model_usage_report",
     "production_model_usages",
@@ -693,7 +719,9 @@ __all__ = [
     "validate_idempotency_key",
     "workflow_result",
     "workflow_result_produced",
+    "unreadable_citations",
     "workflow_run_input",
+    "workflow_run_input_provenance",
     "workflow_uses_model",
     "workflow_uses_tool",
     "workflows_using_model",

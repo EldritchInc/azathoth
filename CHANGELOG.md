@@ -132,8 +132,58 @@ release dates are on the
   check can be verified again from the content store alone
   ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
+### Evidence in Benchmarks
+
+- **A benchmark case can hold a document.** A case names its input's
+  provenance, as a run records it, and a case given a PDF or an image holds
+  its handle, with the content kept in the content store by digest.
+  `benchmark add-case --from-run` takes a run given a document, and
+  `benchmark add-case --input-file` makes a case straight from a file
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Benchmark, comparison and optimization runs read documents.** Every case
+  runs with the database's journal and content, as `workflow run` does, so
+  `segment_pdf` reads a case's PDF and a cited step keeps its checks. A case
+  whose content the store no longer holds is judged as a failed run
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **A case can require its run to cite the right segments.** An expected
+  outcome names the segments its run must cite and whether an unverified
+  citation fails it; `benchmark add-case --require-citation claim:p1.s2`
+  and `--on-unverified` name them. Each is judged from the checks the run's
+  cited steps kept, never from the result, and the case's evaluation
+  records how many were met
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Cited runs are scored on their citations.** A scorecard gains a
+  citation score, the fraction of a run's checked citations that verified,
+  and a cited run's overall score is the mean of five dimensions, so
+  comparisons, experiments and optimization prefer candidates whose
+  citations verify. Runs with no cited step score as they always did
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **What a run cited exports as W3C Web Annotations.** `azathoth run
+  annotations <RUN_ID>` and `azathoth invocation annotations
+  <INVOCATION_ID>` print every verified check as an annotation highlighting
+  its anchor's place, in exactly the document version it came from, ready
+  for a reviewer's annotation tools; the same checks always export to the
+  same bytes
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **A citation links to its page.** `azathoth invocation show --links`
+  follows each verified citation with a link to its document at its page:
+  the origin for `https` and `file` documents, and a presigned GET of the
+  exact object version for `s3://` ones, valid for
+  `AZATHOTH_LINK_EXPIRY_SECONDS`, an hour by default
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **Results that cite compare by what they cite.** Before an exact,
+  normalized or semantic comparison, every citation and check compares as
+  `{source, segment}`, so an expected answer names its citations by segment
+  however the model words its quote
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+
 ### Fixes
 
+- **Workflows with tool steps can be compared and optimized.** A tool step
+  stated no cost, so a run with one could not be scored; it now states
+  that its own work costs nothing, and a step that starts child runs, such
+  as `run_workflow`, costs what its children did, read from their journals
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 - **A command stopped as a process tool starts no longer hangs.** A tool
   cancelled before it was given its inputs is killed, its stdin closed, and
   only then waited for. On a Python without CPython's gh-119710 fix, waiting

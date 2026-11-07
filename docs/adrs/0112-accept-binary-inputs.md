@@ -1,6 +1,6 @@
 # ADR 0112: Accept Binary Inputs
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0117
 - Date: 2026-11-05
 - Decided in: #137
 

@@ -1314,6 +1314,12 @@ async run(Context) -> StrategyOutcome
 This means workflow execution does not require an entirely separate generic
 execution abstraction for tools.
 
+Its outcome states its cost: `StrategyExecutionMetrics(estimated_cost_usd=0.0)`,
+since a tool calls no model, so a run with tool steps can be scored (ADR
+0117). A tool that starts child runs, such as `run_workflow`, `loop_workflow`
+or `map_workflow`, costs what its children cost, which the workflow runner
+adds from their journals.
+
 # ToolStrategy Runtime Binding
 
 A `ToolStrategy` contains:

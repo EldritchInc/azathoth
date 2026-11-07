@@ -16,6 +16,7 @@ from azathoth.workflows import (
     WorkflowExperimentEvidenceRecorder,
     WorkflowExperimentRunner,
     WorkflowResultError,
+    WorkflowRunner,
     WorkflowScorer,
     WorkflowScoringPolicy,
 )
@@ -29,6 +30,7 @@ async def optimize_configured_workflow(
     scoring_policy: WorkflowScoringPolicy,
     max_generations: int,
     recorder: WorkflowExperimentEvidenceRecorder | None = None,
+    workflow_runner: WorkflowRunner | None = None,
 ) -> WorkflowOptimizationSession:
     """Run empirical model-substitution optimization for one workflow.
 
@@ -42,6 +44,7 @@ async def optimize_configured_workflow(
 
     When a recorder is supplied, every generation's candidate runs,
     evaluations, and experiment record are persisted as durable evidence.
+    Every candidate run runs in the given workflow runner (ADR 0117).
 
     Raises:
         ValueError: The benchmark contains no cases.
@@ -80,6 +83,7 @@ async def optimize_configured_workflow(
         scorer=WorkflowScorer(
             policy=scoring_policy,
         ),
+        runner=workflow_runner,
         evaluator=evaluator,
         recorder=recorder,
     )

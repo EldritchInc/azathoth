@@ -30,6 +30,7 @@ from azathoth.workflows import (
     WorkflowCandidateSignature,
     WorkflowGenerationError,
     WorkflowMetadata,
+    WorkflowRunner,
     WorkflowScorecard,
     WorkflowScoringPolicy,
 )
@@ -202,7 +203,9 @@ def test_benchmark_compare_executes_configured_workflows(
         dataset: BenchmarkDataset,
         scoring_policy: WorkflowScoringPolicy,
         recorder: WorkflowBenchmarkEvidenceRecorder,
+        workflow_runner: WorkflowRunner,
     ) -> WorkflowBenchmarkRanking:
+        assert isinstance(workflow_runner, WorkflowRunner)
         calls.append(
             (
                 runtime,

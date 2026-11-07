@@ -1,11 +1,14 @@
 """Deterministic workflow scorecard calculation."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Final
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from azathoth.citations import VERIFIED_STATUSES
 from azathoth.evaluation import EvaluationResult
+from azathoth.prompting import CITATIONS_RESOURCE_KIND
 from azathoth.providers import BEDROCK_PRICING_VARIABLE, BEDROCK_PROVIDER
 from azathoth.strategies import StrategyExecutionMetrics
 from azathoth.workflows.execution import (
@@ -17,6 +20,52 @@ from azathoth.workflows.run_failure import (
 from azathoth.workflows.scorecard import (
     WorkflowScorecard,
 )
+
+CITED_RATIONALE: Final = (
+    "Canonical workflow score calculated from quality, reliability, latency, cost, and citations."
+)
+"""The rationale of a scorecard of a run whose cited steps kept their checks."""
+
+
+def run_citation_score(
+    run: WorkflowRun,
+) -> float | None:
+    """Return the fraction of citations a run's cited steps kept that verified (ADR 0117).
+
+    It is read from the counts each step's `citations` resource records
+    (ADR 0116): its verified and normalized-verified citations, over every
+    citation. A run whose cited steps checked no citation scores 0, since it
+    cited nothing; a run with no cited step has no citation score.
+    """
+
+    records = [
+        resource.attributes
+        for step in run.steps
+        if step.execution is not None
+        for resource in step.execution.resources
+        if resource.kind == CITATIONS_RESOURCE_KIND
+    ]
+
+    if not records:
+        return None
+
+    checked = sum(_count(record, "citations") for record in records)
+    verified = sum(
+        _count(record, status.value) for record in records for status in VERIFIED_STATUSES
+    )
+
+    return min(verified / checked, 1.0) if checked else 0.0
+
+
+def _count(
+    attributes: Mapping[str, JsonValue],
+    key: str,
+) -> int:
+    """Return one count a citations resource records, or 0 when it records none."""
+
+    value = attributes.get(key)
+
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
 
 
 class WorkflowScoringPolicy(BaseModel):
@@ -60,6 +109,10 @@ class WorkflowScorer:
         its declared result. It earns no latency or cost credit, because
         failing quickly and cheaply is not efficiency, so a crashing candidate
         can never outrank a correct one on speed or price alone.
+
+        A run whose cited steps kept their checks is scored on its citations
+        too, and its overall score is the mean of all five dimensions; any
+        other run's is the mean of four, as it always was (ADR 0117).
         """
 
         quality_score = evaluation.score
@@ -87,16 +140,29 @@ class WorkflowScorer:
                 target=self._policy.target_cost_usd,
             )
 
-        overall_score = (quality_score + reliability_score + latency_score + cost_score) / 4.0
+        citation_score = run_citation_score(run)
+        scores = (
+            quality_score,
+            reliability_score,
+            latency_score,
+            cost_score,
+            *((citation_score,) if citation_score is not None else ()),
+        )
 
         return WorkflowScorecard(
             quality_score=quality_score,
             reliability_score=reliability_score,
             latency_score=latency_score,
             cost_score=cost_score,
-            overall_score=overall_score,
+            citation_score=citation_score,
+            overall_score=sum(scores) / len(scores),
             rationale=(
-                "Canonical workflow score calculated from quality, reliability, latency, and cost."
+                CITED_RATIONALE
+                if citation_score is not None
+                else (
+                    "Canonical workflow score calculated from quality, reliability, latency, "
+                    "and cost."
+                )
             ),
         )
 
@@ -166,6 +232,8 @@ def aggregate_workflow_scorecards(
 
     Every dimension, including the overall score, is the unweighted mean of
     that dimension across the scorecards, so each scorecard counts equally.
+    The citation score is the mean of the scorecards that have one, or None
+    when none does (ADR 0117).
 
     Raises:
         ValueError: No scorecards were supplied.
@@ -175,12 +243,14 @@ def aggregate_workflow_scorecards(
         raise ValueError("Cannot aggregate an empty collection of workflow scorecards.")
 
     count = len(scorecards)
+    cited = [item.citation_score for item in scorecards if item.citation_score is not None]
 
     return WorkflowScorecard(
         quality_score=sum(item.quality_score for item in scorecards) / count,
         reliability_score=sum(item.reliability_score for item in scorecards) / count,
         latency_score=sum(item.latency_score for item in scorecards) / count,
         cost_score=sum(item.cost_score for item in scorecards) / count,
+        citation_score=sum(cited) / len(cited) if cited else None,
         overall_score=sum(item.overall_score for item in scorecards) / count,
         rationale=rationale,
     )

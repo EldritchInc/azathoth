@@ -139,6 +139,11 @@ def render_workflow_benchmark_comparison_execution(
                 f"Reliability: {scorecard.reliability_score:.6f}",
                 f"Latency: {scorecard.latency_score:.6f}",
                 f"Cost: {scorecard.cost_score:.6f}",
+                *(
+                    (f"Citations: {scorecard.citation_score:.6f}",)
+                    if scorecard.citation_score is not None
+                    else ()
+                ),
                 f"Overall: {scorecard.overall_score:.6f}",
                 *render_candidate_evidence(candidate),
             )
@@ -205,6 +210,11 @@ def _render_scorecard(
         f"Reliability: {scorecard.reliability_score:.6f}",
         f"Latency: {scorecard.latency_score:.6f}",
         f"Cost: {scorecard.cost_score:.6f}",
+        *(
+            (f"Citations: {scorecard.citation_score:.6f}",)
+            if scorecard.citation_score is not None
+            else ()
+        ),
         f"Overall: {scorecard.overall_score:.6f}",
         *((f"Rationale: {scorecard.rationale}",) if scorecard.rationale else ()),
     )

@@ -9,6 +9,7 @@ from azathoth.evaluation import (
     OutcomeComparison,
     OutcomeEvaluator,
 )
+from azathoth.persistence.repositories import Repositories
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowBenchmarkComparator,
@@ -19,8 +20,28 @@ from azathoth.workflows import (
     WorkflowBenchmarkRunner,
     WorkflowBenchmarkScorer,
     WorkflowCandidate,
+    WorkflowRunner,
     WorkflowScoringPolicy,
 )
+
+
+def case_runner(
+    stored: Repositories,
+) -> WorkflowRunner:
+    """Return the runner benchmark cases and experiments run in (ADR 0117).
+
+    A case's run journals as any run does, indexes the children its steps
+    start, and is given the database's content, so its tools read the
+    documents it was given, its prompts the extractions its steps kept, and
+    a step that starts children costs what they did, as a run of `workflow
+    run` would.
+    """
+
+    return WorkflowRunner(
+        journal=stored.run_journal,
+        children=stored.run_children,
+        content=stored.tool_content,
+    )
 
 
 async def execute_configured_benchmark(
@@ -30,6 +51,7 @@ async def execute_configured_benchmark(
     dataset: BenchmarkDataset,
     runner: WorkflowBenchmarkRunner | None = None,
     recorder: WorkflowBenchmarkEvidenceRecorder | None = None,
+    workflow_runner: WorkflowRunner | None = None,
 ) -> WorkflowBenchmarkResult:
     """Execute one configured workflow against a benchmark dataset.
 
@@ -39,7 +61,8 @@ async def execute_configured_benchmark(
     whole benchmark judges one resolved configuration.
 
     With a recorder, every case run, every evaluation, and one execution
-    record sharing the result's identity are saved.
+    record sharing the result's identity are saved. Without an explicit
+    runner, every case runs in the given workflow runner (ADR 0117).
 
     Raises:
         JudgeUnavailableError: The dataset has semantic cases and a judge
@@ -52,6 +75,7 @@ async def execute_configured_benchmark(
         runner
         if runner is not None
         else WorkflowBenchmarkRunner(
+            runner=workflow_runner,
             evaluator=_outcome_evaluator(
                 runtime,
                 dataset,
@@ -85,6 +109,7 @@ async def compare_configured_benchmarks(
     scoring_policy: WorkflowScoringPolicy,
     comparator: WorkflowBenchmarkComparator | None = None,
     recorder: WorkflowBenchmarkEvidenceRecorder | None = None,
+    workflow_runner: WorkflowRunner | None = None,
 ) -> WorkflowBenchmarkRanking:
     """Compare configured workflows against one benchmark dataset.
 
@@ -94,7 +119,8 @@ async def compare_configured_benchmarks(
 
     With a recorder, every case run, every evaluation, and one execution
     record sharing the ranking's identity are saved, together with the
-    scoring policy that produced the ranking.
+    scoring policy that produced the ranking. Without an explicit
+    comparator, every case runs in the given workflow runner (ADR 0117).
 
     Raises:
         ValueError: Fewer than two workflows, or duplicate workflows.
@@ -115,6 +141,7 @@ async def compare_configured_benchmarks(
         if comparator is not None
         else WorkflowBenchmarkComparator(
             runner=WorkflowBenchmarkRunner(
+                runner=workflow_runner,
                 evaluator=_outcome_evaluator(
                     runtime,
                     dataset,

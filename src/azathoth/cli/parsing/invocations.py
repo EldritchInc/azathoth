@@ -11,10 +11,13 @@ INVOCATION_COMMAND = "invocation"
 
 INVOCATION_ACTION_ATTRIBUTE = "invocation_action"
 
+INVOCATION_ANNOTATIONS_ACTION = "annotations"
 INVOCATION_RESUME_ACTION = "resume"
 INVOCATION_SHOW_ACTION = "show"
 
 INVOCATION_ID_ATTRIBUTE = "invocation_id"
+
+INVOCATION_LINKS_ATTRIBUTE = "invocation_links"
 
 INVOCATION_OUTPUT_ATTRIBUTE = "invocation_output"
 
@@ -43,6 +46,28 @@ def add_invocation_parser(
         type=UUID,
         metavar="INVOCATION_ID",
         help="Production invocation UUID to inspect.",
+    )
+
+    invocation_show_parser.add_argument(
+        "--links",
+        dest=INVOCATION_LINKS_ATTRIBUTE,
+        action="store_true",
+        help=(
+            "Follow each verified citation with a link to its place in its document; "
+            "s3:// links are presigned and need AWS credentials."
+        ),
+    )
+
+    invocation_annotations_parser = invocation_actions.add_parser(
+        INVOCATION_ANNOTATIONS_ACTION,
+        help=("Print every verified citation an invocation's run kept, as W3C Web Annotations."),
+    )
+
+    invocation_annotations_parser.add_argument(
+        INVOCATION_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="INVOCATION_ID",
+        help="Production invocation UUID whose citations to export.",
     )
 
     invocation_resume_parser = invocation_actions.add_parser(

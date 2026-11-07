@@ -369,6 +369,38 @@ def journaled_extractions(
     )
 
 
+def journaled_run_cost(
+    journal: RunJournalRepository,
+    run_id: UUID,
+) -> float | None:
+    """Return what one run's committed steps cost, or None when any cost is unknown (ADR 0117).
+
+    The cost is the estimated cost each executed step's metrics record,
+    summed over every layer the run committed. A step that records no cost,
+    or no metrics, makes the run's cost unknown, as it makes the run
+    unscoreable.
+    """
+
+    total = 0.0
+
+    for entry in journal.entries(run_id):
+        if not isinstance(entry.event, JournalLayerCommitted):
+            continue
+
+        for step in entry.event.steps:
+            if step.execution is None:
+                continue
+
+            metrics = step.execution.metrics
+
+            if metrics is None or metrics.estimated_cost_usd is None:
+                return None
+
+            total += metrics.estimated_cost_usd
+
+    return total
+
+
 def journaled_citations(
     journal: RunJournalRepository,
     run_id: UUID,
@@ -410,4 +442,5 @@ __all__ = [
     "journaled_citations",
     "journaled_extractions",
     "journaled_initial_context",
+    "journaled_run_cost",
 ]

@@ -59,6 +59,7 @@ from azathoth.workflows.run_journal import (
     RunJournalError,
     RunJournalRepository,
     RunJournalWriter,
+    journaled_run_cost,
 )
 from azathoth.workflows.run_lease import (
     RunLeaseKeeper,
@@ -252,6 +253,64 @@ class WorkflowRunner:
         self._lease_policy = lease_policy if lease_policy is not None else RunLeasePolicy()
         self._children = children
         self._content = content
+
+    @property
+    def children(
+        self,
+    ) -> RunChildRepository | None:
+        """Return the index this runner records its runs' children in, if any (ADR 0105)."""
+
+        return self._children
+
+    @property
+    def content(
+        self,
+    ) -> ToolContentAccess | None:
+        """Return the content access this runner gives its steps, if any (ADR 0114)."""
+
+        return self._content
+
+    def _with_child_cost(
+        self,
+        execution: ExecutionResult,
+        *,
+        run_id: UUID,
+        step_id: UUID,
+        attempt: int,
+    ) -> ExecutionResult:
+        """Return one attempt's execution, costing what the child runs it started cost.
+
+        A step whose attempt started child runs, such as `run_workflow`'s,
+        costs its own work plus every child run's, read from the children's
+        journals (ADR 0117). A child whose cost is unknown makes the step's
+        unknown. Without the index of children and a journal, or with no
+        children, the execution is returned as it is.
+        """
+
+        if self._children is None or self._journal is None:
+            return execution
+
+        children = [
+            child
+            for child in self._children.children_of(run_id)
+            if child.parent_step_id == step_id and child.parent_attempt == attempt
+        ]
+        metrics = execution.metrics
+
+        if not children or metrics is None or metrics.estimated_cost_usd is None:
+            return execution
+
+        costs = [journaled_run_cost(self._journal, child.child_run_id) for child in children]
+        cost = (
+            None
+            if any(child_cost is None for child_cost in costs)
+            else metrics.estimated_cost_usd
+            + sum(child_cost for child_cost in costs if child_cost is not None)
+        )
+
+        return execution.model_copy(
+            update={"metrics": metrics.model_copy(update={"estimated_cost_usd": cost})}
+        )
 
     def _providing_content(
         self,
@@ -682,6 +741,14 @@ class WorkflowRunner:
                             strategy,
                             context,
                         )
+
+                if lineage is not None and step_id is not None:
+                    execution = self._with_child_cost(
+                        execution,
+                        run_id=lineage.run.run_id,
+                        step_id=step_id,
+                        attempt=attempt_number,
+                    )
 
                 for binding in outputs:
                     binding.resolve(execution.output)

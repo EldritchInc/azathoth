@@ -1,5 +1,9 @@
 """Azathoth command-line interface."""
 
+from azathoth.cli.annotations import (
+    export_invocation_annotations,
+    export_run_annotations,
+)
 from azathoth.cli.application import main
 from azathoth.cli.benchmark_cases import (
     SuppliedExpectedValue,
@@ -155,6 +159,8 @@ __all__ = [
     "execute_configured_benchmark",
     "execute_configured_workflow",
     "export_benchmark",
+    "export_invocation_annotations",
+    "export_run_annotations",
     "import_benchmark",
     "import_goal",
     "export_tool",

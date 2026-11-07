@@ -852,7 +852,11 @@ A recorded run becomes a benchmark case only deliberately, through
 
 - `workflow_run_input(run)` returns the payload of the run's single
   `workflow.input.received` event, and raises `BenchmarkCaseSourceError` when
-  the run received none or more than one.
+  the run received none or more than one. A run given a PDF or an image
+  returns its content handle (ADR 0117).
+- `workflow_run_input_provenance(run)` returns the provenance of the run's
+  `workflow.input.resolved` event, or `None` for an inline JSON or text
+  input.
 - `latest_corrected_output(feedback)` returns the latest bad feedback that
   carries a corrected output, latest by `created_at` with ties going to the
   later record. Good feedback never supplies a value.
@@ -860,7 +864,38 @@ A recorded run becomes a benchmark case only deliberately, through
   feedback=None)` builds a new case replaying the run's input. Its metadata
   names the source run under `SOURCE_RUN_METADATA_KEY` (`source_run_id`) and,
   when given, the feedback under `SOURCE_FEEDBACK_METADATA_KEY`
-  (`source_feedback_id`). A schema comparison requires a valid JSON Schema.
+  (`source_feedback_id`). The case holds the run's input provenance. A
+  schema comparison requires a valid JSON Schema.
+- `benchmark_case_from_input(resolved, *, comparison, expected,
+  description=None)` builds a case of one resolved input, such as a file's,
+  naming its URI under `SOURCE_URI_METADATA_KEY` (`source_uri`).
+
+A case whose expected outcome names `citations` is judged on what its run
+cited too (ADR 0117), by `workflows/citation_evaluation.py`:
+
+- `recorded_citation_checks(run, store)` returns every check the run's
+  cited steps kept, in step order, read from their `citations` records, and
+  raises `CitationEvidenceError` when there is no store, a record is gone,
+  or what it holds is not a record of checks.
+- `judge_citations(outcome, expectation, checks)` returns the case's
+  evaluation: passed only if the outcome passed, every required segment was
+  met by a verified check, and, under `fail`, every check verified. Its
+  score is the outcome's times the fraction of required segments met and,
+  under `fail`, of checks verified, held below its threshold when its
+  citations fail, and it adds evidence labelled `CITATIONS_EVIDENCE_LABEL`
+  (`citations`).
+- `unreadable_citations(outcome, message)` fails a case whose run's checks
+  cannot be read, naming why.
+
+`WorkflowBenchmarkRunner` reads the checks from the content store its
+runner gives its steps, `WorkflowRunner.content`.
+
+`benchmark_case_context(case)` is the initial context a case's run is
+given: its input, then, when the case names provenance, the
+`workflow.input.resolved` event recording it, both from
+`BENCHMARK_INPUT_PRODUCER` (`azathoth.benchmark`). A case's content is read
+from the content store by digest, so a runner given the content and a
+journal runs a document case as the run it came from ran.
 
 ## Experiments
 
@@ -942,6 +977,22 @@ Candidates can be ordered through:
 - `WorkflowRanker`
 - `WorkflowRanking`
 - `RankedWorkflow`
+
+A run whose cited steps kept their checks is also scored on them (ADR 0117):
+`run_citation_score(run)` is the fraction of the citations its `citations`
+resources count that verified, 0 when they counted none, and `None` for a
+run with no cited step. `WorkflowScorecard.citation_score` holds it, and the
+overall score is then the mean of five dimensions instead of four, with
+`CITED_RATIONALE` as its rationale. `aggregate_workflow_scorecards` takes the
+mean citation score of the scorecards that have one. A scorecard without a
+citation score serializes without it.
+
+A step's cost includes the child runs it started (ADR 0117): a runner given
+a journal and the index of children adds to a successful attempt's
+estimated cost what every child run that attempt started cost, by
+`journaled_run_cost(journal, run_id)`, the sum of the costs its committed
+steps record. A child whose cost is unknown makes the step's unknown, and
+so the run unscoreable, as any unknown cost does.
 
 Scoring and ranking describe empirical preference.
 

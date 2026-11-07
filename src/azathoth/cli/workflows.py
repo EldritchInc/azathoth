@@ -12,6 +12,7 @@ from azathoth.cli.benchmark_checks import (
     configured_benchmark,
     results_declared,
 )
+from azathoth.cli.benchmark_execution import case_runner
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.execution import (
@@ -457,6 +458,7 @@ def optimize_workflow(
                     evaluations=repositories(configuration).run_evaluations,
                     experiments=repositories(configuration).experiments,
                 ),
+                workflow_runner=case_runner(repositories(configuration)),
             )
         )
     except (

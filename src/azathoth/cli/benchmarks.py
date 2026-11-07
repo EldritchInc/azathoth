@@ -12,6 +12,7 @@ from azathoth.cli.benchmark_checks import (
     results_declared,
 )
 from azathoth.cli.benchmark_execution import (
+    case_runner,
     compare_configured_benchmarks,
     execute_configured_benchmark,
 )
@@ -298,6 +299,11 @@ def _print_benchmark_dataset(
     print(f"Description: {dataset.description}")
     print(f"Cases: {len(dataset.cases)}")
 
+    cited = sum(case.expected.citations is not None for case in dataset.cases)
+
+    if cited:
+        print(f"Cited Cases: {cited}")
+
     counts = dataset.comparison_counts()
 
     print(
@@ -325,9 +331,29 @@ def _print_benchmark_case(
         )
     )
 
+    if case.input_provenance is not None:
+        print("Input Provenance:")
+        print(
+            json.dumps(
+                case.input_provenance.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
     print("Expected:")
     print(f"  Description: {case.expected.description}")
     print(f"  Comparison: {case.expected.comparison.value}")
+
+    citations = case.expected.citations
+
+    if citations is not None:
+        print("  Citations:")
+
+        for cited in citations.require:
+            print(f"    Require: {cited.source} {cited.segment}")
+
+        print(f"    On Unverified: {citations.on_unverified}")
     print("  Value:")
     print(
         _indent(
@@ -461,6 +487,7 @@ def run_benchmark(
                 workflow_id=workflow_id,
                 dataset=dataset,
                 recorder=_benchmark_recorder(configuration),
+                workflow_runner=case_runner(repositories(configuration)),
             )
         )
     except (
@@ -544,6 +571,7 @@ def compare_benchmarks(
                     target_cost_usd=target_cost_usd,
                 ),
                 recorder=recorder,
+                workflow_runner=case_runner(repositories(configuration)),
             )
         )
     except (

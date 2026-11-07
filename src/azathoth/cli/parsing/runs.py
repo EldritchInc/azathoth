@@ -12,6 +12,7 @@ RUN_COMMAND = "run"
 
 RUN_ACTION_ATTRIBUTE = "run_action"
 
+RUN_ANNOTATIONS_ACTION = "annotations"
 RUN_CHILDREN_ACTION = "children"
 RUN_FEEDBACK_ACTION = "feedback"
 RUN_RESUME_ACTION = "resume"
@@ -51,6 +52,18 @@ def add_run_parser(
         type=UUID,
         metavar="RUN_ID",
         help="Workflow run UUID to inspect.",
+    )
+
+    run_annotations_parser = run_actions.add_parser(
+        RUN_ANNOTATIONS_ACTION,
+        help="Print every verified citation a run's cited steps kept, as W3C Web Annotations.",
+    )
+
+    run_annotations_parser.add_argument(
+        RUN_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="RUN_ID",
+        help="Workflow run UUID whose citations to export.",
     )
 
     run_children_parser = run_actions.add_parser(

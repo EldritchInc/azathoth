@@ -95,6 +95,7 @@ azathoth
 │
 ├── run
 │   ├── show <RUN_ID>
+│   ├── annotations <RUN_ID>
 │   ├── children <RUN_ID>
 │   ├── resume <RUN_ID>
 │   │   └── --output <FORMAT>
@@ -108,6 +109,8 @@ azathoth
 │
 ├── invocation
 │   ├── show <INVOCATION_ID>
+│   │   └── --links
+│   ├── annotations <INVOCATION_ID>
 │   └── resume <INVOCATION_ID>
 │       └── --output <FORMAT>
 │
@@ -180,8 +183,12 @@ azathoth
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── add-case <BENCHMARK_ID>
     │   ├── --from-run <RUN_ID>
+    │   ├── --input-file <FILE>   (instead of --from-run)
+    │   ├── --media-type <TYPE>
     │   ├── --comparison exact|normalized|semantic|schema
     │   ├── --expected <JSON>
+    │   ├── --require-citation <SOURCE:SEGMENT>   (repeat for each segment)
+    │   ├── --on-unverified fail|ignore
     │   └── --description <TEXT>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
@@ -1520,6 +1527,9 @@ Resource: tool <IMPLEMENTATION_ID> (implementation_digest=<SHA256>, runtime=pyth
 Attributes are sorted by name. Structured attribute values render as compact
 JSON.
 
+A tool step's estimated cost is its children's, `$0.000000` for a tool that
+starts none, since a tool calls no model (ADR 0117).
+
 A tool binding records the content digest of the implementation that ran.
 Implementation IDs stay stable across tool revisions while their source may
 change, so the digest is what pins the exact code a run executed.
@@ -1780,6 +1790,11 @@ target cost
 
 These are scoring inputs used during the empirical workflow optimization
 session.
+
+A candidate whose cited steps kept their checks is scored on its citations
+too, the fraction that verified, and renders a `Citations:` line after
+`Cost:` in comparisons, experiments and optimization sessions; its overall
+score is then the mean of five dimensions (ADR 0117).
 
 They are not silently persisted as production policy by the CLI command.
 
@@ -2704,6 +2719,32 @@ Step <STEP_ID>: 2 citations, record <SHA-256>
   quote_not_found claim p2.s1 'Denied.'
 ```
 
+With `--links`, each verified check is followed by a link to its page in
+its document (ADR 0117):
+
+```bash
+azathoth invocation show <INVOCATION_ID> --links
+```
+
+```text
+  verified claim p1.s2 'December 14'
+    https://claims-intake.s3.amazonaws.com/2026/11/claim-0412.pdf?versionId=<VERSION_ID>&...#page=1
+```
+
+The link is made by the resolver of the document's origin: an `https`,
+`http` or `file` origin is the link, with `#page=N` from the check's PDF
+fragment; an `s3://` origin becomes a presigned GET of the object version
+the run read, signed with your AWS credentials and valid for
+`AZATHOTH_LINK_EXPIRY_SECONDS`, one hour by default and seven days at
+most. A document with no origin, or of another scheme, has no link. Links
+expire, so they are made each time and never kept. These fail the command:
+
+```text
+AZATHOTH_LINK_EXPIRY_SECONDS must be a whole number of seconds from 1 to 604800, not '<VALUE>'.
+Links to s3:// documents need boto3, which is not installed; install azathoth-ai[worker].
+A link to <URI> could not be signed: <REASON>
+```
+
 A record the content store no longer holds is named as such:
 
 ```text
@@ -2715,6 +2756,41 @@ command:
 
 ```text
 Content <SHA-256> is not a record of citation checks.
+```
+
+# Export Citations as Web Annotations
+
+Every verified citation a run's cited steps kept exports as W3C Web
+Annotations (ADR 0117), for a run or for the run of an invocation:
+
+```bash
+azathoth run annotations <RUN_ID>
+azathoth invocation annotations <INVOCATION_ID>
+```
+
+The output is one JSON-LD `AnnotationCollection`, its one `AnnotationPage`
+holding an `Annotation` per verified check: `highlighting` the place its
+anchor names, with the anchor's selectors as they are, its source the
+document's origin, with the S3 object version when one was recorded, or
+the document's digest as an RFC 6920 `ni:` URI. A check that did not
+verify is left out, and the collection's label counts it. The same checks
+always export to the same bytes, so an export can be diffed and kept
+beside the run it came from:
+
+```text
+"label": "Citations of run <RUN_ID>: 1 verified, 1 not verified and left out.",
+"target": {"type": "SpecificResource", "source": "s3://claims-intake/2026/11/claim-0412.pdf?versionId=<VERSION_ID>", "selector": [...]}
+```
+
+Only durable state is read, and a run still under way exports what its
+committed steps checked. These fail:
+
+```text
+Run <RUN_ID> was not found.
+Invocation <INVOCATION_ID> was not found.
+Invocation <INVOCATION_ID> has no run.
+Citation record <DIGEST> of step <STEP_ID> is not in the content store.
+Content <DIGEST> is not a record of citation checks.
 ```
 
 The `Run ID` continues into run inspection:
@@ -3752,6 +3828,13 @@ The new case replays the run's input: the payload of its
 `workflow.input.received` event. Configured runs given `--input`, production
 invocations, and benchmark and optimization runs all have one.
 
+A run whose input was resolved, from `--input-file`, `s3://` or a job's
+inline content, also gives the case its provenance, the payload of its
+`workflow.input.resolved` event, as `input_provenance` (ADR 0117). A run
+given a PDF or an image gives the content's handle, which the case's run
+reads from the content store by digest, as the run did. The content store
+must still hold it.
+
 The expected value is `--expected` when given, and `--expected null` expects
 JSON null. Otherwise it is the corrected output of the run's latest bad
 feedback that carries one, latest by feedback time with ties going to the
@@ -3799,14 +3882,14 @@ no workflow input
 workflow input received more than once
     Run <RUN_ID> received workflow input more than once.
 
-a PDF or image input, which a case cannot hold yet (ADR 0112)
-    Run <RUN_ID> received application/pdf content, which a benchmark case cannot hold yet.
-
 no --expected and no corrected output
     Run <RUN_ID> has no corrected output; pass --expected.
 
 a schema comparison whose value is not a JSON Schema
     Expected value cannot be used with comparison 'schema': <REASON>
+
+a PDF or image the content store no longer holds
+    Run <RUN_ID> received content <DIGEST>, which the content store no longer holds.
 
 an existing case with the same input, comparison, and value
     Benchmark dataset <BENCHMARK_ID> already contains case <CASE_ID> with this input and expected outcome.
@@ -3821,6 +3904,112 @@ or optimized against.
 
 `benchmark add-case` reads and writes durable state only. It never loads the
 runtime and needs no provider credentials.
+
+# Add a Case From a File
+
+A file can become a case without a run first, with `--input-file` in place
+of `--from-run` (ADR 0117):
+
+```bash
+azathoth benchmark add-case <BENCHMARK_ID> \
+    --input-file claim-0412.pdf \
+    --comparison exact \
+    --expected '{"received": "December 14"}'
+```
+
+The file is read as [`workflow run --input-file`](#input-files) reads it:
+JSON, text, a PDF or an image, with its media type from its extension
+unless `--media-type` gives it, and its content kept in the content store.
+The case holds what a run given the file would receive, its handle for a
+PDF or an image, and the file's provenance, so the case's run receives it
+as that run would.
+
+`--expected` is required, since a file has no feedback. The description
+defaults to `Added from <FILE_URI>.`, and the metadata names the file:
+
+```json
+{
+  "source_uri": "file:///claims/claim-0412.pdf"
+}
+```
+
+Besides the checks a case from a run shares, a file that cannot be read
+fails with the message `workflow run --input-file` gives, and:
+
+```text
+no --expected
+    A case read from --input-file needs --expected.
+
+--media-type without --input-file
+    --media-type requires --input-file.
+```
+
+# Cited Cases
+
+A case can hold its run to citing the right segments (ADR 0117). Name each
+segment the run must cite with `--require-citation`, as the source a cited
+step names and the segment's ID:
+
+```bash
+azathoth benchmark add-case <BENCHMARK_ID> \
+    --from-run <RUN_ID> \
+    --comparison exact \
+    --expected '{"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}' \
+    --require-citation claim:p1.s2
+```
+
+A required segment is met by a verified check, of that source and segment,
+that a cited step of the case's run kept, read from the content store, not
+from the result. By default any check the run kept that did not verify
+fails the case too; `--on-unverified ignore` counts only the required
+segments. `--on-unverified` alone names an expectation requiring no
+segment.
+
+Before an exact, normalized or semantic comparison, every citation and
+check in the expected value and the result compares as the segment it
+cites, `{"source", "segment"}`, so an expected value names citations by
+segment and is met however the model words its quote. A schema comparison
+validates the result as it is.
+
+A cited case passes only if its outcome and its citations both pass. Its
+score is the outcome's, times the fraction of required segments met and,
+unless ignored, the fraction of checks that verified. Its evaluation adds
+`citations` evidence, which `run show` prints with the rest:
+
+```text
+Evaluator: exact-match 2.0.0
+Status: failed
+Score: 0.500000 (threshold 1.000000)
+Reason: Actual value exactly matched expected value. Citations: 1 of 2 required citations verified; 2 of 3 citations verified. Missing: segment p2.s1 of 'claim'.
+Evidence: expected = {"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}
+Evidence: actual = {"received": "December 14", "citations": [{"source": "claim", "segment": "p1.s2"}]}
+Evidence: citations = {"required": 2, "missing": [{"source": "claim", "segment": "p2.s1"}], "checks": 3, "verified": 2, "unverified": 1, "on_unverified": "ignore"}
+```
+
+`benchmark case-show` lists a case's input provenance and its required
+citations, and `benchmark show` counts its cited cases:
+
+```text
+Expected:
+  Description: Added from run <RUN_ID>.
+  Comparison: exact
+  Citations:
+    Require: claim p1.s2
+    On Unverified: fail
+```
+
+A required segment is named once, and a value that is not `SOURCE:SEGMENT`
+is refused by the parser:
+
+```text
+Citation expectation requires segment p1.s2 of source 'claim' more than once.
+```
+
+Benchmark, comparison and optimization runs journal as `workflow run` does
+and are given the database's content, so a case's PDF is read by
+`segment_pdf` and a cited step is shown the extraction a step of the case's
+run kept. A case whose content the store does not hold fails the steps that
+read it, and is judged as a failed run; the benchmark goes on.
 
 Execute one configured workflow against a dataset with:
 
