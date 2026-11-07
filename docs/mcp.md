@@ -105,7 +105,7 @@ Each entry of `tools` offers one workflow:
 | `workflow_id` | The workflow to offer. It must be active in production. |
 | `name` | The tool's name: 1 to 64 letters, digits, `_`, `-` or `.`. `get_invocation` is the server's own. |
 | `description` | What the tool does, written for the model that decides whether to call it. |
-| `input_schema` | Optional. A JSON Schema the workflow's input must satisfy. Without one, any JSON value is accepted. |
+| `input_schema` | Optional. A JSON Schema the workflow's input must satisfy. Without one, the promoted workflow's own input schema is used, and without that, any JSON value is accepted. |
 
 A workflow is listed at most once, and a name is used once. The server reads
 the document when it starts, and refuses to start if anything in it is wrong,
@@ -117,7 +117,8 @@ Every exposed workflow must be active in production; these are not: "count_words
 ```
 
 Promoting a listed workflow again needs no restart: each call runs the
-workflow's active state as it is at that moment. A listed workflow that is no
+workflow's active state as it is at that moment, and the tools are listed
+with the schemas that state declares. A listed workflow that is no
 longer active is refused, call by call, until it is promoted again.
 
 ## 4. Serve It Over stdio
@@ -217,6 +218,11 @@ as the same JSON in text:
   result names, so a client that gave up waiting can ask again under it.
 - **A call that does not succeed is marked as an error,** with its `status`,
   `failed`, `rejected` or `incomplete`, and the error's code and message.
+  An input or a result that breaks the promoted workflow's schemas fails
+  with `invalid_input` or `invalid_output`, naming every violation.
+- **Every workflow tool names its `outputSchema`,** the shape above. The
+  value under `result.result` is held to the promoted workflow's output
+  schema, if it declares one, so a client can check what it receives.
 - **A call that is refused,** for an unknown tool, arguments that do not
   match the tool's schema, or a workflow no longer active, is an error whose
   text says why, so the model can correct it:

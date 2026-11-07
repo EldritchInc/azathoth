@@ -197,6 +197,11 @@ release dates are on the
 - **`workflow import` says why a document is refused** when the workflow
   states a reason, such as a schema that is not a JSON Schema
   ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
+- **MCP tools take their workflow's schemas.** A workflow exposed without
+  an operator's `input_schema` takes the promoted workflow's input schema,
+  and every workflow tool names an `outputSchema`, the outcome it returns,
+  its `result` held to the workflow's output schema
+  ([ADR 0118](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0118-workflow-input-and-output-schemas.md)).
 
 ### Fixes
 

@@ -28,6 +28,7 @@ from azathoth_mcp.catalog import (
     UnknownToolError,
     check_exposure,
     unpromoted_workflows,
+    workflow_output_schema,
     workflow_tool_schema,
 )
 from azathoth_mcp.exposure import (
@@ -155,12 +156,14 @@ def test_every_exposed_workflow_is_one_tool_then_get_invocation() -> None:
             name="summarize_ticket",
             description="Summarize a support ticket in three sentences.",
             input_schema=workflow_tool_schema(exposure().tools[0]),
+            output_schema=workflow_output_schema(production_state(SUMMARIZE_ID)),
             workflow_id=SUMMARIZE_ID,
         ),
         CatalogTool(
             name="triage",
             description="Triage a ticket.",
             input_schema=workflow_tool_schema(exposure().tools[1]),
+            output_schema=workflow_output_schema(production_state(TRIAGE_ID)),
             workflow_id=TRIAGE_ID,
         ),
         CatalogTool(

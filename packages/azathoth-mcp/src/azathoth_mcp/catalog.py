@@ -3,7 +3,9 @@
 Each exposed workflow is one tool, under the name and description the
 operator wrote, followed by the server's own `get_invocation`. A tool takes
 an object holding the workflow's `input` and an optional `idempotency_key`;
-the operator's input schema, if any, is the schema of `input`.
+the schema of `input` is the operator's input schema, or else the promoted
+workflow's own (ADR 0118). A tool's output schema describes the outcome it
+returns, its `result` typed by the promoted workflow's output schema.
 
 Promotion still decides what runs. The server refuses to start while an
 exposed workflow has no active production state, and checks again on every
@@ -16,7 +18,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from azathoth.workflows import MAX_IDEMPOTENCY_KEY_LENGTH, WorkflowProductionState
+from azathoth.jobs import JobErrorCode, JobStatus
+from azathoth.workflows import (
+    MAX_IDEMPOTENCY_KEY_LENGTH,
+    PRODUCTION_RESULT_EMISSION,
+    WorkflowProductionState,
+)
 from azathoth_mcp.exposure import (
     GET_INVOCATION_TOOL,
     ExposedWorkflow,
@@ -77,8 +84,8 @@ class ProductionStates(Protocol):
 class CatalogTool(BaseModel):
     """One tool as a client sees it.
 
-    An exposed workflow's tool names its workflow; the server's own tool
-    names none.
+    An exposed workflow's tool names its workflow, and the schema of the
+    outcome it returns; the server's own tool names neither.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -86,6 +93,7 @@ class CatalogTool(BaseModel):
     name: str
     description: str
     input_schema: dict[str, JsonValue]
+    output_schema: dict[str, JsonValue] | None = None
     workflow_id: UUID | None = None
 
 
@@ -97,22 +105,95 @@ class ToolUnavailableError(RuntimeError):
     """Raised when an exposed workflow has no active production state any more."""
 
 
+def effective_input_schema(
+    exposed: ExposedWorkflow,
+    state: WorkflowProductionState | None,
+) -> JsonValue | None:
+    """Return the schema one tool's `input` is held to: the operator's, else the workflow's.
+
+    The workflow's is the promoted specification's input schema (ADR 0118),
+    so promoting a workflow with a new schema changes its tool.
+    """
+
+    if exposed.input_schema is not None:
+        return exposed.input_schema
+
+    return state.specification.input_schema if state is not None else None
+
+
 def workflow_tool_schema(
     exposed: ExposedWorkflow,
+    state: WorkflowProductionState | None = None,
 ) -> dict[str, JsonValue]:
     """Return the input schema of one exposed workflow's tool.
 
-    A boolean input schema is written as the object schema that means the
-    same, since not every client reads boolean subschemas.
+    Its `input` is held to the operator's schema, or else to the promoted
+    workflow's. A boolean input schema is written as the object schema that
+    means the same, since not every client reads boolean subschemas.
     """
 
     return {
         "type": "object",
         "properties": {
-            INPUT_ARGUMENT: _object_schema(exposed.input_schema),
+            INPUT_ARGUMENT: _object_schema(effective_input_schema(exposed, state)),
             IDEMPOTENCY_KEY_ARGUMENT: IDEMPOTENCY_KEY_SCHEMA,
         },
         "required": [INPUT_ARGUMENT],
+        "additionalProperties": False,
+    }
+
+
+def workflow_output_schema(
+    state: WorkflowProductionState | None,
+) -> dict[str, JsonValue]:
+    """Return the schema of the outcome one exposed workflow's tool returns (ADR 0118).
+
+    The outcome is the job envelope's result: its status, whether it was
+    replayed, its key and invocation, and then either what production
+    emitted or why it did not succeed. The emitted `result` is held to the
+    promoted workflow's output schema; a workflow without one may emit
+    anything.
+    """
+
+    output = state.specification.output_schema if state is not None else None
+    emitted: dict[str, JsonValue] = (
+        {
+            "type": "object",
+            "properties": {PRODUCTION_RESULT_EMISSION: _object_schema(output)},
+            "required": [PRODUCTION_RESULT_EMISSION],
+        }
+        if output is not None
+        else {"type": "object"}
+    )
+
+    return {
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "enum": [status.value for status in JobStatus]},
+            "replayed": {"type": "boolean"},
+            "idempotency_key": {"type": "string"},
+            "invocation_id": {"anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}]},
+            "result": {"anyOf": [emitted, {"type": "null"}]},
+            "error": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "enum": [code.value for code in JobErrorCode],
+                            },
+                            "message": {"type": "string"},
+                            "metadata": {"type": "object"},
+                        },
+                        "required": ["code", "message", "metadata"],
+                        "additionalProperties": False,
+                    },
+                    {"type": "null"},
+                ]
+            },
+        },
+        "required": ["status", "replayed", "idempotency_key", "invocation_id", "result", "error"],
         "additionalProperties": False,
     }
 
@@ -171,14 +252,24 @@ class ToolCatalog:
     def tools(
         self,
     ) -> tuple[CatalogTool, ...]:
-        """Return every tool, the exposed workflows in document order and then `get_invocation`."""
+        """Return every tool, the exposed workflows in document order and then `get_invocation`.
+
+        Each exposed workflow's schemas are read from its active production
+        state, as it is now.
+        """
+
+        states = {
+            exposed.workflow_id: self._production.get(exposed.workflow_id)
+            for exposed in self._exposure.tools
+        }
 
         return (
             *(
                 CatalogTool(
                     name=exposed.name,
                     description=exposed.description,
-                    input_schema=workflow_tool_schema(exposed),
+                    input_schema=workflow_tool_schema(exposed, states[exposed.workflow_id]),
+                    output_schema=workflow_output_schema(states[exposed.workflow_id]),
                     workflow_id=exposed.workflow_id,
                 )
                 for exposed in self._exposure.tools
@@ -229,6 +320,14 @@ class ToolCatalog:
 
         return exposed, state
 
+    def input_schema_of(
+        self,
+        exposed: ExposedWorkflow,
+    ) -> JsonValue | None:
+        """Return the schema one exposed workflow's `input` is held to now, if any."""
+
+        return effective_input_schema(exposed, self._production.get(exposed.workflow_id))
+
     def is_exposed(
         self,
         workflow_id: UUID,
@@ -241,7 +340,7 @@ class ToolCatalog:
 def _object_schema(
     schema: JsonValue | None,
 ) -> JsonValue:
-    """Return one input schema as an object schema; none accepts any value."""
+    """Return one schema as an object schema; none accepts any value."""
 
     if schema is None or schema is True:
         return {}
@@ -265,6 +364,8 @@ __all__ = [
     "ToolUnavailableError",
     "UnknownToolError",
     "check_exposure",
+    "effective_input_schema",
     "unpromoted_workflows",
+    "workflow_output_schema",
     "workflow_tool_schema",
 ]

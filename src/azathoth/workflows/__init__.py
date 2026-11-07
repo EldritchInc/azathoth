@@ -233,6 +233,7 @@ from azathoth.workflows.production_revision_repository import (
     WorkflowProductionRevisionRepository,
 )
 from azathoth.workflows.promotion import (
+    PRODUCTION_RESULT_EMISSION,
     materialize_workflow_candidate,
     promote_workflow_candidate,
 )
@@ -577,6 +578,7 @@ __all__ = [
     "SOURCE_FEEDBACK_METADATA_KEY",
     "SOURCE_RUN_METADATA_KEY",
     "SOURCE_URI_METADATA_KEY",
+    "PRODUCTION_RESULT_EMISSION",
     "VIOLATIONS_METADATA_KEY",
     "WORKFLOW_INPUT_EVENT_TYPE",
     "WORKFLOW_INPUT_RESOLVED_EVENT_TYPE",

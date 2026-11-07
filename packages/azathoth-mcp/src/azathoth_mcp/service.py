@@ -277,9 +277,11 @@ class ToolService:
         """Return a call's input and key, or refuse arguments that do not match the tool.
 
         The envelope is checked first, then the input against the operator's
-        schema in that schema's own dialect.
+        schema, or else the promoted workflow's (ADR 0118), in that schema's
+        own dialect.
         """
 
+        input_schema = self._catalog.input_schema_of(exposed)
         envelope = workflow_tool_schema(exposed.model_copy(update={"input_schema": None}))
         problems = [
             f"{violation.path}: {violation.message}"
@@ -289,11 +291,11 @@ class ToolService:
             )
         ]
 
-        if not problems and exposed.input_schema is not None:
+        if not problems and input_schema is not None:
             problems.extend(
                 f"$.{INPUT_ARGUMENT}{violation.path.removeprefix('$')}: {violation.message}"
                 for violation in json_schema_violations(
-                    json_schema_validator(exposed.input_schema),
+                    json_schema_validator(input_schema),
                     arguments[INPUT_ARGUMENT],
                 )
             )

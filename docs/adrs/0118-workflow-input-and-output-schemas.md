@@ -100,6 +100,28 @@ invocation exists. A child whose contract is broken fails its parent's step
 with its own message. A production state that emits no `result` has no
 declared result to check.
 
+### MCP tools take the workflow's schemas
+
+An exposed workflow's tool holds its `input` to the exposure document's
+`input_schema` when the operator wrote one, and otherwise to the promoted
+workflow's input schema. The server reads the active production state each
+time it lists its tools, so promoting a workflow with a new schema changes
+its tool without a restart. The server refuses arguments that break the
+schema in force, as it refuses any other, recording nothing; production
+still checks the workflow's own schema, so an operator's schema may narrow
+the contract but never loosen it.
+
+Each exposed workflow's tool also names an `outputSchema`: the outcome it
+returns, the job envelope's result. Its `result`, when present, is the
+emission object `{"result": ...}`, held to the promoted workflow's output
+schema, or any object when the workflow declares none. The exposure document
+cannot override it, since the server does not produce the result. A call
+that does not succeed returns structured content that conforms too, its
+`error` naming its code, `invalid_input` and `invalid_output` among them. A
+refused call is an error whose text says why, with no structured content.
+`get_invocation` names no output schema: the evidence it returns is not the
+job envelope.
+
 ## Consequences
 
 - A workflow's contract is written once, beside its steps, and versioned
@@ -113,6 +135,9 @@ declared result to check.
   contract, `invalid_output`.
 - A child workflow's contract holds whoever starts it, so a parent finds a
   broken input where it started the child, not deep in the child's run.
+- An MCP client is told a workflow's contract by its tool's schemas, so a
+  workflow exposed without an operator's schema still says what it takes,
+  and a client can check what it receives.
 
 ## Alternatives Considered
 

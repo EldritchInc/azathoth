@@ -89,6 +89,7 @@ def mcp_tool(
         name=tool.name,
         description=tool.description,
         input_schema=tool.input_schema,
+        output_schema=tool.output_schema,
         annotations=(
             WORKFLOW_TOOL_ANNOTATIONS
             if tool.workflow_id is not None
