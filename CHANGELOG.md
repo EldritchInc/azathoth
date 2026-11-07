@@ -226,6 +226,8 @@ release dates are on the
   pinned to them, ready for `tool import`; writing it again for a tool
   whose schemas changed shows a new implementation
   ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+  The new [Calling MCP Tools](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp-tools.md)
+  guide walks through one, with an example server in `examples/mcp`.
 
 ### Fixes
 

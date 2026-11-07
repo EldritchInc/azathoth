@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-0000000000b0",
+    "name": "word count over MCP",
+    "description": "Count words by calling the count_words tool an MCP server serves.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-0000000000b1",
+      "specification": {
+        "requirement": {
+          "name": "count_words",
+          "version": "1.0.0",
+          "runtime": "mcp"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "text",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "count",
+          "path": [
+            "count"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    }
+  ],
+  "result": {
+    "name": "count"
+  }
+}

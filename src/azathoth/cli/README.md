@@ -3496,6 +3496,7 @@ azathoth tool
 ├── show
 ├── history
 ├── export
+├── from-mcp
 ├── versions
 ├── implementations
 ├── implementation-show
@@ -3517,7 +3518,7 @@ Commands that act on one exact definition version take:
 cannot execute, before anything is saved:
 
 ```text
-Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: process, python.
+Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: mcp, process, python.
 ```
 
 `tool implementation-show` renders a process implementation's command,
@@ -3536,9 +3537,23 @@ grants itself, never Azathoth's whole environment (ADR 0099). `Environment`
 appears only when an implementation grants something; the tools README
 lists the base variables.
 
+An MCP implementation has no source, command or entrypoint; it is rendered
+with the server, the remote tool, the schema digest it is pinned to and, for
+an HTTP server, the variable holding its bearer token, never its value
+(ADR 0119):
+
+```text
+Runtime: mcp
+Timeout: 20 seconds
+MCP Server: https://mcp.example.com/mcp
+MCP Tool: search
+Schema Digest: <SCHEMA_DIGEST>
+Authorization: SEARCH_TOKEN
+```
+
 `tool verify` runs every implementation through the runtime it declares, so
-process tools are verified against their test cases exactly like Python
-tools.
+process and MCP tools are verified against their test cases exactly like
+Python tools.
 
 # Tool Revisions
 
@@ -3594,6 +3609,42 @@ azathoth tool export <TOOL_ID> --version <VERSION> --revision <NUMBER>
 Tool versions saved before revisions existed become revision 1 of their
 version, without an import time. Test cases belong to a tool rather than to
 one version, so each such revision holds every test case of its tool.
+
+# Write an MCP Tool's Document
+
+`tool from-mcp` lists the tools one MCP server serves and prints the named
+tool's document, its implementation pinned to the digest of the tool's
+schemas as they are served now (ADR 0119). Name a server reached over HTTP
+by its URL, or give the command that starts a stdio server after `--`:
+
+```bash
+azathoth tool from-mcp --tool <NAME> --url <URL> [--authorization <VARIABLE>] [--timeout-seconds <SECONDS>]
+azathoth tool from-mcp --tool <NAME> [--grant <VARIABLE>]... [--timeout-seconds <SECONDS>] -- <COMMAND>...
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--tool` | The name the server lists the tool under. |
+| `--url` | The URL of a server reached over streamable HTTP. |
+| `--authorization` | The variable holding an HTTP server's bearer token. |
+| `--grant` | A variable a stdio server is given, or a prefix ending in `*`. Repeatable. |
+| `--timeout-seconds` | How long each call may take; also how long listing may take now, 30 seconds when not given. |
+
+Nothing is stored: import the document with `tool import`. Its tool and
+implementation IDs are derived from the server, the tool and the pin, so a
+tool whose schemas changed is written as a new implementation of the same
+tool. A binding no implementation may declare is refused with the same
+message an import would give, and so is a server that is named both ways or
+not at all:
+
+```text
+Name the MCP server with --url or with a command after --, not both.
+Name the MCP server with --url, or with a command after --.
+MCP server <SERVER> serves no tool named <TOOL>.
+```
+
+The [MCP tools guide](../../../docs/mcp-tools.md) walks through writing,
+importing and calling one.
 
 # Install the Standard Tools
 

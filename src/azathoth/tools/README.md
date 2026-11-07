@@ -630,11 +630,12 @@ capability itself.
 `ToolImplementation.runtime` names the execution runtime required by the
 implementation.
 
-V1 supports two runtimes:
+Azathoth supports three runtimes:
 
 ```text
-python     trusted source executed in process by PythonToolExecutor
+mcp        a tool an MCP server serves, called by McpToolExecutor
 process    source executed as a script by ProcessToolExecutor
+python     trusted source executed in process by PythonToolExecutor
 ```
 
 `supported_tool_runtimes()` returns them. Runtimes are checked before anything
@@ -646,7 +647,7 @@ runs:
 - execution raises `UnsupportedToolRuntimeError`
 
 ```text
-Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: process, python.
+Tool implementation <ID> uses unsupported runtime 'javascript'; supported runtimes: mcp, process, python.
 ```
 
 Stored records are never rejected on decode, so the check lives at import and
@@ -683,9 +684,13 @@ run
 The executor owns interpreting that entrypoint according to the implementation
 runtime.
 
+An MCP implementation declares no entrypoint, and is serialized without one.
+
 # Source
 
 `ToolImplementation.source` stores the implementation source as durable data.
+Every implementation but an MCP one declares a source; an MCP one declares
+its binding instead.
 
 This is a major architectural distinction:
 
@@ -988,6 +993,43 @@ UnsupportedToolRuntimeError
 
 An executor therefore does not silently attempt to interpret implementation
 source using the wrong runtime.
+
+# McpToolExecutor
+
+`McpToolExecutor` runs an `mcp` implementation by calling the tool its
+binding names (ADR 0119). The binding is durable data, as a source is:
+
+```text
+McpToolBinding
+├── server          a stdio server's command, or an HTTP server's URL
+├── tool            the name the server lists the tool under
+├── schema_digest   mcp_schema_digest(inputSchema, outputSchema) when pinned
+└── credentials     an HTTP server's authorization variable
+```
+
+Each call opens its own connection, lists the server's tools, every page,
+and calls the tool only while the digest of its served schemas is the
+pinned one. The inputs are the call's arguments. The output is the tool's
+structured content, or its text blocks joined by newlines as `text`; a
+result holding an image, audio or a resource fails, naming the kind. A
+result marked as an error, an unreachable server and a call that outlasts
+the implementation's timeout fail with `ToolExecutionError`, quoting at most
+the last 500 characters of what the server said.
+
+A stdio server is started with the environment a process tool would get, its
+base variables and grants and the step's trace context, but no lineage and
+no timeout variable. An HTTP server is sent `traceparent`, `tracestate` and
+`Authorization: Bearer` with the value of the authorization variable, read
+when the call is made; a variable that is not set fails the step before
+anything is sent.
+
+The MCP SDK is the `azathoth-ai[mcp]` extra. Only `azathoth.tools.mcp_client`
+imports it, and only when an MCP implementation runs, so
+`McpUnavailableError` names the extra where it is missing.
+
+`McpToolExecutor.served_tool` lists a server's tools without calling
+anything, and `mcp_tool_document` turns what it lists into a pinned tool
+document, which is how `azathoth tool from-mcp` writes one.
 
 # ProcessToolExecutor
 
