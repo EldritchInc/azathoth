@@ -43,6 +43,7 @@ from azathoth_mcp.catalog import (
     GET_INVOCATION_DESCRIPTION,
     GET_INVOCATION_SCHEMA,
     ToolCatalog,
+    workflow_output_schema,
     workflow_tool_schema,
 )
 from azathoth_mcp.exposure import ExposedWorkflow, ExposureDocument
@@ -243,12 +244,14 @@ def test_every_tool_is_listed_with_its_schema_and_hints(
             name="summarize",
             description="Summarize a ticket.",
             input_schema=workflow_tool_schema(EXPOSURE.tools[0]),
+            output_schema=workflow_output_schema(None),
             annotations=WORKFLOW_TOOL_ANNOTATIONS,
         ),
         types.Tool(
             name="triage",
             description="Triage a ticket.",
             input_schema=workflow_tool_schema(EXPOSURE.tools[1]),
+            output_schema=workflow_output_schema(None),
             annotations=WORKFLOW_TOOL_ANNOTATIONS,
         ),
         types.Tool(

@@ -12,6 +12,7 @@ from azathoth.tools import (
     ToolImplementationResolver,
     ToolResolver,
 )
+from azathoth.workflows.contract import output_contract_failure
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.generation import WorkflowGenerationError
 from azathoth.workflows.production import WorkflowProductionState
@@ -38,6 +39,7 @@ from azathoth.workflows.production_model_resolution import (
     ProductionModelSubstitutesUnavailableError,
     ProductionPrimaryModelUnavailableError,
 )
+from azathoth.workflows.promotion import PRODUCTION_RESULT_EMISSION
 from azathoth.workflows.references import (
     reference_producer_step_ids,
     resolve_named_value,
@@ -149,6 +151,11 @@ async def complete_production_invocation(
 
     With `resume_run_id`, its unfinished run is resumed instead (ADR 0105).
 
+    A declared result, emitted as `result`, that breaks the promoted
+    workflow's output schema fails the invocation with `invalid_output`, its
+    run kept and associated, so the run shows what the workflow produced
+    (ADR 0118).
+
     A run that stops before it finishes, because its journal could not be
     recorded or its lease was lost, or that cannot be resumed, records no
     result: the error is raised, and the invocation stays incomplete, so it
@@ -193,9 +200,22 @@ async def complete_production_invocation(
                     message="Production workflow did not produce its declared result.",
                 )
             else:
-                result = ProductionInvocationSuccess(
-                    invocation_id=invocation.id,
-                    result=emitted,
+                broken = (
+                    output_contract_failure(
+                        invocation_id=invocation.id,
+                        schema=state.specification.output_schema,
+                        result=emitted[PRODUCTION_RESULT_EMISSION],
+                    )
+                    if PRODUCTION_RESULT_EMISSION in emitted
+                    else None
+                )
+                result = (
+                    broken
+                    if broken is not None
+                    else ProductionInvocationSuccess(
+                        invocation_id=invocation.id,
+                        result=emitted,
+                    )
                 )
 
     except ProductionPrimaryModelUnavailableError:

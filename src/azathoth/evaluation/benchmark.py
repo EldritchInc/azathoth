@@ -1,6 +1,6 @@
 """Domain models describing reusable evaluation benchmarks."""
 
-from typing import cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -77,10 +77,10 @@ class BenchmarkCase(BaseModel):
     def omit_absent_provenance(
         self,
         handler: SerializerFunctionWrapHandler,
-    ) -> dict[str, JsonValue]:
+    ) -> dict[str, Any]:
         """Leave out `input_provenance` when the case has none."""
 
-        serialized = cast(dict[str, JsonValue], handler(self))
+        serialized: dict[str, Any] = handler(self)
 
         if self.input_provenance is None:
             serialized.pop("input_provenance", None)

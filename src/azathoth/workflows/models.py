@@ -1,10 +1,21 @@
 """Domain models describing model-independent workflows."""
 
-from typing import Self
+from typing import Any, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    SerializerFunctionWrapHandler,
+    ValidationInfo,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
+from azathoth.evaluation import json_schema_validator
 from azathoth.workflows.references import declaring_step_ids
 from azathoth.workflows.steps import WorkflowStepSpecification
 from azathoth.workflows.value import (
@@ -32,6 +43,13 @@ class WorkflowSpecification(BaseModel):
     workflow's answer. Evaluation and production use exactly this value. A
     name-only result resolves to the first step, in step order, that produced
     a value with that name.
+
+    The optional `input_schema` is a JSON Schema of the value the workflow
+    receives, after resolution, so a document is its content handle; the
+    optional `output_schema` is one of its declared result. Every production
+    invocation is checked against the schemas of the promoted specification
+    (ADR 0118). A specification without them serializes without them, so no
+    existing workflow's digest changes.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -41,6 +59,65 @@ class WorkflowSpecification(BaseModel):
         min_length=1,
     )
     result: WorkflowResultReference | None = None
+    input_schema: JsonValue | None = None
+    output_schema: JsonValue | None = None
+
+    @field_validator("input_schema", "output_schema")
+    @classmethod
+    def require_json_schema(
+        cls,
+        schema: JsonValue | None,
+        info: ValidationInfo,
+    ) -> JsonValue | None:
+        """Refuse a schema that is not a valid JSON Schema.
+
+        Raises:
+            ValueError: The schema is not an object or a boolean, or does not
+                satisfy its dialect's metaschema.
+        """
+
+        if schema is None:
+            return schema
+
+        try:
+            json_schema_validator(schema)
+        except ValueError as exc:
+            label = (info.field_name or "schema").replace("_", " ")
+
+            raise ValueError(f"The workflow's {label} is not usable: {exc}") from exc
+
+        return schema
+
+    @model_validator(mode="after")
+    def require_a_result_for_an_output_schema(self) -> Self:
+        """Refuse an output schema of a workflow that declares no result.
+
+        Raises:
+            ValueError: The workflow has an output schema and no result.
+        """
+
+        if self.output_schema is not None and self.result is None:
+            raise ValueError(
+                f"Workflow {self.metadata.id} has an output schema, which describes its "
+                "result, but declares no result."
+            )
+
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_schemas(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        """Leave out `input_schema` and `output_schema` when the workflow has none."""
+
+        serialized: dict[str, Any] = handler(self)
+
+        for name in ("input_schema", "output_schema"):
+            if getattr(self, name) is None:
+                serialized.pop(name, None)
+
+        return serialized
 
     @model_validator(mode="after")
     def validate_unique_step_ids(self) -> Self:

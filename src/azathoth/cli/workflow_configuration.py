@@ -7,6 +7,7 @@ from uuid import UUID
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.rendering._json import render_json_value
 from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     PromptSpecification,
@@ -46,7 +47,9 @@ def show_workflow(
 ) -> int:
     """Show one imported revision of a durable workflow, the latest by default.
 
-    Only durable state is read, so no provider credentials are needed.
+    A workflow that declares an input or output schema shows it after its
+    result (ADR 0118). Only durable state is read, so no provider
+    credentials are needed.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -83,6 +86,14 @@ def show_workflow(
     print(f"Description: {metadata.description}")
 
     print(f"Result: {_render_result(specification.result)}")
+
+    for label, schema in (
+        ("Input Schema", specification.input_schema),
+        ("Output Schema", specification.output_schema),
+    ):
+        if schema is not None:
+            print(f"{label}:")
+            print(render_json_value(schema))
 
     print(f"Steps: {len(specification.steps)}")
 
