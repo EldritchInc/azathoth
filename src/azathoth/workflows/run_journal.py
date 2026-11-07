@@ -23,6 +23,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from azathoth.context import Context, ContextEvent
+from azathoth.tools.extraction import EXTRACTION_RESOURCE_KIND
 from azathoth.workflows.attempt import WorkflowStepAttempt
 from azathoth.workflows.execution import WorkflowStepRun
 from azathoth.workflows.models import WorkflowMetadata
@@ -344,6 +345,29 @@ def journaled_initial_context(
     return entries[0].event.initial_context
 
 
+def journaled_extractions(
+    journal: RunJournalRepository,
+    run_id: UUID,
+) -> frozenset[str]:
+    """Return the digests of the extractions one run's committed steps kept (ADR 0116).
+
+    An extraction is kept by the engine and recorded as an `extraction`
+    resource of the step that made it (ADR 0114); a layer's step runs are
+    journaled as it commits, so a later step reads every extraction an
+    earlier layer kept, whether the run is under way or finished.
+    """
+
+    return frozenset(
+        resource.identifier
+        for entry in journal.entries(run_id)
+        if isinstance(entry.event, JournalLayerCommitted)
+        for step in entry.event.steps
+        if step.execution is not None
+        for resource in step.execution.resources
+        if resource.kind == EXTRACTION_RESOURCE_KIND
+    )
+
+
 __all__ = [
     "Clock",
     "Fence",
@@ -360,5 +384,6 @@ __all__ = [
     "RunJournalPositionTakenError",
     "RunJournalRepository",
     "RunJournalWriter",
+    "journaled_extractions",
     "journaled_initial_context",
 ]

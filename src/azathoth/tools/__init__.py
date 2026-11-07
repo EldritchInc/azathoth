@@ -10,6 +10,8 @@ from azathoth.tools.content import (
     ToolContentAccess,
     active_tool_content,
     content_input_files,
+    kept_extractions,
+    lineage_runs,
     providing_tool_content,
     received_content,
 )
@@ -107,6 +109,8 @@ __all__ = [
     "active_tool_content",
     "content_input_files",
     "providing_tool_content",
+    "kept_extractions",
+    "lineage_runs",
     "received_content",
     "TOOL_TABLES",
     "SqlToolRepository",

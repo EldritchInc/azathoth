@@ -638,6 +638,24 @@ Prompt strategy '<NAME>' shows content <DIGEST> as <MEDIA_TYPE>, but model <MODE
 
 `azathoth model show <MODEL>` prints a model's input modalities.
 
+### Prompt Steps Read Extractions
+
+A context-prompt step bound to an extraction handle, such as the output of
+`segment_pdf`, is shown the extraction's segments by their IDs, so a model
+can cite them (ADR 0116):
+
+```text
+<source name="claim">
+[p1.s1] Claim 0412.
+
+[p1.s2] Received on December 14.
+</source>
+```
+
+The variable's name is the source's. Only an extraction a step of the run,
+or of a run above it, kept is shown; a handle a step wrote itself is
+refused.
+
 ### Unresolved Inputs
 
 An input can legitimately have no value when its step becomes eligible, for

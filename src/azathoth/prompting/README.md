@@ -102,6 +102,7 @@ from azathoth.prompting import (
     PromptingError,
     generate_prompt_candidates,
     read_prompt_content,
+    render_extraction,
 )
 ```
 
@@ -971,6 +972,23 @@ the run, or a run above it, received it under that media type, and the
 content store holds it under its digest, at its size. It reads each piece
 once. The bytes are given to the provider for the length of the call, and
 only there; a prompt that fails a check never reaches a model.
+
+# Showing Extractions
+
+A variable whose value is exactly one extraction handle renders the
+extraction's segments, by the IDs a model may cite (ADR 0116):
+
+```text
+<source name="claim">
+[p1.s1] Claim 0412.
+
+[p1.s2] Received on December 14.
+</source>
+```
+
+The variable names the source. `render_extraction` renders one, and only one
+a step of the run, or of a run above it, kept: the content access names the
+extractions each run's journal records keeping.
 
 # Prompt Rendering Errors
 

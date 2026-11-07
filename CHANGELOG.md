@@ -106,6 +106,11 @@ release dates are on the
   `segment_text` makes one segment per paragraph, deterministically, under
   a version of its own that changes only when its output does
   ([ADR 0113](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0113-anchor-and-verify-citations.md)).
+- **A model step is shown an extraction's segments by the IDs it may
+  cite.** A template variable bound to an extraction handle renders its
+  segments as `[p1.s2] text` inside a `source` named by the variable. Only
+  an extraction a step of the run, or of a run above it, kept is shown
+  ([ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Fixes
 

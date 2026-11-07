@@ -84,7 +84,7 @@ class ContextPromptStrategy:
                 bound model does not take; the model is not called.
         """
 
-        prompt = self._template.render(context)
+        prompt = self._template.render(context, strategy_name=self._metadata.name)
         self._require_readable_content(prompt)
 
         return await execute_prompt(
