@@ -68,12 +68,67 @@ and constants (ADR 0094).
 Every implementation of another runtime reads, serializes and digests as it
 did.
 
+### A call is made only while the tool matches its pin
+
+The `mcp` runtime has its own executor. Each call opens its own connection:
+a stdio server is started for the call and stopped after it, and an HTTP
+server is reached over streamable HTTP. Nothing is pooled, so concurrent
+steps, a `map_workflow` among them, never share a session. The executor
+lists the server's tools, reading every page, and computes the digest of
+the bound tool's schemas as the server serves them now. The tool is called
+only when that digest is the pinned one; a tool the server does not serve,
+or serves under other schemas, is not called at all:
+
+```text
+MCP server <SERVER> serves no tool named <TOOL>.
+MCP tool <TOOL> on <SERVER> no longer matches its pinned schemas: pinned <PINNED>, served <SERVED>.
+```
+
+The step's inputs are the call's arguments, exactly. The call's output is
+the tool's structured content, or, when it returns none, its text blocks
+joined by newlines as `text`. A result holding an image, audio or a
+resource fails the step, naming the kind, until a tool's output can hold
+content. A result marked as an error, a server that cannot be reached and
+a call that outlasts the implementation's timeout, which covers connecting,
+listing and calling together, each fail the step with a `ToolExecutionError`
+that quotes at most the last 500 characters of what the server said:
+
+```text
+MCP tool <TOOL> on <SERVER> failed: <REASON>
+```
+
+A stdio server is started with the environment a process tool would be
+given, the platform's base variables and the implementation's grants
+(ADR 0099), and the step's trace context as `TRACEPARENT` and `TRACESTATE`
+(ADR 0100). It is not Azathoth, so it is given no lineage and no timeout
+variable. An HTTP server is sent the step's trace context as `traceparent`
+and `tracestate`, and `Authorization: Bearer` followed by the value of the
+binding's authorization variable, read when the call is made. A variable
+that is not set fails the step before anything is sent, naming the
+variable, never a value:
+
+```text
+MCP tool <TOOL> on <SERVER> needs its authorization variable <VARIABLE>, which is not set.
+```
+
+The SDK is the `mcp` extra, `azathoth-ai[mcp]`, imported only when an MCP
+implementation runs. Where it is not installed, the step fails saying so:
+
+```text
+MCP tools need the mcp package, which is not installed; install azathoth-ai[mcp].
+```
+
 ## Consequences
 
 - A capability served over MCP becomes a tool like any other: it is
   resolved by requirement, verified by test cases and recorded as evidence.
 - An implementation names exactly what it calls, so its evidence does too.
 - A credential's value never enters a document, a digest or evidence.
+- A server that changes a tool stops every step bound to it, with a message
+  naming both digests, until the implementation is pinned again; a step
+  never sends arguments a tool no longer accepts.
+- Every call starts a stdio server or opens an HTTP session anew, which
+  costs time a pooled session would not.
 
 ## Alternatives Considered
 
@@ -82,6 +137,18 @@ did.
 Rejected. Every such tool would carry its own client, pin nothing, and hide
 the server it calls inside its source, where neither evidence nor an
 operator could see it.
+
+### Call whatever the server serves now
+
+Rejected. A tool that changed its schemas would be sent arguments it no
+longer accepts, or answer with a result its definition does not describe,
+and nothing would say why the step that worked yesterday fails today.
+
+### Keep one session per server for the life of a run
+
+Deferred. A pooled session would save each call its connection, but a
+session shared by concurrent steps is state no step owns, and nothing yet
+needs the time it would save.
 
 ### Keep the server, tool and pin as process fields
 

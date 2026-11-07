@@ -212,6 +212,14 @@ release dates are on the
   token; it runs no source. `tool implementation show` prints the binding,
   and every other implementation reads and digests as before
   ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
+- **A tool step calls the MCP tool it is bound to.** Each call connects
+  anew, over stdio or streamable HTTP, and calls the tool only while its
+  schemas match the pin; its output is the tool's structured content, or
+  its text. A stdio server gets only the variables its implementation
+  grants, and an HTTP server the bearer token its authorization variable
+  holds, with the step's trace context. Install `azathoth-ai[mcp]` to call
+  MCP tools
+  ([ADR 0119](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0119-call-mcp-served-tools.md)).
 
 ### Fixes
 

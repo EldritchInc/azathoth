@@ -13,6 +13,8 @@ from azathoth.tools.implementation import (
     PROCESS_TOOL_RUNTIME,
     ToolImplementation,
 )
+from azathoth.tools.mcp_binding import MCP_TOOL_RUNTIME
+from azathoth.tools.mcp_execution import McpToolExecutor
 from azathoth.tools.process import ProcessToolExecutor
 from azathoth.tools.protocols import ToolExecutor
 
@@ -21,6 +23,7 @@ def default_tool_executors() -> dict[str, ToolExecutor]:
     """Return a fresh executor for every runtime Azathoth supports."""
 
     return {
+        MCP_TOOL_RUNTIME: McpToolExecutor(),
         PROCESS_TOOL_RUNTIME: ProcessToolExecutor(),
         PYTHON_TOOL_RUNTIME: PythonToolExecutor(),
     }
