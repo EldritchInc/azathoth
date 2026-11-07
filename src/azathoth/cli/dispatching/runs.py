@@ -10,6 +10,7 @@ from pydantic import JsonValue
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     RUN_ACTION_ATTRIBUTE,
+    RUN_ANNOTATIONS_ACTION,
     RUN_CHILDREN_ACTION,
     RUN_FEEDBACK_ACTION,
     RUN_FEEDBACK_CORRECTED_OUTPUT_ATTRIBUTE,
@@ -34,6 +35,7 @@ def dispatch_run_command(
     show_run: RunIdentifierHandler,
     resume_run: RunResumeHandler,
     list_run_children: RunIdentifierHandler,
+    export_run_annotations: RunIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed run command."""
 
@@ -56,6 +58,9 @@ def dispatch_run_command(
                 ),
             )
         )
+
+    if action == RUN_ANNOTATIONS_ACTION:
+        return export_run_annotations(cast(UUID, getattr(arguments, RUN_ID_ATTRIBUTE)))
 
     if action == RUN_CHILDREN_ACTION:
         return list_run_children(cast(UUID, getattr(arguments, RUN_ID_ATTRIBUTE)))

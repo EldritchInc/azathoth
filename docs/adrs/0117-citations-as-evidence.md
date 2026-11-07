@@ -180,6 +180,59 @@ record. A child whose cost is unknown makes the step's unknown, and the run
 unscoreable, as before. A child started by an attempt that failed is not
 counted, since that attempt has no cost to add it to.
 
+### Checks export as W3C Web Annotations
+
+`azathoth run annotations <RUN_ID>` and `azathoth invocation annotations
+<INVOCATION_ID>` print every verified check a run's cited steps kept as one
+W3C Web Annotation `AnnotationCollection`, whose one `AnnotationPage` holds
+an `Annotation` for each:
+
+```json
+{
+  "@context": "http://www.w3.org/ns/anno.jsonld",
+  "id": "urn:uuid:<UUID>",
+  "type": "AnnotationCollection",
+  "label": "Citations of run <RUN_ID>: 1 verified, 1 not verified and left out.",
+  "total": 1,
+  "first": {
+    "id": "urn:uuid:<UUID>",
+    "type": "AnnotationPage",
+    "startIndex": 0,
+    "items": [
+      {
+        "id": "urn:uuid:<UUID>",
+        "type": "Annotation",
+        "motivation": "highlighting",
+        "generator": {"id": "https://github.com/EldritchInc/azathoth", "type": "Software", "name": "Azathoth <VERSION>", "homepage": "https://github.com/EldritchInc/azathoth"},
+        "body": {"type": "TextualBody", "purpose": "describing", "format": "text/plain", "value": "Cited by step <STEP_ID> of run <RUN_ID>."},
+        "target": {"type": "SpecificResource", "source": "s3://claims-intake/2026/11/claim-0412.pdf?versionId=<VERSION_ID>", "selector": ["<SELECTORS>"]}
+      }
+    ]
+  }
+}
+```
+
+A check that did not verify locates nothing, so it is left out, and the
+label counts it. The selectors are the anchor's own, already the model's
+(ADR 0113), and count code points, as it does. A target's source is the
+content's origin, with the S3 object version as a `versionId` query when
+one was recorded, or else the content's digest as an RFC 6920 `ni:` URI,
+`ni:///sha-256;<BASE64URL>`. Every identifier is a name-based UUID of what
+it names, the run, its page, or one check of one record of one step, so
+the same checks export to the same bytes. A native citation's body names
+the text it supports too. A run whose cited steps verified nothing exports a
+collection with no page.
+
+The checks are read from the records the run's journal names, so a run
+still under way exports what its committed steps checked. An invocation
+whose run has not started cannot be exported, and neither can a record the
+content store no longer holds:
+
+```text
+Invocation <INVOCATION_ID> has no run.
+Citation record <DIGEST> of step <STEP_ID> is not in the content store.
+```
+
 ## Consequences
 
 - A benchmark of documents is built the way any benchmark is: from runs
@@ -199,6 +252,8 @@ counted, since that attempt has no cost to add it to.
   break when a model words a quote differently.
 - Optimization prefers the candidate whose citations verify, and a model
   that cites less, or cites what is not there, ranks lower for it.
+- A reviewer's annotation tools read what a run cited, where it is, in
+  exactly which version of the document, with no Azathoth import.
 - A workflow with tool steps can be compared and optimized, and a parent's
   score counts what its children spent; `run show` names a tool step's
   cost, `$0.000000` when it starts no child.
@@ -229,6 +284,11 @@ below the threshold when citations fail, cannot be averaged away.
 Rejected. A fifth dimension in every overall score would change every
 existing ranking, and give a workflow that cites nothing a score for
 citing.
+
+### Export a check's place in UTF-16 code units
+
+Rejected. The Web Annotation model counts code points, as the anchors do;
+a highlighter that counts UTF-16 converts on its side, as ADR 0113 left it.
 
 ### Run cases with an in-memory journal
 

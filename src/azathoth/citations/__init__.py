@@ -4,6 +4,16 @@ from azathoth.citations.anchors import (
     Extraction,
     SourceAnchor,
 )
+from azathoth.citations.annotations import (
+    ANNOTATION_NAMESPACE,
+    AZATHOTH_HOMEPAGE,
+    CONTENT_URI_PREFIX,
+    WEB_ANNOTATION_CONTEXT,
+    CitationRecord,
+    anchor_source,
+    citation_annotations,
+    content_uri,
+)
 from azathoth.citations.segments import (
     EXTRACTION_KEY,
     SEGMENT_ID,
@@ -43,7 +53,10 @@ from azathoth.citations.verification import (
 )
 
 __all__ = [
+    "ANNOTATION_NAMESPACE",
+    "AZATHOTH_HOMEPAGE",
     "BLANK_LINES",
+    "CONTENT_URI_PREFIX",
     "EXTRACTION_KEY",
     "FRAGMENT_SELECTOR",
     "FRAGMENT_SPECIFICATIONS",
@@ -57,7 +70,9 @@ __all__ = [
     "TEXT_SEGMENTER",
     "TEXT_SEGMENTER_VERSION",
     "VERIFIED_STATUSES",
+    "WEB_ANNOTATION_CONTEXT",
     "BoundingBox",
+    "CitationRecord",
     "CitationCheck",
     "CitationStatus",
     "Extraction",
@@ -71,6 +86,9 @@ __all__ = [
     "SourceAnchor",
     "TextPositionSelector",
     "TextQuoteSelector",
+    "anchor_source",
+    "citation_annotations",
+    "content_uri",
     "extraction_handle_from_value",
     "segment_text",
     "verify_citation",

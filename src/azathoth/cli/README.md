@@ -95,6 +95,7 @@ azathoth
 │
 ├── run
 │   ├── show <RUN_ID>
+│   ├── annotations <RUN_ID>
 │   ├── children <RUN_ID>
 │   ├── resume <RUN_ID>
 │   │   └── --output <FORMAT>
@@ -108,6 +109,7 @@ azathoth
 │
 ├── invocation
 │   ├── show <INVOCATION_ID>
+│   ├── annotations <INVOCATION_ID>
 │   └── resume <INVOCATION_ID>
 │       └── --output <FORMAT>
 │
@@ -2727,6 +2729,41 @@ command:
 
 ```text
 Content <SHA-256> is not a record of citation checks.
+```
+
+# Export Citations as Web Annotations
+
+Every verified citation a run's cited steps kept exports as W3C Web
+Annotations (ADR 0117), for a run or for the run of an invocation:
+
+```bash
+azathoth run annotations <RUN_ID>
+azathoth invocation annotations <INVOCATION_ID>
+```
+
+The output is one JSON-LD `AnnotationCollection`, its one `AnnotationPage`
+holding an `Annotation` per verified check: `highlighting` the place its
+anchor names, with the anchor's selectors as they are, its source the
+document's origin, with the S3 object version when one was recorded, or
+the document's digest as an RFC 6920 `ni:` URI. A check that did not
+verify is left out, and the collection's label counts it. The same checks
+always export to the same bytes, so an export can be diffed and kept
+beside the run it came from:
+
+```text
+"label": "Citations of run <RUN_ID>: 1 verified, 1 not verified and left out.",
+"target": {"type": "SpecificResource", "source": "s3://claims-intake/2026/11/claim-0412.pdf?versionId=<VERSION_ID>", "selector": [...]}
+```
+
+Only durable state is read, and a run still under way exports what its
+committed steps checked. These fail:
+
+```text
+Run <RUN_ID> was not found.
+Invocation <INVOCATION_ID> was not found.
+Invocation <INVOCATION_ID> has no run.
+Citation record <DIGEST> of step <STEP_ID> is not in the content store.
+Content <DIGEST> is not a record of citation checks.
 ```
 
 The `Run ID` continues into run inspection:

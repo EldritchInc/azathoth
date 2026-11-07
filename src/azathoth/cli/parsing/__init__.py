@@ -58,6 +58,7 @@ from azathoth.cli.parsing.initialization import (
 )
 from azathoth.cli.parsing.invocations import (
     INVOCATION_ACTION_ATTRIBUTE,
+    INVOCATION_ANNOTATIONS_ACTION,
     INVOCATION_COMMAND,
     INVOCATION_ID_ATTRIBUTE,
     INVOCATION_OUTPUT_ATTRIBUTE,
@@ -97,6 +98,7 @@ from azathoth.cli.parsing.models import (
 )
 from azathoth.cli.parsing.runs import (
     RUN_ACTION_ATTRIBUTE,
+    RUN_ANNOTATIONS_ACTION,
     RUN_CHILDREN_ACTION,
     RUN_COMMAND,
     RUN_FEEDBACK_ACTION,
@@ -280,6 +282,7 @@ __all__ = [
     "INVOCATION_COMMAND",
     "INVOCATION_ID_ATTRIBUTE",
     "INVOCATION_OUTPUT_ATTRIBUTE",
+    "INVOCATION_ANNOTATIONS_ACTION",
     "INVOCATION_RESUME_ACTION",
     "INVOCATION_SHOW_ACTION",
     "JOB_ACTION_ATTRIBUTE",
@@ -303,6 +306,7 @@ __all__ = [
     "MODEL_SHOW_ACTION",
     "MODEL_USAGE_ACTION",
     "RUN_ACTION_ATTRIBUTE",
+    "RUN_ANNOTATIONS_ACTION",
     "RUN_CHILDREN_ACTION",
     "RUN_COMMAND",
     "RUN_FEEDBACK_ACTION",

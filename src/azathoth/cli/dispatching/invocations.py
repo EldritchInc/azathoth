@@ -8,6 +8,7 @@ from uuid import UUID
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.parsing import (
     INVOCATION_ACTION_ATTRIBUTE,
+    INVOCATION_ANNOTATIONS_ACTION,
     INVOCATION_ID_ATTRIBUTE,
     INVOCATION_OUTPUT_ATTRIBUTE,
     INVOCATION_RESUME_ACTION,
@@ -23,6 +24,7 @@ def dispatch_invocation_command(
     *,
     show_invocation: InvocationIdentifierHandler,
     resume_invocation: InvocationResumeHandler,
+    export_invocation_annotations: InvocationIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed production invocation command."""
 
@@ -44,6 +46,11 @@ def dispatch_invocation_command(
                     INVOCATION_ID_ATTRIBUTE,
                 ),
             )
+        )
+
+    if action == INVOCATION_ANNOTATIONS_ACTION:
+        return export_invocation_annotations(
+            cast(UUID, getattr(arguments, INVOCATION_ID_ATTRIBUTE))
         )
 
     if action == INVOCATION_RESUME_ACTION:

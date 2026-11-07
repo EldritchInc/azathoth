@@ -28,6 +28,7 @@ from azathoth.workflows import (
     CITATIONS_EVIDENCE_LABEL,
     CitationEvidenceError,
     InMemoryRunJournalRepository,
+    RunJournalRepository,
     WorkflowBenchmarkRunner,
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -176,12 +177,21 @@ def runner(
 
 def kept_run(
     records: list[list[dict[str, JsonValue]]],
+    *,
+    journal: RunJournalRepository | None = None,
 ) -> tuple[WorkflowRun, InMemoryContentStore]:
-    """Run a step keeping some records; return the run and the store holding them."""
+    """Run a step keeping some records; return the run and the store holding them.
+
+    With a journal, the run is journaled there, and its records are kept in
+    a store of their own.
+    """
 
     store = InMemoryContentStore()
+    keeping = candidate(CitingStrategy(store, records))
     run = asyncio.run(
-        runner(store).run_recording_failures(candidate(CitingStrategy(store, records)), Context())
+        (
+            runner(store) if journal is None else WorkflowRunner(journal=journal)
+        ).run_recording_failures(keeping, Context())
     )
 
     return run, store

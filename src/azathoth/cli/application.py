@@ -5,6 +5,10 @@ from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
 
+from azathoth.cli.annotations import (
+    export_invocation_annotations,
+    export_run_annotations,
+)
 from azathoth.cli.benchmark_cases import add_benchmark_case
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
@@ -297,6 +301,7 @@ def _dispatch(
             show_run=show_run,
             resume_run=resume_run,
             list_run_children=list_run_children,
+            export_run_annotations=export_run_annotations,
         )
 
     if command == EXPERIMENT_COMMAND:
@@ -310,6 +315,7 @@ def _dispatch(
             arguments,
             show_invocation=show_invocation,
             resume_invocation=resume_invocation,
+            export_invocation_annotations=export_invocation_annotations,
         )
 
     if command == JOB_COMMAND:

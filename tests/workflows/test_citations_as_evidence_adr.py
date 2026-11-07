@@ -8,6 +8,12 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue, ValidationError
 
+from azathoth.citations import CitationRecord, citation_annotations
+from azathoth.cli.annotations import (
+    AnnotationExportError,
+    export_invocation_annotations,
+    run_citation_records,
+)
 from azathoth.cli.benchmark_cases import SuppliedExpectedValue, add_benchmark_case
 from azathoth.evaluation import (
     BenchmarkCase,
@@ -23,13 +29,16 @@ from azathoth.inputs import (
     ResolvedInput,
     content_bytes_digest,
 )
+from azathoth.persistence.repositories import open_repositories
 from azathoth.workflows import (
     CitationEvidenceError,
     SQLiteWorkflowRunRepository,
+    create_production_invocation,
     create_workflow_input_events,
     judge_citations,
     recorded_citation_checks,
 )
+from tests.citations.test_annotations import anchor
 from tests.workflows.test_benchmark_case_source import create_run
 from tests.workflows.test_citation_judging import check, kept_run, outcome, record_of, required
 
@@ -165,6 +174,46 @@ def unreadable(
     return str(raised.value).replace(str(run.id), "<RUN_ID>").replace(record_of(run), DIGEST)
 
 
+def no_run_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> str:
+    """Return what exporting an invocation whose run has not started says."""
+
+    database = tmp_path / "azathoth.db"
+
+    monkeypatch.setenv("AZATHOTH_DATABASE", str(database))
+    monkeypatch.delenv("AZATHOTH_CONTENT_STORE", raising=False)
+
+    invocation = create_production_invocation(workflow_id=CASE_ID, payload=None)
+
+    open_repositories(database).invocations.save(invocation)
+
+    assert export_invocation_annotations(invocation.id) == 1
+
+    return capsys.readouterr().err.rstrip("\n").replace(str(invocation.id), "<INVOCATION_ID>")
+
+
+def gone_record_refusal(
+    tmp_path: Path,
+    **_: object,
+) -> str:
+    """Return why a run's record the content store no longer holds cannot be exported."""
+
+    stored = open_repositories(tmp_path / "azathoth.db")
+    run, _store = kept_run([[check("p1.s2")]], journal=stored.run_journal)
+
+    with pytest.raises(AnnotationExportError) as raised:
+        run_citation_records(stored, run.id)
+
+    return (
+        str(raised.value)
+        .replace(record_of(run), DIGEST)
+        .replace(str(run.steps[0].step_id), "<STEP_ID>")
+    )
+
+
 DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Benchmark case <CASE_ID> names application/pdf content <DIGEST> as its input "
@@ -191,6 +240,14 @@ DOCUMENTED: list[tuple[str, Callable[..., str]]] = [
     (
         "Run <RUN_ID> kept citation record <DIGEST>, which the content store no longer holds.",
         lambda **_: unreadable(store=InMemoryContentStore()),
+    ),
+    (
+        "Invocation <INVOCATION_ID> has no run.",
+        no_run_refusal,
+    ),
+    (
+        "Citation record <DIGEST> of step <STEP_ID> is not in the content store.",
+        gone_record_refusal,
     ),
 ]
 """Each refusal ADR 0117 quotes, and what produces it."""
@@ -220,7 +277,7 @@ def test_the_adr_quotes_no_text_the_tests_do_not_check() -> None:
 
 
 def test_the_adr_shows_a_case_the_model_accepts() -> None:
-    case, expected = documented_blocks("json")
+    case, expected, _ = documented_blocks("json")
     shown = json.loads(case.replace("<SHA-256>", DIGEST).replace("482113", str(len(PDF))))
 
     assert BenchmarkCase.model_validate(shown).input_provenance == PROVENANCE
@@ -234,3 +291,44 @@ def test_the_adr_is_listed_in_the_index() -> None:
     index = (ROOT / "docs" / "adrs" / "README.md").read_text(encoding="utf-8")
 
     assert "- [ADR 0117: Citations as Evidence](0117-citations-as-evidence.md)\n" in index
+
+
+def test_the_adr_shows_the_real_shape_of_an_exported_collection() -> None:
+    (_, _, shown) = documented_blocks("json")
+    run_id = UUID("c1690000-0000-4000-8000-000000000003")
+    step_id = UUID("c1690000-0000-4000-8000-000000000004")
+    verified: dict[str, JsonValue] = {
+        "source": "claim",
+        "segment": "p1.s2",
+        "quote": "December 14",
+        "status": "verified",
+        "anchor": anchor().model_dump(mode="json", by_alias=True),
+    }
+    exported = citation_annotations(
+        run_id,
+        [
+            CitationRecord(
+                step_id=step_id,
+                record=DIGEST,
+                checks=[verified, {**verified, "status": "quote_not_found"}],
+            )
+        ],
+        generator="Azathoth <VERSION>",
+    )
+    text = json.dumps(exported)
+
+    for real in (str(run_id), str(step_id)):
+        text = text.replace(real, "<RUN_ID>" if real == str(run_id) else "<STEP_ID>")
+
+    placeheld = json.loads(text)
+    (annotation,) = placeheld["first"]["items"]
+    annotation["target"]["selector"] = ["<SELECTORS>"]
+    annotation["target"]["source"] = annotation["target"]["source"].replace(
+        "s3://claims/0412.pdf?versionId=3sL4.kqtJ%2Flcp%2BXroDTDmJ",
+        "s3://claims-intake/2026/11/claim-0412.pdf?versionId=<VERSION_ID>",
+    )
+
+    for identified in (placeheld, placeheld["first"], annotation):
+        identified["id"] = "urn:uuid:<UUID>"
+
+    assert placeheld == json.loads(shown)

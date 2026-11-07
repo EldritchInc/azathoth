@@ -158,6 +158,13 @@ release dates are on the
   comparisons, experiments and optimization prefer candidates whose
   citations verify. Runs with no cited step score as they always did
   ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
+- **What a run cited exports as W3C Web Annotations.** `azathoth run
+  annotations <RUN_ID>` and `azathoth invocation annotations
+  <INVOCATION_ID>` print every verified check as an annotation highlighting
+  its anchor's place, in exactly the document version it came from, ready
+  for a reviewer's annotation tools; the same checks always export to the
+  same bytes
+  ([ADR 0117](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0117-citations-as-evidence.md)).
 - **Results that cite compare by what they cite.** Before an exact,
   normalized or semantic comparison, every citation and check compares as
   `{source, segment}`, so an expected answer names its citations by segment

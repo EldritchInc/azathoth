@@ -11,6 +11,7 @@ INVOCATION_COMMAND = "invocation"
 
 INVOCATION_ACTION_ATTRIBUTE = "invocation_action"
 
+INVOCATION_ANNOTATIONS_ACTION = "annotations"
 INVOCATION_RESUME_ACTION = "resume"
 INVOCATION_SHOW_ACTION = "show"
 
@@ -43,6 +44,18 @@ def add_invocation_parser(
         type=UUID,
         metavar="INVOCATION_ID",
         help="Production invocation UUID to inspect.",
+    )
+
+    invocation_annotations_parser = invocation_actions.add_parser(
+        INVOCATION_ANNOTATIONS_ACTION,
+        help=("Print every verified citation an invocation's run kept, as W3C Web Annotations."),
+    )
+
+    invocation_annotations_parser.add_argument(
+        INVOCATION_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="INVOCATION_ID",
+        help="Production invocation UUID whose citations to export.",
     )
 
     invocation_resume_parser = invocation_actions.add_parser(
