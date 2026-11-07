@@ -4,17 +4,14 @@ import asyncio
 import json
 from types import MappingProxyType
 
-import httpx
 import pytest
-from pydantic import JsonValue, SecretStr, ValidationError
+from pydantic import JsonValue, ValidationError
 
 from azathoth.inputs import ContentRef, content_bytes_digest
 from azathoth.providers import (
     BedrockLanguageModel,
     ContentPart,
     DeterministicLanguageModel,
-    OpenRouterConfiguration,
-    OpenRouterLanguageModel,
     Prompt,
     PromptContentError,
     TextPart,
@@ -213,32 +210,6 @@ def test_the_deterministic_model_fails_on_content_it_was_not_given() -> None:
     assert str(raised.value) == (
         f"Model deterministic/deterministic was not given the bytes of content {PHOTO.digest}."
     )
-
-
-def test_openrouter_refuses_content_before_it_sends_anything() -> None:
-    sent: list[httpx.Request] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(request)
-        return httpx.Response(500, request=request)
-
-    model = OpenRouterLanguageModel(
-        OpenRouterConfiguration(
-            api_key=SecretStr("test-openrouter-key"),
-            base_url="https://openrouter.test/api/v1",
-            timeout_seconds=10.0,
-        ),
-        "openai/gpt-test",
-        transport=httpx.MockTransport(handler),
-    )
-
-    with pytest.raises(UnsupportedModelRequestError) as raised:
-        asyncio.run(model.complete(SHOWING))
-
-    assert str(raised.value) == (
-        "OpenRouter model 'openai/gpt-test' cannot be shown content by this release."
-    )
-    assert sent == []
 
 
 def test_bedrock_refuses_content_before_it_calls_converse() -> None:

@@ -5,9 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
-import httpx
 import pytest
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from azathoth.context import Context, LineageRun, LineageStep, StepLineage, running_step
 from azathoth.inputs import (
@@ -22,8 +21,6 @@ from azathoth.providers import (
     BedrockLanguageModel,
     ContentPart,
     ModelExecutionError,
-    OpenRouterConfiguration,
-    OpenRouterLanguageModel,
     Prompt,
     prompt_content_bytes,
 )
@@ -175,28 +172,6 @@ def prompt_refusal(
     return raised.value.errors()[0]["msg"].removeprefix("Value error, ")
 
 
-def openrouter_refusal() -> str:
-    """Return the message OpenRouter refuses a prompt of parts with."""
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(500, request=request)
-
-    model = OpenRouterLanguageModel(
-        OpenRouterConfiguration(
-            api_key=SecretStr("test-openrouter-key"),
-            base_url="https://openrouter.test/api/v1",
-            timeout_seconds=10.0,
-        ),
-        "<MODEL>",
-        transport=httpx.MockTransport(handler),
-    )
-
-    with pytest.raises(ModelExecutionError) as raised:
-        asyncio.run(model.complete(SHOWING))
-
-    return str(raised.value)
-
-
 def bedrock_refusal() -> str:
     """Return the message Bedrock refuses a prompt of parts with."""
 
@@ -282,11 +257,6 @@ DOCUMENTED: list[tuple[str, Callable[[], str], dict[str, str]]] = [
         "Model <PROVIDER>/<MODEL> was not given the bytes of content <DIGEST>.",
         missing_bytes,
         {"<DIGEST>": DIGEST},
-    ),
-    (
-        "OpenRouter model '<MODEL>' cannot be shown content by this release.",
-        openrouter_refusal,
-        {},
     ),
     (
         "Bedrock model '<MODEL>' cannot be shown content by this release.",

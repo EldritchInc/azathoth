@@ -458,8 +458,8 @@ reads them before the model is called, and gives them to the provider for
 the length of the call with `giving_prompt_content`; a provider reads each
 by digest with `prompt_content_bytes`, which raises `PromptContentError` for
 content it was not given. The deterministic model reads them the same way.
-Until OpenRouter and Bedrock send content in their own forms, each refuses a
-prompt of parts before sending anything.
+Until Bedrock sends content in its own form, it refuses a prompt of parts
+before sending anything.
 
 `ModelRequest` represents a provider-neutral request.
 
@@ -514,6 +514,15 @@ provider-neutral `ProviderModel` values.
 
 `OpenRouterLanguageModel` translates prompt execution into provider-neutral
 `ModelResponse` evidence.
+
+`openrouter_request` builds the request a prompt is sent as. A prompt of
+text is one user message of text. A prompt of parts is one user message of
+OpenRouter content parts, in order: `text`, `image_url` with a data URL for
+an image, and `file` with a data URL for a PDF, named `document-<N>.pdf`. A
+request holding a PDF pins OpenRouter's file parser to
+`OPENROUTER_PDF_ENGINE`, `native`, so the model reads the PDF itself and
+OpenRouter never extracts its text with a paid OCR service instead (ADR
+0115). Every piece's bytes are found before anything is sent.
 
 `OpenRouterModelRegistryLoader` constructs executable OpenRouter language model
 implementations for OpenRouter models represented in a `ModelCatalog`.

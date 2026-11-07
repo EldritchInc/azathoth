@@ -59,6 +59,12 @@ release dates are on the
   sent, only for content the run, or a run above it, received, and no event
   or run holds them. A prompt of text is unchanged
   ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **OpenRouter models are shown images and PDFs in OpenRouter's own
+  parts.** An image is sent as an `image_url` and a PDF as a `file`, in the
+  prompt's order, and a PDF is read by the model itself: the request pins
+  OpenRouter's PDF engine to `native`, so no paid OCR service reads it in
+  the model's place
+  ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 
 ### Evidence Out
 

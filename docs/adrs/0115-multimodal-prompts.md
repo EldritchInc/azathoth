@@ -100,9 +100,38 @@ Until a provider sends content in its own form, it refuses a prompt of
 parts before sending anything, rather than send its text alone:
 
 ```text
-OpenRouter model '<MODEL>' cannot be shown content by this release.
 Bedrock model '<MODEL>' cannot be shown content by this release.
 ```
+
+### OpenRouter is sent content parts, and reads PDFs natively
+
+A prompt of text is sent to OpenRouter as it always was: one user message
+whose content is the text. A prompt of parts is sent as one user message of
+OpenRouter's content parts, in the prompt's order. Text is a `text` part, an
+image an `image_url` part holding a data URL, and a PDF a `file` part
+holding one, named `document-<N>.pdf` in the order the prompt shows them:
+
+```json
+{"model": "<MODEL>", "messages": [{"role": "user", "content": [
+  {"type": "text", "text": "Here is the claim form:\n"},
+  {"type": "file", "file": {"filename": "document-1.pdf", "file_data": "data:application/pdf;base64,<BASE64>"}},
+  {"type": "text", "text": "\nand the photo of the damage:\n"},
+  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<BASE64>"}}
+]}],
+ "plugins": [{"id": "file-parser", "pdf": {"engine": "native"}}]}
+```
+
+OpenRouter gives a PDF to a model that cannot read files by extracting its
+text first, by default with an OCR service charged per page, and the model
+then reads text Azathoth never saw. A request that holds a PDF therefore
+pins the file parser to the `native` engine: the model reads the PDF
+itself, charged as its own input tokens. Which models can read a PDF is the
+catalog's to say: OpenRouter lists `file` among their input modalities.
+
+OpenRouter documents no limit on the size of a part, so none is checked
+before sending; a request OpenRouter refuses fails as any failed request
+does. The request is built, and every piece's bytes found, before anything
+is sent, so a prompt whose bytes were not given sends nothing.
 
 ## Consequences
 
@@ -125,6 +154,12 @@ Bedrock model '<MODEL>' cannot be shown content by this release.
 Rejected. `complete(prompt, contents=...)` would change every language
 model, and every test double of one, to carry what only two providers read.
 Giving the bytes for the length of the call keeps the interface as it is.
+
+### Let OpenRouter choose how to read a PDF
+
+Rejected. Its default for a model without native file support extracts the
+text with a paid OCR service, so a model would answer from text no one
+checked, at a cost no step declared.
 
 ### Let a provider read the content store
 

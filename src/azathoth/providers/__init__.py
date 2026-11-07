@@ -64,7 +64,11 @@ from azathoth.providers.models import (
     PromptPart,
     TextPart,
 )
-from azathoth.providers.openrouter import OpenRouterLanguageModel
+from azathoth.providers.openrouter import (
+    OPENROUTER_PDF_ENGINE,
+    OpenRouterLanguageModel,
+    openrouter_request,
+)
 from azathoth.providers.openrouter_directory import (
     OpenRouterModelDirectory,
 )
@@ -153,6 +157,7 @@ __all__ = [
     "load_bedrock_pricing",
     "MODEL_PORTFOLIO_TABLES",
     "MODEL_TABLES",
+    "OPENROUTER_PDF_ENGINE",
     "PROVIDER_MODEL_OBSERVATION_TABLES",
     "SqlModelPortfolioRepository",
     "SqlModelRepository",
@@ -204,6 +209,7 @@ __all__ = [
     "giving_prompt_content",
     "model_catalog_for_portfolio",
     "model_metadata_from_provider_model",
+    "openrouter_request",
     "prompt_content_bytes",
     "require_model_portfolio_repository",
     "require_model_repository",

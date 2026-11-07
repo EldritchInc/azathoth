@@ -1,13 +1,28 @@
-"""OpenRouter language model implementation."""
+"""OpenRouter language model implementation.
 
+A prompt of text is sent as one user message of text, as it always was. A
+prompt of parts is sent as one user message of OpenRouter content parts, in
+order (ADR 0115): text as `text`, an image as an `image_url` holding a data
+URL, and a PDF as a `file` holding one. A request holding a PDF pins
+OpenRouter's PDF engine to `native`, so a model that cannot read files is
+never given text another service extracted, at that service's price.
+"""
+
+import base64
 from time import perf_counter
+from typing import Final
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from azathoth.providers.exceptions import ModelExecutionError, UnsupportedModelRequestError
-from azathoth.providers.models import ModelResponse, Prompt
+from azathoth.inputs import PDF_MEDIA_TYPE
+from azathoth.providers.content import prompt_content_bytes
+from azathoth.providers.exceptions import ModelExecutionError
+from azathoth.providers.models import ModelResponse, Prompt, TextPart
 from azathoth.providers.openrouter_models import OpenRouterConfiguration
+
+OPENROUTER_PDF_ENGINE: Final = "native"
+"""The engine OpenRouter's file parser reads a PDF with: the model's own (ADR 0115)."""
 
 
 class _OpenRouterMessage(BaseModel):
@@ -71,19 +86,16 @@ class OpenRouterLanguageModel:
         """Complete a rendered prompt through OpenRouter.
 
         Raises:
-            UnsupportedModelRequestError: The prompt shows content.
+            PromptContentError: The prompt shows content whose bytes were not
+                given; nothing is sent.
             ModelExecutionError: The request failed or its reply is invalid.
         """
 
-        if prompt.parts:
-            raise UnsupportedModelRequestError(
-                f"OpenRouter model {self._model!r} cannot be shown content by this release."
-            )
-
+        body = openrouter_request(self._model, prompt)
         started_at = perf_counter()
 
         try:
-            response = await self._send(prompt)
+            response = await self._send(body)
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise ModelExecutionError(
@@ -113,7 +125,7 @@ class OpenRouterLanguageModel:
 
     async def _send(
         self,
-        prompt: Prompt,
+        body: dict[str, JsonValue],
     ) -> httpx.Response:
         """Send one OpenRouter chat completion request."""
 
@@ -129,13 +141,55 @@ class OpenRouterLanguageModel:
         ) as client:
             return await client.post(
                 "chat/completions",
-                json={
-                    "model": self._model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt.text,
-                        },
-                    ],
-                },
+                json=body,
             )
+
+
+def openrouter_request(
+    model: str,
+    prompt: Prompt,
+) -> dict[str, JsonValue]:
+    """Return the chat completion request that sends one prompt to one OpenRouter model.
+
+    Raises:
+        PromptContentError: The prompt shows content whose bytes were not
+            given.
+    """
+
+    content: JsonValue = prompt.text
+    documents = 0
+
+    if prompt.parts:
+        parts: list[JsonValue] = []
+
+        for part in prompt.parts:
+            if isinstance(part, TextPart):
+                parts.append({"type": "text", "text": part.text})
+                continue
+
+            shown = part.content
+            data = base64.b64encode(prompt_content_bytes(shown, model=f"openrouter/{model}"))
+            url = f"data:{shown.media_type};base64,{data.decode('ascii')}"
+
+            if shown.media_type == PDF_MEDIA_TYPE:
+                documents += 1
+                parts.append(
+                    {
+                        "type": "file",
+                        "file": {"filename": f"document-{documents}.pdf", "file_data": url},
+                    }
+                )
+            else:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+
+        content = parts
+
+    body: dict[str, JsonValue] = {
+        "model": model,
+        "messages": [{"role": "user", "content": content}],
+    }
+
+    if documents:
+        body["plugins"] = [{"id": "file-parser", "pdf": {"engine": OPENROUTER_PDF_ENGINE}}]
+
+    return body
