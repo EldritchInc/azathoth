@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "azathoth-mcp"
-version = "1.2.0"
+version = "1.3.0"
 description = "Serve promoted Azathoth workflows as Model Context Protocol tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed"
 ]
 dependencies = [
-    "azathoth-ai==1.2.*",
+    "azathoth-ai==1.3.*",
     "mcp>=2.3,<3",
     "pyjwt[crypto]>=2.10,<3",
 ]

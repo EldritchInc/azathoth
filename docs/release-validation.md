@@ -160,18 +160,23 @@ Before the TestPyPI trial, run the pre-release examples check in
 [Releasing](../RELEASING.md#pre-release-examples-run) on macOS:
 
 - install the locally built wheels of both distributions into a fresh venv
-  outside the checkout, following [Installing Azathoth](install.md);
+  outside the checkout, following [Installing Azathoth](install.md), with
+  the `documents` extra;
 - run every example in [Examples Tour](examples.md) against a fresh database;
 - serve a promoted workflow through the installed `azathoth-mcp` over stdio,
-  and read its evidence back.
+  and read its evidence back;
+- divide the example claim's PDF with `segment_pdf`;
+- write, import and call the example MCP server's tool, as
+  [Calling MCP Tools](mcp-tools.md) does.
 
-The provider-free examples (word count, child workflow, loop) must print
-exactly their documented results. The model-backed examples must complete
+The provider-free examples (word count, child workflow, loop, the PDF and
+the MCP tool) must print exactly their documented results. The model-backed examples must complete
 with the documented shape of result. A Windows run in PowerShell 7 is
 recommended whenever a Windows machine is available.
 
 After the TestPyPI trial, install both distributions from TestPyPI into
-another fresh venv and repeat the provider-free examples and the MCP check.
+another fresh venv and repeat the provider-free examples, the MCP check, the
+PDF and the MCP tool.
 
 ## 5. Architecture Invariants
 
@@ -381,6 +386,13 @@ what the stack does not run, such as another distribution's command, is not
 deployed: nothing the deployment would exercise has changed. Its changelog
 entry says that it was not, so its release notes do.
 
+A release that does change one of these, but ships when no sandbox account
+is available, is not deployed because no sandbox was available. It is the
+one exception to this gate, and it is never silent: the release's changelog
+entry says it was not deployed and why, what the repository's checks did
+prove, and what only a deployment would have, so its release notes say so
+too. The next release that is deployed proves both.
+
 ## Release Candidate Checklist
 
 ```text
@@ -390,13 +402,14 @@ entry says that it was not, so its release notes do.
 [ ] docs tests pass, and the documents above were reviewed
 [ ] both pyproject.toml files and both __init__.py files declare the release version
 [ ] the pre-release examples run passed on macOS from the locally built wheels,
-    including the MCP check
+    including the MCP check, the PDF and the MCP tool
 [ ] CI's container job is green, and make container-test passed locally
 [ ] CI's postgres job is green, and make postgres-test passed locally
 [ ] the AWS stack validated and passed the sandbox deployment of section 9, or
-    the release changes nothing it runs, and its changelog entry says so
+    the release changes nothing it runs, or no sandbox was available, and its
+    changelog entry says which
 [ ] the TestPyPI trial published both distributions, installed them and passed
-    the provider-free examples and the MCP check
+    the provider-free examples, the MCP check, the PDF and the MCP tool
 [ ] every link in README.md resolves, including https://eldritchinc.com/workwithus/
 [ ] CHANGELOG.md's first entry is the release, and its notes are on the GitHub release
 [ ] Discussions are enabled, and open good first issues are labeled

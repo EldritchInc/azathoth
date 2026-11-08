@@ -82,7 +82,7 @@ Every other parameter has a default:
 | Parameter | Default | Meaning |
 | --- | --- | --- |
 | `AssignPublicIp` | `DISABLED` | `ENABLED` for public subnets without a NAT gateway. |
-| `ImageUri` | `ghcr.io/eldritchinc/azathoth:1.2.0` | The image; pin it by digest, or use your own ECR copy (see [Copying the Image Into ECR](#copying-the-image-into-ecr)). |
+| `ImageUri` | `ghcr.io/eldritchinc/azathoth:1.3.0` | The image; pin it by digest, or use your own ECR copy (see [Copying the Image Into ECR](#copying-the-image-into-ecr)). |
 | `CpuArchitecture` | `X86_64` | Or `ARM64`, which costs less; the image is built for both. |
 | `TaskCpu`, `TaskMemory` | `1024`, `2048` | One task's CPU units and MiB. |
 | `EnableBedrock` | `false` | `true` grants the Bedrock calls and turns Bedrock on in the stack's region. |
@@ -424,17 +424,17 @@ Amazon ECR instead. Copy the image there, both architectures at once:
 REGISTRY=<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
 aws ecr create-repository --repository-name azathoth
 aws ecr get-login-password | docker login --username AWS --password-stdin $REGISTRY
-docker buildx imagetools create --tag $REGISTRY/azathoth:1.2.0 ghcr.io/eldritchinc/azathoth:1.2.0
+docker buildx imagetools create --tag $REGISTRY/azathoth:1.3.0 ghcr.io/eldritchinc/azathoth:1.3.0
 ```
 
 ```powershell
 $REGISTRY = "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com"
 aws ecr create-repository --repository-name azathoth
 aws ecr get-login-password | docker login --username AWS --password-stdin $REGISTRY
-docker buildx imagetools create --tag $REGISTRY/azathoth:1.2.0 ghcr.io/eldritchinc/azathoth:1.2.0
+docker buildx imagetools create --tag $REGISTRY/azathoth:1.3.0 ghcr.io/eldritchinc/azathoth:1.3.0
 ```
 
-Then deploy with `ImageUri=$REGISTRY/azathoth:1.2.0`. The subnets still need
+Then deploy with `ImageUri=$REGISTRY/azathoth:1.3.0`. The subnets still need
 routes to SQS, S3, Secrets Manager, CloudWatch Logs and ECR, through VPC
 endpoints, and to the model providers.
 

@@ -282,14 +282,16 @@ deactivate
 ### 2. Install them into a fresh venv
 
 Install both wheels into a venv outside the checkout, with a database of its
-own. Stay in the checkout afterwards: the example commands use its paths.
+own, and Azathoth with its `documents` extra, as a user reading PDFs would.
+`azathoth-mcp` brings the MCP SDK, which the `mcp` extra would. Stay in the
+checkout afterwards: the example commands use its paths.
 
 ```bash
 rm -rf ~/azathoth-release-check
 mkdir ~/azathoth-release-check
 python3 -m venv ~/azathoth-release-check/.venv
 source ~/azathoth-release-check/.venv/bin/activate
-python -m pip install dist/azathoth_ai-*.whl dist/azathoth_mcp-*.whl
+python -m pip install "$(echo dist/azathoth_ai-*.whl)[documents]" dist/azathoth_mcp-*.whl
 export AZATHOTH_DATABASE="$HOME/azathoth-release-check/examples.db"
 ```
 
@@ -398,7 +400,46 @@ That proves the installed server finds its document and the database,
 offers only what is exposed, runs the promoted workflow as a recorded
 invocation, and reads back its evidence with the caller.
 
-### 5. Run the model-backed examples
+### 5. Read a PDF
+
+Step 3 installed the standard tools. Give the example claim to the workflow
+that divides it with `segment_pdf`:
+
+```bash
+azathoth workflow import examples/documents/segment-claim.json
+azathoth workflow run a1000000-0000-4000-8000-0000000000c0 --input-file examples/documents/claim.pdf --output result
+```
+
+The run must print exactly this line, with the installed pdfminer.six's
+version and the digest of the extraction it kept in place of the
+placeholders:
+
+```text
+{"extraction": {"tool": "segment_pdf", "version": "1.0.0 (pdfminer.six <PDFMINER_VERSION>; line_overlap=0.5,char_margin=2.0,line_margin=0.5,word_margin=0.1,boxes_flow=0.5)", "digest": "<EXTRACTION_DIGEST>", "source_digest": "9bc3db695946b626972580aa8ed59d6bb008c72f5ca51d79910d22c7feaaa185", "media_type": "application/pdf"}}
+```
+
+That proves the `documents` extra installs pdfminer.six from the wheel's
+metadata, a PDF is accepted by reference and kept, and the standard
+`segment_pdf` finds it through the venv's `python` and keeps its
+extraction.
+
+### 6. Call an MCP tool
+
+Follow [Calling MCP Tools](docs/mcp-tools.md): write the example server's
+tool document, import it, and call the tool from a workflow step:
+
+```bash
+azathoth tool from-mcp --tool count_words -- python examples/mcp/word_count_server.py > "$(dirname "$AZATHOTH_DATABASE")/count-words-mcp.json"
+azathoth tool import "$(dirname "$AZATHOTH_DATABASE")/count-words-mcp.json"
+azathoth workflow import examples/mcp/count-words-over-mcp.json
+azathoth workflow run a1000000-0000-4000-8000-0000000000b0 --input '"the old ones wait and dream"' --output result
+```
+
+The run must print exactly `6`. That proves the server the guide names is
+started over stdio by the venv's `python`, its tool's document is written
+and pinned, and a step calls it.
+
+### 7. Run the model-backed examples
 
 Set the key (see [Connecting OpenRouter](docs/openrouter.md)), authorize
 models and add a judge. Then work through examples 2 and 6 to 8 of the
@@ -418,7 +459,7 @@ workflow writer and code review. Each must complete:
 The novel (example 9) is optional because of its cost. When it is run, a
 three-chapter book is enough.
 
-### 6. Clean up
+### 8. Clean up
 
 ```bash
 deactivate
@@ -428,7 +469,7 @@ rm -rf ~/azathoth-release-check
 A failure in this run blocks the release, just as a failing test would. Fix
 it on a branch, merge, and run it again from step 1.
 
-### 7. Test the image
+### 9. Test the image
 
 With Docker running and the development venv active again, from the
 checkout on `main`, build the release commit's image and run its tests:
@@ -442,7 +483,7 @@ They must pass, as they did in CI. Then follow steps 2 and 3 of
 [Running in a Container](docs/container.md) once by hand, with the image you
 built (`azathoth:test`) and a fresh volume, and remove the volume afterwards.
 
-### 8. Test PostgreSQL
+### 10. Test PostgreSQL
 
 Still with Docker running, run the persistence tests against a throwaway
 PostgreSQL server:
@@ -473,13 +514,13 @@ not the one from the pre-release run, from inside the checkout:
 rm -rf ~/azathoth-testpypi-check
 python3 -m venv ~/azathoth-testpypi-check/.venv
 source ~/azathoth-testpypi-check/.venv/bin/activate
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "azathoth-ai==<version>" "azathoth-mcp==<version>"
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "azathoth-ai[documents]==<version>" "azathoth-mcp==<version>"
 export AZATHOTH_DATABASE="$HOME/azathoth-testpypi-check/examples.db"
 azathoth --version
 azathoth-mcp --version
 ```
 
-Repeat steps 3 and 4 of the [Pre-Release Examples Run](#pre-release-examples-run):
+Repeat steps 3 to 6 of the [Pre-Release Examples Run](#pre-release-examples-run):
 they must print exactly what they printed there. Then clean up:
 
 ```bash
@@ -509,8 +550,8 @@ git push origin v<version>
 For example:
 
 ```bash
-git tag -a v1.2.0 -m "Azathoth 1.2.0"
-git push origin v1.2.0
+git tag -a v1.3.0 -m "Azathoth 1.3.0"
+git push origin v1.3.0
 ```
 
 The workflow then builds, validates and publishes to PyPI, and then
@@ -613,6 +654,11 @@ Section 9 is the authority for what each step must show.
 A release that changes none of these, and changes the image only by adding
 what the stack does not run, as 1.2.0 added `azathoth-mcp`, is not deployed.
 Its changelog entry says so, so the release notes do.
+
+A release that changes one of them when no sandbox account is available, as
+1.3.0 did, is not deployed either. Section 9 allows it only on the record:
+the changelog entry says the release was not deployed and why, what was
+checked instead, and what that leaves unproven.
 
 ## Release Principle
 

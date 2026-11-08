@@ -24,6 +24,7 @@ UNRELEASED = "Unreleased"
 """The entry for what is on `main` but not yet released, renamed when it is."""
 
 RELEASE_DECISIONS = {
+    "1.3.0": range(112, 120),
     "1.2.0": range(111, 112),
     "1.1.0": range(91, 111),
 }
@@ -88,7 +89,7 @@ def fenced(
 def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     releases = RELEASE_HEADING.findall(text())
 
-    assert releases == ["1.2.0", "1.1.0", "1.0.0"]
+    assert releases == ["1.3.0", "1.2.0", "1.1.0", "1.0.0"]
     assert releases[0] == __version__
     assert releases[: len(RELEASE_DECISIONS)] == list(RELEASE_DECISIONS)
 
@@ -147,9 +148,40 @@ def test_this_releases_upgrade_runs_the_install_guides_upgrade_commands() -> Non
     upgrade = entry(__version__)
 
     for language in ("bash", "powershell"):
-        assert fenced(upgrade, language, "### Upgrading From 1.1") == fenced(
+        assert fenced(upgrade, language, "### Upgrading From 1.2") == fenced(
             install, language, "## Upgrading, Leaving and Uninstalling"
         )
+
+
+def test_1_2s_upgrade_from_1_1_still_shows_its_commands() -> None:
+    upgrade = entry("1.2.0")
+
+    for language in ("bash", "powershell"):
+        assert fenced(upgrade, language, "### Upgrading From 1.1") == (
+            "python -m pip install --upgrade azathoth-ai\nazathoth init\n"
+        )
+
+
+def test_1_3_says_what_did_not_change_and_names_each_reworded_refusal() -> None:
+    upgrade = entry("1.3.0")
+
+    assert "Nothing changes for an existing installation." in upgrade
+    assert (
+        "Documents, commands, the output of\nevery command that succeeds, and the database "
+        "schema are as 1.2 left them."
+    ) in upgrade
+    assert "Three refusals the 1.2 documentation quoted now read differently" in upgrade
+
+    for refusal in (
+        "Only process tool implementations may\n  declare a command.",
+        "Only process and MCP tool implementations may\n  declare a timeout.",
+        "`mcp, process, python`",
+        "Workflow document is not a valid\n  WorkflowSpecification.",
+    ):
+        assert refusal in upgrade, refusal
+
+    assert "`azathoth-ai[documents]` and `azathoth-ai[mcp]`" in upgrade
+    assert "it installs `segment_pdf`" in upgrade
 
 
 def test_the_install_guide_upgrades_azathoth_mcp_with_azathoth() -> None:
@@ -202,6 +234,15 @@ def test_every_link_is_absolute_so_it_works_in_the_release_notes() -> None:
 
     assert targets
     assert all(target.startswith("https://") for target in targets), targets
+
+
+def test_1_3_says_it_was_not_deployed_to_aws_because_no_sandbox_was_available() -> None:
+    validation = (PROJECT_ROOT / "docs" / "release-validation.md").read_text(encoding="utf-8")
+
+    assert "because no sandbox was available" in validation
+    assert "no sandbox was available, so this release was not deployed" in entry("1.3.0")
+    assert "is unproven for 1.3.0" in entry("1.3.0")
+    assert f"]({REPOSITORY}/docs/release-validation.md#9-the-aws-deployment)" in entry("1.3.0")
 
 
 def test_1_2_says_it_was_not_deployed_to_aws_and_why() -> None:

@@ -1,0 +1,5 @@
+# Bytes that look like text but are not: a checkout must never change them.
+# The example PDF holds no NUL byte, so without this Git would take it for
+# text and a Windows checkout would rewrite its line endings, changing its
+# digest and every offset in it.
+*.pdf binary

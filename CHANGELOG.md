@@ -6,7 +6,28 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
-## Unreleased
+## 1.3.0
+
+Azathoth 1.3 reads documents and keeps the evidence of where each answer
+came from. A workflow can be given a PDF or an image; a prompt step can show
+it to a model or cite the passages of it the answer rests on, and every
+citation is checked against the text before it is kept. Citations are
+scored in benchmarks and optimization, and export as W3C Web Annotations
+that link back into the documents, S3 objects among them. A workflow can
+declare the schemas of its input and its result, and every production
+invocation is held to them; and a step can call a tool another MCP server
+serves, pinned to that tool's schemas. Documents, commands, the output of
+every command that succeeds, and the database schema are as 1.2 left them.
+
+This release changes what the image runs on AWS: the worker records the
+version of every S3 object it reads, and the image now reads PDFs. Release
+validation requires such a release to be deployed to an AWS sandbox before
+it ships, and no sandbox was available, so this release was not deployed.
+The template was read, the worker run against botocore's `Stubber` and the
+S3 tools against a stand-in for S3, as for every release; what only a real
+deployment proves, that the stack still runs the changed worker and image
+on real SQS and S3, is unproven for 1.3.0
+([Release Validation](https://github.com/EldritchInc/azathoth/blob/main/docs/release-validation.md#9-the-aws-deployment)).
 
 ### Documents In
 
@@ -79,6 +100,14 @@ release dates are on the
   Whatever model a step is bound to, its rendered prompt is checked against
   the model's catalog entry before the model is called
   ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
+- **An example PDF to try it on.** `examples/documents` holds a two-page
+  claim, written by a script byte for byte, a workflow that divides it with
+  `segment_pdf` into the segments a model can cite, and one that answers
+  from it, citing it. The new
+  [Reading Documents and Citing Them](https://github.com/EldritchInc/azathoth/blob/main/docs/documents.md)
+  guide walks through both and exports the citations
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md);
+  [ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Evidence Out
 
@@ -241,6 +270,41 @@ release dates are on the
   only then waited for. On a Python without CPython's gh-119710 fix, waiting
   for it with its stdin still open never returned, so a run stopped by
   SIGTERM could keep its lease and never exit.
+
+### Upgrading From 1.2
+
+Nothing changes for an existing installation. Upgrade, and run `azathoth init`
+as after every upgrade; it installs `segment_pdf`, the one new standard tool:
+
+```bash
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+If you serve workflows with `azathoth-mcp`, upgrade it in the same command,
+as [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#upgrading-leaving-and-uninstalling) shows: 1.3 of it requires 1.3 of
+`azathoth-ai`.
+
+Reading PDFs and calling MCP tools each need an extra, installed only by
+those who use them: `azathoth-ai[documents]` and `azathoth-ai[mcp]`.
+`azathoth-mcp` brings the MCP SDK with it.
+
+Three refusals the 1.2 documentation quoted now read differently, for anyone
+who matches on their text:
+
+- a tool implementation that is not a process one and declares a command,
+  or a timeout, is refused with `Only process tool implementations may
+  declare a command.` or `Only process and MCP tool implementations may
+  declare a timeout.`, where one message named both;
+- the refusal of an unsupported runtime lists `mcp, process, python`;
+- `workflow import` adds the reason a document is not a valid workflow, when
+  the workflow states one, after `Workflow document is not a valid
+  WorkflowSpecification.`
 
 ## 1.2.0
 

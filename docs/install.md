@@ -201,7 +201,7 @@ azathoth --help
 ```
 
 `azathoth --version` prints the installed version, for example
-`azathoth 1.2.0`.
+`azathoth 1.3.0`.
 
 Then confirm that the `python` on your `PATH` is the venv's, and that it can
 import Azathoth. Azathoth's child-process tools depend on this:
@@ -472,7 +472,9 @@ segment_pdf needs pdfminer.six, which is not installed; install azathoth-ai[docu
 ```
 
 The [standard tools](../src/azathoth/standard/README.md#segment_pdf)
-describe what it extracts.
+describe what it extracts, and
+[Reading Documents and Citing Them](documents.md) walks through dividing a
+PDF and answering from it, citing it.
 
 ## Optional: Calling MCP Tools
 

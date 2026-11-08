@@ -581,6 +581,17 @@ benchmark: [Novel Example](../examples/novel/README.md).
 ## Also in `examples/`
 
 - `goals/accurate-answer.json`: a goal document, for `azathoth goal import`.
+- `documents/claim.pdf` and `documents/segment-claim.json`: a two-page
+  claim, and a workflow that divides it with the standard `segment_pdf` tool
+  into the segments a model can cite. It needs the `documents` extra; see
+  [Installing Azathoth](install.md#optional-reading-pdfs). Run it with
+  `azathoth workflow run a1000000-0000-4000-8000-0000000000c0 --input-file examples/documents/claim.pdf --output result`.
+  `documents/make_claim_pdf.py` writes the PDF again, byte for byte, and
+  `documents/answer-from-claim.json` answers from it with a model, citing
+  it; see [Reading Documents and Citing Them](documents.md).
+- `mcp/word_count_server.py` and `mcp/count-words-over-mcp.json`: an MCP
+  server and a workflow that calls its tool; see
+  [Calling MCP Tools](mcp-tools.md).
 - `dogfood/exact-match-live.json`: a one-step workflow for checking live
   models on an exact-match task.
 - `execute_strategy.py` and `create_optimization_example.py`: small scripts

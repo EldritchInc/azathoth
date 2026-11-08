@@ -114,6 +114,7 @@ still passes, follow
 | [Running in a Container](https://github.com/EldritchInc/azathoth/blob/main/docs/container.md) | The container image: a database volume or PostgreSQL, keys, jobs over stdin, a read-only root |
 | [Running on AWS](https://github.com/EldritchInc/azathoth/blob/main/docs/aws.md) | Queue workers on Fargate behind SQS, from one CloudFormation template |
 | [Serving Workflows Over MCP](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md) | Promoted workflows as tools for Claude Desktop, IDEs and agents, over stdio or HTTP behind your identity provider |
+| [Reading Documents and Citing Them](https://github.com/EldritchInc/azathoth/blob/main/docs/documents.md) | A PDF divided into segments, answered from with a citation behind each answer, every citation checked and exported as Web Annotations |
 | [Calling MCP Tools](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp-tools.md) | A step calling a tool another MCP server serves, pinned to its schemas, over stdio or HTTP |
 | [Connecting OpenRouter](https://github.com/EldritchInc/azathoth/blob/main/docs/openrouter.md) | An API key, finding and authorizing models, adding judges |
 | [Connecting Amazon Bedrock](https://github.com/EldritchInc/azathoth/blob/main/docs/bedrock.md) | AWS credentials, the IAM policy, pricing Bedrock models and authorizing them |
@@ -205,11 +206,13 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.2 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Azathoth 1.3 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
 Windows, all tested in CI. It runs models on OpenRouter and Amazon Bedrock,
 keeps its state in SQLite or PostgreSQL, ships as a signed container image
-for amd64 and arm64, deploys to AWS from one CloudFormation template, and
-serves promoted workflows to AI clients over MCP with `azathoth-mcp`.
+for amd64 and arm64, and deploys to AWS from one CloudFormation template. It
+reads PDFs and images and cites the passages its answers came from, serves
+promoted workflows to AI clients over MCP with `azathoth-mcp`, and calls
+tools other MCP servers serve.
 The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
 lists what each release added.
 

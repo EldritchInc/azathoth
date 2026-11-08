@@ -202,7 +202,7 @@ def test_the_readme_asks_for_no_funding_itself() -> None:
 def test_the_project_status_is_this_release_and_its_promise() -> None:
     status = section("Project Status")
 
-    assert "Azathoth 1.2 " in status
+    assert "Azathoth 1.3 " in status
     assert "1.0" not in status.replace("1.0.0", "")
 
     for promised in ("workflow, tool and job documents", "database schema", "Python API"):
