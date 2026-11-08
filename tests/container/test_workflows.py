@@ -6,7 +6,7 @@ The workflows are read as text, so no YAML parser is needed.
 import re
 from pathlib import Path
 
-from azathoth import __version__
+from tests.test_changelog import latest_release
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -60,6 +60,17 @@ def test_the_release_publishes_the_image_only_after_the_wheel() -> None:
     assert "needs.publish-pypi.result == 'success'" in publish
     assert "github.event_name == 'workflow_dispatch'" in publish
     assert "version: ${{ steps.version.outputs.version }}" in job("release.yml", "build")
+
+
+def test_the_release_builds_an_image_only_for_a_final_release() -> None:
+    build = job("release.yml", "build")
+    publish = job("release.yml", "publish-image")
+
+    assert "final: ${{ steps.version.outputs.final }}" in build
+    assert '[[ "${version}" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]' in build
+    assert 'echo "final=true" >> "${GITHUB_OUTPUT}"' in build
+    assert 'echo "final=false" >> "${GITHUB_OUTPUT}"' in build
+    assert "&& needs.build.outputs.final == 'true'" in publish
 
 
 def test_the_release_checks_the_images_version_before_pushing() -> None:
@@ -159,7 +170,7 @@ def test_the_container_guide_verifies_the_signature_this_workflow_makes() -> Non
     guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
     identity = (
         "https://github.com/EldritchInc/azathoth/.github/workflows/release.yml"
-        f"@refs/tags/v{__version__}"
+        f"@refs/tags/v{latest_release()}"
     )
 
     assert (WORKFLOWS / "release.yml").exists()

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.benchmark_checks import (
     comparisons_supported,
     configured_benchmark,
@@ -25,15 +26,13 @@ from azathoth.cli.rendering import (
     render_workflow_benchmark_execution_summaries,
     render_workflow_benchmark_result,
 )
+from azathoth.cli.service import history_line, identical_note, import_note, service_instance
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDatasetRevision,
-    BenchmarkDocumentError,
     BenchmarkRepository,
     SemanticJudgingError,
     UnsupportedComparisonError,
-    decode_benchmark_document,
-    earliest_identical_benchmark_revision,
     encode_benchmark_document,
 )
 from azathoth.runtime import (
@@ -49,14 +48,12 @@ from azathoth.workflows import (
 
 
 def list_benchmarks() -> int:
-    """List durable benchmark datasets."""
+    """List durable benchmark datasets, through the service API (ADR 0120)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).benchmarks
-
-    for dataset in repository.datasets():
-        print(f"{dataset.id}  {dataset.version}  {dataset.name}")
+    for benchmark in service_instance(configuration).benchmarks.list():
+        print(f"{benchmark.id}  {benchmark.version}  {benchmark.name}")
 
     return 0
 
@@ -128,40 +125,26 @@ def list_benchmark_history(
     Each line contains the revision number, import time, the first twelve
     characters of the content digest, the declared version, the case count,
     and the name. A revision with the same content as an earlier one names
-    the earliest such revision. Only durable state is read.
+    the earliest such revision. Only durable state is read, through the
+    service API (ADR 0120).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = repositories(configuration).benchmarks.revisions(benchmark_id)
-
-    if not history:
+    try:
+        history = service_instance(configuration).benchmarks.history(benchmark_id, limit=limit)
+    except api.NotFoundError as exc:
         print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    newest_first = tuple(reversed(history))
-
-    if limit is not None:
-        newest_first = newest_first[:limit]
-
-    for selected in newest_first:
-        identical = earliest_identical_benchmark_revision(
-            history,
-            selected,
-        )
-
-        note = f"  identical to revision {identical.number}" if identical is not None else ""
-
-        dataset = selected.dataset
-
+    for entry in history:
         print(
-            f"{selected.number}  {_render_imported_at(selected)}  "
-            f"{selected.content_digest[:12]}  {dataset.version}  "
-            f"{len(dataset.cases)} cases  {dataset.name}{note}"
+            f"{history_line(entry)}  {entry.version}  "
+            f"{entry.case_count} cases  {entry.name}{identical_note(entry)}"
         )
 
     return 0
@@ -408,11 +391,11 @@ def import_benchmark(
 
         return 1
 
+    configuration = CliRuntimeConfiguration.from_environment()
+
     try:
-        dataset = decode_benchmark_document(
-            document,
-        )
-    except BenchmarkDocumentError as exc:
+        imported = service_instance(configuration).benchmarks.import_document(document)
+    except api.InvalidDocumentError as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -420,22 +403,10 @@ def import_benchmark(
 
         return 1
 
-    configuration = CliRuntimeConfiguration.from_environment()
-
-    repository = repositories(configuration).benchmarks
-
-    saved = repository.save(
-        dataset,
+    print(
+        f"Imported benchmark dataset {imported.id} revision {imported.revision.number}"
+        f"{import_note(imported)}."
     )
-
-    identical = earliest_identical_benchmark_revision(
-        repository.revisions(dataset.id),
-        saved,
-    )
-
-    note = f" (identical to revision {identical.number})" if identical is not None else ""
-
-    print(f"Imported benchmark dataset {dataset.id} revision {saved.number}{note}.")
 
     return 0
 

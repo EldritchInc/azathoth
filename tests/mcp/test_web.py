@@ -28,20 +28,11 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from starlette.applications import Starlette
 
-from azathoth.persistence.repositories import Repositories, open_repositories
+from azathoth.persistence.repositories import open_repositories
 from azathoth.prompting import FixedModelSelection, PromptStrategySpec
-from azathoth.providers import (
-    DeterministicLanguageModel,
-    LanguageModelRegistry,
-    ModelCatalog,
-    ModelMetadata,
-    ModelPortfolio,
-    Prompt,
-)
-from azathoth.runtime import AzathothRuntime
+from azathoth.providers import Prompt
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
-    WorkflowCatalog,
     WorkflowMetadata,
     WorkflowProductionState,
     WorkflowSpecification,
@@ -64,6 +55,7 @@ from azathoth_mcp.web import (
     scopes_supported,
     transport_security,
 )
+from tests.mcp.test_service import instance_serving
 
 SUMMARIZE_ID = UUID("7d1f3c2a-0b8e-4c55-9a61-2f0d6c1e9b44")
 
@@ -121,48 +113,20 @@ def production_state(
     )
 
 
-def runtime_of(
-    stores: Repositories,
-) -> AzathothRuntime:
-    """Compose a runtime with one fake model and the database's production states."""
-
-    return AzathothRuntime(
-        workflows=WorkflowCatalog(),
-        production_states=stores.production_states.states(),
-        models=ModelCatalog(
-            models=(
-                ModelMetadata(
-                    provider=PRIMARY.provider,
-                    model=PRIMARY.model,
-                    display_name=PRIMARY.identifier,
-                ),
-            )
-        ),
-        portfolio=ModelPortfolio(),
-        language_models=LanguageModelRegistry(
-            {
-                PRIMARY.identifier: DeterministicLanguageModel(
-                    provider=PRIMARY.provider, model=PRIMARY.model
-                ),
-            }
-        ),
-    )
-
-
 def service_over(
     tmp_path: Path,
 ) -> ToolService:
     """Return a tool service over a fresh database with both workflows active."""
 
-    stores = open_repositories(tmp_path / "azathoth.db")
+    database = tmp_path / "azathoth.db"
+    stores = open_repositories(database)
 
     for workflow_id in (SUMMARIZE_ID, TRIAGE_ID):
         stores.production_states.set(production_state(workflow_id))
 
     return ToolService(
         catalog=ToolCatalog(EXPOSURE, stores.production_states),
-        repositories=stores,
-        load_runtime=lambda: runtime_of(stores),
+        instance=instance_serving(database, PRIMARY),
     )
 
 

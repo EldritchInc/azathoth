@@ -148,4 +148,4 @@ jobs:
       - name: Test on PostgreSQL
         env:
           AZATHOTH_TEST_POSTGRES_URL: postgresql://azathoth:azathoth@localhost:5432/azathoth
-        run: python -m pytest tests/persistence -ra
+        run: python -m pytest tests/persistence tests/api -ra

@@ -164,7 +164,7 @@ def test_arguments_breaking_the_workflows_input_schema_are_refused_recording_not
         "$.input.priority: 'high' is not of type 'integer'."
     )
     assert server.repositories.invocations.invocation_for_idempotency_key("t-1") is None
-    assert server.loads == 0
+    assert server.discoveries == 0
 
 
 def test_an_input_the_operators_schema_allows_is_still_held_to_the_workflows(

@@ -587,6 +587,50 @@ gh release create v<version> --title "Azathoth <version>" --notes-file release-n
 A tag identifies source that has already passed validation. It is not the
 mechanism that discovers whether the release works.
 
+## Pre-Releases
+
+A pre-release lets the next release's work be installed from PyPI before it
+is final: an alpha, beta or release candidate, such as `1.4.0a1`. It follows
+the release steps, with these differences.
+
+- Its version, `<major>.<minor>.<patch>` followed by `a`, `b` or `rc` and a
+  number, goes in the same four places, and `azathoth-mcp` requires the
+  pre-release's minor release, `azathoth-ai==<major>.<minor>.*`.
+- The changelog keeps its `## Unreleased` entry; nothing is renamed.
+- The documents and the AWS template keep showing the latest final release,
+  whose image they use. The tests hold them to that release, not to the
+  pre-release.
+- The [Pre-Release Examples Run](#pre-release-examples-run), the image test
+  and the AWS deployment check are not required. The test suite, the
+  PostgreSQL tests, every gate and the
+  [Trial Release on TestPyPI](#trial-release-on-testpypi) are.
+- The release workflow publishes both distributions to PyPI and no image: it
+  builds an image only for a final release.
+
+Tag it as any release:
+
+```bash
+git switch main
+git pull
+git tag -a v<version> -m "Azathoth <version>"
+git push origin v<version>
+```
+
+pip installs a pre-release only when asked for it, so nobody receives one by
+upgrading:
+
+```bash
+python -m pip install --pre azathoth-ai azathoth-mcp
+```
+
+Its GitHub Release is marked as a pre-release, and its notes are the
+`## Unreleased` entry:
+
+```bash
+awk -v version=Unreleased '$0 == "## " version {found = 1; next} /^## / {found = 0} found' CHANGELOG.md > release-notes.md
+gh release create v<version> --prerelease --title "Azathoth <version>" --notes-file release-notes.md
+```
+
 ## Optional Live Verification
 
 OpenRouter verification is explicitly opt-in, and may consume API credits.

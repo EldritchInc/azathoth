@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.persistence.repositories import open_repositories
 from azathoth_mcp.access import READ_ALL_SCOPE, READ_SCOPE, McpCaller, Transport, invoke_scope
 from azathoth_mcp.catalog import ToolCatalog, check_exposure
@@ -78,12 +79,12 @@ def service_without_production(
 ) -> ToolService:
     """Return a service over the guide's document and a database with nothing promoted."""
 
-    stores = open_repositories(tmp_path / "azathoth.db")
+    database = tmp_path / "azathoth.db"
+    stores = open_repositories(database)
 
     return ToolService(
         catalog=ToolCatalog(decode_exposure(exposure()), stores.production_states),
-        repositories=stores,
-        load_runtime=lambda: pytest.fail("No runtime is needed."),
+        instance=api.Azathoth(open_repositories(database), directories=()),
     )
 
 

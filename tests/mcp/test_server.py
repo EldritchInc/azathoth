@@ -12,20 +12,11 @@ from mcp import Client
 from mcp.server.lowlevel import Server
 from pydantic import JsonValue
 
-from azathoth.persistence.repositories import Repositories, open_repositories
+from azathoth.persistence.repositories import open_repositories
 from azathoth.prompting import FixedModelSelection, PromptStrategySpec
-from azathoth.providers import (
-    DeterministicLanguageModel,
-    LanguageModelRegistry,
-    ModelCatalog,
-    ModelMetadata,
-    ModelPortfolio,
-    Prompt,
-)
-from azathoth.runtime import AzathothRuntime
+from azathoth.providers import Prompt, ProviderModel
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
-    WorkflowCatalog,
     WorkflowMetadata,
     WorkflowProductionState,
     WorkflowSpecification,
@@ -55,6 +46,8 @@ from azathoth_mcp.server import (
     build_server,
 )
 from azathoth_mcp.service import ToolService
+from tests.api.test_models import StaticDirectory
+from tests.mcp.test_service import instance_serving
 
 SUMMARIZE_ID = UUID("7d1f3c2a-0b8e-4c55-9a61-2f0d6c1e9b44")
 
@@ -122,49 +115,36 @@ def production_state(
     )
 
 
-def runtime_of(
-    stores: Repositories,
-) -> AzathothRuntime:
-    """Compose a runtime with one fake model and the database's production states."""
+class BrokenDirectory(StaticDirectory):
+    """A provider directory that fails with a secret in its message."""
 
-    return AzathothRuntime(
-        workflows=WorkflowCatalog(),
-        production_states=stores.production_states.states(),
-        models=ModelCatalog(
-            models=(
-                ModelMetadata(
-                    provider=PRIMARY.provider,
-                    model=PRIMARY.model,
-                    display_name=PRIMARY.identifier,
-                ),
-            )
-        ),
-        portfolio=ModelPortfolio(),
-        language_models=LanguageModelRegistry(
-            {
-                PRIMARY.identifier: DeterministicLanguageModel(
-                    provider=PRIMARY.provider, model=PRIMARY.model
-                ),
-            }
-        ),
-    )
+    async def models(
+        self,
+    ) -> tuple[ProviderModel, ...]:
+        """Fail as a server's own bug would."""
+
+        raise RuntimeError("password=hunter2")
 
 
 def service_over(
     tmp_path: Path,
     *,
-    load_runtime: Callable[[Repositories], AzathothRuntime] = runtime_of,
+    broken: bool = False,
 ) -> ToolService:
     """Return a tool service over a fresh database with two active workflows."""
 
-    stores = open_repositories(tmp_path / "azathoth.db")
+    database = tmp_path / "azathoth.db"
+    stores = open_repositories(database)
     stores.production_states.set(production_state(SUMMARIZE_ID, PRIMARY))
     stores.production_states.set(production_state(TRIAGE_ID, MISSING))
 
     return ToolService(
         catalog=ToolCatalog(EXPOSURE, stores.production_states),
-        repositories=stores,
-        load_runtime=lambda: load_runtime(stores),
+        instance=instance_serving(
+            database,
+            PRIMARY,
+            directory=BrokenDirectory(PRIMARY.provider, ()) if broken else None,
+        ),
     )
 
 
@@ -401,14 +381,7 @@ def test_a_call_without_arguments_is_refused_for_its_missing_input(
 def test_an_unexpected_failure_is_reported_without_its_details(
     tmp_path: Path,
 ) -> None:
-    def broken(
-        stores: Repositories,
-    ) -> AzathothRuntime:
-        raise RuntimeError("password=hunter2")
-
-    server = build_server(
-        service_over(tmp_path, load_runtime=broken), caller_of=lambda: STDIO_CALLER
-    )
+    server = build_server(service_over(tmp_path, broken=True), caller_of=lambda: STDIO_CALLER)
 
     result = call(server, "summarize", {"input": {"ticket": "x"}})
 

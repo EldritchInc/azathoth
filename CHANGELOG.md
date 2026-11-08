@@ -6,6 +6,24 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+- `azathoth.api`, a public service API that the command line, azathoth-mcp
+  and the coming local editor all call. It browses and imports workflows,
+  tools and benchmarks, lists the models providers serve, keeps the model
+  portfolio, initializes databases, and runs and invokes workflows,
+  reporting each step and context change to a callback as it happens and
+  stopping when cancelled. It returns its own
+  frozen models, each with its equivalent `azathoth` command, raises errors
+  with stable codes, and is provisional until 1.4.0
+  ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
+- azathoth-mcp runs each tool call through the service API. A call now asks
+  the providers what they serve, as `azathoth job run` does, rather than
+  once while production stays the same, so a model authorized or a tool
+  imported reaches a running server at once; a call the client cancels
+  cancels its invocation, which the same call under its key resumes
+  ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
+
 ## 1.3.0
 
 Azathoth 1.3 reads documents and keeps the evidence of where each answer

@@ -36,9 +36,9 @@ def project(
 def minor_release(
     full_version: str,
 ) -> str:
-    """Return the `X.Y` of an `X.Y.Z` version."""
+    """Return the `X.Y` of an `X.Y.Z` version, or of a pre-release such as `X.Y.Za1`."""
 
-    matched = re.fullmatch(r"(\d+\.\d+)\.\d+", full_version)
+    matched = re.fullmatch(r"(\d+\.\d+)\.\d+(?:(?:a|b|rc)\d+)?", full_version)
 
     assert matched is not None, full_version
 

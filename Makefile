@@ -34,7 +34,7 @@ postgres-test:
 		--env POSTGRES_USER=azathoth --env POSTGRES_PASSWORD=azathoth --env POSTGRES_DB=azathoth \
 		postgres:17 > /dev/null
 	until docker exec $(POSTGRES_TEST_CONTAINER) pg_isready --host=127.0.0.1 --username=azathoth --quiet; do sleep 1; done; \
-	AZATHOTH_TEST_POSTGRES_URL=$(POSTGRES_TEST_URL) python -m pytest tests/persistence -ra; \
+	AZATHOTH_TEST_POSTGRES_URL=$(POSTGRES_TEST_URL) python -m pytest tests/persistence tests/api -ra; \
 	status=$$?; \
 	docker stop $(POSTGRES_TEST_CONTAINER) > /dev/null; \
 	exit $$status

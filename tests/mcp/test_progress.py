@@ -1,64 +1,40 @@
 """Tests for progress notifications while an invocation runs (ADR 0111)."""
 
 import asyncio
+import threading
 from uuid import UUID
 
 import pytest
 
-from azathoth.context import Context
-from azathoth.strategies import StrategyMetadata, StrategyOutcome
-from azathoth.workflows import (
-    WorkflowCandidateStep,
-    WorkflowStepFinished,
-    WorkflowStepStarted,
-    WorkflowStepStatus,
-)
+from azathoth import api
 from azathoth_mcp.progress import StepProgress, progress_message
 
-
-class StaticStrategy:
-    """A strategy that is never run; the events only name it."""
-
-    @property
-    def metadata(self) -> StrategyMetadata:
-        """Return the strategy's metadata."""
-
-        return StrategyMetadata(
-            id=UUID(int=2),
-            name="progress-step",
-            description="Exercise progress.",
-        )
-
-    async def run(
-        self,
-        _context: Context,
-    ) -> StrategyOutcome:
-        """Return a fixed outcome."""
-
-        return StrategyOutcome(output="success")
+STEP_ID = UUID(int=1)
 
 
-def candidate_step() -> WorkflowCandidateStep:
-    """Return one step as the runner reports it."""
-
-    return WorkflowCandidateStep(id=UUID(int=1), strategy=StaticStrategy())
-
-
-def finished() -> WorkflowStepFinished:
+def finished() -> api.StepFinished:
     """Return one step's skipped finish."""
 
-    return WorkflowStepFinished(
-        step=candidate_step(),
-        layer_index=0,
-        status=WorkflowStepStatus.SKIPPED,
+    return api.StepFinished(
+        step_id=STEP_ID,
+        layer=0,
+        status="skipped",
+        failure=None,
+        confidence=None,
     )
+
+
+def started() -> api.StepStarted:
+    """Return one step's start."""
+
+    return api.StepStarted(step_id=STEP_ID, layer=0, message=None)
 
 
 def observe_all(
     total: int,
-    *events: WorkflowStepFinished | WorkflowStepStarted,
+    *events: api.RunEvent,
 ) -> list[tuple[float, float | None, str | None]]:
-    """Return the notifications a run of some events sends."""
+    """Return the notifications some events, observed on a worker thread, send."""
 
     reports: list[tuple[float, float | None, str | None]] = []
 
@@ -70,11 +46,13 @@ def observe_all(
         reports.append((progress, of, message))
 
     async def run() -> None:
-        progress = StepProgress(report, total=total)
+        progress = StepProgress(report, total=total, loop=asyncio.get_running_loop())
 
-        for event in events:
-            progress.observe(event)
+        def deliver() -> None:
+            for event in events:
+                progress.observe(event)
 
+        await asyncio.to_thread(deliver)
         await progress.flush()
 
     asyncio.run(run())
@@ -90,9 +68,7 @@ def test_each_finished_step_is_one_notification() -> None:
 
 
 def test_a_started_step_sends_nothing() -> None:
-    started = WorkflowStepStarted(step=candidate_step(), layer_index=0)
-
-    assert observe_all(2, started, finished(), started) == [
+    assert observe_all(2, started(), finished(), started()) == [
         (1.0, 2.0, "1 of 2 steps finished."),
     ]
 
@@ -109,8 +85,13 @@ def test_a_run_counts_at_least_one_step() -> None:
     ) -> None:
         return None
 
-    with pytest.raises(ValueError) as raised:
-        StepProgress(report, total=0)
+    loop = asyncio.new_event_loop()
+
+    try:
+        with pytest.raises(ValueError) as raised:
+            StepProgress(report, total=0, loop=loop)
+    finally:
+        loop.close()
 
     assert str(raised.value) == "A run's progress counts at least one step."
 
@@ -129,14 +110,36 @@ def test_a_notification_that_fails_is_dropped() -> None:
         sent.append(progress)
 
     async def run() -> None:
-        progress = StepProgress(report, total=2)
-        progress.observe(finished())
-        progress.observe(finished())
+        progress = StepProgress(report, total=2, loop=asyncio.get_running_loop())
+        await asyncio.to_thread(progress.observe, finished())
+        await asyncio.to_thread(progress.observe, finished())
         await progress.flush()
 
     asyncio.run(run())
 
     assert sent == [2.0]
+
+
+def test_notifications_are_sent_on_the_calls_loop_not_the_observing_thread() -> None:
+    threads: list[threading.Thread] = []
+
+    async def report(
+        progress: float,
+        of: float | None,
+        message: str | None,
+    ) -> None:
+        threads.append(threading.current_thread())
+
+    async def run() -> threading.Thread:
+        progress = StepProgress(report, total=1, loop=asyncio.get_running_loop())
+        await asyncio.to_thread(progress.observe, finished())
+        await progress.flush()
+
+        return threading.current_thread()
+
+    loop_thread = asyncio.run(run())
+
+    assert threads == [loop_thread]
 
 
 def test_the_message_counts_finished_steps() -> None:

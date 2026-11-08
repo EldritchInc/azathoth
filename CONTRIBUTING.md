@@ -302,19 +302,20 @@ tools, process tools, or how Azathoth finds its database.
 ## PostgreSQL Tests
 
 Every repository runs on SQLite and on PostgreSQL (ADR 0102), and
-`tests/persistence` runs each of their tests against both. Without a server,
-the PostgreSQL half is skipped. With Docker running:
+`tests/persistence` runs each of their tests against both, as `tests/api`
+runs each contract of the service API (ADR 0120). Without a server, the
+PostgreSQL half is skipped. With Docker running:
 
 ```bash
 make postgres-test
 ```
 
 This starts a throwaway `postgres:17` container on `127.0.0.1:54329`, runs
-`tests/persistence` against it, and stops it. To use a server of your own,
-name a database the tests may create schemas in:
+`tests/persistence` and `tests/api` against it, and stops it. To use a
+server of your own, name a database the tests may create schemas in:
 
 ```bash
-AZATHOTH_TEST_POSTGRES_URL=postgresql://<USER>:<PASSWORD>@<HOST>/<DATABASE> python -m pytest tests/persistence -ra
+AZATHOTH_TEST_POSTGRES_URL=postgresql://<USER>:<PASSWORD>@<HOST>/<DATABASE> python -m pytest tests/persistence tests/api -ra
 ```
 
 Each test gets a fresh schema of its own, which it drops when it ends, so

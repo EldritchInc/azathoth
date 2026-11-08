@@ -4,23 +4,22 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering._json import render_json_value
+from azathoth.cli.service import history_line, identical_note, import_note, service_instance
 from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     PromptSpecification,
 )
 from azathoth.workflows import (
     ToolStepSpecification,
-    WorkflowDocumentError,
     WorkflowRepository,
     WorkflowResultReference,
     WorkflowSpecificationRevision,
-    decode_workflow_document,
     describe_value_reference,
-    earliest_identical_revision,
     encode_workflow_document,
 )
 
@@ -182,40 +181,24 @@ def list_workflow_history(
     Each line contains the revision number, import time, the first twelve
     characters of the content digest, the declared version, and the name.
     A revision with the same content as an earlier one names the earliest
-    such revision, so reverts are visible. Only durable state is read.
+    such revision, so reverts are visible. Only durable state is read,
+    through the service API (ADR 0120).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = repositories(configuration).workflows.revisions(workflow_id)
-
-    if not history:
+    try:
+        history = service_instance(configuration).workflows.history(workflow_id, limit=limit)
+    except api.NotFoundError as exc:
         print(
-            f"Workflow {workflow_id} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    newest_first = tuple(reversed(history))
-
-    if limit is not None:
-        newest_first = newest_first[:limit]
-
-    for selected in newest_first:
-        metadata = selected.specification.metadata
-
-        identical = earliest_identical_revision(
-            history,
-            selected,
-        )
-
-        note = f"  identical to revision {identical.number}" if identical is not None else ""
-
-        print(
-            f"{selected.number}  {_render_imported_at(selected)}  "
-            f"{selected.content_digest[:12]}  {metadata.version}  {metadata.name}{note}"
-        )
+    for entry in history:
+        print(f"{history_line(entry)}  {entry.version}  {entry.name}{identical_note(entry)}")
 
     return 0
 
@@ -288,9 +271,11 @@ def import_workflow(
 
         return 1
 
+    configuration = CliRuntimeConfiguration.from_environment()
+
     try:
-        specification = decode_workflow_document(document)
-    except WorkflowDocumentError as exc:
+        imported = service_instance(configuration).workflows.import_document(document)
+    except api.InvalidDocumentError as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -298,28 +283,10 @@ def import_workflow(
 
         return 1
 
-    if specification.result is None:
-        print(
-            "Workflow document must declare a result.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    configuration = CliRuntimeConfiguration.from_environment()
-
-    repository = repositories(configuration).workflows
-
-    revision = repository.save(specification)
-
-    identical = earliest_identical_revision(
-        repository.revisions(specification.metadata.id),
-        revision,
+    print(
+        f"Imported workflow {imported.id} revision {imported.revision.number}"
+        f"{import_note(imported)}."
     )
-
-    note = f" (identical to revision {identical.number})" if identical is not None else ""
-
-    print(f"Imported workflow {specification.metadata.id} revision {revision.number}{note}.")
 
     return 0
 
