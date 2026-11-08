@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from azathoth import __version__
+from tests.test_changelog import latest_release
 
 PROJECT_ROOT = Path(__file__).parents[1]
 
@@ -87,7 +88,7 @@ def current_documents() -> list[Path]:
 
 
 def test_package_exposes_version() -> None:
-    assert __version__ == "1.3.0"
+    assert __version__ == "1.4.0a1"
 
 
 @pytest.mark.parametrize(
@@ -97,13 +98,13 @@ def test_package_exposes_version() -> None:
         for path in current_documents()
     ],
 )
-def test_every_version_the_documents_show_is_this_one(
+def test_every_version_the_documents_show_is_the_latest_release(
     path: Path,
 ) -> None:
     text = path.read_text(encoding="utf-8")
     shown = {found for pattern in SHOWN_VERSIONS for found in pattern.findall(text)}
 
-    assert shown <= {__version__}, shown
+    assert shown <= {latest_release()}, shown
 
 
 def test_distribution_name_is_public_package_name() -> None:

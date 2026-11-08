@@ -101,6 +101,15 @@ pre-releases. `API_STABILITY` says which, and every instance reports it. At
 1.4.0 the 1.x compatibility promise grows to cover `azathoth.api`; the rest
 of the Python API stays outside it.
 
+### Pre-releases preview it
+
+The editor is built against released Azathoth, so the API reaches it first
+in pre-releases, such as `1.4.0a1`, published to PyPI and nowhere else. A
+pre-release builds no image, keeps its changelog entry as `Unreleased`, and
+leaves the documents and the AWS template showing the latest final release,
+whose image they name. pip installs one only when asked to, so nobody
+upgrading receives it.
+
 ### The callers move onto it
 
 azathoth-mcp is a client like any other: each tool call is `runs.invoke`

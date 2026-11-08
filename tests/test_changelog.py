@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 from azathoth import __version__
 
@@ -45,10 +46,42 @@ NOTES_COMMAND = (
 )
 
 
+FINAL_VERSION = re.compile(r"\d+\.\d+\.\d+")
+"""A final release's version; anything else, such as `1.4.0a1`, is a pre-release."""
+
+PRERELEASE_NOTES_COMMAND = (
+    'awk -v version=Unreleased \'$0 == "## " version {found = 1; next} '
+    "/^## / {found = 0} found' CHANGELOG.md > release-notes.md"
+)
+"""The command RELEASING.md gives for a pre-release's notes: the Unreleased entry."""
+
+
 def text() -> str:
     """Return the changelog."""
 
     return CHANGELOG.read_text(encoding="utf-8")
+
+
+def is_final(
+    version: str,
+) -> bool:
+    """Return whether one version is a final release rather than a pre-release."""
+
+    return FINAL_VERSION.fullmatch(version) is not None
+
+
+def latest_release() -> str:
+    """Return the newest final release the changelog records.
+
+    It is this Azathoth's version, unless this is a pre-release: then it is
+    the release before, which the documents keep showing.
+    """
+
+    releases = RELEASE_HEADING.findall(text())
+
+    assert releases
+
+    return str(releases[0])
 
 
 def entry(
@@ -90,8 +123,27 @@ def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     releases = RELEASE_HEADING.findall(text())
 
     assert releases == ["1.3.0", "1.2.0", "1.1.0", "1.0.0"]
-    assert releases[0] == __version__
     assert releases[: len(RELEASE_DECISIONS)] == list(RELEASE_DECISIONS)
+
+    if is_final(__version__):
+        assert releases[0] == __version__
+    else:
+        assert Version(__version__) > Version(releases[0])
+        assert Version(__version__).is_prerelease
+
+
+def test_a_pre_release_is_described_by_the_unreleased_entry() -> None:
+    if is_final(__version__):
+        pytest.skip("This is a final release.")
+
+    assert ENTRY_HEADING.findall(text())[0] == UNRELEASED
+    assert entry(UNRELEASED).strip()
+
+
+def test_versions_are_told_final_or_pre_release() -> None:
+    assert is_final("1.4.0")
+    assert not is_final("1.4.0a1")
+    assert not is_final("1.4.0rc2")
 
 
 def decision_numbers() -> set[int]:
@@ -145,7 +197,7 @@ def test_every_cited_decision_links_its_record(
 
 def test_this_releases_upgrade_runs_the_install_guides_upgrade_commands() -> None:
     install = (PROJECT_ROOT / "docs" / "install.md").read_text(encoding="utf-8")
-    upgrade = entry(__version__)
+    upgrade = entry(latest_release())
 
     for language in ("bash", "powershell"):
         assert fenced(upgrade, language, "### Upgrading From 1.2") == fenced(
@@ -226,7 +278,18 @@ def test_releasing_publishes_this_entry_as_the_github_release() -> None:
         'gh release create v<version> --title "Azathoth <version>" '
         "--notes-file release-notes.md" in releasing
     )
-    assert entry(__version__).strip()
+    assert entry(latest_release()).strip()
+
+
+def test_releasing_publishes_a_pre_release_with_the_unreleased_entry() -> None:
+    releasing = (PROJECT_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+
+    assert PRERELEASE_NOTES_COMMAND in releasing
+    assert (
+        'gh release create v<version> --prerelease --title "Azathoth <version>" '
+        "--notes-file release-notes.md" in releasing
+    )
+    assert "python -m pip install --pre azathoth-ai azathoth-mcp" in releasing
 
 
 def test_every_link_is_absolute_so_it_works_in_the_release_notes() -> None:

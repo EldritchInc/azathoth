@@ -2,9 +2,9 @@
 
 import re
 
-from azathoth import __version__
 from azathoth.worker import MAX_WAIT_SECONDS
 from tests.deploy.template import PROJECT_ROOT, defaults, properties, resolve, template
+from tests.test_changelog import latest_release
 
 ADR = PROJECT_ROOT / "docs" / "adrs" / "0109-deploy-on-aws.md"
 
@@ -28,7 +28,7 @@ def test_the_adr_states_the_templates_defaults() -> None:
     # The template defaults to this release's image; the decision names the
     # image of the release it was made for, and is never rewritten.
     #
-    assert parameters["ImageUri"]["Default"] == f"ghcr.io/eldritchinc/azathoth:{__version__}"
+    assert parameters["ImageUri"]["Default"] == f"ghcr.io/eldritchinc/azathoth:{latest_release()}"
     assert "`ghcr.io/eldritchinc/azathoth:1.1.0`" in prose()
 
 
@@ -53,7 +53,7 @@ def test_the_adr_states_the_queues_timing() -> None:
 def test_the_adr_quotes_the_verify_command_the_container_guide_shows() -> None:
     guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
     (shown,) = set(re.findall(r"^cosign verify .+$", guide, re.MULTILINE))
-    general = shown.replace(__version__, "<VERSION>")
+    general = shown.replace(latest_release(), "<VERSION>")
 
     assert f"```text\n{general}\n```" in ADR.read_text(encoding="utf-8")
 
