@@ -6,33 +6,28 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.service import history_line, identical_note, import_note, service_instance
 from azathoth.revisions import content_digest
 from azathoth.standard import standard_tool_documents
 from azathoth.tools import (
     ToolDefinition,
-    ToolDocumentError,
-    ToolDocumentRevision,
     ToolImplementation,
     ToolTestCase,
-    decode_tool_document,
     earliest_identical_tool_revision,
     encode_tool_document,
-    supported_tool_runtimes,
-    unsupported_runtime_message,
 )
 
 
 def list_tools() -> int:
-    """List all durable tool definition versions."""
+    """List all durable tool definition versions, through the service API (ADR 0120)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    for definition in repository.definitions():
-        print(f"{definition.id}  {definition.version}  {definition.name}")
+    for tool in service_instance(configuration).tools.list():
+        print(f"{tool.id}  {tool.version}  {tool.name}")
 
     return 0
 
@@ -322,45 +317,30 @@ def list_tool_history(
     first twelve characters of the content digest, and the document's
     implementation and test case counts. A revision with the same content as
     an earlier revision of its version names the earliest such revision.
-    Only durable state is read.
+    Only durable state is read, through the service API (ADR 0120).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    history = repositories(configuration).tools.document_revisions(tool_id)
-
-    selected = tuple(
-        revision for revision in history if version is None or revision.tool_version == version
-    )
-
-    if not selected:
-        reference = f"{tool_id}@{version}" if version is not None else str(tool_id)
-
+    try:
+        history = service_instance(configuration).tools.history(
+            tool_id,
+            version=version,
+            limit=limit,
+        )
+    except api.NotFoundError as exc:
         print(
-            f"Tool {reference} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    newest_first = tuple(reversed(selected))
-
-    if limit is not None:
-        newest_first = newest_first[:limit]
-
-    for revision in newest_first:
-        identical = earliest_identical_tool_revision(
-            history,
-            revision,
-        )
-
-        note = f"  identical to revision {identical.number}" if identical is not None else ""
-
+    for entry in history:
         print(
-            f"{revision.tool_version}  {revision.number}  {_render_imported_at(revision)}  "
-            f"{revision.content_digest[:12]}  "
-            f"{len(revision.document.implementations)} implementations  "
-            f"{len(revision.document.test_cases)} test cases{note}"
+            f"{entry.version}  {history_line(entry)}  "
+            f"{entry.implementation_count} implementations  "
+            f"{entry.test_case_count} test cases{identical_note(entry)}"
         )
 
     return 0
@@ -419,17 +399,6 @@ def export_tool(
     return 0
 
 
-def _render_imported_at(
-    revision: ToolDocumentRevision,
-) -> str:
-    """Render when one revision was imported, or that it is unknown."""
-
-    if revision.imported_at is None:
-        return "unknown"
-
-    return revision.imported_at.isoformat()
-
-
 def import_tool(
     document_path: Path,
 ) -> int:
@@ -456,36 +425,11 @@ def import_tool(
 
         return 1
 
-    try:
-        document = decode_tool_document(
-            encoded,
-        )
-    except ToolDocumentError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
-
-        return 1
-
-    runtimes = supported_tool_runtimes()
-
-    for implementation in document.implementations:
-        if implementation.runtime not in runtimes:
-            print(
-                unsupported_runtime_message(implementation),
-                file=sys.stderr,
-            )
-
-            return 1
-
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
     try:
-        revision = repository.save_document(document)
-    except ValueError as exc:
+        imported = service_instance(configuration).tools.import_document(encoded)
+    except api.InvalidDocumentError as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -493,14 +437,10 @@ def import_tool(
 
         return 1
 
-    identical = earliest_identical_tool_revision(
-        repository.document_revisions(revision.tool_id),
-        revision,
+    print(
+        f"Imported tool {imported.id}@{imported.version} revision {imported.revision.number}"
+        f"{import_note(imported)}."
     )
-
-    note = f" (identical to revision {identical.number})" if identical is not None else ""
-
-    print(f"Imported tool {revision.reference} revision {revision.number}{note}.")
 
     return 0
 
