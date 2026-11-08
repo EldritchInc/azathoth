@@ -1,0 +1,116 @@
+{
+  "metadata": {
+    "id": "a1000000-0000-4000-8000-0000000000c2",
+    "name": "answer from a claim",
+    "description": "Divide a claim's PDF into segments, then answer two questions about it, citing the segment behind each answer.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "a1000000-0000-4000-8000-0000000000c3",
+      "specification": {
+        "requirement": {
+          "name": "segment_pdf",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "document",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "extraction",
+          "path": [
+            "extraction"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow"
+    },
+    {
+      "id": "a1000000-0000-4000-8000-0000000000c4",
+      "specification": {
+        "metadata": {
+          "id": "a1000000-0000-4000-8000-0000000000c5",
+          "name": "Answer from the claim",
+          "description": "Say when the claim was received and what repair is approved, citing the claim for each.",
+          "version": "1.0.0"
+        },
+        "template": {
+          "text": "Here is an insurance claim, divided into segments. Each segment begins with its ID in brackets.\n\n{claim}\n\nWhen was the claim received, and up to how much is its repair approved? Back each answer with a citation: an object of exactly three keys, \"source\", which is \"claim\", \"segment\", the ID of the segment that says it, and \"quote\", the words of that segment that say it, copied exactly.\n\nReply with one JSON object and nothing else, in this shape:\n{{\"received\": {{\"answer\": \"...\", \"citation\": {{\"source\": \"claim\", \"segment\": \"...\", \"quote\": \"...\"}}}}, \"approved\": {{\"answer\": \"...\", \"citation\": {{\"source\": \"claim\", \"segment\": \"...\", \"quote\": \"...\"}}}}}}",
+          "bindings": [
+            {
+              "variable_name": "claim",
+              "input_name": "claim"
+            }
+          ]
+        },
+        "model_selection": {
+          "requirements": {
+            "required_capabilities": [],
+            "required_input_modalities": [
+              "text"
+            ],
+            "required_output_modalities": [
+              "text"
+            ],
+            "minimum_context_window_tokens": null,
+            "minimum_output_tokens": null,
+            "maximum_input_usd_per_million_tokens": null,
+            "maximum_output_usd_per_million_tokens": null,
+            "require_known_pricing": false
+          }
+        },
+        "output_format": "json",
+        "citations": {
+          "on_unverified": "fail"
+        }
+      },
+      "depends_on": [
+        "a1000000-0000-4000-8000-0000000000c3"
+      ],
+      "inputs": [
+        {
+          "name": "claim",
+          "source": {
+            "producer_step_id": "a1000000-0000-4000-8000-0000000000c3",
+            "name": "extraction"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "path": []
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 2,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Answering from the claim"
+    }
+  ],
+  "result": {
+    "name": "answer"
+  }
+}

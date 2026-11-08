@@ -101,9 +101,13 @@ on real SQS and S3, is unproven for 1.3.0
   the model's catalog entry before the model is called
   ([ADR 0115](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0115-multimodal-prompts.md)).
 - **An example PDF to try it on.** `examples/documents` holds a two-page
-  claim, written by a script byte for byte, and a workflow that divides it
-  with `segment_pdf` into the segments a model can cite
-  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md)).
+  claim, written by a script byte for byte, a workflow that divides it with
+  `segment_pdf` into the segments a model can cite, and one that answers
+  from it, citing it. The new
+  [Reading Documents and Citing Them](https://github.com/EldritchInc/azathoth/blob/main/docs/documents.md)
+  guide walks through both and exports the citations
+  ([ADR 0114](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0114-read-documents-with-tools.md);
+  [ADR 0116](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0116-cited-prompt-steps.md)).
 
 ### Evidence Out
 

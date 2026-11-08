@@ -586,7 +586,9 @@ benchmark: [Novel Example](../examples/novel/README.md).
   into the segments a model can cite. It needs the `documents` extra; see
   [Installing Azathoth](install.md#optional-reading-pdfs). Run it with
   `azathoth workflow run a1000000-0000-4000-8000-0000000000c0 --input-file examples/documents/claim.pdf --output result`.
-  `documents/make_claim_pdf.py` writes the PDF again, byte for byte.
+  `documents/make_claim_pdf.py` writes the PDF again, byte for byte, and
+  `documents/answer-from-claim.json` answers from it with a model, citing
+  it; see [Reading Documents and Citing Them](documents.md).
 - `mcp/word_count_server.py` and `mcp/count-words-over-mcp.json`: an MCP
   server and a workflow that calls its tool; see
   [Calling MCP Tools](mcp-tools.md).
