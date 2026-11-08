@@ -1,29 +1,37 @@
-"""Running workflows and watching them run (ADR 0120).
+"""Running and invoking workflows, and watching them run (ADR 0120).
 
-A run here is what `azathoth workflow run` does: the workflow's latest
-revision runs as configured, not as promoted, and the finished run is kept
-as evidence whether it succeeded or failed. The call returns when the run
-has finished. While it runs, an optional callback receives each event on the
-caller's thread, and an optional cancellation token stops it.
+`run` is what `azathoth workflow run` does: the workflow's latest revision
+runs as configured, not as promoted, and the finished run is kept as
+evidence whether it succeeded or failed. `invoke` is what `azathoth job run`
+does: the workflow's active production state runs under an idempotency key,
+so the same request again replays its outcome, or resumes it.
+
+Each call returns when it has finished. While it runs, an optional callback
+receives each event on the caller's thread, and an optional cancellation
+token stops it.
 """
 
 import asyncio
 import threading
-from collections.abc import Callable, Coroutine
-from typing import Any, Final, Literal
-from uuid import UUID
+from collections.abc import Callable, Coroutine, Mapping
+from typing import Any, Final, Literal, TypeVar
+from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 
 from azathoth.api.browsing import RepositoriesAccess
 from azathoth.api.catalog import DirectoriesAccess, discover
 from azathoth.api.errors import (
+    InvalidArgumentError,
     NotFoundError,
     RunCancelledError,
     RunNotStartedError,
 )
 from azathoth.api.models import (
     ContextChanged,
+    InvocationError,
+    InvocationFinished,
+    InvocationOutcome,
     RunError,
     RunEvent,
     RunFinished,
@@ -34,7 +42,21 @@ from azathoth.api.models import (
     StepStarted,
 )
 from azathoth.context import Context
-from azathoth.inputs import JSON_MEDIA_TYPE, ResolvedInput
+from azathoth.inputs import (
+    JSON_MEDIA_TYPE,
+    InlineInput,
+    InputPolicy,
+    InputProvenance,
+    ResolvedInput,
+)
+from azathoth.jobs import (
+    InvokeJobRequest,
+    JobResult,
+    JobStatus,
+    run_invoke_job,
+    runtime_job_invoker,
+    runtime_job_resumer,
+)
 from azathoth.persistence.repositories import Repositories
 from azathoth.providers import (
     LanguageModelRegistry,
@@ -46,6 +68,8 @@ from azathoth.telemetry import NO_TELEMETRY
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.tools import ToolCatalogLoader
 from azathoth.workflows import (
+    InvocationIdempotency,
+    ProductionInvocationResult,
     WorkflowCatalogLoader,
     WorkflowGenerationError,
     WorkflowResultError,
@@ -56,6 +80,7 @@ from azathoth.workflows import (
     WorkflowStepStarted,
     WorkflowStepStatus,
     create_workflow_input_events,
+    validate_idempotency_key,
     workflow_result,
 )
 
@@ -65,8 +90,17 @@ RUN_PRODUCER: Final = "azathoth.api"
 CANCEL_POLL_SECONDS: Final = 0.05
 """How often a running workflow checks its cancellation token."""
 
+GENERATED_KEY_PREFIX: Final = "api-"
+"""What begins the idempotency key an invocation is given when it names none."""
+
+INLINE_ONLY: Final = InputPolicy()
+"""An invocation's input is the value given: no reference is resolved."""
+
 EventCallback = Callable[[RunEvent], None]
 """Receive one run event, on the run's thread; it must return quickly."""
+
+RunT = TypeVar("RunT", WorkflowRun, JobResult)
+"""What a cancellable call finishes with: a run, or a job's result."""
 
 LanguageModelsAccess = Callable[[ModelCatalog], LanguageModelRegistry]
 """Return the executable models an instance's providers serve, for the models discovered."""
@@ -287,6 +321,127 @@ class Runs:
             command=f"azathoth run show {run.id}",
         )
 
+    def invoke(
+        self,
+        workflow_id: UUID,
+        *,
+        input: JsonValue,
+        idempotency_key: str | None = None,
+        caller_metadata: Mapping[str, JsonValue] | None = None,
+        on_event: EventCallback | None = None,
+        cancel: CancellationToken | None = None,
+    ) -> InvocationOutcome:
+        """Invoke a workflow's active production state under an idempotency key.
+
+        As `azathoth job run` does: a key recorded with the same request
+        replays its outcome; a key recorded with another request is
+        rejected as an `idempotency_conflict`; an invocation whose run was
+        stopped is resumed from its journal. Without a key, one beginning
+        `api-` is made. A workflow not in production, or that fails, is an
+        outcome, not an error. The caller metadata is recorded with the
+        invocation.
+
+        Events report the run as it happens, and `invocation_finished` ends
+        every call, including a replay or a rejection.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The idempotency key is empty, too long or
+                holds a control character.
+            RunCancelledError: The token was cancelled before the invocation
+                finished; the same request under the same key resumes it.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        if cancel is not None and cancel.cancelled:
+            raise RunCancelledError()
+
+        key = idempotency_key if idempotency_key is not None else f"{GENERATED_KEY_PREFIX}{uuid4()}"
+
+        try:
+            validate_idempotency_key(key)
+        except ValueError as exc:
+            raise InvalidArgumentError(str(exc)) from exc
+
+        repositories = self._repositories()
+        observer = _CallbackObserver(on_event)
+        runner = tracing_runner(
+            NO_TELEMETRY,
+            observer=observer,
+            journal=repositories.run_journal,
+            leases=repositories.run_leases,
+            children=repositories.run_children,
+            content=repositories.tool_content,
+        )
+
+        def load_runtime() -> AzathothRuntime:
+            return self._runtime(repositories)
+
+        invoker = runtime_job_invoker(
+            load_runtime,
+            invocation_repository=repositories.invocations,
+            run_repository=repositories.runs,
+            invocation_run_repository=repositories.invocation_runs,
+            runner=runner,
+        )
+
+        async def invoke(
+            *,
+            workflow_id: UUID,
+            payload: JsonValue,
+            caller_metadata: Mapping[str, JsonValue],
+            input_provenance: InputProvenance | None,
+            idempotency: InvocationIdempotency,
+        ) -> ProductionInvocationResult:
+            observer.emit(RunStarted(workflow_id=workflow_id))
+
+            return await invoker(
+                workflow_id=workflow_id,
+                payload=payload,
+                caller_metadata=caller_metadata,
+                input_provenance=input_provenance,
+                idempotency=idempotency,
+            )
+
+        job = asyncio.run(
+            _until_cancelled(
+                run_invoke_job(
+                    InvokeJobRequest(
+                        kind="invoke",
+                        version=1,
+                        idempotency_key=key,
+                        workflow_id=workflow_id,
+                        input=InlineInput(value=input),
+                        caller_metadata=dict(caller_metadata or {}),
+                    ),
+                    policy=INLINE_ONLY,
+                    store=repositories.content,
+                    invocation_repository=repositories.invocations,
+                    invoke=invoke,
+                    resume=runtime_job_resumer(
+                        load_runtime,
+                        invocation_repository=repositories.invocations,
+                        run_repository=repositories.runs,
+                        invocation_run_repository=repositories.invocation_runs,
+                        revision_repository=repositories.production_revisions,
+                        journal=repositories.run_journal,
+                        runner=runner,
+                    ),
+                ),
+                cancel,
+            )
+        )
+
+        outcome = _invocation_outcome(job, key, warnings=())
+
+        observer.emit(
+            InvocationFinished(invocation_id=outcome.invocation_id, status=outcome.status)
+        )
+
+        return outcome.model_copy(update={"warnings": tuple(observer.warnings)})
+
     def _runtime(
         self,
         repositories: Repositories,
@@ -309,9 +464,9 @@ class Runs:
 
 
 async def _until_cancelled(
-    run: Coroutine[Any, Any, WorkflowRun],
+    run: Coroutine[Any, Any, RunT],
     cancel: CancellationToken | None,
-) -> WorkflowRun:
+) -> RunT:
     """Await a run, cancelling it as soon as its token is cancelled.
 
     Raises:
@@ -335,6 +490,55 @@ async def _until_cancelled(
         await asyncio.wait({task}, timeout=CANCEL_POLL_SECONDS)
 
     return task.result()
+
+
+def _invocation_status(
+    status: JobStatus,
+) -> Literal["succeeded", "failed", "rejected", "incomplete"]:
+    """Return a job's status as the API names it."""
+
+    if status is JobStatus.SUCCEEDED:
+        return "succeeded"
+
+    if status is JobStatus.FAILED:
+        return "failed"
+
+    if status is JobStatus.REJECTED:
+        return "rejected"
+
+    return "incomplete"
+
+
+def _invocation_outcome(
+    job: JobResult,
+    key: str,
+    *,
+    warnings: tuple[str, ...],
+) -> InvocationOutcome:
+    """Return the API's view of one job's result."""
+
+    return InvocationOutcome(
+        status=_invocation_status(job.status),
+        replayed=job.replayed,
+        idempotency_key=key,
+        invocation_id=job.invocation_id,
+        result=job.result,
+        error=(
+            InvocationError(
+                code=job.error.code.value,
+                message=job.error.message,
+                metadata=job.error.metadata,
+            )
+            if job.error is not None
+            else None
+        ),
+        warnings=warnings,
+        command=(
+            f"azathoth invocation show {job.invocation_id}"
+            if job.invocation_id is not None
+            else None
+        ),
+    )
 
 
 def _context(
@@ -407,6 +611,7 @@ def _outcome(
 
 __all__ = [
     "CANCEL_POLL_SECONDS",
+    "GENERATED_KEY_PREFIX",
     "RUN_PRODUCER",
     "CancellationToken",
     "EventCallback",

@@ -13,6 +13,11 @@ with api.open("azathoth.db") as instance:
 print(description.model_dump_json())
 ```
 
+`api.initialize(database)` does what `azathoth init` does: it creates an
+SQLite file, or creates or upgrades a PostgreSQL schema, and installs the
+standard tool library, returning an `Initialization` that says which, and
+which tools it installed. Running it again is always safe.
+
 `api.open(database)` opens the instance one database holds, named as
 `AZATHOTH_DATABASE` names it: an SQLite file's path, or a `postgresql://`
 URL. Opening never creates or changes a database; `azathoth init` does.
@@ -154,15 +159,29 @@ run makes them:
 | `StepFinished` | `step_finished` | Its status, its final failure's message, its confidence. |
 | `ContextChanged` | `context_changed` | The values the step declared, by name. |
 | `RunFinished` | `run_finished` | The kept run's ID, and whether it succeeded. |
+| `InvocationFinished` | `invocation_finished` | The invocation, if one was made, and its status. |
 
 Steps of one layer run together, so their events interleave. A callback
 must return quickly. One that raises is detached for the rest of the run,
 and the result's `warnings` name what it raised; the run carries on. Every
 event is its own JSON, and `parse_run_event` reads one back.
 
+`instance.runs.invoke(workflow_id, input=..., idempotency_key=None,
+caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
+active production state, as `azathoth job run` does, and returns an
+`InvocationOutcome`: `succeeded` or `failed` with the invocation,
+`rejected` when no invocation was made (such as an `idempotency_conflict`),
+or `incomplete` while another process still runs it. The same request under
+the same key replays its outcome, marked `replayed`, or resumes an
+invocation whose run was stopped. Without a key, one beginning `api-` is
+made. A workflow not in production fails as `workflow_not_deployed`; that
+is an outcome, not an error. Every invocation ends with an
+`InvocationFinished` event, a replay included.
+
 `cancel.cancel()`, from any thread, stops the run where it is, as Ctrl-C
 does: a running tool process is killed, nothing is kept as a finished run,
-and `RunCancelledError` is raised. A token cancelled beforehand starts
+and `RunCancelledError` is raised; a cancelled invocation resumes when the
+same request is made under its key. A token cancelled beforehand starts
 nothing.
 
 ## Errors

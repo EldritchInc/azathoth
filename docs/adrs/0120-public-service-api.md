@@ -31,8 +31,8 @@ engine is synchronous throughout, and the API does not pretend otherwise.
 
 Opening never creates or changes a database. A missing SQLite file is
 refused, as is a PostgreSQL database without this Azathoth's schema; both
-messages say to run `azathoth init`. Once closed, an instance refuses every
-call.
+messages say to run `azathoth init`, which `initialize(database)` does
+through the API. Once closed, an instance refuses every call.
 
 The facade groups its operations by what they act on, as namespaces of the
 instance: workflows, tools, benchmarks, models, portfolio and runs.
@@ -54,6 +54,15 @@ carries a `code`, a short stable name such as `instance_not_found`. Messages
 are exact and tested. Errors the engine raises in its own terms, such as a
 database without its schema, are raised again as the API's own, with the
 original as their cause.
+
+### Runs and invocations
+
+`runs.run` is `azathoth workflow run`: a workflow's latest revision, as
+configured. `runs.invoke` is `azathoth job run`: its active production
+state, under an idempotency key, so the same request replays its outcome or
+resumes it, and another request under the key is rejected. A workflow that
+is not in production, or that fails, is an invocation's outcome rather than
+an error, as it is in a job's result.
 
 ### Runs report through a callback
 

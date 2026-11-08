@@ -325,6 +325,74 @@ class RunResult(ApiModel):
     )
 
 
+class InvocationError(ApiModel):
+    """Why an invocation did not succeed, as `azathoth job run` reports it."""
+
+    code: str = Field(
+        description="A production code, such as `workflow_not_deployed`, or an envelope code.",
+    )
+
+    message: str
+
+    metadata: dict[str, JsonValue]
+
+
+class InvocationOutcome(ApiModel):
+    """How one invocation of a promoted workflow ended, under its idempotency key.
+
+    `succeeded` and `failed` report an invocation with its outcome;
+    `rejected` means no invocation was made for the request; `incomplete`
+    means the key's invocation is still running elsewhere.
+    """
+
+    status: Literal["succeeded", "failed", "rejected", "incomplete"]
+
+    replayed: bool = Field(
+        description="Whether an earlier request under the same key made the invocation.",
+    )
+
+    idempotency_key: str
+
+    invocation_id: UUID | None
+
+    result: JsonValue = None
+
+    error: InvocationError | None
+
+    warnings: tuple[str, ...]
+
+    command: str | None = Field(
+        description="The `azathoth` command that shows the invocation, when there is one.",
+    )
+
+
+class StandardTool(ApiModel):
+    """One tool of the standard library, as initializing a database left it."""
+
+    name: str
+
+    version: str
+
+    revision: int = Field(
+        ge=1,
+        description="The revision of the tool version that is now current.",
+    )
+
+    installed: bool = Field(
+        description="Whether initializing imported it, rather than finding it already there.",
+    )
+
+
+class Initialization(ApiModel):
+    """What initializing a database did, as `azathoth init` reports it."""
+
+    database: str
+
+    outcome: Literal["created", "upgraded", "current"]
+
+    tools: tuple[StandardTool, ...]
+
+
 class RunStarted(ApiModel):
     """A run is about to start."""
 
@@ -388,8 +456,20 @@ class RunFinished(ApiModel):
     succeeded: bool
 
 
+class InvocationFinished(ApiModel):
+    """An invocation reached its outcome, whether it ran, replayed or was refused."""
+
+    type: Literal["invocation_finished"] = "invocation_finished"
+
+    invocation_id: UUID | None = Field(
+        description="The invocation, or None when the request was rejected before one was made.",
+    )
+
+    status: Literal["succeeded", "failed", "rejected", "incomplete"]
+
+
 RunEvent = Annotated[
-    RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished,
+    RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished | InvocationFinished,
     Field(discriminator="type"),
 ]
 """One event of a run, told apart by its `type`."""
@@ -413,7 +493,11 @@ __all__ = [
     "BenchmarkDetail",
     "BenchmarkSummary",
     "ContextChanged",
+    "Initialization",
     "InstanceDescription",
+    "InvocationError",
+    "InvocationFinished",
+    "InvocationOutcome",
     "ModelSummary",
     "PortfolioEntry",
     "PortfolioRemoval",
@@ -426,6 +510,7 @@ __all__ = [
     "RunInput",
     "RunResult",
     "RunStarted",
+    "StandardTool",
     "StepFinished",
     "StepStarted",
     "ToolDetail",

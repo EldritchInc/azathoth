@@ -36,6 +36,7 @@ from azathoth.api.errors import (
     RunCancelledError,
     RunNotStartedError,
 )
+from azathoth.api.initialization import initialize
 from azathoth.api.instance import (
     Azathoth,
     open,
@@ -48,7 +49,11 @@ from azathoth.api.models import (
     BenchmarkDetail,
     BenchmarkSummary,
     ContextChanged,
+    Initialization,
     InstanceDescription,
+    InvocationError,
+    InvocationFinished,
+    InvocationOutcome,
     ModelSummary,
     PortfolioEntry,
     PortfolioRemoval,
@@ -61,6 +66,7 @@ from azathoth.api.models import (
     RunInput,
     RunResult,
     RunStarted,
+    StandardTool,
     StepFinished,
     StepStarted,
     ToolDetail,
@@ -75,6 +81,7 @@ from azathoth.api.providers import (
     ProviderSettings,
 )
 from azathoth.api.running import (
+    GENERATED_KEY_PREFIX,
     CancellationToken,
     EventCallback,
     Runs,
@@ -85,6 +92,7 @@ __all__ = [
     "BEDROCK_VARIABLES",
     "CANCELLED_MESSAGE",
     "CLOSED_MESSAGE",
+    "GENERATED_KEY_PREFIX",
     "LIMIT_MESSAGE",
     "OPENROUTER_API_KEY_VARIABLE",
     "RESULT_REQUIRED_MESSAGE",
@@ -101,6 +109,7 @@ __all__ = [
     "ContextChanged",
     "Document",
     "EventCallback",
+    "Initialization",
     "InstanceClosedError",
     "InstanceDescription",
     "InstanceNotFoundError",
@@ -108,6 +117,9 @@ __all__ = [
     "InstanceUnavailableError",
     "InvalidArgumentError",
     "InvalidDocumentError",
+    "InvocationError",
+    "InvocationFinished",
+    "InvocationOutcome",
     "ModelInUseError",
     "ModelSummary",
     "Models",
@@ -131,6 +143,7 @@ __all__ = [
     "RunResult",
     "RunStarted",
     "Runs",
+    "StandardTool",
     "StepFinished",
     "StepStarted",
     "ToolDetail",
@@ -139,6 +152,7 @@ __all__ = [
     "WorkflowDetail",
     "WorkflowSummary",
     "Workflows",
+    "initialize",
     "open",
     "parse_run_event",
 ]
