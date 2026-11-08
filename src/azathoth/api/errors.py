@@ -39,6 +39,24 @@ class InstanceSchemaError(ApiError):
     code: ClassVar[str] = "instance_schema"
 
 
+class InvalidArgumentError(ApiError, ValueError):
+    """A call was given an argument it cannot use, such as a history limit below 1."""
+
+    code: ClassVar[str] = "invalid_argument"
+
+
+class NotFoundError(ApiError):
+    """The workflow, tool or benchmark a call names is not configured."""
+
+    code: ClassVar[str] = "not_found"
+
+
+class RevisionNotFoundError(NotFoundError):
+    """The component is configured, but has no revision with the number named."""
+
+    code: ClassVar[str] = "revision_not_found"
+
+
 class InstanceClosedError(ApiError):
     """A call was made on an instance that was already closed."""
 
@@ -57,4 +75,7 @@ __all__ = [
     "InstanceNotFoundError",
     "InstanceSchemaError",
     "InstanceUnavailableError",
+    "InvalidArgumentError",
+    "NotFoundError",
+    "RevisionNotFoundError",
 ]

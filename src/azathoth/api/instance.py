@@ -4,6 +4,7 @@ from pathlib import Path
 from types import TracebackType
 
 import azathoth
+from azathoth.api.browsing import Benchmarks, Tools, Workflows
 from azathoth.api.errors import (
     InstanceClosedError,
     InstanceNotFoundError,
@@ -33,6 +34,9 @@ class Azathoth:
     Open one with `azathoth.api.open`, and close it when done, best as a
     context manager. Calls run synchronously on the caller's thread. Once
     closed, every call raises `InstanceClosedError`.
+
+    Operations are grouped by what they act on: `workflows`, `tools` and
+    `benchmarks`.
     """
 
     def __init__(
@@ -43,6 +47,9 @@ class Azathoth:
 
         self._repositories = repositories
         self._closed = False
+        self._workflows = Workflows(self._open_repositories)
+        self._tools = Tools(self._open_repositories)
+        self._benchmarks = Benchmarks(self._open_repositories)
 
     def __enter__(
         self,
@@ -64,6 +71,30 @@ class Azathoth:
         """Return whether the instance was closed."""
 
         return self._closed
+
+    @property
+    def workflows(
+        self,
+    ) -> Workflows:
+        """Return the workflows this instance holds."""
+
+        return self._workflows
+
+    @property
+    def tools(
+        self,
+    ) -> Tools:
+        """Return the tools this instance holds."""
+
+        return self._tools
+
+    @property
+    def benchmarks(
+        self,
+    ) -> Benchmarks:
+        """Return the benchmark datasets this instance holds."""
+
+        return self._benchmarks
 
     def describe(
         self,

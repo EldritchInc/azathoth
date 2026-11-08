@@ -153,24 +153,23 @@ def test_an_uninitialized_postgresql_database_is_refused(
 
 
 def test_every_error_carries_a_distinct_code() -> None:
-    errors = (
-        api.ApiError,
-        api.InstanceNotFoundError,
-        api.InstanceUnavailableError,
-        api.InstanceSchemaError,
-        api.InstanceClosedError,
+    errors = tuple(
+        public
+        for name in api.__all__
+        if isinstance(public := getattr(api, name), type) and issubclass(public, api.ApiError)
     )
 
-    codes = tuple(error.code for error in errors)
-
-    assert codes == (
-        "error",
-        "instance_not_found",
-        "instance_unavailable",
-        "instance_schema",
-        "instance_closed",
-    )
-    assert all(issubclass(error, api.ApiError) for error in errors)
+    assert {error.__name__: error.code for error in errors} == {
+        "ApiError": "error",
+        "InstanceClosedError": "instance_closed",
+        "InstanceNotFoundError": "instance_not_found",
+        "InstanceSchemaError": "instance_schema",
+        "InstanceUnavailableError": "instance_unavailable",
+        "InvalidArgumentError": "invalid_argument",
+        "NotFoundError": "not_found",
+        "RevisionNotFoundError": "revision_not_found",
+    }
+    assert len({error.code for error in errors}) == len(errors)
 
 
 def test_an_errors_code_is_part_of_the_instance_too() -> None:

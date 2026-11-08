@@ -6,9 +6,11 @@ is frozen, refuses unknown fields, and is its own JSON: a local UI server
 sends `model_dump(mode="json")` as it is.
 """
 
+from datetime import datetime
 from typing import Final, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 ApiStability = Literal["provisional", "stable"]
 """Whether the API is still provisional, or covered by the 1.x promise."""
@@ -54,10 +56,142 @@ class InstanceDescription(ApiModel):
     api_stability: ApiStability
 
 
+class Revision(ApiModel):
+    """One imported revision of a workflow, tool version or benchmark."""
+
+    number: int = Field(
+        ge=1,
+    )
+
+    content_digest: str = Field(
+        description="The sha256 of the revision's canonical JSON.",
+    )
+
+    imported_at: datetime | None = Field(
+        description="When it was imported, or None for revisions from before 1.1.",
+    )
+
+    identical_to: int | None = Field(
+        description="The earliest earlier revision with the same content, when it reverted to one.",
+    )
+
+
+class WorkflowSummary(ApiModel):
+    """One revision of a workflow, as lists and histories show it."""
+
+    id: UUID
+
+    name: str
+
+    version: str
+
+    description: str
+
+    revision: Revision
+
+    command: str = Field(
+        description="The `azathoth` command that shows the same workflow.",
+    )
+
+
+class WorkflowDetail(WorkflowSummary):
+    """One revision of a workflow with its whole document."""
+
+    latest_number: int = Field(
+        ge=1,
+        description="The number of the workflow's latest revision.",
+    )
+
+    document: dict[str, JsonValue] = Field(
+        description="The revision as `azathoth workflow import` accepts it.",
+    )
+
+
+class ToolSummary(ApiModel):
+    """One revision of one exact tool version, as lists and histories show it."""
+
+    id: UUID
+
+    version: str
+
+    name: str
+
+    description: str
+
+    revision: Revision
+
+    implementation_count: int = Field(
+        ge=0,
+    )
+
+    test_case_count: int = Field(
+        ge=0,
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the same tool version.",
+    )
+
+
+class ToolDetail(ToolSummary):
+    """One revision of one exact tool version with its whole document."""
+
+    latest_number: int = Field(
+        ge=1,
+        description="The number of the tool version's latest revision.",
+    )
+
+    document: dict[str, JsonValue] = Field(
+        description="The revision as `azathoth tool import` accepts it.",
+    )
+
+
+class BenchmarkSummary(ApiModel):
+    """One revision of a benchmark dataset, as lists and histories show it."""
+
+    id: UUID
+
+    name: str
+
+    version: str
+
+    description: str
+
+    case_count: int = Field(
+        ge=0,
+    )
+
+    revision: Revision
+
+    command: str = Field(
+        description="The `azathoth` command that shows the same benchmark.",
+    )
+
+
+class BenchmarkDetail(BenchmarkSummary):
+    """One revision of a benchmark dataset with its whole document."""
+
+    latest_number: int = Field(
+        ge=1,
+        description="The number of the benchmark's latest revision.",
+    )
+
+    document: dict[str, JsonValue] = Field(
+        description="The revision as `azathoth benchmark import` accepts it.",
+    )
+
+
 __all__ = [
     "API_STABILITY",
     "ApiModel",
     "ApiStability",
     "Backend",
+    "BenchmarkDetail",
+    "BenchmarkSummary",
     "InstanceDescription",
+    "Revision",
+    "ToolDetail",
+    "ToolSummary",
+    "WorkflowDetail",
+    "WorkflowSummary",
 ]
