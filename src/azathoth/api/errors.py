@@ -8,6 +8,8 @@ documented, and say what to do next where there is something to do.
 
 from typing import ClassVar, Final
 
+from azathoth.api.models import ProductionDependent
+
 CLOSED_MESSAGE: Final = "This Azathoth instance is closed."
 
 
@@ -57,6 +59,42 @@ class RevisionNotFoundError(NotFoundError):
     code: ClassVar[str] = "revision_not_found"
 
 
+class ConflictError(ApiError):
+    """A change was refused because of the state it would change, such as a duplicate."""
+
+    code: ClassVar[str] = "conflict"
+
+
+class ModelInUseError(ConflictError):
+    """A model was kept in the portfolio because active production uses it.
+
+    `dependents` names the workflows and steps that use it.
+    """
+
+    code: ClassVar[str] = "model_in_use"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        dependents: tuple[ProductionDependent, ...],
+    ) -> None:
+        super().__init__(message)
+        self.dependents = dependents
+
+
+class ProviderConfigurationError(ApiError):
+    """A provider is turned on in a way that cannot be used, such as Bedrock without boto3."""
+
+    code: ClassVar[str] = "provider_configuration"
+
+
+class ProviderUnavailableError(ApiError):
+    """A configured provider could not be asked which models it serves."""
+
+    code: ClassVar[str] = "provider_unavailable"
+
+
 class InstanceClosedError(ApiError):
     """A call was made on an instance that was already closed."""
 
@@ -71,11 +109,15 @@ class InstanceClosedError(ApiError):
 __all__ = [
     "CLOSED_MESSAGE",
     "ApiError",
+    "ConflictError",
     "InstanceClosedError",
     "InstanceNotFoundError",
     "InstanceSchemaError",
     "InstanceUnavailableError",
     "InvalidArgumentError",
+    "ModelInUseError",
     "NotFoundError",
+    "ProviderConfigurationError",
+    "ProviderUnavailableError",
     "RevisionNotFoundError",
 ]

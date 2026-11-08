@@ -161,12 +161,16 @@ def test_every_error_carries_a_distinct_code() -> None:
 
     assert {error.__name__: error.code for error in errors} == {
         "ApiError": "error",
+        "ConflictError": "conflict",
         "InstanceClosedError": "instance_closed",
         "InstanceNotFoundError": "instance_not_found",
         "InstanceSchemaError": "instance_schema",
         "InstanceUnavailableError": "instance_unavailable",
         "InvalidArgumentError": "invalid_argument",
+        "ModelInUseError": "model_in_use",
         "NotFoundError": "not_found",
+        "ProviderConfigurationError": "provider_configuration",
+        "ProviderUnavailableError": "provider_unavailable",
         "RevisionNotFoundError": "revision_not_found",
     }
     assert len({error.code for error in errors}) == len(errors)

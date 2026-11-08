@@ -10,8 +10,9 @@ release dates are on the
 
 - `azathoth.api`, a public service API that the command line, azathoth-mcp
   and the coming local editor all call. It browses workflows, tools and
-  benchmarks and their revisions, returns its own frozen models, each with
-  its equivalent `azathoth` command, raises errors with stable codes, and is
+  benchmarks and their revisions, lists the models providers serve, and
+  keeps the model portfolio. It returns its own frozen models, each with its
+  equivalent `azathoth` command, raises errors with stable codes, and is
   provisional until 1.4.0
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
 

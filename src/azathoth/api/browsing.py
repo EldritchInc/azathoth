@@ -6,6 +6,7 @@ the same thing, built here rather than by callers.
 """
 
 import json
+import shlex
 from collections.abc import Callable, Iterable
 from typing import Final, TypeVar
 from uuid import UUID
@@ -270,7 +271,10 @@ class Tools:
                 self._summary(
                     history[-1],
                     history,
-                    command=f"azathoth tool show {definition.id} --version {definition.version}",
+                    command=(
+                        f"azathoth tool show {definition.id} "
+                        f"--version {shlex.quote(definition.version)}"
+                    ),
                 )
             )
 
@@ -535,7 +539,7 @@ def _tool_command(
     """
 
     return (
-        f"azathoth tool export {selected.tool_id} --version {selected.tool_version} "
+        f"azathoth tool export {selected.tool_id} --version {shlex.quote(selected.tool_version)} "
         f"--revision {selected.number}"
     )
 

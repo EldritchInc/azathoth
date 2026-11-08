@@ -72,6 +72,40 @@ by number, and `tool show --version` for a tool version, or
 `tool export --version --revision` for one of its revisions, since
 `tool show` cannot select a revision.
 
+## Models and the Portfolio
+
+An instance asks no model provider anything unless it is opened with
+`ProviderSettings`. `ProviderSettings.from_environment()` reads
+`OPENROUTER_API_KEY` and the Bedrock variables as the command line does;
+nothing is reached, and boto3 is not imported, until a call needs a
+provider's models.
+
+```python
+from azathoth import api
+
+with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) as instance:
+    models = instance.models.list()
+    entry = instance.portfolio.add("openrouter/openai/gpt-4o-mini")
+    removal = instance.portfolio.remove("openrouter/openai/gpt-4o-mini")
+```
+
+| Call | Does | Asks providers |
+| --- | --- | --- |
+| `models.list()` | Every model the providers serve now, provider by provider. | Yes |
+| `models.get(identifier)` | One of them. | Yes |
+| `portfolio.list()` | Every authorized model, in the order authorized. | No |
+| `portfolio.add(identifier)` | Authorizes a model a provider serves now. | Yes |
+| `portfolio.remove(identifier, force=False)` | Removes a model, as `azathoth model deauthorize` does. | No |
+
+Listing models records what each provider reports, as `azathoth model list`
+does. A model's `authorized` says whether it is in the portfolio. Whatever a
+provider does not publish, such as a context window or a price, is `None`.
+
+`portfolio.remove` keeps a model that active production uses, raising
+`ModelInUseError`, whose `dependents` names each workflow and step; with
+`force=True` the model is removed and its `dependents` are returned. A
+semantic judge is always kept until it leaves the judge rotation.
+
 ## Errors
 
 Every error the API raises on purpose is an `ApiError` with a stable `code`:
@@ -85,6 +119,10 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `NotFoundError` | `not_found` | No workflow, tool version or benchmark has the ID named. |
 | `RevisionNotFoundError` | `revision_not_found` | It has no revision with the number named; a `NotFoundError` too. |
 | `InvalidArgumentError` | `invalid_argument` | A history limit is below 1; a `ValueError` too. |
+| `ConflictError` | `conflict` | A model is already authorized, or is a semantic judge. |
+| `ModelInUseError` | `model_in_use` | Active production uses the model; a `ConflictError` too. |
+| `ProviderConfigurationError` | `provider_configuration` | Bedrock is on without boto3, without a region, or with unusable prices. |
+| `ProviderUnavailableError` | `provider_unavailable` | A provider could not be asked what it serves. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.
@@ -96,6 +134,11 @@ Tool <TOOL_ID>@<VERSION> has no revision <NUMBER>.
 Benchmark dataset <BENCHMARK_ID> is not configured.
 Benchmark dataset <BENCHMARK_ID> has no revision <NUMBER>.
 A history limit must be at least 1.
+Model '<IDENTIFIER>' is not currently available.
+Model '<IDENTIFIER>' is already authorized.
+Model '<IDENTIFIER>' is not authorized.
+Model '<IDENTIFIER>' is a semantic judge and was not deauthorized; remove it from the rotation first with: azathoth judge remove <IDENTIFIER>
+Model '<IDENTIFIER>' is used by active production and was not deauthorized.
 ```
 
 The not-found messages are the ones the matching CLI commands print.

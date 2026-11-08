@@ -1,10 +1,12 @@
 """Opening an Azathoth instance through the service API (ADR 0120)."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
 
 import azathoth
 from azathoth.api.browsing import Benchmarks, Tools, Workflows
+from azathoth.api.catalog import Models, Portfolio
 from azathoth.api.errors import (
     InstanceClosedError,
     InstanceNotFoundError,
@@ -12,6 +14,7 @@ from azathoth.api.errors import (
     InstanceUnavailableError,
 )
 from azathoth.api.models import API_STABILITY, InstanceDescription
+from azathoth.api.providers import ProviderSettings, model_directories
 from azathoth.persistence import (
     SCHEMA_VERSION,
     DatabaseLocation,
@@ -26,6 +29,7 @@ from azathoth.persistence.repositories import (
     Repositories,
     open_repositories,
 )
+from azathoth.providers import ProviderModelDirectory
 
 
 class Azathoth:
@@ -35,21 +39,33 @@ class Azathoth:
     context manager. Calls run synchronously on the caller's thread. Once
     closed, every call raises `InstanceClosedError`.
 
-    Operations are grouped by what they act on: `workflows`, `tools` and
-    `benchmarks`.
+    Operations are grouped by what they act on: `workflows`, `tools`,
+    `benchmarks`, `models` and `portfolio`.
     """
 
     def __init__(
         self,
         repositories: Repositories,
+        *,
+        providers: ProviderSettings | None = None,
+        directories: Sequence[ProviderModelDirectory] | None = None,
     ) -> None:
-        """Serve the API over one database's repositories; `open` is the way to make one."""
+        """Serve the API over one database's repositories; `open` is the way to make one.
+
+        The providers `providers` turns on are reached through directories
+        made the first time models are needed. `directories`, when given,
+        are used instead, as tests do.
+        """
 
         self._repositories = repositories
+        self._providers = providers if providers is not None else ProviderSettings()
+        self._directories = tuple(directories) if directories is not None else None
         self._closed = False
         self._workflows = Workflows(self._open_repositories)
         self._tools = Tools(self._open_repositories)
         self._benchmarks = Benchmarks(self._open_repositories)
+        self._models = Models(self._open_repositories, self._model_directories)
+        self._portfolio = Portfolio(self._open_repositories, self._model_directories)
 
     def __enter__(
         self,
@@ -96,6 +112,22 @@ class Azathoth:
 
         return self._benchmarks
 
+    @property
+    def models(
+        self,
+    ) -> Models:
+        """Return the models this instance's providers serve now."""
+
+        return self._models
+
+    @property
+    def portfolio(
+        self,
+    ) -> Portfolio:
+        """Return the models this instance authorizes for selection."""
+
+        return self._portfolio
+
     def describe(
         self,
     ) -> InstanceDescription:
@@ -140,15 +172,37 @@ class Azathoth:
 
         return self._repositories
 
+    def _model_directories(
+        self,
+    ) -> tuple[ProviderModelDirectory, ...]:
+        """Return the directories of the configured providers, made the first time.
+
+        Raises:
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        if self._directories is None:
+            self._directories = model_directories(self._providers)
+
+        return self._directories
+
 
 def open(
     database: DatabaseLocation | str | Path,
+    *,
+    providers: ProviderSettings | None = None,
 ) -> Azathoth:
     """Open the Azathoth instance one database holds.
 
     The database is named as `AZATHOTH_DATABASE` names it: an SQLite file's
     path, or a `postgresql://` URL. Opening never creates or changes a
     database; `azathoth init` does.
+
+    `providers` names the model providers the instance may ask what they
+    serve; without it, it asks none. `ProviderSettings.from_environment()`
+    reads them as the command line does. No provider is reached, and boto3
+    is not imported, until a call needs a provider's models.
 
     Raises:
         InstanceNotFoundError: The SQLite file does not exist.
@@ -180,7 +234,7 @@ def open(
         except DatabaseSchemaError as exc:
             raise InstanceSchemaError(str(exc)) from exc
 
-    return Azathoth(repositories)
+    return Azathoth(repositories, providers=providers)
 
 
 __all__ = [

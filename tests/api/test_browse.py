@@ -399,6 +399,21 @@ def test_each_tool_version_has_revisions_of_its_own(
     assert tuple(entry.revision.identical_to for entry in history) == (None, 1, None, None)
 
 
+def test_a_tool_version_is_quoted_in_its_commands(
+    instance: api.Azathoth,
+    location: str,
+) -> None:
+    open_repositories(location).tools.save_document(versioned_tool("2.0 beta"))
+
+    (summary,) = instance.tools.list()
+    tool = instance.tools.get(TOOL_ID, "2.0 beta")
+
+    assert summary.command == f"azathoth tool show {TOOL_ID} --version '2.0 beta'"
+    assert tool.command == f"azathoth tool export {TOOL_ID} --version '2.0 beta' --revision 1"
+    assert parses(summary.command)
+    assert parses(tool.command)
+
+
 def test_an_unknown_tool_is_not_found(
     instance: api.Azathoth,
 ) -> None:

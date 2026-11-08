@@ -181,6 +181,92 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class ModelSummary(ApiModel):
+    """One model a configured provider currently serves.
+
+    What its provider does not publish is `None`: Azathoth never guesses a
+    context window, an output limit or a price.
+    """
+
+    identifier: str = Field(
+        description="The provider-qualified identifier, `<provider>/<model>`.",
+    )
+
+    provider: str
+
+    model: str
+
+    display_name: str
+
+    input_modalities: tuple[str, ...]
+
+    output_modalities: tuple[str, ...]
+
+    capabilities: tuple[str, ...]
+
+    context_window_tokens: int | None
+
+    maximum_output_tokens: int | None
+
+    input_usd_per_million_tokens: float | None
+
+    output_usd_per_million_tokens: float | None
+
+    authorized: bool = Field(
+        description="Whether the model is in this instance's portfolio.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the same model.",
+    )
+
+
+class PortfolioEntry(ApiModel):
+    """One model this instance authorizes for selection."""
+
+    identifier: str
+
+    provider: str
+
+    model: str
+
+    command: str = Field(
+        description="The `azathoth` command that shows the model.",
+    )
+
+
+class ProductionStepUsage(ApiModel):
+    """One step of a production workflow that uses a model."""
+
+    step_id: UUID
+
+    role: Literal["primary", "substitute"]
+
+
+class ProductionDependent(ApiModel):
+    """One workflow whose active production uses a model."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    steps: tuple[ProductionStepUsage, ...]
+
+
+class PortfolioRemoval(ApiModel):
+    """What removing a model from the portfolio did."""
+
+    identifier: str
+
+    dependents: tuple[ProductionDependent, ...] = Field(
+        description="The production workflows that still use the model, when removal was forced.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that removes a model the same way.",
+    )
+
+
 __all__ = [
     "API_STABILITY",
     "ApiModel",
@@ -189,6 +275,11 @@ __all__ = [
     "BenchmarkDetail",
     "BenchmarkSummary",
     "InstanceDescription",
+    "ModelSummary",
+    "PortfolioEntry",
+    "PortfolioRemoval",
+    "ProductionDependent",
+    "ProductionStepUsage",
     "Revision",
     "ToolDetail",
     "ToolSummary",
