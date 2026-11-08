@@ -12,6 +12,8 @@ from azathoth.api.models import ProductionDependent
 
 CLOSED_MESSAGE: Final = "This Azathoth instance is closed."
 
+CANCELLED_MESSAGE: Final = "The run was cancelled."
+
 
 class ApiError(Exception):
     """Base class of every error the service API raises on purpose."""
@@ -45,6 +47,12 @@ class InvalidArgumentError(ApiError, ValueError):
     """A call was given an argument it cannot use, such as a history limit below 1."""
 
     code: ClassVar[str] = "invalid_argument"
+
+
+class InvalidDocumentError(InvalidArgumentError):
+    """A document to import is not a valid workflow, tool or benchmark document."""
+
+    code: ClassVar[str] = "invalid_document"
 
 
 class NotFoundError(ApiError):
@@ -95,6 +103,27 @@ class ProviderUnavailableError(ApiError):
     code: ClassVar[str] = "provider_unavailable"
 
 
+class RunNotStartedError(ApiError):
+    """A run could not start: no executable candidate of the workflow could be made."""
+
+    code: ClassVar[str] = "run_not_started"
+
+
+class RunCancelledError(ApiError):
+    """A run was stopped through its cancellation token before it finished.
+
+    Nothing is kept as a finished run; what its journal recorded can be
+    resumed, as for a run that was interrupted.
+    """
+
+    code: ClassVar[str] = "run_cancelled"
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__(CANCELLED_MESSAGE)
+
+
 class InstanceClosedError(ApiError):
     """A call was made on an instance that was already closed."""
 
@@ -107,6 +136,7 @@ class InstanceClosedError(ApiError):
 
 
 __all__ = [
+    "CANCELLED_MESSAGE",
     "CLOSED_MESSAGE",
     "ApiError",
     "ConflictError",
@@ -115,9 +145,12 @@ __all__ = [
     "InstanceSchemaError",
     "InstanceUnavailableError",
     "InvalidArgumentError",
+    "InvalidDocumentError",
     "ModelInUseError",
     "NotFoundError",
     "ProviderConfigurationError",
     "ProviderUnavailableError",
     "RevisionNotFoundError",
+    "RunCancelledError",
+    "RunNotStartedError",
 ]

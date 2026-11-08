@@ -167,11 +167,14 @@ def test_every_error_carries_a_distinct_code() -> None:
         "InstanceSchemaError": "instance_schema",
         "InstanceUnavailableError": "instance_unavailable",
         "InvalidArgumentError": "invalid_argument",
+        "InvalidDocumentError": "invalid_document",
         "ModelInUseError": "model_in_use",
         "NotFoundError": "not_found",
         "ProviderConfigurationError": "provider_configuration",
         "ProviderUnavailableError": "provider_unavailable",
         "RevisionNotFoundError": "revision_not_found",
+        "RunCancelledError": "run_cancelled",
+        "RunNotStartedError": "run_not_started",
     }
     assert len({error.code for error in errors}) == len(errors)
 

@@ -17,11 +17,17 @@ from azathoth.providers import (
     AWS_REGION_VARIABLE,
     BEDROCK_ENABLED_VARIABLE,
     BEDROCK_PRICING_VARIABLE,
+    BedrockClient,
+    BedrockConfiguration,
     BedrockConfigurationError,
     BedrockModelDirectory,
+    BedrockModelRegistryLoader,
     BedrockUnavailableError,
+    LanguageModelRegistry,
+    ModelCatalog,
     OpenRouterConfiguration,
     OpenRouterModelDirectory,
+    OpenRouterModelRegistryLoader,
     ProviderModelDirectory,
     bedrock_enabled,
     boto3_driver,
@@ -102,26 +108,78 @@ def model_directories(
             )
         )
 
-    environment = dict(settings.bedrock_environment)
+    bedrock = _bedrock(settings)
 
-    if bedrock_enabled(environment):
-        try:
-            driver = boto3_driver()
-            configuration = configure_bedrock(environment, driver=driver)
-        except (BedrockUnavailableError, BedrockConfigurationError) as exc:
-            raise ProviderConfigurationError(str(exc)) from exc
-
-        if configuration is not None:
-            directories.append(
-                BedrockModelDirectory(configuration, driver.client(configuration)),
-            )
+    if bedrock is not None:
+        configuration, client = bedrock
+        directories.append(BedrockModelDirectory(configuration, client))
 
     return tuple(directories)
+
+
+def language_models(
+    settings: ProviderSettings,
+    models: ModelCatalog,
+) -> LanguageModelRegistry:
+    """Return the executable models the settings' providers serve, for the models discovered.
+
+    Raises:
+        ProviderConfigurationError: Bedrock is configured in a way that
+            cannot be used.
+    """
+
+    registries: list[LanguageModelRegistry] = []
+
+    if settings.openrouter_api_key is not None:
+        registries.append(
+            OpenRouterModelRegistryLoader(
+                OpenRouterConfiguration(api_key=settings.openrouter_api_key),
+            ).load_registry(models)
+        )
+
+    bedrock = _bedrock(settings)
+
+    if bedrock is not None:
+        _, client = bedrock
+        registries.append(BedrockModelRegistryLoader(client).load_registry(models))
+
+    if not registries:
+        return LanguageModelRegistry()
+
+    return LanguageModelRegistry.compose(registries)
+
+
+def _bedrock(
+    settings: ProviderSettings,
+) -> tuple[BedrockConfiguration, BedrockClient] | None:
+    """Return Bedrock's configuration and a client for it, or None when Bedrock is off.
+
+    Raises:
+        ProviderConfigurationError: Bedrock is on without the `bedrock`
+            extra, without a region, or with a pricing document that cannot
+            be used.
+    """
+
+    environment = dict(settings.bedrock_environment)
+
+    if not bedrock_enabled(environment):
+        return None
+
+    try:
+        driver = boto3_driver()
+        configuration = configure_bedrock(environment, driver=driver)
+    except (BedrockUnavailableError, BedrockConfigurationError) as exc:
+        raise ProviderConfigurationError(str(exc)) from exc
+
+    assert configuration is not None
+
+    return configuration, driver.client(configuration)
 
 
 __all__ = [
     "BEDROCK_VARIABLES",
     "OPENROUTER_API_KEY_VARIABLE",
     "ProviderSettings",
+    "language_models",
     "model_directories",
 ]

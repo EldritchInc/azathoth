@@ -14,7 +14,8 @@ from azathoth.api.errors import (
     InstanceUnavailableError,
 )
 from azathoth.api.models import API_STABILITY, InstanceDescription
-from azathoth.api.providers import ProviderSettings, model_directories
+from azathoth.api.providers import ProviderSettings, language_models, model_directories
+from azathoth.api.running import Runs
 from azathoth.persistence import (
     SCHEMA_VERSION,
     DatabaseLocation,
@@ -29,7 +30,7 @@ from azathoth.persistence.repositories import (
     Repositories,
     open_repositories,
 )
-from azathoth.providers import ProviderModelDirectory
+from azathoth.providers import LanguageModelRegistry, ModelCatalog, ProviderModelDirectory
 
 
 class Azathoth:
@@ -40,7 +41,7 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models` and `portfolio`.
+    `benchmarks`, `models`, `portfolio` and `runs`.
     """
 
     def __init__(
@@ -54,7 +55,7 @@ class Azathoth:
 
         The providers `providers` turns on are reached through directories
         made the first time models are needed. `directories`, when given,
-        are used instead, as tests do.
+        are used instead, as tests do, and no model can then be executed.
         """
 
         self._repositories = repositories
@@ -66,6 +67,8 @@ class Azathoth:
         self._benchmarks = Benchmarks(self._open_repositories)
         self._models = Models(self._open_repositories, self._model_directories)
         self._portfolio = Portfolio(self._open_repositories, self._model_directories)
+        self._injected = directories is not None
+        self._runs = Runs(self._open_repositories, self._model_directories, self._language_models)
 
     def __enter__(
         self,
@@ -128,6 +131,14 @@ class Azathoth:
 
         return self._portfolio
 
+    @property
+    def runs(
+        self,
+    ) -> Runs:
+        """Return runs of this instance's configured workflows."""
+
+        return self._runs
+
     def describe(
         self,
     ) -> InstanceDescription:
@@ -186,6 +197,22 @@ class Azathoth:
             self._directories = model_directories(self._providers)
 
         return self._directories
+
+    def _language_models(
+        self,
+        models: ModelCatalog,
+    ) -> LanguageModelRegistry:
+        """Return the executable models of the configured providers, for the models discovered.
+
+        Raises:
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        if self._injected:
+            return LanguageModelRegistry()
+
+        return language_models(self._providers, models)
 
 
 def open(

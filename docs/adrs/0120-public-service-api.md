@@ -57,18 +57,20 @@ original as their cause.
 
 ### Runs report through a callback
 
-`invoke` takes an optional `on_event` callback and calls it, on the run's
-thread, with each typed event as it happens: the run starting, each step
-starting and finishing, each change to the context, and the run finishing
-or failing. A context change carries the keys that changed and their new
-values, never the whole context. The call still returns the run's result
+Running a workflow takes an optional `on_event` callback and calls it, on
+the run's thread, with each typed event as it happens: the run starting,
+each step starting and finishing, each change to the context, and the run
+finishing. A context change carries the values a finished step declared,
+by name, never the whole context. The call still returns the run's result
 and raises its errors as any call does.
 
 A callback must be quick. One that raises is detached for the rest of the
 run and its failure is recorded as a warning on the result: a broken
-display never fails an invocation. A run is stopped by a cancellation token
-passed to `invoke` and checked between steps, never by abandoning an
-iterator.
+display never fails a run. A run is stopped by a cancellation token passed
+with it, never by abandoning an iterator. Cancelling stops the run where it
+is, as Ctrl-C stops `azathoth workflow run`: a running tool process is
+killed, the run's lease is released, nothing is kept as a finished run, and
+its journal can be resumed.
 
 Events on the caller's own instance carry the values they report. The rule
 that a shared instance shows only aggregates applies to what a remote

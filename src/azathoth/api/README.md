@@ -60,6 +60,13 @@ with api.open("azathoth.db") as instance:
 | `benchmarks.get(id, revision=None)` | One revision with its document, the latest by default. |
 | `benchmarks.history(id, limit=None)` | Its revisions, newest first. |
 
+`import_document(document)` on each of the three appends the next revision,
+as the matching `import` command does, and returns it as `get` would. The
+document is its JSON text, or its JSON values. A document that is not one,
+a workflow that declares no result, a tool implementation in a runtime
+Azathoth cannot run, or a tool artifact that belongs to another tool or
+version is refused with `InvalidDocumentError`, and nothing is saved.
+
 Each value carries its `revision`: the number, the content digest, when it
 was imported (`None` for revisions from before 1.1), and `identical_to`, the
 earliest earlier revision with the same content when the import reverted to
@@ -106,6 +113,58 @@ provider does not publish, such as a context window or a price, is `None`.
 `force=True` the model is removed and its `dependents` are returned. A
 semantic judge is always kept until it leaves the judge rotation.
 
+## Runs
+
+`instance.runs.run(workflow_id, input=None, on_event=None, cancel=None)`
+runs a workflow's latest revision as configured, as `azathoth workflow run`
+does, and keeps the finished run whether it succeeded or failed. It returns
+when the run has finished.
+
+```python
+from uuid import UUID
+
+from azathoth import api
+
+workflow_id = UUID("11111111-1111-1111-1111-111111111111")
+token = api.CancellationToken()
+
+with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) as instance:
+    result = instance.runs.run(
+        workflow_id,
+        input=api.RunInput(payload="that is not dead which can eternal lie"),
+        on_event=print,
+        cancel=token,
+    )
+```
+
+`RunInput` wraps the payload, so a JSON null is input and `None` is no
+input: a run given none starts with an empty context. The `RunResult` says
+whether it `succeeded`, holds the declared `result` when `has_result`, and
+otherwise its `error`: the step that halted the run and its final failure
+(`workflow_execution_failed`), or that it did not produce its declared
+result (`result_not_produced`).
+
+`on_event` is called on the run's thread with each event, in the order the
+run makes them:
+
+| Event | `type` | Carries |
+| --- | --- | --- |
+| `RunStarted` | `run_started` | The workflow. |
+| `StepStarted` | `step_started` | The step, its dependency layer, and its message. |
+| `StepFinished` | `step_finished` | Its status, its final failure's message, its confidence. |
+| `ContextChanged` | `context_changed` | The values the step declared, by name. |
+| `RunFinished` | `run_finished` | The kept run's ID, and whether it succeeded. |
+
+Steps of one layer run together, so their events interleave. A callback
+must return quickly. One that raises is detached for the rest of the run,
+and the result's `warnings` name what it raised; the run carries on. Every
+event is its own JSON, and `parse_run_event` reads one back.
+
+`cancel.cancel()`, from any thread, stops the run where it is, as Ctrl-C
+does: a running tool process is killed, nothing is kept as a finished run,
+and `RunCancelledError` is raised. A token cancelled beforehand starts
+nothing.
+
 ## Errors
 
 Every error the API raises on purpose is an `ApiError` with a stable `code`:
@@ -123,6 +182,9 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `ModelInUseError` | `model_in_use` | Active production uses the model; a `ConflictError` too. |
 | `ProviderConfigurationError` | `provider_configuration` | Bedrock is on without boto3, without a region, or with unusable prices. |
 | `ProviderUnavailableError` | `provider_unavailable` | A provider could not be asked what it serves. |
+| `InvalidDocumentError` | `invalid_document` | A document to import is refused; an `InvalidArgumentError` too. |
+| `RunNotStartedError` | `run_not_started` | No executable candidate could be made, such as for a missing tool. |
+| `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.
@@ -139,6 +201,8 @@ Model '<IDENTIFIER>' is already authorized.
 Model '<IDENTIFIER>' is not authorized.
 Model '<IDENTIFIER>' is a semantic judge and was not deauthorized; remove it from the rotation first with: azathoth judge remove <IDENTIFIER>
 Model '<IDENTIFIER>' is used by active production and was not deauthorized.
+Workflow document must declare a result.
+The run was cancelled.
 ```
 
 The not-found messages are the ones the matching CLI commands print.

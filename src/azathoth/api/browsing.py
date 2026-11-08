@@ -1,13 +1,15 @@
-"""Browsing the workflows, tools and benchmarks an instance holds (ADR 0120).
+"""Browsing and importing the workflows, tools and benchmarks an instance holds (ADR 0120).
 
-Each namespace reads durable state only: no provider is reached and no
-credential is needed. Every value names the `azathoth` command that shows
-the same thing, built here rather than by callers.
+Each namespace reads and writes durable state only: no provider is reached
+and no credential is needed. Importing never replaces anything: it appends
+the next revision, as the matching `import` command does. Every value names
+the `azathoth` command that shows the same thing, built here rather than by
+callers.
 """
 
 import json
 import shlex
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Final, TypeVar
 from uuid import UUID
 
@@ -15,6 +17,7 @@ from pydantic import JsonValue
 
 from azathoth.api.errors import (
     InvalidArgumentError,
+    InvalidDocumentError,
     NotFoundError,
     RevisionNotFoundError,
 )
@@ -29,22 +32,35 @@ from azathoth.api.models import (
 )
 from azathoth.evaluation import (
     BenchmarkDatasetRevision,
+    BenchmarkDocumentError,
+    decode_benchmark_document,
     earliest_identical_benchmark_revision,
     encode_benchmark_document,
 )
 from azathoth.persistence.repositories import Repositories
 from azathoth.tools import (
+    ToolDocumentError,
     ToolDocumentRevision,
+    decode_tool_document,
     earliest_identical_tool_revision,
     encode_tool_document,
+    supported_tool_runtimes,
+    unsupported_runtime_message,
 )
 from azathoth.workflows import (
+    WorkflowDocumentError,
     WorkflowSpecificationRevision,
+    decode_workflow_document,
     earliest_identical_revision,
     encode_workflow_document,
 )
 
 LIMIT_MESSAGE: Final = "A history limit must be at least 1."
+
+RESULT_REQUIRED_MESSAGE: Final = "Workflow document must declare a result."
+
+Document = str | Mapping[str, JsonValue]
+"""A document to import: its JSON text, or its JSON values."""
 
 RepositoriesAccess = Callable[[], Repositories]
 """Return an instance's repositories, or raise `InstanceClosedError`."""
@@ -97,6 +113,14 @@ def _check_limit(
 
     if limit is not None and limit < 1:
         raise InvalidArgumentError(LIMIT_MESSAGE)
+
+
+def _encoded(
+    document: Document,
+) -> str:
+    """Return a document to import as JSON text."""
+
+    return document if isinstance(document, str) else json.dumps(dict(document))
 
 
 def _document(
@@ -201,6 +225,33 @@ class Workflows:
             self._summary(selected, history, command=_workflow_command(selected))
             for selected in _newest_first(history, limit)
         )
+
+    def import_document(
+        self,
+        document: Document,
+    ) -> WorkflowDetail:
+        """Import one workflow document as its workflow's next revision, as `workflow import` does.
+
+        A workflow must declare its result. Nothing is saved when the
+        document is refused.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidDocumentError: It is not a workflow document, or declares
+                no result.
+        """
+
+        try:
+            specification = decode_workflow_document(_encoded(document))
+        except WorkflowDocumentError as exc:
+            raise InvalidDocumentError(str(exc)) from exc
+
+        if specification.result is None:
+            raise InvalidDocumentError(RESULT_REQUIRED_MESSAGE)
+
+        revision = self._repositories().workflows.save(specification)
+
+        return self.get(specification.metadata.id, revision=revision.number)
 
     def _history(
         self,
@@ -352,6 +403,42 @@ class Tools:
             for revision in _newest_first(selected, limit)
         )
 
+    def import_document(
+        self,
+        document: Document,
+    ) -> ToolDetail:
+        """Import one tool document as its exact version's next revision, as `tool import` does.
+
+        A document whose implementations use a runtime Azathoth cannot run,
+        or whose artifacts belong to another tool or version, is refused and
+        nothing is saved.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidDocumentError: It is not a tool document, or cannot be
+                imported.
+        """
+
+        try:
+            decoded = decode_tool_document(_encoded(document))
+        except ToolDocumentError as exc:
+            raise InvalidDocumentError(str(exc)) from exc
+
+        runtimes = supported_tool_runtimes()
+
+        for implementation in decoded.implementations:
+            if implementation.runtime not in runtimes:
+                raise InvalidDocumentError(unsupported_runtime_message(implementation))
+
+        repository = self._repositories().tools
+
+        try:
+            revision = repository.save_document(decoded)
+        except ValueError as exc:
+            raise InvalidDocumentError(str(exc)) from exc
+
+        return self.get(revision.tool_id, revision.tool_version, revision=revision.number)
+
     def _version_history(
         self,
         tool_id: UUID,
@@ -483,6 +570,26 @@ class Benchmarks:
             for selected in _newest_first(history, limit)
         )
 
+    def import_document(
+        self,
+        document: Document,
+    ) -> BenchmarkDetail:
+        """Import one benchmark document as its dataset's next revision, as `benchmark import` does.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidDocumentError: It is not a benchmark document.
+        """
+
+        try:
+            dataset = decode_benchmark_document(_encoded(document))
+        except BenchmarkDocumentError as exc:
+            raise InvalidDocumentError(str(exc)) from exc
+
+        revision = self._repositories().benchmarks.save(dataset)
+
+        return self.get(dataset.id, revision=revision.number)
+
     def _history(
         self,
         benchmark_id: UUID,
@@ -554,7 +661,9 @@ def _benchmark_command(
 
 __all__ = [
     "LIMIT_MESSAGE",
+    "RESULT_REQUIRED_MESSAGE",
     "Benchmarks",
+    "Document",
     "RepositoriesAccess",
     "Tools",
     "Workflows",

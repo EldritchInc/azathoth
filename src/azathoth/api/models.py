@@ -7,10 +7,10 @@ sends `model_dump(mode="json")` as it is.
 """
 
 from datetime import datetime
-from typing import Final, Literal
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 ApiStability = Literal["provisional", "stable"]
 """Whether the API is still provisional, or covered by the 1.x promise."""
@@ -267,6 +267,144 @@ class PortfolioRemoval(ApiModel):
     )
 
 
+class RunInput(ApiModel):
+    """The input a run is given; a run given none starts with an empty context.
+
+    Wrapping the payload keeps a JSON null, which is input, apart from no
+    input at all.
+    """
+
+    payload: JsonValue
+
+
+class RunError(ApiModel):
+    """Why a finished run has no result, as `azathoth workflow run` reports it."""
+
+    code: Literal["workflow_execution_failed", "result_not_produced"]
+
+    step_id: UUID | None = Field(
+        description="The step that halted the run, when one did.",
+    )
+
+    exception_type: str | None
+
+    message: str
+
+
+class RunResult(ApiModel):
+    """One finished run, which is kept whether it succeeded or failed."""
+
+    run_id: UUID
+
+    workflow_id: UUID
+
+    workflow_revision: int | None
+
+    succeeded: bool = Field(
+        description="Whether the run finished with its declared result, or without one declared.",
+    )
+
+    has_result: bool = Field(
+        description="Whether `result` holds the declared result, so a null result is not absence.",
+    )
+
+    result: JsonValue = None
+
+    error: RunError | None
+
+    warnings: tuple[str, ...] = Field(
+        description="What went wrong beside the run, such as an event callback that raised.",
+    )
+
+    started_at: datetime
+
+    completed_at: datetime
+
+    command: str = Field(
+        description="The `azathoth` command that shows the run.",
+    )
+
+
+class RunStarted(ApiModel):
+    """A run is about to start."""
+
+    type: Literal["run_started"] = "run_started"
+
+    workflow_id: UUID
+
+
+class StepStarted(ApiModel):
+    """A step began its first attempt; retries never start it again."""
+
+    type: Literal["step_started"] = "step_started"
+
+    step_id: UUID
+
+    layer: int = Field(
+        ge=0,
+        description="The dependency layer the step runs in; steps of one layer run together.",
+    )
+
+    message: str | None
+
+
+class StepFinished(ApiModel):
+    """A step reached its final status."""
+
+    type: Literal["step_finished"] = "step_finished"
+
+    step_id: UUID
+
+    layer: int = Field(
+        ge=0,
+    )
+
+    status: Literal["executed", "failed", "skipped"]
+
+    failure: str | None = Field(
+        description="The message of a failed step's final attempt.",
+    )
+
+    confidence: float | None
+
+
+class ContextChanged(ApiModel):
+    """A step added values to the run's context: the names it declared, with their values."""
+
+    type: Literal["context_changed"] = "context_changed"
+
+    step_id: UUID
+
+    values: dict[str, JsonValue]
+
+
+class RunFinished(ApiModel):
+    """A run finished and was kept."""
+
+    type: Literal["run_finished"] = "run_finished"
+
+    run_id: UUID
+
+    succeeded: bool
+
+
+RunEvent = Annotated[
+    RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished,
+    Field(discriminator="type"),
+]
+"""One event of a run, told apart by its `type`."""
+
+_RUN_EVENT: TypeAdapter[RunEvent] = TypeAdapter(RunEvent)
+
+
+def parse_run_event(
+    data: str | bytes,
+) -> RunEvent:
+    """Return the run event one JSON document holds, as a client receiving events reads it."""
+
+    return _RUN_EVENT.validate_json(data)
+
+
 __all__ = [
     "API_STABILITY",
     "ApiModel",
@@ -274,6 +412,7 @@ __all__ = [
     "Backend",
     "BenchmarkDetail",
     "BenchmarkSummary",
+    "ContextChanged",
     "InstanceDescription",
     "ModelSummary",
     "PortfolioEntry",
@@ -281,8 +420,17 @@ __all__ = [
     "ProductionDependent",
     "ProductionStepUsage",
     "Revision",
+    "RunError",
+    "RunEvent",
+    "RunFinished",
+    "RunInput",
+    "RunResult",
+    "RunStarted",
+    "StepFinished",
+    "StepStarted",
     "ToolDetail",
     "ToolSummary",
     "WorkflowDetail",
     "WorkflowSummary",
+    "parse_run_event",
 ]

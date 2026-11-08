@@ -9,11 +9,12 @@ release dates are on the
 ## Unreleased
 
 - `azathoth.api`, a public service API that the command line, azathoth-mcp
-  and the coming local editor all call. It browses workflows, tools and
-  benchmarks and their revisions, lists the models providers serve, and
-  keeps the model portfolio. It returns its own frozen models, each with its
-  equivalent `azathoth` command, raises errors with stable codes, and is
-  provisional until 1.4.0
+  and the coming local editor all call. It browses and imports workflows,
+  tools and benchmarks, lists the models providers serve, keeps the model
+  portfolio, and runs workflows, reporting each step and context change to
+  a callback as it happens and stopping when cancelled. It returns its own
+  frozen models, each with its equivalent `azathoth` command, raises errors
+  with stable codes, and is provisional until 1.4.0
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
 
 ## 1.3.0
