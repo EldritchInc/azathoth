@@ -229,8 +229,9 @@ Repositories store domain state. They must not become hidden orchestration or
 provider-policy layers.
 
 Every repository runs on SQLite and on PostgreSQL (ADR 0102). The PostgreSQL
-tests (`tests/persistence`, with `AZATHOTH_TEST_POSTGRES_URL`) must pass, in
-CI's `postgres` job and with `make postgres-test`. They prove:
+tests (`tests/persistence` and `tests/api`, with
+`AZATHOTH_TEST_POSTGRES_URL`) must pass, in CI's `postgres` job and with
+`make postgres-test`. They prove:
 
 - that every repository stores and reads back the same values on either
   database;

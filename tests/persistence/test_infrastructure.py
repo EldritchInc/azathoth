@@ -43,7 +43,7 @@ def test_ci_runs_the_persistence_tests_against_postgresql() -> None:
     assert "image: postgres:17" in postgres
     assert "--health-cmd" in postgres
     assert f"{POSTGRES_URL_VARIABLE}: postgresql://" in postgres
-    assert "run: python -m pytest tests/persistence -ra" in postgres
+    assert "run: python -m pytest tests/persistence tests/api -ra" in postgres
 
 
 def test_the_test_matrix_never_needs_postgresql() -> None:
@@ -56,7 +56,8 @@ def test_make_runs_the_postgresql_tests_against_a_throwaway_server() -> None:
     assert re.search(r"^\.PHONY:.*\bpostgres-test\b", makefile, re.MULTILINE)
     assert re.search(r"^postgres-test:$", makefile, re.MULTILINE)
     assert "postgres:17" in makefile
-    assert f"{POSTGRES_URL_VARIABLE}=$(POSTGRES_TEST_URL) python -m pytest tests/persistence" in (
-        makefile
+    assert (
+        f"{POSTGRES_URL_VARIABLE}=$(POSTGRES_TEST_URL) python -m pytest tests/persistence tests/api"
+        in makefile
     )
     assert "docker stop $(POSTGRES_TEST_CONTAINER)" in makefile

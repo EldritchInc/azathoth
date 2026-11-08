@@ -6,6 +6,13 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+- `azathoth.api`, a public service API that the command line, azathoth-mcp
+  and the coming local editor all call. It returns its own frozen models,
+  raises errors with stable codes, and is provisional until 1.4.0
+  ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
+
 ## 1.3.0
 
 Azathoth 1.3 reads documents and keeps the evidence of where each answer
