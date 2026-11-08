@@ -61,7 +61,11 @@ def kept_files(
             path for name in names if (path := Path(directory) / name).resolve() != THIS_FILE
         )
 
-    return tuple(sorted(files))
+    #
+    # Sorted by each path's text, so the order is the same on every platform:
+    # Windows paths compare without regard to case.
+    #
+    return tuple(sorted(files, key=lambda path: path.relative_to(root).as_posix()))
 
 
 def private_mentions(
