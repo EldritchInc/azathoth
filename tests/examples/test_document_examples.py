@@ -54,6 +54,14 @@ def test_the_claim_is_the_pdf_its_script_writes() -> None:
     assert CLAIM_PDF.read_bytes().startswith(b"%PDF-1.7\n")
 
 
+def test_git_never_rewrites_a_pdfs_line_endings() -> None:
+    attributes = (PROJECT_ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+
+    assert "*.pdf binary" in attributes
+    assert b"\x00" not in CLAIM_PDF.read_bytes()
+    assert b"\n" in CLAIM_PDF.read_bytes()
+
+
 def test_the_workflow_divides_its_input_with_the_standard_segment_pdf() -> None:
     workflow = decode_workflow_document(WORKFLOW.read_text(encoding="utf-8"))
     (step,) = workflow.steps
