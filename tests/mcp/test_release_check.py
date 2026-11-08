@@ -108,7 +108,10 @@ def test_the_release_check_builds_and_installs_both_wheels() -> None:
     install = step("### 2. Install them into a fresh venv")
 
     assert "python -m build packages/azathoth-mcp --outdir dist" in build
-    assert "python -m pip install dist/azathoth_ai-*.whl dist/azathoth_mcp-*.whl" in install
+    assert (
+        'python -m pip install "$(echo dist/azathoth_ai-*.whl)[documents]" dist/azathoth_mcp-*.whl'
+        in install
+    )
     assert "azathoth-mcp --version" in install
 
 
@@ -116,6 +119,6 @@ def test_the_testpypi_trial_installs_and_checks_both() -> None:
     text = RELEASING.read_text(encoding="utf-8")
     trial = text[text.index("## Trial Release on TestPyPI") : text.index("\n## Release\n")]
 
-    assert '"azathoth-ai==<version>" "azathoth-mcp==<version>"' in trial
+    assert '"azathoth-ai[documents]==<version>" "azathoth-mcp==<version>"' in trial
     assert "azathoth-mcp --version" in trial
-    assert "Repeat steps 3 and 4 of the" in trial
+    assert "Repeat steps 3 to 6 of the" in trial
