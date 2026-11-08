@@ -1,28 +1,27 @@
 """Tests for running tool calls: invoking exposed workflows and reading invocations (ADR 0111)."""
 
 import asyncio
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.jobs import JobErrorCode, JobStatus
 from azathoth.persistence.repositories import Repositories, open_repositories
 from azathoth.prompting import FixedModelSelection, PromptStrategySpec
 from azathoth.providers import (
     DeterministicLanguageModel,
     LanguageModelRegistry,
-    ModelCatalog,
-    ModelMetadata,
-    ModelPortfolio,
     Prompt,
+    ProviderModel,
 )
-from azathoth.runtime import AzathothRuntime
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     InvocationIdempotency,
-    WorkflowCatalog,
     WorkflowMetadata,
     WorkflowProductionState,
     WorkflowSpecification,
@@ -51,6 +50,9 @@ from azathoth_mcp.service import (
     ToolService,
     generated_key,
 )
+from tests.api.test_invoke import promote
+from tests.api.test_models import StaticDirectory
+from tests.api.test_runs import tool_document, tool_step, workflow
 
 SUMMARIZE_ID = UUID("7d1f3c2a-0b8e-4c55-9a61-2f0d6c1e9b44")
 
@@ -149,8 +151,47 @@ def exposure(
 DEFAULT_EXPOSURE = ((SUMMARIZE_ID, "summarize"), (BROKEN_ID, "broken"))
 
 
+def instance_serving(
+    database: Path,
+    selection: FixedModelSelection,
+    *,
+    directory: StaticDirectory | None = None,
+) -> api.Azathoth:
+    """Return an instance whose one provider serves one model, which runs deterministically."""
+
+    return api.Azathoth(
+        open_repositories(database),
+        directories=(
+            directory
+            if directory is not None
+            else StaticDirectory(
+                selection.provider,
+                (
+                    ProviderModel(
+                        provider=selection.provider,
+                        model=selection.model,
+                        display_name=selection.identifier,
+                    ),
+                ),
+            ),
+        ),
+        language_models=LanguageModelRegistry(
+            {
+                selection.identifier: DeterministicLanguageModel(
+                    provider=selection.provider,
+                    model=selection.model,
+                ),
+            }
+        ),
+    )
+
+
 class Harness:
-    """One server's tool service over a real SQLite database, with fake models."""
+    """One server's tool service over a real SQLite database, with fake models.
+
+    Its provider serves the production model, which runs deterministically;
+    `discoveries` counts how often the provider was asked what it serves.
+    """
 
     def __init__(
         self,
@@ -159,7 +200,6 @@ class Harness:
         exposed: tuple[tuple[UUID, str], ...] = DEFAULT_EXPOSURE,
     ) -> None:
         self.repositories: Repositories = open_repositories(database)
-        self.loads = 0
         self.keys = 0
 
         for workflow_id in (SUMMARIZE_ID, HIDDEN_ID):
@@ -171,42 +211,29 @@ class Harness:
                 production_state(BROKEN_ID, steps=1, selection=MISSING)
             )
 
+        self.directory = StaticDirectory(
+            PRIMARY.provider,
+            (
+                ProviderModel(
+                    provider=PRIMARY.provider,
+                    model=PRIMARY.model,
+                    display_name=PRIMARY.identifier,
+                ),
+            ),
+        )
         self.service = ToolService(
             catalog=ToolCatalog(exposure(*exposed), self.repositories.production_states),
-            repositories=self.repositories,
-            load_runtime=self.load,
+            instance=instance_serving(database, PRIMARY, directory=self.directory),
             new_key=self.new_key,
         )
 
-    def load(
+    @property
+    def discoveries(
         self,
-    ) -> AzathothRuntime:
-        """Compose a runtime from the database's production states, counting each time."""
+    ) -> int:
+        """Return how often the provider was asked what it serves."""
 
-        self.loads += 1
-
-        return AzathothRuntime(
-            workflows=WorkflowCatalog(),
-            production_states=self.repositories.production_states.states(),
-            models=ModelCatalog(
-                models=(
-                    ModelMetadata(
-                        provider=PRIMARY.provider,
-                        model=PRIMARY.model,
-                        display_name=PRIMARY.identifier,
-                    ),
-                )
-            ),
-            portfolio=ModelPortfolio(),
-            language_models=LanguageModelRegistry(
-                {
-                    PRIMARY.identifier: DeterministicLanguageModel(
-                        provider=PRIMARY.provider,
-                        model=PRIMARY.model,
-                    ),
-                }
-            ),
-        )
+        return self.directory.calls
 
     def new_key(
         self,
@@ -503,7 +530,7 @@ def test_a_refused_argument_records_nothing(
         server.invoke("summarize", {"input": {}, "idempotency_key": "ticket-42"})
 
     assert server.repositories.invocations.invocation_for_idempotency_key("ticket-42") is None
-    assert server.loads == 0
+    assert server.discoveries == 0
 
 
 def test_a_workflow_no_longer_active_is_refused_and_records_nothing(
@@ -523,7 +550,7 @@ def test_a_workflow_no_longer_active_is_refused_and_records_nothing(
 # Runtimes and progress
 
 
-def test_the_runtime_is_composed_once_while_production_stays_the_same(
+def test_every_call_asks_the_providers_again(
     tmp_path: Path,
 ) -> None:
     server = harness(tmp_path)
@@ -531,7 +558,7 @@ def test_the_runtime_is_composed_once_while_production_stays_the_same(
     server.invoke("summarize", {"input": TICKET})
     server.invoke("summarize", {"input": TICKET})
 
-    assert server.loads == 1
+    assert server.discoveries == 2
 
 
 def test_a_workflow_promoted_again_is_served_at_its_new_state(
@@ -543,7 +570,6 @@ def test_a_workflow_promoted_again_is_served_at_its_new_state(
     server.repositories.production_states.set(production_state(SUMMARIZE_ID, version="2.0.0"))
     outcome = server.invoke("summarize", {"input": TICKET})
 
-    assert server.loads == 2
     assert outcome.invocation_id is not None
 
     evidence = server.service.get_invocation(
@@ -859,75 +885,170 @@ def test_the_service_offers_its_catalog(
     ]
 
 
-def test_evidence_names_how_often_a_run_was_resumed_and_each_steps_attempts(
-    tmp_path: Path,
-) -> None:
-    server = harness(tmp_path)
-    outcome = server.invoke("summarize", {"input": TICKET})
-
-    assert outcome.invocation_id is not None
-
-    invocation = server.repositories.invocations.get(outcome.invocation_id)
-    association = server.repositories.invocation_runs.get(outcome.invocation_id)
-
-    assert invocation is not None
-    assert association is not None
-
-    run = server.repositories.runs.get(association.run_id)
-
-    assert run is not None
-
-    retried = run.model_copy(
-        update={
-            "steps": tuple(
-                step.model_copy(update={"attempts": step.attempts * 2}) for step in run.steps
-            )
-        }
+def test_evidence_names_how_often_a_run_was_resumed_and_each_steps_attempts() -> None:
+    detail = api.InvocationDetail(
+        invocation_id=HIDDEN_ID,
+        workflow_id=SUMMARIZE_ID,
+        created_at=datetime(2026, 11, 8, tzinfo=UTC),
+        status="succeeded",
+        result={"result": "summary"},
+        error=None,
+        idempotency_key="ticket-42",
+        input=TICKET,
+        caller_metadata={"mcp": {"transport": "stdio", "tool": "summarize"}},
+        run=api.InvocationRun(
+            run_id=BROKEN_ID,
+            finished=True,
+            resumes=3,
+            workflow_revision=4,
+            started_at=datetime(2026, 11, 8, tzinfo=UTC),
+            completed_at=datetime(2026, 11, 8, 0, 1, tzinfo=UTC),
+            halted=False,
+            steps=(
+                api.RunStep(step_id=UUID(int=101), status="executed", attempts=2, confidence=0.9),
+                api.RunStep(step_id=UUID(int=102), status="skipped", attempts=0, confidence=None),
+            ),
+        ),
+        command=f"azathoth invocation show {HIDDEN_ID}",
     )
 
-    evidence = invocation_evidence(
-        invocation,
-        tool="summarize",
-        result=server.repositories.invocations.result(outcome.invocation_id),
-        run_id=run.id,
-        run=retried,
-        resumes=3,
-    )
+    evidence = invocation_evidence(detail, tool="summarize")
 
+    assert evidence.tool == "summarize"
+    assert evidence.status is InvocationStatus.SUCCEEDED
+    assert evidence.caller == {"mcp": {"transport": "stdio", "tool": "summarize"}}
     assert evidence.run is not None
     assert evidence.run.resumes == 3
-    assert [step.attempts for step in evidence.run.steps] == [2, 2]
-    assert evidence.run.workflow_revision == run.workflow_revision
+    assert evidence.run.workflow_revision == 4
+    assert [step.attempts for step in evidence.run.steps] == [2, 0]
+    assert [step.status for step in evidence.run.steps] == [
+        WorkflowStepStatus.EXECUTED,
+        WorkflowStepStatus.SKIPPED,
+    ]
+    assert evidence.run.steps[0].confidence == 0.9
 
 
-def test_evidence_names_a_run_that_has_not_finished(
-    tmp_path: Path,
-) -> None:
-    invocation = create_production_invocation(workflow_id=SUMMARIZE_ID, payload=TICKET)
-
-    evidence = invocation_evidence(
-        invocation,
-        tool="summarize",
-        result=None,
-        run_id=HIDDEN_ID,
+def test_evidence_of_a_failed_invocation_carries_its_job_error_code() -> None:
+    detail = api.InvocationDetail(
+        invocation_id=HIDDEN_ID,
+        workflow_id=BROKEN_ID,
+        created_at=datetime(2026, 11, 8, tzinfo=UTC),
+        status="failed",
+        error=api.InvocationError(
+            code="model_unavailable",
+            message="The production model is unavailable.",
+            metadata={},
+        ),
+        idempotency_key=None,
+        input="x",
+        caller_metadata={},
         run=None,
-        resumes=1,
+        command=f"azathoth invocation show {HIDDEN_ID}",
     )
+
+    evidence = invocation_evidence(detail, tool="broken")
+
+    assert evidence.status is InvocationStatus.FAILED
+    assert evidence.error is not None
+    assert evidence.error.code is JobErrorCode.MODEL_UNAVAILABLE
+    assert evidence.run is None
+
+
+def test_evidence_names_a_run_that_has_not_finished() -> None:
+    detail = api.InvocationDetail(
+        invocation_id=SUMMARIZE_ID,
+        workflow_id=SUMMARIZE_ID,
+        created_at=datetime(2026, 11, 8, tzinfo=UTC),
+        status="incomplete",
+        error=None,
+        idempotency_key=None,
+        input=TICKET,
+        caller_metadata={},
+        run=api.InvocationRun(run_id=HIDDEN_ID, finished=False, resumes=1),
+        command=f"azathoth invocation show {SUMMARIZE_ID}",
+    )
+
+    evidence = invocation_evidence(detail, tool="summarize")
 
     assert evidence.status is InvocationStatus.INCOMPLETE
     assert evidence.idempotency_key is None
     assert evidence.run == RunEvidence(run_id=HIDDEN_ID, finished=False, resumes=1)
 
 
-def test_preloading_composes_the_runtime_before_any_call(
+def test_preloading_asks_the_providers_before_any_call(
     tmp_path: Path,
 ) -> None:
     server = harness(tmp_path)
 
     server.service.preload()
 
-    assert server.loads == 1
+    assert server.discoveries == 1
 
-    server.invoke("summarize", {"input": TICKET})
 
-    assert server.loads == 1
+def test_a_cancelled_call_cancels_its_invocation_which_resumes_under_its_key(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "azathoth.db"
+    slow_tool = UUID("c0000000-0000-4000-8000-000000000008")
+    slow_workflow = UUID("c0000000-0000-4000-8000-000000000009")
+
+    api.initialize(database)
+
+    with api.open(database) as instance:
+        instance.tools.import_document(
+            tool_document(
+                slow_tool,
+                "brief_count",
+                {
+                    "runtime": "process",
+                    "command": [sys.executable],
+                    "source": (
+                        "import json\nimport sys\nimport time\n\n"
+                        "json.load(sys.stdin)\ntime.sleep(0.5)\n"
+                        "json.dump({'count': 7}, sys.stdout)\n"
+                    ),
+                    "timeout_seconds": 60.0,
+                },
+            )
+        )
+        instance.workflows.import_document(
+            workflow(slow_workflow, tool_step(UUID(int=901), "brief_count", runtime="process"))
+        )
+
+    promote(str(database), slow_workflow)
+
+    stores = open_repositories(database)
+    service = ToolService(
+        catalog=ToolCatalog(
+            ExposureDocument(
+                version=1,
+                tools=(
+                    ExposedWorkflow(workflow_id=slow_workflow, name="slow", description="Wait."),
+                ),
+            ),
+            stores.production_states,
+        ),
+        instance=api.open(database),
+    )
+    arguments: dict[str, JsonValue] = {"input": "x", "idempotency_key": "slow-1"}
+
+    async def cancel_once_running() -> None:
+        call = asyncio.ensure_future(service.invoke("slow", arguments, caller=STDIO_CALLER))
+
+        while stores.invocations.invocation_for_idempotency_key("slow-1") is None:
+            await asyncio.sleep(0.02)
+
+        call.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await call
+
+    asyncio.run(cancel_once_running())
+
+    assert stores.runs.runs() == ()
+
+    resumed = asyncio.run(service.invoke("slow", arguments, caller=STDIO_CALLER))
+
+    assert resumed.status is JobStatus.SUCCEEDED
+    assert resumed.result == {"result": 7}
+    assert len(stores.invocations.invocations()) == 1

@@ -64,7 +64,8 @@ from azathoth.providers import (
     ModelPortfolioLoader,
 )
 from azathoth.runtime import AzathothRuntime
-from azathoth.telemetry import NO_TELEMETRY
+from azathoth.telemetry import Telemetry
+from azathoth.telemetry.invocations import traced_job_invoker
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.tools import ToolCatalogLoader
 from azathoth.workflows import (
@@ -190,7 +191,7 @@ class _CallbackObserver:
             StepFinished(
                 step_id=event.step.id,
                 layer=event.layer_index,
-                status=_status(event.status),
+                status=step_status(event.status),
                 failure=_failure_message(event.failure),
                 confidence=event.confidence,
             )
@@ -205,7 +206,7 @@ class _CallbackObserver:
             )
 
 
-def _status(
+def step_status(
     status: WorkflowStepStatus,
 ) -> Literal["executed", "failed", "skipped"]:
     """Return a step status as the API names it."""
@@ -235,12 +236,14 @@ class Runs:
         repositories: RepositoriesAccess,
         directories: DirectoriesAccess,
         language_models: LanguageModelsAccess,
+        telemetry: Telemetry,
     ) -> None:
-        """Run workflows over the repositories and providers given."""
+        """Run workflows over the repositories and providers given, traced by `telemetry`."""
 
         self._repositories = repositories
         self._directories = directories
         self._language_models = language_models
+        self._telemetry = telemetry
 
     def run(
         self,
@@ -284,7 +287,7 @@ class Runs:
 
         observer = _CallbackObserver(on_event)
         runner = tracing_runner(
-            NO_TELEMETRY,
+            self._telemetry,
             observer=observer,
             journal=repositories.run_journal,
             leases=repositories.run_leases,
@@ -368,7 +371,7 @@ class Runs:
         repositories = self._repositories()
         observer = _CallbackObserver(on_event)
         runner = tracing_runner(
-            NO_TELEMETRY,
+            self._telemetry,
             observer=observer,
             journal=repositories.run_journal,
             leases=repositories.run_leases,
@@ -419,7 +422,7 @@ class Runs:
                     policy=INLINE_ONLY,
                     store=repositories.content,
                     invocation_repository=repositories.invocations,
-                    invoke=invoke,
+                    invoke=traced_job_invoker(self._telemetry, invoke),
                     resume=runtime_job_resumer(
                         load_runtime,
                         invocation_repository=repositories.invocations,
@@ -616,4 +619,5 @@ __all__ = [
     "CancellationToken",
     "EventCallback",
     "Runs",
+    "step_status",
 ]

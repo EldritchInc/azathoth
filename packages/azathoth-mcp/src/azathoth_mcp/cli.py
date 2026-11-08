@@ -32,7 +32,7 @@ from mcp.server.stdio import stdio_server
 from pydantic import ValidationError
 from starlette.applications import Starlette
 
-from azathoth.cli.bootstrap import load_runtime
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.streams import use_utf8_streams
@@ -48,11 +48,6 @@ from azathoth.cli.tracing import run_traced
 from azathoth.inputs import ContentStoreError
 from azathoth.persistence import DatabaseSchemaError, DatabaseUnavailableError
 from azathoth.persistence.repositories import close_postgres_databases
-from azathoth.providers import (
-    BedrockConfigurationError,
-    BedrockUnavailableError,
-    ModelDiscoveryError,
-)
 from azathoth.telemetry import Telemetry
 from azathoth_mcp import __version__
 from azathoth_mcp.access import STDIO_CALLER
@@ -108,9 +103,7 @@ STARTUP_ERRORS = (
     DatabaseUnavailableError,
     DatabaseSchemaError,
     ContentStoreError,
-    BedrockUnavailableError,
-    BedrockConfigurationError,
-    ModelDiscoveryError,
+    api.ApiError,
 )
 """What stops the server before it serves, each reported in one line."""
 
@@ -309,11 +302,19 @@ def prepare_service(
         DatabaseUnavailableError: The database cannot be used here.
         DatabaseSchemaError: The database's schema is not this Azathoth's.
         ContentStoreError: The configured content store cannot be used.
-        BedrockUnavailableError: Bedrock is on, without its extra.
-        BedrockConfigurationError: Bedrock is on, and misconfigured.
-        ModelDiscoveryError: A provider's models cannot be discovered.
+        ApiError: The database cannot be opened, or a provider cannot be
+            used or asked what it serves.
     """
 
+    instance = api.open(
+        configuration.location,
+        providers=api.ProviderSettings(
+            openrouter_api_key=configuration.openrouter_api_key,
+            bedrock_environment=configuration.bedrock_environment,
+        ),
+        telemetry=telemetry,
+        content=configuration.content_store,
+    )
     stores = repositories(configuration)
     exposure = load_exposure(path)
 
@@ -321,9 +322,7 @@ def prepare_service(
 
     service = ToolService(
         catalog=ToolCatalog(exposure, stores.production_states),
-        repositories=stores,
-        load_runtime=lambda: load_runtime(configuration),
-        telemetry=telemetry,
+        instance=instance,
     )
     service.preload()
 

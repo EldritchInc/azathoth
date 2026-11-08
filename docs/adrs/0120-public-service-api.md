@@ -35,7 +35,16 @@ messages say to run `azathoth init`, which `initialize(database)` does
 through the API. Once closed, an instance refuses every call.
 
 The facade groups its operations by what they act on, as namespaces of the
-instance: workflows, tools, benchmarks, models, portfolio and runs.
+instance: workflows, tools, benchmarks, models, portfolio, runs and
+invocations. `open` also takes the telemetry that traces runs and
+invocations, and the S3 location that keeps resolved content, as the
+command line's environment gives them.
+
+The API caches nothing a run depends on. Every run and invocation asks the
+providers what they serve: a missing fixed model stops a run before it
+starts, and which substitute a production state may use depends on what is
+available now. How a client caches, or which of its threads calls, is the
+client's to decide.
 
 ### The API returns its own models
 
@@ -94,9 +103,14 @@ of the Python API stays outside it.
 
 ### The callers move onto it
 
-azathoth-mcp serves its tools through the API, and the CLI's commands that
-the API covers call it. The CLI's other commands move as the API grows to
-cover them.
+azathoth-mcp is a client like any other: each tool call is `runs.invoke`
+on a worker thread, and `get_invocation` reads `invocations.get`, while the
+server keeps its own rules of who may call and read what. A call the client
+cancels cancels its invocation. The server no longer keeps a runtime between
+calls, which amends ADR 0111: each call asks the providers what they serve,
+as `azathoth job run` does, and sees every import and authorization at once.
+The CLI's commands that the API covers call it, and its other commands move
+as the API grows to cover them.
 
 ### Contracts run on both databases
 
@@ -142,8 +156,11 @@ would pay for threads only one needs.
 
 ### An asynchronous API
 
-Rejected. The engine and its provider clients are synchronous; an
-asynchronous facade over them would only hide the threads it needs.
+Rejected. A client that runs in an event loop, as azathoth-mcp does, calls
+the API from a worker thread, and so chooses its own concurrency; the API
+does not choose it for every client. Each call runs its workflow on an
+event loop of its own, so a run steps through its workflow exactly as it
+does from the command line, whichever thread called.
 
 ### Move every CLI command at once
 

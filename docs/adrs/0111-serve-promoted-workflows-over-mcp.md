@@ -1,6 +1,6 @@
 # ADR 0111: Serve Promoted Workflows Over MCP
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0120
 - Date: 2026-11-05
 - Decided in: #135
 

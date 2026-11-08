@@ -184,6 +184,25 @@ and `RunCancelledError` is raised; a cancelled invocation resumes when the
 same request is made under its key. A token cancelled beforehand starts
 nothing.
 
+## Invocations
+
+`instance.invocations.get(invocation_id)` reads one invocation back, as
+`azathoth invocation show` reports it: its workflow, when it was made, its
+`status` (`succeeded`, `failed` or `incomplete`), its result or error, its
+idempotency key, the input it was given, its caller metadata, and its run.
+A finished run lists each step's status, attempts and confidence; a run
+that has not finished names only its ID and how often it was resumed. Who
+may read which invocation is the caller's to decide: azathoth-mcp, for
+one, shows a caller only invocations it made.
+
+## Tracing and Content
+
+`api.open(database, telemetry=..., content=...)` takes the telemetry that
+traces runs and invocations, as `AZATHOTH_TRACING` does for the command
+line, and the S3 location that keeps resolved content, as
+`AZATHOTH_CONTENT_STORE` does. Without them, nothing is traced and content
+is kept in the database.
+
 ## Errors
 
 Every error the API raises on purpose is an `ApiError` with a stable `code`:

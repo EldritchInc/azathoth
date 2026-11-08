@@ -366,6 +366,74 @@ class InvocationOutcome(ApiModel):
     )
 
 
+class RunStep(ApiModel):
+    """One step of a finished run, as an invocation's evidence shows it."""
+
+    step_id: UUID
+
+    status: Literal["executed", "failed", "skipped"]
+
+    attempts: int = Field(
+        ge=0,
+    )
+
+    confidence: float | None
+
+
+class InvocationRun(ApiModel):
+    """The run behind one invocation.
+
+    A run that has not finished names only its ID and how often it was
+    resumed: `finished` is false, and it has no steps.
+    """
+
+    run_id: UUID
+
+    finished: bool
+
+    resumes: int = Field(
+        ge=0,
+    )
+
+    workflow_revision: int | None = None
+
+    started_at: datetime | None = None
+
+    completed_at: datetime | None = None
+
+    halted: bool | None = None
+
+    steps: tuple[RunStep, ...] = ()
+
+
+class InvocationDetail(ApiModel):
+    """One invocation as it was recorded: its input, who made it, its outcome and its run."""
+
+    invocation_id: UUID
+
+    workflow_id: UUID
+
+    created_at: datetime
+
+    status: Literal["succeeded", "failed", "incomplete"]
+
+    result: JsonValue = None
+
+    error: InvocationError | None
+
+    idempotency_key: str | None
+
+    input: JsonValue
+
+    caller_metadata: dict[str, JsonValue]
+
+    run: InvocationRun | None
+
+    command: str = Field(
+        description="The `azathoth` command that shows the invocation.",
+    )
+
+
 class StandardTool(ApiModel):
     """One tool of the standard library, as initializing a database left it."""
 
@@ -495,9 +563,11 @@ __all__ = [
     "ContextChanged",
     "Initialization",
     "InstanceDescription",
+    "InvocationDetail",
     "InvocationError",
     "InvocationFinished",
     "InvocationOutcome",
+    "InvocationRun",
     "ModelSummary",
     "PortfolioEntry",
     "PortfolioRemoval",
@@ -510,6 +580,7 @@ __all__ = [
     "RunInput",
     "RunResult",
     "RunStarted",
+    "RunStep",
     "StandardTool",
     "StepFinished",
     "StepStarted",

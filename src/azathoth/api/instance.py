@@ -13,9 +13,11 @@ from azathoth.api.errors import (
     InstanceSchemaError,
     InstanceUnavailableError,
 )
+from azathoth.api.invocations import Invocations
 from azathoth.api.models import API_STABILITY, InstanceDescription
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
 from azathoth.api.running import Runs
+from azathoth.inputs import S3ContentLocation, S3ContentStore
 from azathoth.persistence import (
     SCHEMA_VERSION,
     DatabaseLocation,
@@ -31,6 +33,7 @@ from azathoth.persistence.repositories import (
     open_repositories,
 )
 from azathoth.providers import LanguageModelRegistry, ModelCatalog, ProviderModelDirectory
+from azathoth.telemetry import NO_TELEMETRY, Telemetry
 
 
 class Azathoth:
@@ -41,7 +44,7 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models`, `portfolio` and `runs`.
+    `benchmarks`, `models`, `portfolio`, `runs` and `invocations`.
     """
 
     def __init__(
@@ -49,18 +52,22 @@ class Azathoth:
         repositories: Repositories,
         *,
         providers: ProviderSettings | None = None,
+        telemetry: Telemetry = NO_TELEMETRY,
         directories: Sequence[ProviderModelDirectory] | None = None,
+        language_models: LanguageModelRegistry | None = None,
     ) -> None:
         """Serve the API over one database's repositories; `open` is the way to make one.
 
         The providers `providers` turns on are reached through directories
         made the first time models are needed. `directories`, when given,
-        are used instead, as tests do, and no model can then be executed.
+        are used instead, as tests do, with `language_models` as the models
+        runs execute. Runs and invocations are traced by `telemetry`.
         """
 
         self._repositories = repositories
         self._providers = providers if providers is not None else ProviderSettings()
         self._directories = tuple(directories) if directories is not None else None
+        self._given_language_models = language_models
         self._closed = False
         self._workflows = Workflows(self._open_repositories)
         self._tools = Tools(self._open_repositories)
@@ -68,7 +75,13 @@ class Azathoth:
         self._models = Models(self._open_repositories, self._model_directories)
         self._portfolio = Portfolio(self._open_repositories, self._model_directories)
         self._injected = directories is not None
-        self._runs = Runs(self._open_repositories, self._model_directories, self._language_models)
+        self._runs = Runs(
+            self._open_repositories,
+            self._model_directories,
+            self._language_models,
+            telemetry,
+        )
+        self._invocations = Invocations(self._open_repositories)
 
     def __enter__(
         self,
@@ -138,6 +151,14 @@ class Azathoth:
         """Return runs of this instance's configured workflows."""
 
         return self._runs
+
+    @property
+    def invocations(
+        self,
+    ) -> Invocations:
+        """Return the invocations of this instance's promoted workflows."""
+
+        return self._invocations
 
     def describe(
         self,
@@ -210,7 +231,11 @@ class Azathoth:
         """
 
         if self._injected:
-            return LanguageModelRegistry()
+            return (
+                self._given_language_models
+                if self._given_language_models is not None
+                else LanguageModelRegistry()
+            )
 
         return language_models(self._providers, models)
 
@@ -219,6 +244,8 @@ def open(
     database: DatabaseLocation | str | Path,
     *,
     providers: ProviderSettings | None = None,
+    telemetry: Telemetry = NO_TELEMETRY,
+    content: S3ContentLocation | None = None,
 ) -> Azathoth:
     """Open the Azathoth instance one database holds.
 
@@ -230,6 +257,11 @@ def open(
     serve; without it, it asks none. `ProviderSettings.from_environment()`
     reads them as the command line does. No provider is reached, and boto3
     is not imported, until a call needs a provider's models.
+
+    `telemetry` traces runs and invocations, as `AZATHOTH_TRACING` does for
+    the command line. `content` names the S3 location that keeps resolved
+    content (ADR 0108), as `AZATHOTH_CONTENT_STORE` does; without it,
+    content is kept in the database.
 
     Raises:
         InstanceNotFoundError: The SQLite file does not exist.
@@ -251,7 +283,10 @@ def open(
         )
 
     try:
-        repositories = open_repositories(location)
+        repositories = open_repositories(
+            location,
+            content=(lambda: S3ContentStore(content)) if content is not None else None,
+        )
     except DatabaseUnavailableError as exc:
         raise InstanceUnavailableError(str(exc)) from exc
 
@@ -261,7 +296,7 @@ def open(
         except DatabaseSchemaError as exc:
             raise InstanceSchemaError(str(exc)) from exc
 
-    return Azathoth(repositories, providers=providers)
+    return Azathoth(repositories, providers=providers, telemetry=telemetry)
 
 
 __all__ = [

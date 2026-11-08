@@ -17,6 +17,12 @@ release dates are on the
   frozen models, each with its equivalent `azathoth` command, raises errors
   with stable codes, and is provisional until 1.4.0
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
+- azathoth-mcp runs each tool call through the service API. A call now asks
+  the providers what they serve, as `azathoth job run` does, rather than
+  once while production stays the same, so a model authorized or a tool
+  imported reaches a running server at once; a call the client cancels
+  cancels its invocation, which the same call under its key resumes
+  ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
 
 ## 1.3.0
 

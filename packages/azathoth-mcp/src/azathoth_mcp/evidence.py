@@ -12,16 +12,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from azathoth.cli.rendering.invocation_history import production_invocation_input
-from azathoth.jobs import JobErrorCode, job_error_code
-from azathoth.workflows import (
-    ProductionInvocation,
-    ProductionInvocationFailure,
-    ProductionInvocationResult,
-    ProductionInvocationSuccess,
-    WorkflowRun,
-    WorkflowStepStatus,
-)
+from azathoth import api
+from azathoth.jobs import JobErrorCode
+from azathoth.workflows import WorkflowStepStatus
 
 
 class InvocationStatus(StrEnum):
@@ -91,78 +84,61 @@ class InvocationEvidence(BaseModel):
 
 
 def invocation_evidence(
-    invocation: ProductionInvocation,
+    detail: api.InvocationDetail,
     *,
     tool: str,
-    result: ProductionInvocationResult | None,
-    run_id: UUID | None,
-    run: WorkflowRun | None,
-    resumes: int,
 ) -> InvocationEvidence:
-    """Return the evidence of one invocation, from what its repositories recorded."""
-
-    status = InvocationStatus.INCOMPLETE
-    value: JsonValue = None
-    error: InvocationError | None = None
-
-    if isinstance(result, ProductionInvocationSuccess):
-        status = InvocationStatus.SUCCEEDED
-        value = result.result
-
-    if isinstance(result, ProductionInvocationFailure):
-        status = InvocationStatus.FAILED
-        error = InvocationError(
-            code=job_error_code(result.error_code),
-            message=result.message,
-            metadata=dict(result.metadata),
-        )
+    """Return the evidence of one invocation, as the service API reads it back."""
 
     return InvocationEvidence(
-        invocation_id=invocation.id,
-        workflow_id=invocation.workflow_id,
+        invocation_id=detail.invocation_id,
+        workflow_id=detail.workflow_id,
         tool=tool,
-        created_at=invocation.created_at,
-        status=status,
-        result=value,
-        error=error,
-        idempotency_key=invocation.idempotency.key if invocation.idempotency else None,
-        input=production_invocation_input(invocation),
-        caller=dict(invocation.caller_metadata),
-        run=_run_evidence(run_id, run, resumes),
+        created_at=detail.created_at,
+        status=InvocationStatus(detail.status),
+        result=detail.result,
+        error=(
+            InvocationError(
+                code=JobErrorCode(detail.error.code),
+                message=detail.error.message,
+                metadata=dict(detail.error.metadata),
+            )
+            if detail.error is not None
+            else None
+        ),
+        idempotency_key=detail.idempotency_key,
+        input=detail.input,
+        caller=dict(detail.caller_metadata),
+        run=_run_evidence(detail.run),
     )
 
 
 def _run_evidence(
-    run_id: UUID | None,
-    run: WorkflowRun | None,
-    resumes: int,
+    run: api.InvocationRun | None,
 ) -> RunEvidence | None:
     """Return the evidence of an invocation's run, finished or not, if it has one."""
 
-    if run is not None:
-        return RunEvidence(
-            run_id=run.id,
-            finished=True,
-            resumes=resumes,
-            workflow_revision=run.workflow_revision,
-            started_at=run.started_at,
-            completed_at=run.completed_at,
-            halted=run.halted,
-            steps=tuple(
-                StepEvidence(
-                    step_id=step.step_id,
-                    status=step.status,
-                    attempts=len(step.attempts),
-                    confidence=step.confidence,
-                )
-                for step in run.steps
-            ),
-        )
+    if run is None:
+        return None
 
-    if run_id is not None:
-        return RunEvidence(run_id=run_id, finished=False, resumes=resumes)
-
-    return None
+    return RunEvidence(
+        run_id=run.run_id,
+        finished=run.finished,
+        resumes=run.resumes,
+        workflow_revision=run.workflow_revision,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        halted=run.halted,
+        steps=tuple(
+            StepEvidence(
+                step_id=step.step_id,
+                status=WorkflowStepStatus(step.status),
+                attempts=step.attempts,
+                confidence=step.confidence,
+            )
+            for step in run.steps
+        ),
+    )
 
 
 __all__ = [

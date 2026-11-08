@@ -7,11 +7,13 @@ run in their own process and are not counted.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+import concurrent.futures
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from azathoth.workflows import WorkflowRunEvent, WorkflowStepFinished
+from azathoth import api
 
-ReportProgress = Callable[[float, float | None, str | None], Awaitable[None]]
+ReportProgress = Callable[[float, float | None, str | None], Coroutine[Any, Any, None]]
 """Send the client one progress notification: progress, total and a message."""
 
 
@@ -25,12 +27,12 @@ def progress_message(
 
 
 class StepProgress:
-    """Report each finished step of one run to the client.
+    """Report each finished step of one invocation to the client.
 
-    The runner tells its observer synchronously, from the event loop the
-    call runs in, so each notification is sent as a task of that loop, and
-    `flush` waits for every one before the call returns its result. A
-    notification that fails is dropped: progress never changes a result.
+    The invocation runs on a worker thread, and its events arrive there, so
+    each notification is handed to the call's event loop, and `flush` waits
+    for every one before the call returns its result. A notification that
+    fails is dropped: progress never changes a result.
     """
 
     def __init__(
@@ -38,33 +40,36 @@ class StepProgress:
         report: ReportProgress,
         *,
         total: int,
+        loop: asyncio.AbstractEventLoop,
     ) -> None:
         if total < 1:
             raise ValueError("A run's progress counts at least one step.")
 
         self._report = report
         self._total = total
+        self._loop = loop
         self._finished = 0
-        self._pending: list[asyncio.Future[None]] = []
+        self._pending: list[concurrent.futures.Future[None]] = []
 
     def observe(
         self,
-        event: WorkflowRunEvent,
+        event: api.RunEvent,
     ) -> None:
-        """Send a notification for one finished step."""
+        """Send a notification for one finished step, from any thread."""
 
-        if not isinstance(event, WorkflowStepFinished):
+        if not isinstance(event, api.StepFinished):
             return
 
         self._finished = min(self._finished + 1, self._total)
 
         self._pending.append(
-            asyncio.ensure_future(
+            asyncio.run_coroutine_threadsafe(
                 self._report(
                     float(self._finished),
                     float(self._total),
                     progress_message(self._finished, self._total),
-                )
+                ),
+                self._loop,
             )
         )
 
@@ -75,7 +80,10 @@ class StepProgress:
 
         pending, self._pending = self._pending, []
 
-        await asyncio.gather(*pending, return_exceptions=True)
+        await asyncio.gather(
+            *(asyncio.wrap_future(future) for future in pending),
+            return_exceptions=True,
+        )
 
 
 __all__ = [

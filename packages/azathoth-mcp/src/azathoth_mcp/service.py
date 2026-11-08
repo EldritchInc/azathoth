@@ -10,34 +10,29 @@ incomplete. A call that names no key is given one, which the result returns.
 Inputs are inline values only, so a call can never make the server read a
 file or any other reference.
 
+The server is a client of Azathoth's service API (ADR 0120): each call is
+`runs.invoke` on a worker thread, and every read is `invocations.get`. A
+call the client cancels cancels its invocation, which the same call under
+the same key resumes.
+
 Every refusal raises an error whose message is written for the model that
 made the call: an unknown tool, a missing scope, arguments that are not
 valid, a workflow that is no longer active, or an invocation that cannot be
 read.
 """
 
+import asyncio
+import contextlib
+import functools
 from collections.abc import Callable, Mapping
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
+from azathoth import api
 from azathoth.evaluation import json_schema_validator, json_schema_violations
-from azathoth.inputs import InlineInput, InputPolicy
-from azathoth.jobs import (
-    InvokeJobRequest,
-    JobError,
-    JobResult,
-    JobStatus,
-    run_invoke_job,
-    runtime_job_invoker,
-    runtime_job_resumer,
-)
-from azathoth.persistence.repositories import Repositories
-from azathoth.runtime import AzathothRuntime
-from azathoth.telemetry import NO_TELEMETRY, Telemetry
-from azathoth.telemetry.invocations import traced_job_invoker
-from azathoth.telemetry.runs import tracing_runner
-from azathoth.workflows import journal_resumes
+from azathoth.inputs import InputPolicy
+from azathoth.jobs import JobError, JobErrorCode, JobStatus
 from azathoth_mcp.access import READ_SCOPE, McpCaller, invoke_scope
 from azathoth_mcp.catalog import (
     GET_INVOCATION_SCHEMA,
@@ -50,7 +45,6 @@ from azathoth_mcp.catalog import (
 from azathoth_mcp.evidence import InvocationEvidence, invocation_evidence
 from azathoth_mcp.exposure import ExposedWorkflow
 from azathoth_mcp.progress import ReportProgress, StepProgress
-from azathoth_mcp.runtimes import RuntimeProvider
 
 INLINE_ONLY_POLICY = InputPolicy()
 """The server resolves no references: every input is the value the call sent."""
@@ -110,25 +104,17 @@ class ToolOutcome(BaseModel):
 
 
 class ToolService:
-    """Run the calls of one server's tools.
-
-    `load_runtime` composes a runtime from the configured database; it is
-    called again only when production has moved on (see `RuntimeProvider`).
-    """
+    """Run the calls of one server's tools on one Azathoth instance."""
 
     def __init__(
         self,
         *,
         catalog: ToolCatalog,
-        repositories: Repositories,
-        load_runtime: Callable[[], AzathothRuntime],
-        telemetry: Telemetry = NO_TELEMETRY,
+        instance: api.Azathoth,
         new_key: Callable[[], str] = generated_key,
     ) -> None:
         self._catalog = catalog
-        self._repositories = repositories
-        self._runtimes = RuntimeProvider(load_runtime)
-        self._telemetry = telemetry
+        self._instance = instance
         self._new_key = new_key
 
     @property
@@ -140,9 +126,18 @@ class ToolService:
     def preload(
         self,
     ) -> None:
-        """Compose the runtime the calls will run on, before any call arrives."""
+        """Ask every configured provider what it serves, before any call arrives.
 
-        self._runtimes.preload()
+        A server preloads when it starts, so a provider that cannot be used
+        stops it before any client connects.
+
+        Raises:
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        self._instance.models.list()
 
     async def invoke(
         self,
@@ -153,6 +148,10 @@ class ToolService:
         report_progress: ReportProgress | None = None,
     ) -> ToolOutcome:
         """Invoke one exposed workflow's tool, and return its outcome.
+
+        The invocation runs on a worker thread, so the server keeps serving
+        meanwhile. Cancelling the call cancels the invocation, and waits for
+        it to stop.
 
         Raises:
             UnknownToolError: No exposed workflow is offered under the name.
@@ -169,61 +168,41 @@ class ToolService:
 
         _, state = self._catalog.active_state(tool)
 
-        stores = self._repositories
         progress = (
-            StepProgress(report_progress, total=len(state.specification.steps))
+            StepProgress(
+                report_progress,
+                total=len(state.specification.steps),
+                loop=asyncio.get_running_loop(),
+            )
             if report_progress is not None
             else None
         )
-        runner = tracing_runner(
-            self._telemetry,
-            observer=progress,
-            journal=stores.run_journal,
-            leases=stores.run_leases,
-            children=stores.run_children,
-            content=stores.tool_content,
+        token = api.CancellationToken()
+        call = functools.partial(
+            self._instance.runs.invoke,
+            exposed.workflow_id,
+            input=payload,
+            idempotency_key=key,
+            caller_metadata=caller.caller_metadata(tool),
+            on_event=progress.observe if progress is not None else None,
+            cancel=token,
         )
+        invocation = asyncio.ensure_future(asyncio.to_thread(call))
 
-        def runtime() -> AzathothRuntime:
-            return self._runtimes.runtime_for(exposed.workflow_id, state)
+        try:
+            outcome = await asyncio.shield(invocation)
+        except asyncio.CancelledError:
+            token.cancel()
 
-        job = await run_invoke_job(
-            InvokeJobRequest(
-                kind="invoke",
-                version=1,
-                idempotency_key=key,
-                workflow_id=exposed.workflow_id,
-                input=InlineInput(value=payload),
-                caller_metadata=caller.caller_metadata(tool),
-            ),
-            policy=INLINE_ONLY_POLICY,
-            store=stores.content,
-            invocation_repository=stores.invocations,
-            invoke=traced_job_invoker(
-                self._telemetry,
-                runtime_job_invoker(
-                    runtime,
-                    invocation_repository=stores.invocations,
-                    run_repository=stores.runs,
-                    invocation_run_repository=stores.invocation_runs,
-                    runner=runner,
-                ),
-            ),
-            resume=runtime_job_resumer(
-                runtime,
-                invocation_repository=stores.invocations,
-                run_repository=stores.runs,
-                invocation_run_repository=stores.invocation_runs,
-                revision_repository=stores.production_revisions,
-                journal=stores.run_journal,
-                runner=runner,
-            ),
-        )
+            with contextlib.suppress(api.RunCancelledError):
+                await invocation
+
+            raise
 
         if progress is not None:
             await progress.flush()
 
-        return _outcome(job, key)
+        return _outcome(outcome)
 
     def get_invocation(
         self,
@@ -243,31 +222,19 @@ class ToolService:
             caller.require(READ_SCOPE)
 
         invocation_id = _invocation_id(arguments)
-        stores = self._repositories
-        invocation = stores.invocations.get(invocation_id)
+        missing = InvocationNotFoundError(f"No invocation {invocation_id} was found.")
 
-        if (
-            invocation is None
-            or not self._catalog.is_exposed(invocation.workflow_id)
-            or not caller.may_read(invocation.caller_metadata)
+        try:
+            detail = self._instance.invocations.get(invocation_id)
+        except api.NotFoundError as exc:
+            raise missing from exc
+
+        if not self._catalog.is_exposed(detail.workflow_id) or not caller.may_read(
+            detail.caller_metadata
         ):
-            raise InvocationNotFoundError(f"No invocation {invocation_id} was found.")
+            raise missing
 
-        association = stores.invocation_runs.get(invocation_id)
-        run_id = (
-            association.run_id
-            if association is not None
-            else stores.run_journal.invocation_run_id(invocation_id)
-        )
-
-        return invocation_evidence(
-            invocation,
-            tool=self._tool_name(invocation.workflow_id),
-            result=stores.invocations.result(invocation_id),
-            run_id=run_id,
-            run=stores.runs.get(association.run_id) if association is not None else None,
-            resumes=0 if run_id is None else journal_resumes(stores.run_journal.entries(run_id)),
-        )
+        return invocation_evidence(detail, tool=self._tool_name(detail.workflow_id))
 
     def _arguments(
         self,
@@ -354,18 +321,25 @@ def _invocation_id(
 
 
 def _outcome(
-    job: JobResult,
-    key: str,
+    outcome: api.InvocationOutcome,
 ) -> ToolOutcome:
-    """Return a call's outcome from its job result, naming its key."""
+    """Return a call's outcome from its invocation's, naming its key."""
 
     return ToolOutcome(
-        status=job.status,
-        replayed=job.replayed,
-        idempotency_key=job.idempotency_key if job.idempotency_key is not None else key,
-        invocation_id=job.invocation_id,
-        result=job.result,
-        error=job.error,
+        status=JobStatus(outcome.status),
+        replayed=outcome.replayed,
+        idempotency_key=outcome.idempotency_key,
+        invocation_id=outcome.invocation_id,
+        result=outcome.result,
+        error=(
+            JobError(
+                code=JobErrorCode(outcome.error.code),
+                message=outcome.error.message,
+                metadata=outcome.error.metadata,
+            )
+            if outcome.error is not None
+            else None
+        ),
     )
 
 
