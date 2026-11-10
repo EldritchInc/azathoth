@@ -36,6 +36,7 @@ from azathoth.providers import (
     ModelPortfolioLoader,
     ModelQuery,
     ModelRequirements,
+    PolicyDeclaration,
     PortfolioProvenance,
     ProviderModelCatalogSynchronizer,
     ProviderModelDirectory,
@@ -116,8 +117,11 @@ def _summary(
 def _entry(
     entry: ModelPortfolioEntry,
     provenance: PortfolioProvenance | None,
+    declaration: PolicyDeclaration | None,
 ) -> PortfolioEntry:
-    """Return the API's view of one portfolio entry and who added it (ADR 0122).
+    """Return the API's view of one portfolio entry, who added it and who declared its policy.
+
+    See ADR 0122 and ADR 0123.
 
     Raises:
         LookupError: The entry's provenance is not recorded.
@@ -135,6 +139,8 @@ def _entry(
         added_at=provenance.added_at,
         data_policy=entry.data_policy,
         receives_restricted=entry.data_policy.private,
+        policy_declared_by=None if declaration is None else author_view(declaration.author),
+        policy_declared_at=None if declaration is None else declaration.declared_at,
         command=_show_command(entry.identifier),
     )
 
@@ -310,7 +316,12 @@ class Portfolio:
         portfolio = self._repositories().portfolio
 
         return tuple(
-            _entry(entry, portfolio.provenance(entry.identifier)) for entry in portfolio.entries()
+            _entry(
+                entry,
+                portfolio.provenance(entry.identifier),
+                portfolio.policy_declaration(entry.identifier),
+            )
+            for entry in portfolio.entries()
         )
 
     def add(
@@ -352,7 +363,11 @@ class Portfolio:
 
         repositories.portfolio.save(entry, author=self._author())
 
-        return _entry(entry, repositories.portfolio.provenance(entry.identifier))
+        return _entry(
+            entry,
+            repositories.portfolio.provenance(entry.identifier),
+            repositories.portfolio.policy_declaration(entry.identifier),
+        )
 
     def set_data_policy(
         self,
@@ -364,11 +379,13 @@ class Portfolio:
         The policy replaces the one declared, as `azathoth model policy`
         does. Only a model declared to neither retain nor train on data may
         be sent restricted input. The entry keeps its place and provenance,
-        and no provider is asked.
+        and no provider is asked. Who declares it, as the author the
+        instance records, and when, are recorded.
 
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: It is not authorized.
+            InvalidAuthorError: Who is declaring it could not be told.
         """
 
         portfolio = self._repositories().portfolio
@@ -376,9 +393,11 @@ class Portfolio:
         if portfolio.get(identifier) is None:
             raise NotFoundError(f"Model {identifier!r} is not authorized.")
 
-        entry = portfolio.set_data_policy(identifier, data_policy)
+        entry = portfolio.set_data_policy(identifier, data_policy, author=self._author())
 
-        return _entry(entry, portfolio.provenance(identifier))
+        return _entry(
+            entry, portfolio.provenance(identifier), portfolio.policy_declaration(identifier)
+        )
 
     def remove(
         self,

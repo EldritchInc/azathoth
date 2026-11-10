@@ -119,6 +119,16 @@ def database(
 ) -> Path:
     """Initialize a database whose portfolio holds Beta, then a private Alpha."""
 
+    return initialized(tmp_path, monkeypatch, capsys)
+
+
+def initialized(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> Path:
+    """Initialize a database whose portfolio holds Beta, then a private Alpha; return it."""
+
     path = tmp_path / "azathoth.db"
 
     monkeypatch.setenv("AZATHOTH_DATABASE", str(path))
@@ -390,6 +400,9 @@ def test_a_resumed_restricted_invocation_reads_the_portfolio(
 
     assert status == 0, err
     assert result_of(out) == {"result": "alpha"}
+    assert err == (
+        f"Invocation {invocation.id} is restricted; its output contains restricted data.\n"
+    )
 
 
 def test_a_resumed_restricted_run_keeps_to_the_private_model(

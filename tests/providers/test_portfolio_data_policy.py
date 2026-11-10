@@ -166,3 +166,117 @@ def test_a_declared_policy_survives_reopening_the_database(
 
     assert reopened is not None
     assert reopened.data_policy == PRIVATE_DATA_POLICY
+
+
+# Who declared it
+
+
+def test_an_entry_added_with_a_declared_policy_records_its_author_as_declaring_it(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(
+        FRONTIER.model_copy(update={"data_policy": PRIVATE_DATA_POLICY}),
+        author=Author(name="Eris"),
+    )
+
+    declaration = repository.policy_declaration(FRONTIER.identifier)
+    provenance = repository.provenance(FRONTIER.identifier)
+
+    assert declaration is not None and provenance is not None
+    assert declaration.identifier == FRONTIER.identifier
+    assert declaration.author == Author(name="Eris")
+    assert declaration.declared_at == provenance.added_at
+
+
+def test_an_entry_added_without_a_policy_records_no_declaration(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(FRONTIER, author=Author(name="Eris"))
+
+    assert repository.policy_declaration(FRONTIER.identifier) is None
+    assert repository.policy_declaration("openrouter/example/missing") is None
+
+
+def test_each_declaration_replaces_who_declared_and_when(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(FRONTIER)
+    repository.set_data_policy(FRONTIER.identifier, RETAINING, author=Author(name="Eris"))
+
+    first = repository.policy_declaration(FRONTIER.identifier)
+
+    repository.set_data_policy(
+        FRONTIER.identifier,
+        PRIVATE_DATA_POLICY,
+        author=Author(name="Discordia", email="discordia@example.com"),
+    )
+
+    second = repository.policy_declaration(FRONTIER.identifier)
+
+    assert first is not None and second is not None
+    assert first.author == Author(name="Eris")
+    assert second.author == Author(name="Discordia", email="discordia@example.com")
+    assert second.declared_at >= first.declared_at
+
+
+def test_a_declaration_without_an_author_records_none(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(FRONTIER)
+    repository.set_data_policy(FRONTIER.identifier, PRIVATE_DATA_POLICY)
+
+    declaration = repository.policy_declaration(FRONTIER.identifier)
+
+    assert declaration is not None
+    assert declaration.author is None
+
+
+def test_a_declaration_leaves_the_entrys_digest_and_provenance_alone(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(FRONTIER, author=Author(name="Eris"))
+    before = repository.provenance(FRONTIER.identifier)
+
+    declared = repository.set_data_policy(
+        FRONTIER.identifier,
+        PRIVATE_DATA_POLICY,
+        author=Author(name="Discordia"),
+    )
+
+    assert repository.provenance(FRONTIER.identifier) == before
+    assert content_digest(declared) == content_digest(
+        FRONTIER.model_copy(update={"data_policy": PRIVATE_DATA_POLICY})
+    )
+
+
+def test_removing_an_entry_removes_its_declaration(
+    repository: ModelPortfolioRepository,
+) -> None:
+    repository.save(FRONTIER)
+    repository.set_data_policy(FRONTIER.identifier, PRIVATE_DATA_POLICY, author=Author(name="Eris"))
+    repository.delete(FRONTIER.identifier)
+
+    assert repository.policy_declaration(FRONTIER.identifier) is None
+
+    repository.save(FRONTIER)
+
+    assert repository.policy_declaration(FRONTIER.identifier) is None
+
+
+def test_a_declaration_survives_reopening_the_database(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "portfolio.db"
+
+    SQLiteModelPortfolioRepository(path).save(FRONTIER)
+    SQLiteModelPortfolioRepository(path).set_data_policy(
+        FRONTIER.identifier,
+        PRIVATE_DATA_POLICY,
+        author=Author(name="Eris", email="eris@example.com"),
+    )
+
+    reopened = SQLiteModelPortfolioRepository(path).policy_declaration(FRONTIER.identifier)
+
+    assert reopened is not None
+    assert reopened.author == Author(name="Eris", email="eris@example.com")
+    assert reopened.declared_at.tzinfo is not None

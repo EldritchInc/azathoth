@@ -140,6 +140,7 @@ def test_a_run_names_its_identity_status_and_step_counts() -> None:
         "azathoth.run.steps.executed": 0,
         "azathoth.run.steps.failed": 0,
         "azathoth.run.steps.skipped": 1,
+        "azathoth.sensitivity": "internal",
     }
 
 

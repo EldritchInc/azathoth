@@ -81,6 +81,7 @@ def test_a_workflows_runs_are_listed_newest_first(
         invocation_id=None,
         succeeded=True,
         error=None,
+        sensitivity=api.Sensitivity.INTERNAL,
         started_at=second.started_at,
         completed_at=second.completed_at,
         command=f"azathoth run show {second.run_id}",

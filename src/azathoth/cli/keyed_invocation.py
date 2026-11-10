@@ -23,7 +23,12 @@ from azathoth.cli.inputs import CLI_INPUT_POLICY, WorkflowInputFile, input_file_
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import ERROR_RECORD_TYPE, OutputRecord
-from azathoth.cli.reporting import report_invocation_result, step_observer, write_terminal_record
+from azathoth.cli.reporting import (
+    invocation_sensitivity,
+    report_invocation_result,
+    step_observer,
+    write_terminal_record,
+)
 from azathoth.cli.step_output import JsonLinesOutputWriter
 from azathoth.context import WorkflowLineage
 from azathoth.inputs import InlineInput, InputSourceError
@@ -169,7 +174,12 @@ def invoke_with_key(
 
         assert result is not None
 
-        return report_invocation_result(result, output=output, writer=writer)
+        return report_invocation_result(
+            result,
+            output=output,
+            writer=writer,
+            sensitivity=invocation_sensitivity(stores.invocations, job.invocation_id),
+        )
 
     record = unfinished_record(job)
 

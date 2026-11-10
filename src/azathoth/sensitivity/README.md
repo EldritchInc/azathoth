@@ -79,3 +79,10 @@ every model path is guarded:
 
 A fixed prompt holds only its own text, so it is not guarded. Tools are not
 guarded in 1.4.
+
+Labels are also shown wherever data is: the API's run, invocation and
+benchmark views carry `sensitivity`, show commands name a label that is not
+internal, a command that prints restricted data warns of it on standard
+error, and a run's span names its label as `azathoth.sensitivity`. Who
+declared each model's data policy, and when, is recorded beside its
+portfolio entry.

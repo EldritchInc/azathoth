@@ -23,6 +23,8 @@ from azathoth.cli.rendering import (
     render_workflow_production,
     render_workflow_revision_summaries,
 )
+from azathoth.cli.rendering.sensitivity import warn_if_restricted
+from azathoth.context import context_sensitivity
 from azathoth.persistence.repositories import Repositories
 from azathoth.prompting import CitationCheckError, stored_citation_checks
 from azathoth.workflows import (
@@ -253,6 +255,10 @@ def show_invocation(
         return 1
 
     print(rendered)
+
+    warn_if_restricted(
+        context_sensitivity(invocation.initial_context), f"Invocation {invocation_id}"
+    )
 
     return 0
 

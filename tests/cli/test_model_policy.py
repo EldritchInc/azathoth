@@ -11,7 +11,7 @@ from azathoth.providers import (
     ModelPortfolioEntry,
     SQLiteModelPortfolioRepository,
 )
-from azathoth.revisions import AUTHOR_VARIABLE
+from azathoth.revisions import AUTHOR_VARIABLE, Author
 from azathoth.sensitivity import (
     PRIVATE_DATA_POLICY,
     RESTRICTED_REFUSAL_HINT,
@@ -49,11 +49,36 @@ def authorized(
 
     database = configure_database(monkeypatch, tmp_path)
     repository = SQLiteModelPortfolioRepository(database)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris@example.com>")
 
     repository.save(entry)
     forbid_runtime(monkeypatch)
 
     return repository
+
+
+def declared(
+    repository: SQLiteModelPortfolioRepository,
+) -> str:
+    """Return the lines naming who declared the entry's policy, and when."""
+
+    declaration = repository.policy_declaration(ENTRY.identifier)
+
+    assert declaration is not None
+
+    author = "unknown" if declaration.author is None else str(declaration.author)
+
+    return f"Declared By: {author}\nDeclared At: {declaration.declared_at.isoformat()}\n"
+
+
+def declaration_time(
+    repository: SQLiteModelPortfolioRepository,
+) -> str:
+    declaration = repository.policy_declaration(ENTRY.identifier)
+
+    assert declaration is not None
+
+    return declaration.declared_at.isoformat()
 
 
 def policy_of(
@@ -129,11 +154,17 @@ def test_a_private_models_policy_allows_restricted_input(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    authorized(monkeypatch, tmp_path, ENTRY.model_copy(update={"data_policy": PRIVATE_DATA_POLICY}))
+    repository = authorized(
+        monkeypatch,
+        tmp_path,
+        ENTRY.model_copy(update={"data_policy": PRIVATE_DATA_POLICY}),
+    )
 
     assert run(capsys, "model", "policy", ENTRY.identifier) == (
         0,
-        "Retains Data: no\nTrains On Data: no\nRestricted Input: allowed\n",
+        "Retains Data: no\nTrains On Data: no\nRestricted Input: allowed\n"
+        "Declared By: unknown\n"
+        f"Declared At: {declaration_time(repository)}\n",
         "",
     )
 
@@ -148,13 +179,73 @@ def test_declaring_both_answers_allows_restricted_input(
 ) -> None:
     repository = authorized(monkeypatch, tmp_path)
 
-    assert run(capsys, "model", "policy", ENTRY.identifier, "--no-retention", "--no-training") == (
-        0,
+    status, out, err = run(
+        capsys, "model", "policy", ENTRY.identifier, "--no-retention", "--no-training"
+    )
+
+    assert (status, err) == (0, "")
+    assert out == (
         f"Declared the data policy of model {ENTRY.identifier}.\n"
-        "Retains Data: no\nTrains On Data: no\nRestricted Input: allowed\n",
-        "",
+        "Retains Data: no\nTrains On Data: no\nRestricted Input: allowed\n"
+        "Declared By: Eris <eris@example.com>\n"
+        f"Declared At: {declaration_time(repository)}\n"
     )
     assert policy_of(repository) == PRIVATE_DATA_POLICY
+
+
+def test_each_declaration_replaces_who_declared_and_when(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository = authorized(monkeypatch, tmp_path)
+
+    assert repository.policy_declaration(ENTRY.identifier) is None
+
+    run(capsys, "model", "policy", ENTRY.identifier, "--no-retention")
+    first = repository.policy_declaration(ENTRY.identifier)
+
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Discordia")
+    run(capsys, "model", "policy", ENTRY.identifier, "--no-training")
+    second = repository.policy_declaration(ENTRY.identifier)
+
+    assert first is not None and second is not None
+    assert first.author == Author(name="Eris", email="eris@example.com")
+    assert second.author == Author(name="Discordia")
+    assert second.declared_at >= first.declared_at
+
+    _, shown, _ = run(capsys, "model", "policy", ENTRY.identifier)
+
+    assert shown.endswith(declared(repository))
+    assert "Declared By: Discordia\n" in shown
+
+
+def test_showing_a_policy_records_no_declaration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository = authorized(monkeypatch, tmp_path)
+
+    run(capsys, "model", "policy", ENTRY.identifier)
+
+    assert repository.policy_declaration(ENTRY.identifier) is None
+
+
+def test_a_policy_is_not_declared_when_who_declares_it_cannot_be_told(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository = authorized(monkeypatch, tmp_path)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "not an author <")
+
+    status, out, err = run(capsys, "model", "policy", ENTRY.identifier, "--no-retention")
+
+    assert (status, out) == (1, "")
+    assert err != ""
+    assert policy_of(repository) == UNKNOWN_DATA_POLICY
+    assert repository.policy_declaration(ENTRY.identifier) is None
 
 
 def test_an_answer_not_given_is_kept(
@@ -171,7 +262,9 @@ def test_an_answer_not_given_is_kept(
     status, out, _ = run(capsys, "model", "policy", ENTRY.identifier, "--trains-on-data", "yes")
 
     assert status == 0
-    assert out.endswith("Retains Data: no\nTrains On Data: yes\nRestricted Input: refused\n")
+    assert out.endswith(
+        "Retains Data: no\nTrains On Data: yes\nRestricted Input: refused\n" + declared(repository)
+    )
     assert policy_of(repository) == DataPolicy(
         retains_data=PolicyAnswer.NO,
         trains_on_data=PolicyAnswer.YES,
@@ -270,7 +363,7 @@ def test_the_documented_policy_output_is_the_one_shown(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    authorized(monkeypatch, tmp_path)
+    repository = authorized(monkeypatch, tmp_path)
 
     _, out, _ = run(
         capsys,
@@ -282,6 +375,10 @@ def test_the_documented_policy_output_is_the_one_shown(
     )
     readme = Path(__file__).parents[2] / "src" / "azathoth" / "cli" / "README.md"
 
-    documented = out.replace(ENTRY.identifier, "<MODEL_IDENTIFIER>")
+    documented = (
+        out.replace(ENTRY.identifier, "<MODEL_IDENTIFIER>")
+        .replace("Eris <eris@example.com>", "<AUTHOR>")
+        .replace(declaration_time(repository), "<TIME>")
+    )
 
     assert f"```text\n{documented}```" in readme.read_text(encoding="utf-8")

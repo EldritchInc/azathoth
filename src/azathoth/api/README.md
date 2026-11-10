@@ -84,7 +84,8 @@ Each value carries its `revision`: the number, the content digest, when it
 was imported (`None` for revisions from before 1.1), and `identical_to`, the
 earliest earlier revision with the same content when the import reverted to
 one. A `get` also carries `latest_number` and the `document`, exactly what
-the matching `import` command accepts.
+the matching `import` command accepts. A benchmark also carries its
+`sensitivity`, the most sensitive of its cases' labels (ADR 0123).
 
 Each value's `command` is the `azathoth` command that shows the same thing:
 `workflow show` and `benchmark show`, with `--revision` for a revision named
@@ -129,6 +130,9 @@ A `PortfolioEntry` holds its `data_policy`, a `DataPolicy` of two
 `set_data_policy`, which replaces the policy and raises `NotFoundError` for a
 model not authorized. `receives_restricted` says whether the model may be
 sent restricted input: only when both answers are `no`.
+`policy_declared_by` and `policy_declared_at` say who last declared the
+policy, as the author the instance records, and when; both are None for a
+policy never declared.
 
 ```python
 instance.portfolio.set_data_policy(
@@ -251,7 +255,9 @@ layer, when its first attempt started and its last finished, its strategy
 and what it measured, its output, the values it added to the context by
 name, and every attempt that failed. A run that has not finished is not
 kept yet, so `get` raises `NotFoundError` saying how to resume it
-(ADR 0121).
+(ADR 0121). Every `RunSummary` holds the run's `sensitivity`: the most
+sensitive of its input's label and its parent run's, `INTERNAL` when
+neither is labelled (ADR 0123).
 
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
@@ -268,7 +274,8 @@ reach `on_event` as a run's do, and the `StepTrial` holds the step as
 `instance.invocations.get(invocation_id)` reads one invocation back, as
 `azathoth invocation show` reports it: its workflow, when it was made, its
 `status` (`succeeded`, `failed` or `incomplete`), its result or error, its
-idempotency key, the input it was given, its caller metadata, and its run.
+idempotency key, the input it was given, its `sensitivity`, its caller
+metadata, and its run.
 A finished run lists each step's status, attempts and confidence; a run
 that has not finished names only its ID and how often it was resumed. Who
 may read which invocation is the caller's to decide: azathoth-mcp, for

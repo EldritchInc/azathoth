@@ -3,10 +3,14 @@
 `workflow run`, `workflow invoke`, `run resume`, `invocation resume` and a
 keyed `workflow invoke` all report through these, so a resumed or replayed
 run reads exactly like one that just ran.
+
+Each ends, when what it printed holds restricted data, with the warning
+that it does, on standard error (ADR 0123).
 """
 
 import json
 import sys
+from uuid import UUID
 
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.cli.rendering import (
@@ -17,12 +21,16 @@ from azathoth.cli.rendering import (
     render_workflow_run,
     workflow_run_record,
 )
+from azathoth.cli.rendering.sensitivity import warn_if_restricted
 from azathoth.cli.step_output import (
     JsonLinesOutputWriter,
     TextStepMessageWriter,
 )
+from azathoth.context import context_sensitivity
+from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
 from azathoth.workflows import (
     ProductionInvocationFailure,
+    ProductionInvocationRepository,
     ProductionInvocationResult,
     WorkflowRun,
     WorkflowRunObserver,
@@ -42,27 +50,32 @@ def report_configured_run(
 
     Text renders the run, naming how often it was resumed, and exits 0 when
     it succeeded. JSON Lines and result mode end with its result record, as
-    the specification it executed declares it.
+    the specification it executed declares it. A restricted run's report
+    is followed by the warning that it holds restricted data (ADR 0123).
     """
+
+    if output is not WorkflowOutputFormat.TEXT and specification is None:
+        raise ValueError("A run reported as a record needs the specification it executed.")
 
     if output is WorkflowOutputFormat.TEXT:
         print(render_workflow_run(run, resumes=resumes))
 
-        return 0 if run.succeeded else 1
+        status = 0 if run.succeeded else 1
+    else:
+        assert specification is not None
 
-    if specification is None:
-        raise ValueError("A run reported as a record needs the specification it executed.")
+        status = write_terminal_record(
+            workflow_run_record(
+                run,
+                result=specification.result,
+                steps=specification.steps,
+            ),
+            writer,
+        )
 
-    record = workflow_run_record(
-        run,
-        result=specification.result,
-        steps=specification.steps,
-    )
+    warn_if_restricted(context_sensitivity(run.initial_context), f"Run {run.id}")
 
-    return write_terminal_record(
-        record,
-        writer,
-    )
+    return status
 
 
 def report_invocation_result(
@@ -70,37 +83,48 @@ def report_invocation_result(
     *,
     output: WorkflowOutputFormat,
     writer: JsonLinesOutputWriter | None,
+    sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
 ) -> int:
     """Print an invocation's terminal result in its output format, returning the exit code.
 
     Text prints a success on stdout and a failure on stderr; JSON Lines and
-    result mode end with its record. A failure exits 1.
+    result mode end with its record. A failure exits 1. An invocation
+    labelled restricted is followed by the warning that its output holds
+    restricted data (ADR 0123).
     """
 
     if output is WorkflowOutputFormat.TEXT:
         rendered = render_production_invocation_result(
             result,
         )
+        failed = isinstance(result, ProductionInvocationFailure)
 
-        if isinstance(
-            result,
-            ProductionInvocationFailure,
-        ):
-            print(
-                rendered,
-                file=sys.stderr,
-            )
+        print(rendered, file=sys.stderr if failed else sys.stdout)
 
-            return 1
+        status = 1 if failed else 0
+    else:
+        status = write_terminal_record(
+            production_invocation_record(result),
+            writer,
+        )
 
-        print(rendered)
+    warn_if_restricted(sensitivity, f"Invocation {result.invocation_id}")
 
-        return 0
+    return status
 
-    return write_terminal_record(
-        production_invocation_record(result),
-        writer,
-    )
+
+def invocation_sensitivity(
+    repository: ProductionInvocationRepository,
+    invocation_id: UUID,
+) -> Sensitivity:
+    """Return the label of a recorded invocation, internal when it is not recorded (ADR 0123)."""
+
+    invocation = repository.get(invocation_id)
+
+    if invocation is None:
+        return DEFAULT_SENSITIVITY
+
+    return context_sensitivity(invocation.initial_context)
 
 
 def step_observer(
@@ -156,6 +180,7 @@ def write_terminal_record(
 
 
 __all__ = [
+    "invocation_sensitivity",
     "report_configured_run",
     "report_invocation_result",
     "step_observer",

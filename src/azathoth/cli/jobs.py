@@ -12,6 +12,8 @@ from azathoth.cli.lineage import parent_lineage
 from azathoth.cli.parsing.jobs import STANDARD_INPUT_REQUEST
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering.jobs import render_job_result
+from azathoth.cli.rendering.sensitivity import warn_if_restricted
+from azathoth.cli.reporting import invocation_sensitivity
 from azathoth.cli.tracing import run_traced
 from azathoth.jobs import (
     JobError,
@@ -90,6 +92,14 @@ def _run_traced_job(
         trace.record(result)
 
     print(render_job_result(result))
+
+    if result.invocation_id is not None:
+        configuration = CliRuntimeConfiguration.from_environment()
+
+        warn_if_restricted(
+            invocation_sensitivity(repositories(configuration).invocations, result.invocation_id),
+            f"Invocation {result.invocation_id}",
+        )
 
     return 0 if result.status is JobStatus.SUCCEEDED else 1
 

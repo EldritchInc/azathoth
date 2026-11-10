@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 
+from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
+from azathoth.sensitivity import effective_sensitivity
 from azathoth.workflows import (
     WorkflowBenchmarkExecutionCandidate,
     WorkflowBenchmarkExecutionCase,
@@ -42,6 +44,7 @@ def render_workflow_benchmark_execution(
         f"Kind: {execution.kind.value}",
         f"Benchmark ID: {execution.benchmark_id}",
         f"Benchmark Digest: {_render_digest(execution.benchmark_digest)}",
+        *render_sensitivity_lines(effective_sensitivity(execution.sensitivity)),
         f"Candidates: {len(execution.candidates)}",
         f"Cases: {len(execution.case_ids)}",
     ]
@@ -122,6 +125,7 @@ def render_workflow_benchmark_comparison_execution(
     lines = [
         f"Execution ID: {execution.id}",
         f"Benchmark ID: {execution.benchmark_id}",
+        *render_sensitivity_lines(effective_sensitivity(execution.sensitivity)),
     ]
 
     for rank, candidate in enumerate(execution.ranked_candidates, start=1):

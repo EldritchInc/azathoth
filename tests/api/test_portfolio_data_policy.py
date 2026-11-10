@@ -75,9 +75,9 @@ def test_declaring_a_policy_replaces_it(
 
     assert private.data_policy == PRIVATE_DATA_POLICY
     assert private.receives_restricted is True
-    assert private.model_dump(exclude={"data_policy", "receives_restricted"}) == added.model_dump(
-        exclude={"data_policy", "receives_restricted"}
-    )
+    declared = {"data_policy", "receives_restricted", "policy_declared_by", "policy_declared_at"}
+
+    assert private.model_dump(exclude=declared) == added.model_dump(exclude=declared)
 
     retaining = modelled.portfolio.set_data_policy(ALPHA.identifier, RETAINING)
 
@@ -123,3 +123,38 @@ def test_a_policy_entry_is_its_own_json(
         "retains_data": "yes",
         "trains_on_data": "no",
     }
+
+
+def test_who_declared_a_policy_and_when_is_listed(
+    location: str,
+) -> None:
+    open_repositories(location).portfolio.save(
+        ModelPortfolioEntry(provider=ALPHA.provider, model=ALPHA.model)
+    )
+
+    with api.Azathoth(open_repositories(location), directories=(), author="Eris") as instance:
+        undeclared = instance.portfolio.list()[0]
+        declared = instance.portfolio.set_data_policy(ALPHA.identifier, PRIVATE_DATA_POLICY)
+        (listed,) = instance.portfolio.list()
+
+    declaration = open_repositories(location).portfolio.policy_declaration(ALPHA.identifier)
+
+    assert declaration is not None
+    assert (undeclared.policy_declared_by, undeclared.policy_declared_at) == (None, None)
+    assert declared.policy_declared_by == api.Author(name="Eris", email=None)
+    assert declared.policy_declared_at == declaration.declared_at
+    assert listed == declared
+
+
+def test_a_model_authorized_with_a_policy_names_its_author_as_declaring_it(
+    location: str,
+) -> None:
+    with api.Azathoth(
+        open_repositories(location),
+        directories=(StaticDirectory("provider-a", (ALPHA,)),),
+        author="Eris",
+    ) as instance:
+        entry = instance.portfolio.add(ALPHA.identifier, data_policy=PRIVATE_DATA_POLICY)
+
+    assert entry.policy_declared_by == api.Author(name="Eris", email=None)
+    assert entry.policy_declared_at == entry.added_at

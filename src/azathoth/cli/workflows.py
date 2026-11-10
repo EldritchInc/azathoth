@@ -44,6 +44,7 @@ from azathoth.cli.rendering import (
     render_workflow_promotion,
 )
 from azathoth.cli.reporting import (
+    invocation_sensitivity,
     report_configured_run,
     report_invocation_result,
     step_observer,
@@ -422,6 +423,10 @@ def _invoke_workflow(
         result,
         output=output,
         writer=writer,
+        sensitivity=invocation_sensitivity(
+            repositories(configuration).invocations,
+            result.invocation_id,
+        ),
     )
 
 

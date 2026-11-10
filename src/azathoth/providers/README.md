@@ -331,9 +331,15 @@ Implementations include:
 `ModelPortfolioLoader` reconstructs the immutable ordered portfolio from
 repository state.
 
-`set_data_policy(identifier, policy)` replaces one entry's declared policy
-and returns the entry. The entry keeps its place and its provenance, which
-records who added it; an entry not in the portfolio raises `ValueError`.
+`set_data_policy(identifier, policy, author=None)` replaces one entry's
+declared policy and returns the entry. The entry keeps its place and its
+provenance, which records who added it; an entry not in the portfolio
+raises `ValueError`. Who declared the policy, and when, is a
+`PolicyDeclaration`, kept beside the entry so it is no part of the entry's
+digest: `policy_declaration(identifier)` returns the latest, which each
+declaration replaces. An entry saved with a declared policy records its
+author as having declared it when it was added. Removing an entry removes
+its declaration.
 
 Portfolio authorization is durable policy.
 

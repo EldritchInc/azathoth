@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
-from azathoth.sensitivity import DataPolicy
+from azathoth.sensitivity import DataPolicy, Sensitivity
 
 ApiStability = Literal["provisional", "stable"]
 """Whether the API is still provisional, or covered by the 1.x promise."""
@@ -191,6 +191,13 @@ class BenchmarkSummary(ApiModel):
         ge=0,
     )
 
+    sensitivity: Sensitivity = Field(
+        description=(
+            "The most sensitive of its cases' labels, an unlabelled case counting as internal "
+            "(ADR 0123)."
+        ),
+    )
+
     revision: Revision
 
     command: str = Field(
@@ -323,6 +330,14 @@ class PortfolioEntry(ApiModel):
             "Whether it may be sent restricted input: only when its provider is declared to "
             "neither retain nor train on data."
         ),
+    )
+
+    policy_declared_by: Author | None = Field(
+        description="Who declared its data policy, or None when it was never declared.",
+    )
+
+    policy_declared_at: datetime | None = Field(
+        description="When its data policy was declared, or None when it was never declared.",
     )
 
     command: str = Field(
@@ -617,6 +632,13 @@ class RunSummary(ApiModel):
 
     error: RunError | None
 
+    sensitivity: Sensitivity = Field(
+        description=(
+            "The run's label: the most sensitive of its input's and its parent run's, internal "
+            "when neither is labelled (ADR 0123)."
+        ),
+    )
+
     started_at: datetime
 
     completed_at: datetime
@@ -745,6 +767,13 @@ class InvocationDetail(ApiModel):
     idempotency_key: str | None
 
     input: JsonValue
+
+    sensitivity: Sensitivity = Field(
+        description=(
+            "The invocation's label: the most sensitive of its input's and its parent run's, "
+            "internal when neither is labelled (ADR 0123)."
+        ),
+    )
 
     caller_metadata: dict[str, JsonValue]
 

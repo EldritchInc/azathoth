@@ -322,6 +322,7 @@ def _resume_invocation(
         result,
         output=output,
         writer=writer,
+        sensitivity=context_sensitivity(invocation.initial_context),
     )
 
 

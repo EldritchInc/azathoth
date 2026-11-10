@@ -410,14 +410,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -1172,7 +1172,7 @@ Only a run that received input can later become a benchmark case; see
 
 | Format | stdout | stderr |
 |---|---|---|
-| `jsonl` | step records live, then one terminal record | nothing once execution starts |
+| `jsonl` | step records live, then one terminal record | nothing once execution starts, but the restricted-output warning |
 | `text` | the human-readable report | step messages, one per line |
 | `result` | the result value as JSON, or nothing when no result is declared | the error message |
 
@@ -3353,7 +3353,16 @@ Declared the data policy of model <MODEL_IDENTIFIER>.
 Retains Data: no
 Trains On Data: no
 Restricted Input: allowed
+Declared By: <AUTHOR>
+Declared At: <TIME>
 ```
+
+Who declares a policy, `AZATHOTH_AUTHOR` or the operating system's
+username as for every authored change, and when, is recorded beside the
+entry, never in it, so it is no part of the entry's digest. Each
+declaration replaces the last; `model authorize` with a declared policy
+records its author as having declared it. A policy never declared shows no
+`Declared` lines.
 
 `--no-retention` is `--retains-data no`, and `--no-training` is
 `--trains-on-data no`; each also takes `yes` or `unknown`. An answer
@@ -4606,6 +4615,38 @@ A label labels input, so `workflow run` given one without `--input` or
 ```
 
 Any other label is a usage error.
+
+## Seeing Labels
+
+`run show`, `invocation show`, `benchmark show`, `benchmark case-show`,
+`benchmark execution-show` and `experiment show` name a label that is not
+internal, as `Sensitivity:`, after the ID they show:
+
+```text
+Run ID: <RUN_ID>
+Sensitivity: restricted
+```
+
+A run's label is the most sensitive of its input's and its parent run's; a
+benchmark's, the most sensitive of its cases'. Internal data shows as it
+always did, with no line.
+
+A command whose output holds a restricted run's, invocation's or
+benchmark's data warns of it on standard error, after the output, in every
+output format: `workflow run`, `workflow invoke`, `run resume`, `invocation
+resume`, `job run`, `run show`, `invocation show`, `benchmark case-show` and
+`benchmark export`:
+
+```text
+Run <RUN_ID> is restricted; its output contains restricted data.
+Invocation <INVOCATION_ID> is restricted; its output contains restricted data.
+Benchmark <BENCHMARK_ID> is restricted; its output contains restricted data.
+Benchmark case <CASE_ID> is restricted; its output contains restricted data.
+```
+
+Nothing is redacted, in 1.4: the warning says what the operator now holds.
+A run's span names its label as `azathoth.sensitivity`, so a collector can
+route or drop restricted runs' traces.
 
 ## Where Restricted Input May Go
 

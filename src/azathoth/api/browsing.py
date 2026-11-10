@@ -1017,6 +1017,7 @@ class Benchmarks:
             version=dataset.version,
             description=dataset.description,
             case_count=len(dataset.cases),
+            sensitivity=dataset.sensitivity,
             revision=_revision(
                 selected,
                 earliest_identical_benchmark_revision(history, selected),

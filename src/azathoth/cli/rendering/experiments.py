@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 
+from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
+from azathoth.sensitivity import effective_sensitivity
 from azathoth.workflows import (
     WorkflowExperimentCaseObservation,
     WorkflowExperimentObservation,
@@ -49,6 +51,7 @@ def render_workflow_experiment(
             if experiment.benchmark_digest is not None
             else "unknown"
         ),
+        *render_sensitivity_lines(effective_sensitivity(experiment.sensitivity)),
         f"Candidates: {len(experiment.observations)}",
         f"Cases: {_case_count(experiment)}",
         f"Winner Observation ID: {experiment.winner.id}",

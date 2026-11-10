@@ -57,7 +57,7 @@ from azathoth.api.models import (
     StepTrial,
     WorkflowReadiness,
 )
-from azathoth.context import Context, create_input_sensitivity_event
+from azathoth.context import Context, context_sensitivity, create_input_sensitivity_event
 from azathoth.inputs import (
     DEFAULT_MAX_INPUT_BYTES,
     JSON_MEDIA_TYPE,
@@ -945,6 +945,7 @@ def _summary(
         invocation_id=invocation_id,
         succeeded=error is None,
         error=error,
+        sensitivity=context_sensitivity(run.initial_context),
         started_at=run.started_at,
         completed_at=run.completed_at,
         command=f"azathoth run show {run.id}",

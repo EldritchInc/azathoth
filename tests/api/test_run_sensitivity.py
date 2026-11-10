@@ -14,6 +14,12 @@ from pydantic import JsonValue
 
 from azathoth import api
 from azathoth.context import INPUT_SENSITIVITY_EVENT_TYPE, context_sensitivity
+from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
+    ExpectedOutcome,
+    OutcomeComparison,
+)
 from azathoth.persistence.repositories import open_repositories
 from azathoth.sensitivity import Sensitivity
 from tests.api.test_invoke import promote
@@ -24,6 +30,8 @@ LABEL_TOOL_ID = UUID("d1000000-0000-4000-8000-000000000001")
 LABEL_WORKFLOW_ID = UUID("d1000000-0000-4000-8000-000000000003")
 
 LABEL_STEP_ID = UUID("d1000000-0000-4000-8000-000000000011")
+
+BENCHMARK_ID = UUID("d1000000-0000-4000-8000-000000000021")
 
 LABEL_SOURCE = (
     "import json\n"
@@ -245,3 +253,86 @@ def test_the_documented_label_refusal_is_the_one_raised() -> None:
     readme = Path(__file__).parents[2] / "src" / "azathoth" / "api" / "README.md"
 
     assert f"\n{api.SENSITIVITY_WITHOUT_INPUT_MESSAGE}\n" in readme.read_text(encoding="utf-8")
+
+
+# What the views say
+
+
+def test_a_runs_views_carry_its_label(
+    labelling: api.Azathoth,
+) -> None:
+    restricted = labelling.runs.run(
+        LABEL_WORKFLOW_ID,
+        input=api.RunInput(payload="claim 412"),
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+    unlabelled = labelling.runs.run(LABEL_WORKFLOW_ID, input=api.RunInput(payload="claim 412"))
+
+    listed = {
+        summary.run_id: summary.sensitivity for summary in labelling.runs.list(LABEL_WORKFLOW_ID)
+    }
+
+    assert listed == {
+        restricted.run_id: Sensitivity.RESTRICTED,
+        unlabelled.run_id: Sensitivity.INTERNAL,
+    }
+    assert labelling.runs.get(restricted.run_id).sensitivity is Sensitivity.RESTRICTED
+    assert labelling.runs.get(unlabelled.run_id).sensitivity is Sensitivity.INTERNAL
+
+
+def test_an_invocations_view_carries_its_label(
+    labelling: api.Azathoth,
+    location: str,
+) -> None:
+    promote(location, LABEL_WORKFLOW_ID)
+
+    public = labelling.runs.invoke(
+        LABEL_WORKFLOW_ID,
+        input="claim 412",
+        sensitivity=Sensitivity.PUBLIC,
+    )
+    unlabelled = labelling.runs.invoke(LABEL_WORKFLOW_ID, input="claim 412")
+
+    assert public.invocation_id is not None
+    assert unlabelled.invocation_id is not None
+    assert labelling.invocations.get(public.invocation_id).sensitivity is Sensitivity.PUBLIC
+    assert labelling.invocations.get(unlabelled.invocation_id).sensitivity is (Sensitivity.INTERNAL)
+
+
+def test_a_benchmarks_views_carry_its_label(
+    instance: api.Azathoth,
+) -> None:
+    def dataset(
+        label: Sensitivity | None,
+    ) -> BenchmarkDataset:
+        return BenchmarkDataset(
+            id=BENCHMARK_ID,
+            name="claims",
+            description="Claims.",
+            cases=(
+                BenchmarkCase(
+                    id=UUID(int=BENCHMARK_ID.int + 1),
+                    input="claim 412",
+                    expected=ExpectedOutcome(
+                        description="Answered.",
+                        value=2,
+                        comparison=OutcomeComparison.EXACT,
+                    ),
+                    sensitivity=label,
+                ),
+            ),
+        )
+
+    instance.benchmarks.import_document(dataset(None).model_dump_json())
+    unlabelled = instance.benchmarks.get(BENCHMARK_ID)
+
+    instance.benchmarks.import_document(dataset(Sensitivity.RESTRICTED).model_dump_json())
+
+    (latest, earlier) = instance.benchmarks.history(BENCHMARK_ID)
+
+    assert unlabelled.sensitivity is Sensitivity.INTERNAL
+    assert instance.benchmarks.get(BENCHMARK_ID).sensitivity is Sensitivity.RESTRICTED
+    assert (latest.sensitivity, earlier.sensitivity) == (
+        Sensitivity.RESTRICTED,
+        Sensitivity.INTERNAL,
+    )

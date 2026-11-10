@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from azathoth.providers.portfolio import (
     ModelPortfolioEntry,
 )
-from azathoth.providers.portfolio_provenance import PortfolioProvenance
+from azathoth.providers.portfolio_provenance import PolicyDeclaration, PortfolioProvenance
 from azathoth.providers.portfolio_repository import (
     ModelPortfolioRepository,
 )
@@ -29,6 +29,11 @@ class InMemoryModelPortfolioRepository:
             PortfolioProvenance,
         ] = {}
 
+        self._declarations: dict[
+            str,
+            PolicyDeclaration,
+        ] = {}
+
     def save(
         self,
         entry: ModelPortfolioEntry,
@@ -40,13 +45,22 @@ class InMemoryModelPortfolioRepository:
         if entry.identifier in self._entries:
             raise ValueError(f"Model portfolio entry {entry.identifier!r} already exists.")
 
+        added_at = datetime.now(UTC)
+
         self._entries[entry.identifier] = entry
         self._provenance[entry.identifier] = PortfolioProvenance(
             identifier=entry.identifier,
             content_digest=content_digest(entry),
             author=author,
-            added_at=datetime.now(UTC),
+            added_at=added_at,
         )
+
+        if not entry.data_policy.unknown:
+            self._declarations[entry.identifier] = PolicyDeclaration(
+                identifier=entry.identifier,
+                author=author,
+                declared_at=added_at,
+            )
 
     def provenance(
         self,
@@ -75,6 +89,15 @@ class InMemoryModelPortfolioRepository:
 
         del self._entries[identifier]
         del self._provenance[identifier]
+        self._declarations.pop(identifier, None)
+
+    def policy_declaration(
+        self,
+        identifier: str,
+    ) -> PolicyDeclaration | None:
+        """Return who declared one entry's data policy and when, if it was declared."""
+
+        return self._declarations.get(identifier)
 
     def entries(
         self,
@@ -90,8 +113,12 @@ class InMemoryModelPortfolioRepository:
         self,
         identifier: str,
         policy: DataPolicy,
+        *,
+        author: Author | None = None,
     ) -> ModelPortfolioEntry:
         """Declare what one entry's provider does with data, keeping its place and provenance.
+
+        Who declared it, and when, replace any earlier declaration.
 
         Raises:
             ValueError: The entry does not exist.
@@ -105,6 +132,11 @@ class InMemoryModelPortfolioRepository:
         declared = entry.model_copy(update={"data_policy": policy})
 
         self._entries[identifier] = declared
+        self._declarations[identifier] = PolicyDeclaration(
+            identifier=identifier,
+            author=author,
+            declared_at=datetime.now(UTC),
+        )
 
         return declared
 
