@@ -269,6 +269,7 @@ def test_a_restricted_invocation_with_no_private_model_fails_and_says_why(
 
     assert failure is not None
     assert failure.exception_type == "RestrictedInputRefusedError"
+    assert result.message == failure.message
     assert failure.message.startswith(
         f"Step {STEP_ID} sent nothing. {PRIMARY.identifier} cannot receive restricted input"
     )

@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from azathoth.context import context_sensitivity
+from azathoth.prompting import RestrictedInputRefusedError
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
@@ -198,7 +199,7 @@ async def complete_production_invocation(
             result: ProductionInvocationResult = ProductionInvocationFailure(
                 invocation_id=invocation.id,
                 error_code=ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED,
-                message="Production workflow execution failed.",
+                message=_failure_message(run),
             )
         else:
             try:
@@ -337,3 +338,25 @@ def _validate_invocation_state(
         raise ValueError(
             "Production invocation workflow does not match the supplied production state."
         )
+
+
+def _failure_message(
+    run: WorkflowRun,
+) -> str:
+    """Return what a caller is told of a failed run.
+
+    A caller is told only that production failed, except when a step
+    refused to send restricted input: that says which step, which model and
+    how to fix it, and holds none of the input, so a caller can tell an
+    operator what to declare (ADR 0123).
+    """
+
+    refusals = (
+        attempt.failure.message
+        for step in run.steps
+        for attempt in step.attempts
+        if attempt.failure is not None
+        and attempt.failure.exception_type == RestrictedInputRefusedError.__name__
+    )
+
+    return next(refusals, "Production workflow execution failed.")

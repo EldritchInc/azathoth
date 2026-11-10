@@ -69,6 +69,37 @@ release dates are on the
   `WorkflowImport`, `ToolImport` and `BenchmarkImport`, which say whether a
   revision was created; `api.open` takes the `author` to record
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
+- Sensitivity labels: a run's input, a job's input and a benchmark case may
+  be labelled `public`, `internal` or `restricted`, with `--sensitivity`,
+  an input source's `sensitivity` or the service API's `sensitivity=`.
+  Unlabelled data is internal and unchanged. A child workflow and a case
+  made from a run are never less sensitive than their source, and a
+  benchmark is as sensitive as its most sensitive case
+  ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
+- Each portfolio model declares what its provider does with data:
+  `model authorize --no-retention --no-training`, or `model policy` at any
+  time, which also shows who declared it and when. The database schema is
+  now version 4; run `azathoth init` once to upgrade a PostgreSQL database
+  ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
+- Restricted input reaches only models declared to neither retain nor train
+  on data. A context prompt step that would send it anywhere else sends
+  nothing and says which model and what to declare, and a production
+  invocation's caller is told the same. Steps that choose a model, and
+  production with approved substitutes, choose a private one first;
+  semantic judges and the optimizer's substitutes of restricted cases must
+  be private; readiness and model matching take a label
+  ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
+- azathoth-mcp: an exposure document's tool may take `"sensitivity":
+  "restricted"`, the operator's declaration that its client may hold
+  restricted data. Its calls are restricted, and `get_invocation` returns no
+  restricted invocation through a tool not so exposed
+  ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
+- Labels are shown wherever data is: the API's run, invocation and
+  benchmark views, a `Sensitivity:` line in show commands for data that is
+  not internal, a warning on standard error from every command that prints
+  restricted data, and the `azathoth.sensitivity` span attribute. Tools are
+  not gated by labels in 1.4
+  ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
 
 ## 1.3.0
 

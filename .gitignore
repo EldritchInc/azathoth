@@ -36,3 +36,6 @@ config.json
 *.swp
 *.swo
 *.tmp
+
+# Files handed over while working, kept beside the clone
+Claude outputs/

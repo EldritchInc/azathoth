@@ -109,6 +109,7 @@ Each entry of `tools` offers one workflow:
 | `name` | The tool's name: 1 to 64 letters, digits, `_`, `-` or `.`. `get_invocation` is the server's own. |
 | `description` | What the tool does, written for the model that decides whether to call it. |
 | `input_schema` | Optional. A JSON Schema the workflow's input must satisfy. Without one, the promoted workflow's own input schema is used, and without that, any JSON value is accepted. |
+| `sensitivity` | Optional. `public`, `internal` or `restricted`: the label every call's input is given. Without one, calls are internal. See [Serving Restricted Data](#serving-restricted-data). |
 
 A workflow is listed at most once, and a name is used once. The server reads
 the document when it starts, and refuses to start if anything in it is wrong,
@@ -398,6 +399,40 @@ run the same `docker run` as its command. To serve over HTTP, add
 `--transport http --host 0.0.0.0` with `--issuer` and `--resource`, and
 publish the port with `-p 8000:8000`. Inside a container, only an authorized
 server can be reached from outside it.
+
+## Serving Restricted Data
+
+A client that holds restricted data, a HIPAA assistant sending patient
+records to a HIPAA workflow, say, needs a tool exposed as restricted:
+
+```json
+{
+  "workflow_id": "a1000000-0000-4000-8000-000000000002",
+  "name": "summarize_chart",
+  "description": "Summarize a patient's chart.",
+  "sensitivity": "restricted"
+}
+```
+
+That is your declaration that the client may send and receive restricted
+data ([ADR 0123](adrs/0123-sensitivity-labels.md)). Every call's input is
+labelled restricted, so its prompts reach only models declared to neither
+retain nor train on data (`azathoth model policy <MODEL> --no-retention
+--no-training`), and the client is given the results.
+
+A call whose step has no such model fails, and the call's error says why:
+
+```text
+Step <STEP_ID> sent nothing. <MODEL> cannot receive restricted input: its portfolio entry does not say whether its provider retains data, and does not say whether it trains on data. If its provider neither retains nor trains on data, declare that with `azathoth model policy <MODEL> --no-retention --no-training`; otherwise choose a model that may receive restricted input.
+```
+
+A tool not exposed as restricted never returns restricted data: when
+`get_invocation` names a restricted invocation of its workflow, made some
+other way, it is refused:
+
+```text
+Invocation <INVOCATION_ID> is restricted, and the tool 'summarize_chart' is not exposed for restricted data, so its result is not returned. If this client may hold restricted data, the operator exposes the tool with "sensitivity": "restricted".
+```
 
 ## Troubleshooting
 

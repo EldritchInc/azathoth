@@ -25,7 +25,12 @@ from azathoth_mcp import __version__
 from azathoth_mcp.access import READ_ALL_SCOPE, READ_SCOPE, McpCaller, ToolAccessError, invoke_scope
 from azathoth_mcp.catalog import CatalogTool, ToolUnavailableError, UnknownToolError
 from azathoth_mcp.exposure import GET_INVOCATION_TOOL
-from azathoth_mcp.service import InvocationNotFoundError, ToolArgumentsError, ToolService
+from azathoth_mcp.service import (
+    InvocationNotFoundError,
+    RestrictedInvocationError,
+    ToolArgumentsError,
+    ToolService,
+)
 
 SERVER_NAME = "azathoth"
 
@@ -47,6 +52,7 @@ REFUSALS = (
     ToolArgumentsError,
     ToolUnavailableError,
     InvocationNotFoundError,
+    RestrictedInvocationError,
 )
 """The errors a call is refused with, each with a message written for the model."""
 

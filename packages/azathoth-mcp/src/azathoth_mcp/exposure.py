@@ -41,6 +41,7 @@ from pydantic import (
 )
 
 from azathoth.evaluation import json_schema_validator
+from azathoth.sensitivity import Sensitivity
 
 EXPOSURE_VERSION = 1
 """The one exposure document version this release reads."""
@@ -70,6 +71,12 @@ class ExposedWorkflow(BaseModel):
 
     The input schema, when given, is a JSON Schema the workflow's input must
     satisfy. Without one, the tool accepts any JSON value as the input.
+
+    The sensitivity, when given, labels every call's input (ADR 0123). A
+    restricted tool is the operator's declaration that its client may hold
+    restricted data: its calls reach only models declared private, and the
+    client is given their results. Without one, calls are internal, and the
+    server returns no restricted invocation through the tool.
     """
 
     model_config = ConfigDict(
@@ -81,6 +88,7 @@ class ExposedWorkflow(BaseModel):
     name: str
     description: str
     input_schema: JsonValue | None = None
+    sensitivity: Sensitivity | None = None
 
     @field_validator("workflow_id", mode="before")
     @classmethod
