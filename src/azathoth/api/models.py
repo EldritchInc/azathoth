@@ -267,6 +267,80 @@ class PortfolioRemoval(ApiModel):
     )
 
 
+class DocumentProblem(ApiModel):
+    """One reason a workflow document would be refused (ADR 0121)."""
+
+    message: str = Field(
+        description="Why, as importing the document would say.",
+    )
+
+    location: tuple[str | int, ...] = Field(
+        description=(
+            "Where in the document: the keys and indexes leading to the value at fault, "
+            "empty when the fault is the whole document's."
+        ),
+    )
+
+    step_id: UUID | None = Field(
+        description="The step the problem is in, when it is in a step whose id is valid.",
+    )
+
+
+class WorkflowCheck(ApiModel):
+    """Whether a workflow document would be imported, and every reason it would not."""
+
+    valid: bool = Field(
+        description="Whether importing the document would accept it.",
+    )
+
+    problems: tuple[DocumentProblem, ...]
+
+
+StepKind = Literal["prompt", "context_prompt", "tool"]
+"""How a step runs: a prompt, a prompt rendered from the context, or a tool."""
+
+
+class StepReadiness(ApiModel):
+    """Whether one step of a workflow document could run here now (ADR 0121)."""
+
+    step_id: UUID
+
+    kind: StepKind
+
+    ready: bool
+
+    models: tuple[str, ...] = Field(
+        description=(
+            "The models a prompt step could run on, in the order a run tries them; "
+            "a run uses the first."
+        ),
+    )
+
+    tool_id: UUID | None = Field(
+        description="The tool a tool step would run, when it can run.",
+    )
+
+    tool_version: str | None
+
+    tool_implementation_id: UUID | None = Field(
+        description="The implementation of the tool a tool step would run, when it can run.",
+    )
+
+    problem: str | None = Field(
+        description="Why the step could not run here now, when it could not.",
+    )
+
+
+class WorkflowReadiness(ApiModel):
+    """Whether every step of a workflow document could run here now."""
+
+    ready: bool
+
+    steps: tuple[StepReadiness, ...] = Field(
+        description="Every step, in the document's order.",
+    )
+
+
 class RunInput(ApiModel):
     """The input a run is given; a run given none starts with an empty context.
 
@@ -275,6 +349,23 @@ class RunInput(ApiModel):
     """
 
     payload: JsonValue
+
+
+class RunFile(ApiModel):
+    """A file a run or an invocation is given as its input (ADR 0121).
+
+    It is accepted as the command line's `--input-file` accepts one (ADR
+    0112): JSON and `text/*` content is decoded into the value the workflow
+    receives, and a PDF, PNG, JPEG or WebP is kept in the content store by
+    its digest and given to the workflow as a content handle. Content that
+    is not its media type is refused before anything runs or is kept.
+    """
+
+    content: bytes
+
+    media_type: str = Field(
+        description="The content's media type, such as application/pdf or text/plain.",
+    )
 
 
 class RunError(ApiModel):
@@ -404,6 +495,141 @@ class InvocationRun(ApiModel):
     halted: bool | None = None
 
     steps: tuple[RunStep, ...] = ()
+
+
+class RunSummary(ApiModel):
+    """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
+
+    run_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name in the revision that ran.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The revision that ran, or None for a run recorded before revisions.",
+    )
+
+    invocation_id: UUID | None = Field(
+        description="The production invocation the run executed, when it executed one.",
+    )
+
+    succeeded: bool = Field(
+        description="Whether the run finished with its declared result, or without one declared.",
+    )
+
+    error: RunError | None
+
+    started_at: datetime
+
+    completed_at: datetime
+
+    command: str = Field(
+        description="The `azathoth` command that shows the run.",
+    )
+
+
+class StepMetrics(ApiModel):
+    """What a step's strategy measured as it ran; what it did not measure is None."""
+
+    provider: str | None
+
+    model: str | None
+
+    prompt_tokens: int | None
+
+    completion_tokens: int | None
+
+    total_tokens: int | None
+
+    latency_ms: int | None
+
+    estimated_cost_usd: float | None
+
+
+class StepFailure(ApiModel):
+    """One attempt of a step that failed."""
+
+    attempt: int = Field(
+        ge=1,
+    )
+
+    exception_type: str
+
+    message: str
+
+
+class RunStepDetail(RunStep):
+    """One step of a kept run, with what it produced and every attempt that failed."""
+
+    layer: int = Field(
+        ge=0,
+        description="The dependency layer the step ran in.",
+    )
+
+    started_at: datetime | None = Field(
+        description="When its first attempt started; None for a step that never ran.",
+    )
+
+    completed_at: datetime | None = Field(
+        description="When its last attempt finished; None for a step that never ran.",
+    )
+
+    strategy: str | None = Field(
+        description="The name of the strategy an executed step ran: its prompt, or its tool.",
+    )
+
+    metrics: StepMetrics | None
+
+    output: JsonValue = Field(
+        default=None,
+        description="What an executed step's strategy returned; None for any other.",
+    )
+
+    values: dict[str, JsonValue] = Field(
+        description="The values the step added to the run's context, by name.",
+    )
+
+    failures: tuple[StepFailure, ...] = Field(
+        description="Each attempt that failed, in order; a failed step's last is its failure.",
+    )
+
+
+class RunDetail(RunSummary):
+    """One kept run with its input, its result and each of its steps."""
+
+    has_result: bool = Field(
+        description="Whether `result` holds the declared result, so a null result is not absence.",
+    )
+
+    result: JsonValue = None
+
+    has_input: bool = Field(
+        description="Whether `input` holds the run's input, so a null input is not absence.",
+    )
+
+    input: JsonValue = None
+
+    resumes: int = Field(
+        ge=0,
+        description="How often another process resumed the run.",
+    )
+
+    steps: tuple[RunStepDetail, ...] = Field(
+        description="Every step, in the order the run recorded them.",
+    )
+
+
+class StepTrial(ApiModel):
+    """One step of a workflow document, tried alone and kept nowhere (ADR 0121)."""
+
+    step: RunStepDetail
+
+    warnings: tuple[str, ...] = Field(
+        description="What went wrong beside the step, such as an event callback that raised.",
+    )
 
 
 class InvocationDetail(ApiModel):
@@ -561,6 +787,7 @@ __all__ = [
     "BenchmarkDetail",
     "BenchmarkSummary",
     "ContextChanged",
+    "DocumentProblem",
     "Initialization",
     "InstanceDescription",
     "InvocationDetail",
@@ -574,19 +801,30 @@ __all__ = [
     "ProductionDependent",
     "ProductionStepUsage",
     "Revision",
+    "RunDetail",
     "RunError",
     "RunEvent",
+    "RunFile",
     "RunFinished",
     "RunInput",
     "RunResult",
     "RunStarted",
     "RunStep",
+    "RunStepDetail",
+    "RunSummary",
     "StandardTool",
+    "StepFailure",
     "StepFinished",
+    "StepKind",
+    "StepMetrics",
+    "StepReadiness",
     "StepStarted",
+    "StepTrial",
     "ToolDetail",
     "ToolSummary",
+    "WorkflowCheck",
     "WorkflowDetail",
+    "WorkflowReadiness",
     "WorkflowSummary",
     "parse_run_event",
 ]

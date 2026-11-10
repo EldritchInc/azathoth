@@ -27,7 +27,7 @@ from azathoth.workflows.candidate import (
     WorkflowCandidateStep,
 )
 from azathoth.workflows.models import WorkflowSpecification
-from azathoth.workflows.steps import ToolStepSpecification
+from azathoth.workflows.steps import ToolStepSpecification, WorkflowStepSpecification
 
 
 class WorkflowGenerationError(Exception):
@@ -53,58 +53,28 @@ def generate_workflow_candidate(
     executable_steps: list[WorkflowCandidateStep] = []
 
     for workflow_step in specification.steps:
-        step_specification = workflow_step.specification
+        strategies = generate_step_strategies(
+            workflow_step,
+            catalog,
+            registry,
+            portfolio=portfolio,
+            tool_resolver=tool_resolver,
+            tool_implementation_resolver=tool_implementation_resolver,
+        )
 
-        strategy: Strategy
-
-        if isinstance(
-            step_specification,
-            ToolStepSpecification,
-        ):
-            strategy = _generate_tool_strategy(
-                step_specification,
-                tool_resolver=tool_resolver,
-                tool_implementation_resolver=tool_implementation_resolver,
-            )
-        elif isinstance(
-            step_specification,
-            ContextPromptStrategySpec,
-        ):
-            context_prompt_candidates = generate_context_prompt_candidates(
-                specification=step_specification,
-                catalog=catalog,
-                registry=registry,
-                portfolio=portfolio,
+        if not strategies:
+            kind = (
+                "context prompt"
+                if isinstance(workflow_step.specification, ContextPromptStrategySpec)
+                else "prompt"
             )
 
-            if not context_prompt_candidates:
-                raise WorkflowGenerationError(
-                    "No executable context prompt candidate "
-                    "could be generated for "
-                    f"workflow step {workflow_step.id}."
-                )
-
-            strategy = context_prompt_candidates[0]
-        else:
-            assert isinstance(
-                step_specification,
-                PromptStrategySpec,
+            raise WorkflowGenerationError(
+                f"No executable {kind} candidate could be generated for "
+                f"workflow step {workflow_step.id}."
             )
 
-            prompt_candidates = generate_prompt_candidates(
-                specification=step_specification,
-                catalog=catalog,
-                registry=registry,
-                portfolio=portfolio,
-            )
-
-            if not prompt_candidates:
-                raise WorkflowGenerationError(
-                    "No executable prompt candidate could be generated for "
-                    f"workflow step {workflow_step.id}."
-                )
-
-            strategy = prompt_candidates[0]
+        strategy = strategies[0]
 
         executable_steps.append(
             WorkflowCandidateStep(
@@ -127,6 +97,55 @@ def generate_workflow_candidate(
         steps=tuple(executable_steps),
         result=specification.result,
         revision=revision,
+    )
+
+
+def generate_step_strategies(
+    workflow_step: WorkflowStepSpecification,
+    catalog: ModelCatalog,
+    registry: LanguageModelRegistry,
+    *,
+    portfolio: ModelPortfolio,
+    tool_resolver: ToolResolver | None = None,
+    tool_implementation_resolver: ToolImplementationResolver | None = None,
+) -> tuple[Strategy, ...]:
+    """Return the executable strategies one step could run as, in the order they are tried.
+
+    A tool step resolves to the one implementation it would run. A prompt
+    step's strategies are one per model it could run on, the first being the
+    one a candidate uses; there are none when no model it may use is served.
+
+    Raises:
+        WorkflowGenerationError: A tool step's tool cannot be resolved, or
+            its implementation cannot be run.
+    """
+
+    step_specification = workflow_step.specification
+
+    if isinstance(step_specification, ToolStepSpecification):
+        return (
+            _generate_tool_strategy(
+                step_specification,
+                tool_resolver=tool_resolver,
+                tool_implementation_resolver=tool_implementation_resolver,
+            ),
+        )
+
+    if isinstance(step_specification, ContextPromptStrategySpec):
+        return generate_context_prompt_candidates(
+            specification=step_specification,
+            catalog=catalog,
+            registry=registry,
+            portfolio=portfolio,
+        )
+
+    assert isinstance(step_specification, PromptStrategySpec)
+
+    return generate_prompt_candidates(
+        specification=step_specification,
+        catalog=catalog,
+        registry=registry,
+        portfolio=portfolio,
     )
 
 

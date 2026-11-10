@@ -72,6 +72,14 @@ a workflow that declares no result, a tool implementation in a runtime
 Azathoth cannot run, or a tool artifact that belongs to another tool or
 version is refused with `InvalidDocumentError`, and nothing is saved.
 
+`workflows.check(document)` says whether importing a workflow document would
+accept it, saving nothing. Its `problems` are every reason it would not,
+each with its `message`, its `location` in the document, and the `step_id`
+of the step it is in. A step is checked as the kind of step it most nearly
+is, so a prompt step missing its model selection is not also told it lacks
+a tool; a rule of the whole workflow is checked once every part is valid on
+its own (ADR 0121).
+
 Each value carries its `revision`: the number, the content digest, when it
 was imported (`None` for revisions from before 1.1), and `identical_to`, the
 earliest earlier revision with the same content when the import reverted to
@@ -105,6 +113,7 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
+| `models.matching(requirements)` | The portfolio's models that meet a step's requirements, in the order a run tries them. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier)` | Authorizes a model a provider serves now. | Yes |
 | `portfolio.remove(identifier, force=False)` | Removes a model, as `azathoth model deauthorize` does. | No |
@@ -143,8 +152,15 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 ```
 
 `RunInput` wraps the payload, so a JSON null is input and `None` is no
-input: a run given none starts with an empty context. The `RunResult` says
-whether it `succeeded`, holds the declared `result` when `has_result`, and
+input: a run given none starts with an empty context. A run or an invocation
+may be given a file instead, `RunFile(content=..., media_type=...)`, checked
+and kept as `--input-file` is: JSON and text are decoded into the value, and
+a PDF, PNG, JPEG or WebP of at most `MAX_INPUT_FILE_BYTES` is kept in the
+content store and given to the workflow as a content handle; a file that is
+not its media type is refused before anything runs (ADR 0121).
+
+The `RunResult` says whether it `succeeded`, holds the declared `result`
+when `has_result`, and
 otherwise its `error`: the step that halted the run and its final failure
 (`workflow_execution_failed`), or that it did not produce its declared
 result (`result_not_produced`).
@@ -166,6 +182,14 @@ must return quickly. One that raises is detached for the rest of the run,
 and the result's `warnings` name what it raised; the run carries on. Every
 event is its own JSON, and `parse_run_event` reads one back.
 
+`instance.runs.readiness(document)` says whether each step of a workflow
+document, imported or not, could run here now, resolving it as a run would:
+a prompt step to the `models` it could run on, in the order a run tries
+them, and a tool step to the tool and implementation it would run. A step
+that could not run says why in its `problem`, such as a model no provider
+serves now or a tool not imported. It asks the providers, and saves nothing
+(ADR 0121).
+
 `instance.runs.invoke(workflow_id, input=..., idempotency_key=None,
 caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
 active production state, as `azathoth job run` does, and returns an
@@ -183,6 +207,28 @@ does: a running tool process is killed, nothing is kept as a finished run,
 and `RunCancelledError` is raised; a cancelled invocation resumes when the
 same request is made under its key. A token cancelled beforehand starts
 nothing.
+
+`instance.runs.list(workflow_id, limit=None)` returns a workflow's kept
+runs newest first, as `azathoth workflow runs` lists them, and
+`instance.runs.get(run_id)` one of them, as `azathoth run show` shows it.
+Each run is judged by the revision that ran, and names the production
+invocation it executed, if it executed one. A `RunDetail` holds the run's
+input and result, how often it was resumed, and each step: its status and
+layer, when its first attempt started and its last finished, its strategy
+and what it measured, its output, the values it added to the context by
+name, and every attempt that failed. A run that has not finished is not
+kept yet, so `get` raises `NotFoundError` saying how to resume it
+(ADR 0121).
+
+`instance.runs.try_step(document, step_id, inputs=None, input=None,
+on_event=None, cancel=None)` tries one step of a workflow document alone,
+imported or not, and keeps no run. Each value `inputs` names, JSON or a
+`RunFile`, takes the place of that input's source; an input not given keeps
+its source, a constant its value and a field of the run's input the field of
+`input`, while one another step produces must be given. The step's
+conditions are not asked, it is retried as its policy says, its events
+reach `on_event` as a run's do, and the `StepTrial` holds the step as
+`runs.get` would show it (ADR 0121).
 
 ## Invocations
 

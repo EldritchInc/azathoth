@@ -7,11 +7,14 @@ instance authorizes for selection, is read from the database alone.
 
 import asyncio
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+
+from pydantic import JsonValue, ValidationError
 
 from azathoth.api.browsing import RepositoriesAccess
 from azathoth.api.errors import (
     ConflictError,
+    InvalidArgumentError,
     ModelInUseError,
     NotFoundError,
     ProviderUnavailableError,
@@ -29,9 +32,13 @@ from azathoth.providers import (
     ModelDiscoveryError,
     ModelMetadata,
     ModelPortfolioEntry,
+    ModelPortfolioLoader,
+    ModelQuery,
+    ModelRequirements,
     ProviderModelCatalogSynchronizer,
     ProviderModelDirectory,
     ProviderModelObserver,
+    model_catalog_for_portfolio,
 )
 from azathoth.workflows import WorkflowProductionModelUsageRole, model_usage_report
 
@@ -116,6 +123,33 @@ def _entry(
     )
 
 
+def _requirements(
+    requirements: Mapping[str, JsonValue],
+) -> ModelRequirements:
+    """Return a step's model requirements as Azathoth reads them.
+
+    Raises:
+        InvalidArgumentError: A requirement is unknown, or not valid.
+    """
+
+    unknown = next(
+        (name for name in requirements if name not in ModelRequirements.model_fields), None
+    )
+
+    if unknown is not None:
+        raise InvalidArgumentError(f"Unknown model requirement {unknown!r}.")
+
+    try:
+        return ModelRequirements.model_validate(dict(requirements))
+    except ValidationError as exc:
+        error = exc.errors()[0]
+        name = error["loc"][0] if error["loc"] else "requirements"
+
+        raise InvalidArgumentError(
+            f"Model requirement {name!r} is not valid: {error['msg']}."
+        ) from exc
+
+
 def _unavailable(
     identifier: str,
 ) -> NotFoundError:
@@ -177,6 +211,38 @@ class Models:
             raise _unavailable(identifier)
 
         return model
+
+    def matching(
+        self,
+        requirements: Mapping[str, JsonValue],
+    ) -> tuple[ModelSummary, ...]:
+        """Return the portfolio's models that meet a step's model requirements (ADR 0121).
+
+        The requirements are a step's `requirements`, as its document holds
+        them; one left out is its default, so a step reads and writes text
+        unless it says otherwise. A model matches as a run matches it, by
+        `ModelQuery.matches`, and the models are in the order a run tries
+        them. A served model outside the portfolio never matches.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: A requirement is unknown, or not valid.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        parsed = _requirements(requirements)
+        repositories = self._repositories()
+        catalog = model_catalog_for_portfolio(
+            catalog=discover(repositories, self._directories()),
+            portfolio=ModelPortfolioLoader(repositories.portfolio).load_portfolio(),
+        )
+
+        return tuple(
+            _summary(model, authorized=True)
+            for model in catalog.find(ModelQuery.from_requirements(parsed))
+        )
 
 
 class Portfolio:

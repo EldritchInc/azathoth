@@ -8,6 +8,7 @@ import pytest
 from pydantic import JsonValue
 
 from azathoth import api
+from azathoth.inputs import content_ref_from_value
 from azathoth.persistence.repositories import open_repositories
 
 EXAMPLES = Path(__file__).parents[2] / "examples"
@@ -393,6 +394,221 @@ def test_a_token_cancelled_beforehand_starts_nothing(
 
     assert events == []
     assert token.cancelled
+
+
+#
+# Files as input (ADR 0121)
+#
+
+MEASURE_TOOL_ID = UUID("c0000000-0000-4000-8000-000000000008")
+
+MEASURE_WORKFLOW_ID = UUID("c0000000-0000-4000-8000-000000000009")
+
+MEASURE_STEP_ID = UUID("c0000000-0000-4000-8000-000000000091")
+
+PDF = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj << >> endobj\n%%EOF\n"
+
+
+def stock_measure(
+    instance: api.Azathoth,
+) -> None:
+    """Import a workflow whose tool counts the bytes of the document its input names."""
+
+    instance.tools.import_document(
+        {
+            "definition": {
+                "id": str(MEASURE_TOOL_ID),
+                "name": "measure",
+                "description": "Count the bytes of a document by its content handle.",
+                "version": "1.0.0",
+                "input_schema": {
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"document": {"type": "object"}},
+                        "required": ["document"],
+                    }
+                },
+                "output_schema": {
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"count": {"type": "integer"}},
+                        "required": ["count"],
+                    }
+                },
+            },
+            "implementations": [
+                {
+                    "id": str(UUID(int=MEASURE_TOOL_ID.int + 1)),
+                    "tool_id": str(MEASURE_TOOL_ID),
+                    "tool_version": "1.0.0",
+                    "version": "1.0.0",
+                    "runtime": "python",
+                    "entrypoint": "run",
+                    "source": (
+                        "def run(document):\n"
+                        "    return {'count': document['content']['size_bytes']}\n"
+                    ),
+                }
+            ],
+        }
+    )
+    step = tool_step(MEASURE_STEP_ID, "measure")
+    step["inputs"] = [
+        {
+            "name": "document",
+            "source": {"event_type": "workflow.input.received", "field_name": "input"},
+        }
+    ]
+    instance.workflows.import_document(workflow(MEASURE_WORKFLOW_ID, step))
+
+
+def test_a_document_is_a_runs_input_kept_by_its_digest(
+    instance: api.Azathoth,
+    location: str,
+) -> None:
+    stock_measure(instance)
+
+    result = instance.runs.run(
+        MEASURE_WORKFLOW_ID,
+        input=api.RunFile(content=PDF, media_type="application/pdf"),
+    )
+
+    assert result.succeeded
+    assert result.result == len(PDF)
+
+    repositories = open_repositories(location)
+    run = repositories.runs.get(result.run_id)
+
+    assert run is not None
+
+    received, resolved = run.initial_context.events[:2]
+    handle = content_ref_from_value(received.payload["input"])
+
+    assert handle is not None
+    assert (handle.media_type, handle.size_bytes) == ("application/pdf", len(PDF))
+    assert repositories.content.get(handle.digest) == PDF
+    assert resolved.event_type == "workflow.input.resolved"
+    assert resolved.payload["inline"] is True
+    assert resolved.payload["digest"] == handle.digest
+
+
+def test_an_image_is_a_runs_input_too(
+    instance: api.Azathoth,
+) -> None:
+    stock_measure(instance)
+    png = b"\x89PNG\r\n\x1a\n" + bytes(24)
+
+    result = instance.runs.run(
+        MEASURE_WORKFLOW_ID,
+        input=api.RunFile(content=png, media_type="image/png"),
+    )
+
+    assert result.result == len(png)
+
+
+@pytest.mark.parametrize(
+    ("content", "media_type", "expected"),
+    [
+        (b"one two three", "text/plain", 3),
+        (b"\xef\xbb\xbfone two", "text/markdown", 2),
+        (b'"a b c d"', "application/json", 4),
+    ],
+)
+def test_a_text_or_json_file_is_decoded_into_its_value(
+    instance: api.Azathoth,
+    content: bytes,
+    media_type: str,
+    expected: int,
+) -> None:
+    stock(instance)
+
+    result = instance.runs.run(
+        COUNT_WORKFLOW_ID,
+        input=api.RunFile(content=content, media_type=media_type),
+    )
+
+    assert result.result == expected
+
+
+@pytest.mark.parametrize(
+    ("content", "media_type", "message"),
+    [
+        (
+            b"GIF89a",
+            "image/gif",
+            "Media type 'image/gif' is not supported; Azathoth accepts application/json, "
+            "text/* media types, application/pdf, image/jpeg, image/png and image/webp.",
+        ),
+        (
+            b"<html></html>",
+            "application/pdf",
+            "Content is not application/pdf: no PDF header in its first 1024 bytes.",
+        ),
+        (
+            b"not a png",
+            "image/png",
+            "Content is not image/png: it does not start with the PNG signature.",
+        ),
+        (b"{", "application/json", "Content is not valid JSON: Expecting property name"),
+        (b"\xff\xfe", "text/plain", "Content is not valid UTF-8 for media type text/plain"),
+        (b"text", "Text/Plain", "Media type 'Text/Plain' must be a lowercase type/subtype"),
+    ],
+)
+def test_a_file_that_is_not_its_media_type_is_refused_and_nothing_is_kept(
+    instance: api.Azathoth,
+    location: str,
+    content: bytes,
+    media_type: str,
+    message: str,
+) -> None:
+    stock(instance)
+
+    with pytest.raises(api.InvalidArgumentError) as refused:
+        instance.runs.run(
+            COUNT_WORKFLOW_ID,
+            input=api.RunFile(content=content, media_type=media_type),
+        )
+
+    assert str(refused.value).startswith(message)
+    assert open_repositories(location).runs.runs_for_workflow(COUNT_WORKFLOW_ID) == ()
+
+
+def test_a_file_larger_than_the_limit_is_refused(
+    instance: api.Azathoth,
+) -> None:
+    stock_measure(instance)
+    content = PDF + bytes(api.MAX_INPUT_FILE_BYTES - len(PDF) + 1)
+
+    with pytest.raises(api.InvalidArgumentError) as refused:
+        instance.runs.run(
+            MEASURE_WORKFLOW_ID,
+            input=api.RunFile(content=content, media_type="application/pdf"),
+        )
+
+    assert str(refused.value) == (
+        f"The input file is larger than the limit of {api.MAX_INPUT_FILE_BYTES} bytes."
+    )
+
+
+def test_a_file_at_the_limit_is_accepted(
+    instance: api.Azathoth,
+) -> None:
+    stock_measure(instance)
+    content = PDF + bytes(api.MAX_INPUT_FILE_BYTES - len(PDF))
+
+    result = instance.runs.run(
+        MEASURE_WORKFLOW_ID,
+        input=api.RunFile(content=content, media_type="application/pdf"),
+    )
+
+    assert result.result == api.MAX_INPUT_FILE_BYTES
+
+
+def test_a_refused_file_is_refused_before_its_workflow_is_looked_for(
+    instance: api.Azathoth,
+) -> None:
+    with pytest.raises(api.InvalidArgumentError):
+        instance.runs.run(MISSING_ID, input=api.RunFile(content=b"x", media_type="image/gif"))
 
 
 def test_a_closed_instance_runs_nothing(

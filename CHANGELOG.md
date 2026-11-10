@@ -23,6 +23,24 @@ release dates are on the
   imported reaches a running server at once; a call the client cancels
   cancels its invocation, which the same call under its key resumes
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
+- `azathoth.api` runs and invokes a workflow on a file: `RunFile` holds a
+  document or an image, JSON or text, checked and kept as `--input-file`
+  keeps one, and refused before anything runs when it is not its media type
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` checks a workflow document without saving it, naming every
+  problem with where it is and its step; says, step by step, whether a
+  document could run here now and on which models; and lists the
+  portfolio's models that meet a step's requirements, by the rules a run
+  uses
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` reads back the runs an instance kept: a workflow's runs
+  newest first, and one run with its input, its result, and each step's
+  output, values, measurements and failed attempts
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` tries one step of a workflow document alone, on the inputs
+  given, a file among them, reporting its events as a run does and keeping
+  no run
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
 
 ## 1.3.0
 
