@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 import azathoth
 from azathoth import api
@@ -201,6 +201,25 @@ def test_api_models_are_frozen_and_refuse_unknown_fields() -> None:
         api.InstanceDescription.model_validate(
             {**description.model_dump(), "extra": "field"},
         )
+
+
+def test_every_value_the_api_returns_is_frozen_closed_and_described_by_a_schema() -> None:
+    models = tuple(
+        public
+        for name in api.__all__
+        if isinstance(public := getattr(api, name), type)
+        and issubclass(public, BaseModel)
+        and public.__module__ == "azathoth.api.models"
+    )
+
+    assert api.RunDetail in models
+    assert api.StepTrial in models
+
+    for model in models:
+        assert issubclass(model, api.ApiModel), model.__name__
+        assert model.model_config.get("frozen") is True, model.__name__
+        assert model.model_config.get("extra") == "forbid", model.__name__
+        assert model.model_json_schema()["title"] == model.__name__
 
 
 def test_every_public_name_is_documented() -> None:

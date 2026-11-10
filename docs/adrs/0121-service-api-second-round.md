@@ -18,6 +18,19 @@ import or a model selection means.
 
 ## Decision
 
+| Call | Does | Asks providers | Keeps |
+| --- | --- | --- | --- |
+| `runs.run(id, input=RunFile(...))`, `runs.invoke(...)` | Runs or invokes a workflow on a file. | Yes | The run, and a binary file by its digest |
+| `workflows.check(document)` | Every reason importing a document would refuse it. | No | Nothing |
+| `runs.readiness(document)` | Whether each step could run here now, and on what. | Yes | Nothing |
+| `models.matching(requirements)` | The portfolio's models that meet a step's requirements. | Yes | What the providers reported, as `models.list` does |
+| `runs.list(id, limit=None)`, `runs.get(run_id)` | The runs already kept, and one with its steps' evidence. | No | Nothing |
+| `runs.try_step(document, step_id, ...)` | One step tried alone. | Yes | A file given, by its digest |
+
+Every value is one of the API's own frozen, closed models, as ADR 0120
+requires, and every one is described by its JSON Schema, so a client in
+another language can read them.
+
 ### A file as a run's input
 
 `RunFile(content, media_type)` stands beside `RunInput(payload)`, and
@@ -218,3 +231,6 @@ starts them as a run's step would.
   it, before the workflow is saved or its other steps are finished.
 - Candidate generation and readiness resolve a step through one function,
   so readiness never says a step could run where a run would refuse it.
+- The API stays provisional. These calls are first published in
+  `azathoth-ai` 1.4.0a2, a pre-release, so the editor can depend on them
+  before 1.4.0 is final.
