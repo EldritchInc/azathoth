@@ -897,7 +897,8 @@ The identifier is a workflow UUID.
 
 The command renders the latest revision by default, or the one named with
 `--revision <NUMBER>`. It shows the revision, its import time and content
-digest, workflow metadata, the declared result, and configured step
+digest, its revision digest, the revision it was built on and who imported it
+(ADR 0122), workflow metadata, the declared result, and configured step
 structure:
 
 ```text
@@ -905,12 +906,18 @@ ID: <WORKFLOW_ID>
 Revision: 2 of 2
 Imported: 2026-10-23T15:30:40+00:00
 Content Digest: <SHA256>
+Revision Digest: <SHA256>
+Parent: revision 1
+Author: Eris <eris@example.com>
 Name: simple prompt
 Version: 1.0.0
 Description: Return a concise answer to one request.
 Result: step <STEP_ID> output answer
 Steps: 1
 ```
+
+A workflow's first revision shows `Parent: none`, and one imported before 1.4
+shows `Author: unknown`.
 
 A name-only result renders as:
 
@@ -1006,13 +1013,24 @@ azathoth workflow history <WORKFLOW_ID> --limit <COUNT>
 ```
 
 ```text
-3  2026-10-23T15:31:02+00:00  4f1a9c0e2b7d  1.0.0  simple prompt  identical to revision 1
-2  2026-10-23T15:30:40+00:00  91d07a3c55e2  1.0.0  simple prompt
+3  2026-10-23T15:31:02+00:00  4f1a9c0e2b7d  1.0.0  simple prompt  identical to revision 1  by Eris
+2  2026-10-23T15:30:40+00:00  91d07a3c55e2  1.0.0  simple prompt  by Eris
 1  unknown                    4f1a9c0e2b7d  1.0.0  simple prompt
 ```
 
 Each line contains the revision number, import time, the first twelve
-characters of the content digest, the declared version, and the name.
+characters of the content digest, the declared version, and the name. It ends
+with who imported the revision, when that is known: revisions imported before
+1.4 name nobody (ADR 0122). `tool history` and `benchmark history` lines end
+the same way.
+
+Every import is recorded as the author `AZATHOTH_AUTHOR` names, as
+`Name <email>` or `Name`, or else as the operating system's username. A
+malformed `AZATHOTH_AUTHOR` stops the import:
+
+```text
+AZATHOTH_AUTHOR is '<VALUE>'; set it to "Name <email>" or "Name".
+```
 
 Print any revision as a document `workflow import` accepts with:
 
@@ -3915,7 +3933,8 @@ A document identical to the latest revision appends nothing (ADR 0122):
 Benchmark dataset <BENCHMARK_ID> is unchanged at revision 3.
 ```
 
-`benchmark show` adds `Revision`, `Imported`, and `Content Digest` lines, and
+`benchmark show` adds `Revision`, `Imported`, `Content Digest`,
+`Revision Digest`, `Parent`, and `Author` lines, as `workflow show` does, and
 `benchmark history` lists one line per revision, newest first:
 
 ```text

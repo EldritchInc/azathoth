@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from azathoth.api.errors import InvalidAuthorError
+from azathoth.api.models import Author as AuthorView
 from azathoth.revisions import Author, AuthorError, resolve_author
 
 AuthorAccess = Callable[[], Author]
@@ -39,7 +40,19 @@ def author_access(
     return resolved
 
 
+def author_view(
+    author: Author | None,
+) -> AuthorView | None:
+    """Return the API's view of a recorded author, or None when none was recorded."""
+
+    if author is None:
+        return None
+
+    return AuthorView(name=author.name, email=author.email)
+
+
 __all__ = [
     "AuthorAccess",
     "author_access",
+    "author_view",
 ]

@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 
 from pydantic import JsonValue, ValidationError
 
-from azathoth.api.authorship import AuthorAccess
+from azathoth.api.authorship import AuthorAccess, author_view
 from azathoth.api.browsing import RepositoriesAccess
 from azathoth.api.errors import (
     ConflictError,
@@ -36,6 +36,7 @@ from azathoth.providers import (
     ModelPortfolioLoader,
     ModelQuery,
     ModelRequirements,
+    PortfolioProvenance,
     ProviderModelCatalogSynchronizer,
     ProviderModelDirectory,
     ProviderModelObserver,
@@ -113,13 +114,24 @@ def _summary(
 
 def _entry(
     entry: ModelPortfolioEntry,
+    provenance: PortfolioProvenance | None,
 ) -> PortfolioEntry:
-    """Return the API's view of one portfolio entry."""
+    """Return the API's view of one portfolio entry and who added it (ADR 0122).
+
+    Raises:
+        LookupError: The entry's provenance is not recorded.
+    """
+
+    if provenance is None:
+        raise LookupError(f"Model portfolio entry {entry.identifier!r} has no provenance.")
 
     return PortfolioEntry(
         identifier=entry.identifier,
         provider=entry.provider,
         model=entry.model,
+        content_digest=provenance.content_digest,
+        author=author_view(provenance.author),
+        added_at=provenance.added_at,
         command=_show_command(entry.identifier),
     )
 
@@ -275,7 +287,11 @@ class Portfolio:
             InstanceClosedError: The instance was closed.
         """
 
-        return tuple(_entry(entry) for entry in self._repositories().portfolio.entries())
+        portfolio = self._repositories().portfolio
+
+        return tuple(
+            _entry(entry, portfolio.provenance(entry.identifier)) for entry in portfolio.entries()
+        )
 
     def add(
         self,
@@ -306,7 +322,7 @@ class Portfolio:
 
         repositories.portfolio.save(entry, author=self._author())
 
-        return _entry(entry)
+        return _entry(entry, repositories.portfolio.provenance(entry.identifier))
 
     def remove(
         self,

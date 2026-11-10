@@ -16,7 +16,7 @@ from uuid import UUID
 from pydantic import JsonValue, ValidationError
 from pydantic_core import ErrorDetails
 
-from azathoth.api.authorship import AuthorAccess
+from azathoth.api.authorship import AuthorAccess, author_view
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -45,7 +45,7 @@ from azathoth.evaluation import (
     encode_benchmark_document,
 )
 from azathoth.persistence.repositories import Repositories
-from azathoth.revisions import BaseRevisionError
+from azathoth.revisions import BaseRevisionError, LineageRecord
 from azathoth.tools import (
     ToolDocumentError,
     ToolDocumentRevision,
@@ -86,17 +86,52 @@ RevisionT = TypeVar(
 )
 
 
+LineageView = Mapping[int, LineageRecord]
+"""The lineage records of one lineage's revisions, by revision number."""
+
+
+def _by_number(
+    records: Iterable[LineageRecord],
+) -> dict[int, LineageRecord]:
+    """Return lineage records by the number of the revision each records."""
+
+    return {record.number: record for record in records}
+
+
 def _revision(
     revision: AnyRevision,
     identical: AnyRevision | None,
+    lineage: LineageView,
 ) -> Revision:
-    """Return the API's view of one revision, naming the revision it reverted to."""
+    """Return the API's view of one revision, naming the revision it reverted to and its parent.
+
+    Raises:
+        LookupError: The revision's lineage is not recorded.
+    """
+
+    record = lineage.get(revision.number)
+
+    if record is None:
+        raise LookupError(f"Revision {revision.number} has no lineage record.")
+
+    parent = next(
+        (
+            candidate
+            for candidate in lineage.values()
+            if candidate.revision_digest == record.parent_digest
+        ),
+        None,
+    )
 
     return Revision(
         number=revision.number,
         content_digest=revision.content_digest,
         imported_at=revision.imported_at,
         identical_to=identical.number if identical is not None else None,
+        revision_digest=record.revision_digest,
+        parent_digest=record.parent_digest,
+        parent_number=parent.number if parent is not None else None,
+        author=author_view(record.author),
     )
 
 
@@ -357,6 +392,7 @@ class Workflows:
                 self._summary(
                     history[-1],
                     history,
+                    _by_number(repository.lineage(specification.metadata.id)),
                     command=f"azathoth workflow show {specification.metadata.id}",
                 )
             )
@@ -388,7 +424,12 @@ class Workflows:
         if selected is None:
             raise RevisionNotFoundError(f"Workflow {workflow_id} has no revision {revision}.")
 
-        summary = self._summary(selected, history, command=_workflow_command(selected))
+        summary = self._summary(
+            selected,
+            history,
+            self._lineage(workflow_id),
+            command=_workflow_command(selected),
+        )
 
         return WorkflowDetail(
             **summary.model_dump(),
@@ -413,9 +454,10 @@ class Workflows:
         _check_limit(limit)
 
         history = self._history(workflow_id)
+        lineage = self._lineage(workflow_id)
 
         return tuple(
-            self._summary(selected, history, command=_workflow_command(selected))
+            self._summary(selected, history, lineage, command=_workflow_command(selected))
             for selected in _newest_first(history, limit)
         )
 
@@ -527,10 +569,19 @@ class Workflows:
 
         return history
 
+    def _lineage(
+        self,
+        workflow_id: UUID,
+    ) -> dict[int, LineageRecord]:
+        """Return the lineage records of a workflow's revisions, by number."""
+
+        return _by_number(self._repositories().workflows.lineage(workflow_id))
+
     @staticmethod
     def _summary(
         selected: WorkflowSpecificationRevision,
         history: tuple[WorkflowSpecificationRevision, ...],
+        lineage: LineageView,
         *,
         command: str,
     ) -> WorkflowSummary:
@@ -543,7 +594,7 @@ class Workflows:
             name=metadata.name,
             version=metadata.version,
             description=metadata.description,
-            revision=_revision(selected, earliest_identical_revision(history, selected)),
+            revision=_revision(selected, earliest_identical_revision(history, selected), lineage),
             command=command,
         )
 
@@ -584,6 +635,7 @@ class Tools:
                 self._summary(
                     history[-1],
                     history,
+                    _by_number(repository.document_lineage(definition.id, definition.version)),
                     command=(
                         f"azathoth tool show {definition.id} "
                         f"--version {shlex.quote(definition.version)}"
@@ -624,7 +676,12 @@ class Tools:
         if selected is None:
             raise RevisionNotFoundError(f"Tool {tool_id}@{version} has no revision {revision}.")
 
-        summary = self._summary(selected, history, command=_tool_command(selected))
+        summary = self._summary(
+            selected,
+            history,
+            _by_number(self._repositories().tools.document_lineage(tool_id, version)),
+            command=_tool_command(selected),
+        )
 
         return ToolDetail(
             **summary.model_dump(),
@@ -649,7 +706,8 @@ class Tools:
 
         _check_limit(limit)
 
-        history = self._repositories().tools.document_revisions(tool_id)
+        repository = self._repositories().tools
+        history = repository.document_revisions(tool_id)
 
         selected = tuple(
             revision for revision in history if version is None or revision.tool_version == version
@@ -660,8 +718,20 @@ class Tools:
 
             raise NotFoundError(f"Tool {reference} is not configured.")
 
+        lineages = {
+            revision.tool_version: _by_number(
+                repository.document_lineage(tool_id, revision.tool_version)
+            )
+            for revision in selected
+        }
+
         return tuple(
-            self._summary(revision, history, command=_tool_command(revision))
+            self._summary(
+                revision,
+                history,
+                lineages[revision.tool_version],
+                command=_tool_command(revision),
+            )
             for revision in _newest_first(selected, limit)
         )
 
@@ -739,6 +809,7 @@ class Tools:
     def _summary(
         selected: ToolDocumentRevision,
         history: tuple[ToolDocumentRevision, ...],
+        lineage: LineageView,
         *,
         command: str,
     ) -> ToolSummary:
@@ -751,7 +822,11 @@ class Tools:
             version=definition.version,
             name=definition.name,
             description=definition.description,
-            revision=_revision(selected, earliest_identical_tool_revision(history, selected)),
+            revision=_revision(
+                selected,
+                earliest_identical_tool_revision(history, selected),
+                lineage,
+            ),
             implementation_count=len(selected.document.implementations),
             test_case_count=len(selected.document.test_cases),
             command=command,
@@ -794,6 +869,7 @@ class Benchmarks:
                 self._summary(
                     history[-1],
                     history,
+                    _by_number(repository.lineage(dataset.id)),
                     command=f"azathoth benchmark show {dataset.id}",
                 )
             )
@@ -827,7 +903,12 @@ class Benchmarks:
                 f"Benchmark dataset {benchmark_id} has no revision {revision}."
             )
 
-        summary = self._summary(selected, history, command=_benchmark_command(selected))
+        summary = self._summary(
+            selected,
+            history,
+            _by_number(self._repositories().benchmarks.lineage(benchmark_id)),
+            command=_benchmark_command(selected),
+        )
 
         return BenchmarkDetail(
             **summary.model_dump(),
@@ -852,9 +933,10 @@ class Benchmarks:
         _check_limit(limit)
 
         history = self._history(benchmark_id)
+        lineage = _by_number(self._repositories().benchmarks.lineage(benchmark_id))
 
         return tuple(
-            self._summary(selected, history, command=_benchmark_command(selected))
+            self._summary(selected, history, lineage, command=_benchmark_command(selected))
             for selected in _newest_first(history, limit)
         )
 
@@ -921,6 +1003,7 @@ class Benchmarks:
     def _summary(
         selected: BenchmarkDatasetRevision,
         history: tuple[BenchmarkDatasetRevision, ...],
+        lineage: LineageView,
         *,
         command: str,
     ) -> BenchmarkSummary:
@@ -934,7 +1017,11 @@ class Benchmarks:
             version=dataset.version,
             description=dataset.description,
             case_count=len(dataset.cases),
-            revision=_revision(selected, earliest_identical_benchmark_revision(history, selected)),
+            revision=_revision(
+                selected,
+                earliest_identical_benchmark_revision(history, selected),
+                lineage,
+            ),
             command=command,
         )
 

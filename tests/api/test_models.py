@@ -27,7 +27,7 @@ from azathoth.providers import (
     Prompt,
     ProviderModel,
 )
-from azathoth.revisions import AUTHOR_VARIABLE, Author
+from azathoth.revisions import AUTHOR_VARIABLE, Author, content_digest
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowMetadata,
@@ -293,12 +293,16 @@ def test_an_authorized_model_is_in_the_portfolio_and_marked_in_the_catalog(
 ) -> None:
     entry = modelled.portfolio.add(ALPHA.identifier)
 
-    assert entry == api.PortfolioEntry(
-        identifier=ALPHA.identifier,
-        provider="provider-a",
-        model="example/alpha",
-        command="azathoth model show provider-a/example/alpha",
-    )
+    assert entry.model_dump(exclude={"author", "added_at"}) == {
+        "identifier": ALPHA.identifier,
+        "provider": "provider-a",
+        "model": "example/alpha",
+        "content_digest": content_digest(
+            ModelPortfolioEntry(provider="provider-a", model="example/alpha")
+        ),
+        "command": "azathoth model show provider-a/example/alpha",
+    }
+    assert entry.added_at is not None
     assert modelled.portfolio.list() == (entry,)
     assert tuple(model.authorized for model in modelled.models.list()) == (True, False)
     assert open_repositories(location).portfolio.entries() == (
@@ -635,3 +639,38 @@ def test_a_model_is_not_authorized_when_who_adds_it_cannot_be_told(
         modelled.portfolio.add(ALPHA.identifier)
 
     assert open_repositories(location).portfolio.entries() == ()
+
+
+def test_the_portfolio_lists_who_authorized_each_model_and_when(
+    location: str,
+) -> None:
+    with api.Azathoth(
+        open_repositories(location),
+        directories=(StaticDirectory("provider-a", (ALPHA,)),),
+        author="Eris",
+    ) as instance:
+        added = instance.portfolio.add(ALPHA.identifier)
+
+        (listed,) = instance.portfolio.list()
+
+    provenance = open_repositories(location).portfolio.provenance(ALPHA.identifier)
+
+    assert provenance is not None
+    assert listed == added
+    assert listed.author == api.Author(name="Eris", email=None)
+    assert listed.added_at == provenance.added_at
+    assert listed.content_digest == provenance.content_digest
+
+
+def test_a_model_authorized_without_an_author_lists_none(
+    location: str,
+) -> None:
+    open_repositories(location).portfolio.save(
+        ModelPortfolioEntry(provider="provider-a", model="example/alpha"),
+    )
+
+    with api.Azathoth(open_repositories(location), directories=()) as instance:
+        (listed,) = instance.portfolio.list()
+
+    assert listed.author is None
+    assert listed.added_at is not None

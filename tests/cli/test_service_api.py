@@ -12,7 +12,15 @@ import azathoth.cli.tools as tool_commands
 import azathoth.cli.workflow_configuration as workflow_commands
 from azathoth import api
 from azathoth.cli import CliRuntimeConfiguration
-from azathoth.cli.service import history_line, identical_note, import_note, service_instance
+from azathoth.cli.service import (
+    author_note,
+    history_line,
+    identical_note,
+    import_note,
+    lineage_lines,
+    service_instance,
+)
+from azathoth.revisions import Author, Lineage, LineageRecord, RevisionKind, child_record
 
 EXAMPLES = Path(__file__).parents[2] / "examples"
 
@@ -89,6 +97,7 @@ def revision(
     *,
     imported_at: datetime | None,
     identical_to: int | None,
+    author: api.Author | None = None,
 ) -> api.Revision:
     """Return one revision as the API reports it."""
 
@@ -97,6 +106,10 @@ def revision(
         content_digest="0123456789abcdef" * 4,
         imported_at=imported_at,
         identical_to=identical_to,
+        revision_digest="f" * 64,
+        parent_digest="e" * 64,
+        parent_number=2,
+        author=author,
     )
 
 
@@ -139,3 +152,65 @@ def test_a_revert_is_noted_in_history_and_on_import() -> None:
     assert identical_note(summary(fresh)) == ""
     assert import_note(detail) == " (identical to revision 1)"
     assert import_note(detail.model_copy(update={"revision": fresh})) == ""
+
+
+def test_a_history_line_names_who_imported_its_revision() -> None:
+    eris = api.Author(name="Eris", email="eris@example.com")
+
+    assert author_note(summary(revision(imported_at=None, identical_to=None, author=eris))) == (
+        "  by Eris"
+    )
+    assert author_note(summary(revision(imported_at=None, identical_to=None))) == ""
+
+
+def lineage_of(
+    *contents: str,
+    author: Author | None = None,
+) -> tuple[LineageRecord, ...]:
+    """Return a linear lineage of the given contents, each recorded with one author."""
+
+    lineage = Lineage(kind=RevisionKind.WORKFLOW, id=ID)
+    records: list[LineageRecord] = []
+
+    for number, digest in enumerate(contents, start=1):
+        records.append(
+            child_record(
+                lineage,
+                number=number,
+                content_digest=digest,
+                parent=records[-1] if records else None,
+                author=author,
+            )
+        )
+
+    return tuple(records)
+
+
+def test_show_names_a_revisions_digest_parent_and_author() -> None:
+    first, second = lineage_of("a" * 64, "b" * 64, author=Author(name="Eris", email="e@x.org"))
+
+    assert lineage_lines(2, (first, second)) == (
+        f"Revision Digest: {second.revision_digest}",
+        "Parent: revision 1",
+        "Author: Eris <e@x.org>",
+    )
+    assert lineage_lines(1, (first, second)) == (
+        f"Revision Digest: {first.revision_digest}",
+        "Parent: none",
+        "Author: Eris <e@x.org>",
+    )
+
+
+def test_show_names_a_parent_kept_elsewhere_by_its_digest_and_an_unknown_author() -> None:
+    first, second = lineage_of("a" * 64, "b" * 64)
+
+    assert lineage_lines(2, (second,)) == (
+        f"Revision Digest: {second.revision_digest}",
+        f"Parent: {first.revision_digest}",
+        "Author: unknown",
+    )
+
+
+def test_show_refuses_a_revision_without_a_lineage_record() -> None:
+    with pytest.raises(LookupError, match="Revision 3 has no lineage record."):
+        lineage_lines(3, lineage_of("a" * 64))

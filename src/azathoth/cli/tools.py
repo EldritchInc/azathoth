@@ -9,7 +9,13 @@ from uuid import UUID
 from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
-from azathoth.cli.service import history_line, identical_note, import_note, service_instance
+from azathoth.cli.service import (
+    author_note,
+    history_line,
+    identical_note,
+    import_note,
+    service_instance,
+)
 from azathoth.revisions import content_digest
 from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 from azathoth.tools import (
@@ -340,7 +346,7 @@ def list_tool_history(
         print(
             f"{entry.version}  {history_line(entry)}  "
             f"{entry.implementation_count} implementations  "
-            f"{entry.test_case_count} test cases{identical_note(entry)}"
+            f"{entry.test_case_count} test cases{identical_note(entry)}{author_note(entry)}"
         )
 
     return 0
@@ -355,8 +361,9 @@ def export_tool(
     """Print one imported tool revision as an importable JSON document.
 
     The latest revision of the exact version is exported unless another is
-    named. Importing the output again appends a revision with identical
-    content. Only durable state is read.
+    named. Importing the latest revision's export again appends nothing;
+    importing an earlier one's reverts to it (ADR 0122). Only durable state
+    is read.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()

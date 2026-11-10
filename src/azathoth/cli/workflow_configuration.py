@@ -9,7 +9,14 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering._json import render_json_value
-from azathoth.cli.service import history_line, identical_note, import_note, service_instance
+from azathoth.cli.service import (
+    author_note,
+    history_line,
+    identical_note,
+    import_note,
+    lineage_lines,
+    service_instance,
+)
 from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     PromptSpecification,
@@ -77,6 +84,11 @@ def show_workflow(
     print(f"Imported: {_render_imported_at(selected)}")
 
     print(f"Content Digest: {selected.content_digest}")
+
+    lineage = repository.lineage(workflow_id)
+
+    for line in lineage_lines(selected.number, lineage):
+        print(line)
 
     print(f"Name: {metadata.name}")
 
@@ -150,9 +162,9 @@ def export_workflow(
 ) -> int:
     """Print one imported revision of a workflow as an importable JSON document.
 
-    The document is exactly what `workflow import` accepts, so exporting a
-    revision and importing it again appends a revision with identical
-    content. Only durable state is read.
+    The document is exactly what `workflow import` accepts. Importing the
+    latest revision's export again appends nothing; importing an earlier
+    one's reverts to it (ADR 0122). Only durable state is read.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -198,7 +210,10 @@ def list_workflow_history(
         return 1
 
     for entry in history:
-        print(f"{history_line(entry)}  {entry.version}  {entry.name}{identical_note(entry)}")
+        print(
+            f"{history_line(entry)}  {entry.version}  {entry.name}{identical_note(entry)}"
+            f"{author_note(entry)}"
+        )
 
     return 0
 

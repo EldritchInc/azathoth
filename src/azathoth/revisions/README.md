@@ -92,6 +92,6 @@ one revision. `resolve_author()` takes the first of these that is set:
 A malformed `AZATHOTH_AUTHOR` is refused rather than ignored:
 
 ```text
-AZATHOTH_AUTHOR is '<value>'; set it to "Name <email>" or "Name".
+AZATHOTH_AUTHOR is '<VALUE>'; set it to "Name <email>" or "Name".
 Could not tell who is importing; set AZATHOTH_AUTHOR to "Name <email>" or "Name".
 ```

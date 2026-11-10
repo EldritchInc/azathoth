@@ -11,6 +11,7 @@ from azathoth import api
 from azathoth.persistence.repositories import open_repositories
 from azathoth.revisions import AUTHOR_VARIABLE, Author
 from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
+from azathoth.workflows import WorkflowSpecification
 
 EXAMPLES = Path(__file__).parents[2] / "examples"
 
@@ -313,3 +314,136 @@ def test_the_standard_tools_are_recorded_as_azathoths(
 
 def test_the_standard_tool_author_is_azathoth() -> None:
     assert Author(name="Azathoth") == STANDARD_TOOL_AUTHOR
+
+
+# What browsing shows of each revision's lineage
+
+
+def test_a_workflow_revision_shows_its_digest_parent_and_author(
+    location: str,
+) -> None:
+    with api.open(location, author="Eris <eris@example.com>") as instance:
+        instance.workflows.import_document(workflow())
+        instance.workflows.import_document(workflow("Changed."))
+
+        first, second = open_repositories(location).workflows.lineage(WORKFLOW_ID)
+
+        latest = instance.workflows.get(WORKFLOW_ID).revision
+        earliest = instance.workflows.get(WORKFLOW_ID, revision=1).revision
+
+    assert latest.revision_digest == second.revision_digest
+    assert latest.parent_digest == first.revision_digest
+    assert latest.parent_number == 1
+    assert latest.author == api.Author(name="Eris", email="eris@example.com")
+    assert earliest.revision_digest == first.revision_digest
+    assert (earliest.parent_digest, earliest.parent_number) == (None, None)
+
+
+def test_a_fork_shows_the_revision_it_was_built_on(
+    instance: api.Azathoth,
+    location: str,
+) -> None:
+    instance.workflows.import_document(workflow())
+    instance.workflows.import_document(workflow("Changed."))
+
+    first, _ = revision_digests(location)
+
+    instance.workflows.import_document(workflow("Forked."), based_on=first)
+
+    fork, changed, original = instance.workflows.history(WORKFLOW_ID)
+
+    assert (fork.revision.number, fork.revision.parent_number) == (3, 1)
+    assert changed.revision.parent_number == 1
+    assert original.revision.parent_number is None
+    assert instance.workflows.list()[0].revision == fork.revision
+
+
+def test_a_revision_saved_without_an_author_shows_none(
+    instance: api.Azathoth,
+    location: str,
+) -> None:
+    instance.workflows.import_document(workflow())
+
+    open_repositories(location).workflows.save(
+        api_free_workflow("Saved without an author."),
+    )
+
+    assert instance.workflows.get(WORKFLOW_ID).revision.author is None
+
+
+def test_tool_revisions_show_their_lineage_per_version(
+    location: str,
+) -> None:
+    with api.open(location, author="Eris") as instance:
+        instance.tools.import_document(tool())
+        instance.tools.import_document(tool("Changed."))
+        instance.tools.import_document(tool_version("2.0.0"))
+
+        repository = open_repositories(location).tools
+        first, second = repository.document_lineage(TOOL_ID, "1.0.0")
+        (other,) = repository.document_lineage(TOOL_ID, "2.0.0")
+
+        history = instance.tools.history(TOOL_ID)
+        listed = {summary.version: summary.revision for summary in instance.tools.list()}
+        shown = instance.tools.get(TOOL_ID, "1.0.0").revision
+
+    assert [entry.revision.revision_digest for entry in history] == [
+        other.revision_digest,
+        second.revision_digest,
+        first.revision_digest,
+    ]
+    assert [entry.revision.parent_number for entry in history] == [None, 1, None]
+    assert listed["2.0.0"].revision_digest == other.revision_digest
+    assert listed["1.0.0"].revision_digest == second.revision_digest
+    assert shown.author == api.Author(name="Eris", email=None)
+
+
+def test_benchmark_revisions_show_their_lineage(
+    location: str,
+) -> None:
+    with api.open(location, author="Eris") as instance:
+        instance.benchmarks.import_document(benchmark())
+        instance.benchmarks.import_document(benchmark("Changed."))
+
+        first, second = open_repositories(location).benchmarks.lineage(BENCHMARK_ID)
+
+        latest, earliest = instance.benchmarks.history(BENCHMARK_ID)
+        listed = instance.benchmarks.list()[0].revision
+        shown = instance.benchmarks.get(BENCHMARK_ID, revision=1).revision
+
+    assert latest.revision.revision_digest == second.revision_digest
+    assert latest.revision.parent_number == 1
+    assert earliest.revision.revision_digest == first.revision_digest
+    assert listed == latest.revision
+    assert shown == earliest.revision
+    assert shown.author == api.Author(name="Eris", email=None)
+
+
+def api_free_workflow(
+    description: str,
+) -> WorkflowSpecification:
+    """Return the example workflow, with another description, as a specification."""
+
+    return WorkflowSpecification.model_validate(workflow(description))
+
+
+def tool_version(
+    version: str,
+) -> dict[str, JsonValue]:
+    """Return the example tool document as another version of the tool."""
+
+    values = tool()
+    definition = values["definition"]
+    implementations = values["implementations"]
+
+    assert isinstance(definition, dict)
+    assert isinstance(implementations, list)
+
+    definition["version"] = version
+
+    for implementation in implementations:
+        assert isinstance(implementation, dict)
+        implementation["tool_version"] = version
+        implementation["id"] = "c2000000-0000-4000-8000-000000000001"
+
+    return values

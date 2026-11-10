@@ -19,6 +19,7 @@ from azathoth.cli import (
     show_workflow,
 )
 from azathoth.cli.dispatching import dispatch_workflow_command
+from azathoth.revisions import Author
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
     WorkflowSpecification,
@@ -394,7 +395,9 @@ def test_show_defaults_to_the_latest_revision(
     repository = SQLiteWorkflowRepository(database)
 
     repository.save(create_workflow())
-    latest = repository.save(create_renamed_workflow())
+    latest = repository.save(create_renamed_workflow(), author=Author(name="Eris"))
+
+    _, record = repository.lineage(WORKFLOW_ID)
 
     status = show_workflow(WORKFLOW_ID)
 
@@ -406,6 +409,9 @@ def test_show_defaults_to_the_latest_revision(
         "Revision: 2 of 2\n"
         f"Imported: {latest.imported_at.isoformat() if latest.imported_at else ''}\n"
         f"Content Digest: {latest.content_digest}\n"
+        f"Revision Digest: {record.revision_digest}\n"
+        "Parent: revision 1\n"
+        "Author: Eris\n"
         "Name: Renamed workflow\n"
     )
 
@@ -630,3 +636,42 @@ def test_execution_rendering_names_the_judged_revision() -> None:
     )
 
     assert "\nWorkflow Revision: 3\n" in render_workflow_benchmark_execution(revised)
+
+
+def test_history_names_who_imported_each_revision_when_it_is_known(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = configure_database(monkeypatch, tmp_path)
+
+    repository = SQLiteWorkflowRepository(database)
+    repository.save(create_workflow())
+    repository.save(create_renamed_workflow(), author=Author(name="Eris", email="e@example.com"))
+
+    assert list_workflow_history(WORKFLOW_ID) == 0
+
+    latest, earliest = capsys.readouterr().out.splitlines()
+
+    assert latest.endswith("  Renamed workflow  by Eris")
+    assert not earliest.endswith("by Eris")
+    assert " by " not in earliest
+
+
+def test_show_names_no_parent_and_an_unknown_author_for_a_first_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = configure_database(monkeypatch, tmp_path)
+
+    repository = SQLiteWorkflowRepository(database)
+    repository.save(create_workflow())
+
+    (record,) = repository.lineage(WORKFLOW_ID)
+
+    assert show_workflow(WORKFLOW_ID) == 0
+
+    output = capsys.readouterr().out
+
+    assert f"Revision Digest: {record.revision_digest}\nParent: none\nAuthor: unknown\n" in output
