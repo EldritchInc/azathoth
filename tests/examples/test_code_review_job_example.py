@@ -24,6 +24,7 @@ from azathoth.jobs import (
     parse_job_request,
     run_job_content,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     InMemoryProductionInvocationRepository,
     InvocationIdempotency,
@@ -68,6 +69,7 @@ class ReviewInvoker:
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         self.calls.append({"workflow_id": workflow_id, "payload": payload})

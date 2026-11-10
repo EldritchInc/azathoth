@@ -16,6 +16,7 @@ from azathoth.cli import (
 )
 from azathoth.cli.output_format import WorkflowOutputFormat
 from azathoth.context import ContextEvent
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
     SQLiteWorkflowRunRepository,
@@ -216,6 +217,7 @@ def capture_run_inputs(
         *,
         workflow_input: WorkflowRunInput | None,
         output: WorkflowOutputFormat,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         received.append(workflow_input)
 

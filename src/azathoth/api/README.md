@@ -129,7 +129,8 @@ semantic judge is always kept until it leaves the judge rotation.
 
 ## Runs
 
-`instance.runs.run(workflow_id, input=None, on_event=None, cancel=None)`
+`instance.runs.run(workflow_id, input=None, sensitivity=None, on_event=None,
+cancel=None)`
 runs a workflow's latest revision as configured, as `azathoth workflow run`
 does, and keeps the finished run whether it succeeded or failed. It returns
 when the run has finished.
@@ -158,6 +159,20 @@ and kept as `--input-file` is: JSON and text are decoded into the value, and
 a PDF, PNG, JPEG or WebP of at most `MAX_INPUT_FILE_BYTES` is kept in the
 content store and given to the workflow as a content handle; a file that is
 not its media type is refused before anything runs (ADR 0121).
+
+`run`, `invoke` and `try_step` each take `sensitivity`, a `Sensitivity`
+labelling the input `PUBLIC`, `INTERNAL` or `RESTRICTED` (ADR 0123); without
+one it is internal. The label is recorded with the run and inherited by
+every child run it starts. It labels input, so `run` given one without
+`input` raises `InvalidArgumentError` with
+`SENSITIVITY_WITHOUT_INPUT_MESSAGE`:
+
+```text
+A sensitivity labels a run's input; give input too.
+```
+
+For `invoke` the label is part of the request a key is recorded with, and
+for `try_step` it labels whatever `inputs` and `input` the step is given.
 
 The `RunResult` says whether it `succeeded`, holds the declared `result`
 when `has_result`, and
@@ -190,8 +205,8 @@ that could not run says why in its `problem`, such as a model no provider
 serves now or a tool not imported. It asks the providers, and saves nothing
 (ADR 0121).
 
-`instance.runs.invoke(workflow_id, input=..., idempotency_key=None,
-caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
+`instance.runs.invoke(workflow_id, input=..., sensitivity=None,
+idempotency_key=None, caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
 active production state, as `azathoth job run` does, and returns an
 `InvocationOutcome`: `succeeded` or `failed` with the invocation,
 `rejected` when no invocation was made (such as an `idempotency_conflict`),
@@ -221,7 +236,7 @@ kept yet, so `get` raises `NotFoundError` saying how to resume it
 (ADR 0121).
 
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
-on_event=None, cancel=None)` tries one step of a workflow document alone,
+sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a
 `RunFile`, takes the place of that input's source; an input not given keeps
 its source, a constant its value and a field of the run's input the field of

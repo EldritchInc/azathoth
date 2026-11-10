@@ -19,6 +19,7 @@ from azathoth.inputs import (
     InputProvenance,
     ResolvedInput,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows.input import create_workflow_input_events
 
 PRODUCTION_INVOCATION_EVENT_TYPE = "production.invocation.received"
@@ -156,6 +157,7 @@ def create_production_invocation(
     input_provenance: InputProvenance | None = None,
     idempotency: InvocationIdempotency | None = None,
     lineage: WorkflowLineage | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> ProductionInvocation:
     """Create one production invocation from caller-supplied input.
 
@@ -167,7 +169,8 @@ def create_production_invocation(
 
     When the input has provenance, from a reference or an inline input that
     is binary or names an origin, it follows as a `workflow.input.resolved`
-    event (ADR 0096, ADR 0112). An invocation started
+    event (ADR 0096, ADR 0112), and its label as a
+    `workflow.input.sensitivity` event (ADR 0123). An invocation started
     through a job envelope records its idempotency (ADR 0097). An invocation
     started by a step of another run records its lineage last, as a
     `workflow.lineage.received` event (ADR 0104).
@@ -195,6 +198,7 @@ def create_production_invocation(
                         else JSON_MEDIA_TYPE
                     ),
                     provenance=input_provenance,
+                    sensitivity=sensitivity,
                 ),
                 producer=PRODUCTION_INVOCATION_PRODUCER,
                 occurred_at=created_at,

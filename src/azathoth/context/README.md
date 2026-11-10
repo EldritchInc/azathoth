@@ -750,6 +750,41 @@ so concurrent steps each see their own. Outside a step it is `None`.
 child process as compact JSON; decoding names the first problem it finds,
 without the value, as a `LineageError`.
 
+## Sensitivity
+
+A run's input may be labelled `public`, `internal` or `restricted`
+(ADR 0123). The label is recorded in the run's initial context by one
+`workflow.input.sensitivity` event, after the input's own events:
+
+```json
+{"sensitivity": "restricted"}
+```
+
+| Name | Meaning |
+| --- | --- |
+| `INPUT_SENSITIVITY_EVENT_TYPE` | `workflow.input.sensitivity` |
+| `SENSITIVITY_PAYLOAD_KEY` | `sensitivity` |
+| `create_input_sensitivity_event(label, producer=...)` | The event a labelled input records |
+| `input_sensitivities(context)` | The labels a context's input was given, in order |
+| `context_sensitivity(context)` | The run's label: the most sensitive of its input's and its parent's |
+
+An unlabelled run is internal and records no event, so its context is
+exactly what it was before labels. A child run takes its parent's label from
+its lineage, so it is never less sensitive than the run that started it,
+whatever its own input was labelled; it may be more.
+
+Lineage carries the label down: `RunLineage`, `StepLineage` and
+`WorkflowLineage` each hold a `sensitivity`, omitted when the run is
+internal, so an internal run's lineage, and the `AZATHOTH_LINEAGE` a tool is
+given, are unchanged. A running step's `active_step_lineage().sensitivity`
+is the label anything the step sends data to is judged by.
+
+An event whose payload holds no known label raises `ValueError`:
+
+```text
+A workflow.input.sensitivity event holds no label Azathoth knows: 'secret'.
+```
+
 ## Public Surface
 
 The public context package exports the context itself:
@@ -762,7 +797,8 @@ from azathoth.context import (
 ```
 
 and the lineage model above, with its constants `LINEAGE_EVENT_TYPE`,
-`LINEAGE_PRODUCER` and `MAX_WORKFLOW_DEPTH`. That small API reflects the
+`LINEAGE_PRODUCER` and `MAX_WORKFLOW_DEPTH`, and the sensitivity names
+above. That small API reflects the
 package's narrow architectural responsibility.
 
 ## V1 Context Principles

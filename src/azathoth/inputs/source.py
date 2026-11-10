@@ -25,6 +25,7 @@ from azathoth.inputs.media import (
     is_text_media_type,
     validate_media_type,
 )
+from azathoth.sensitivity import Sensitivity
 
 INLINE_INPUT_KEY = "value"
 
@@ -33,6 +34,9 @@ REFERENCE_INPUT_KEY = "uri"
 MEDIA_TYPE_KEY = "media_type"
 
 ORIGIN_KEY = "origin"
+
+SENSITIVITY_KEY: Final = "sensitivity"
+"""The key of an input's sensitivity label (ADR 0123)."""
 
 EXCLUSIVE_KEYS_MESSAGE = "An input source holds exactly one of 'value' and 'uri'."
 
@@ -135,7 +139,8 @@ class InlineInput(BaseModel):
     The media type defaults to JSON. A text media type requires a string. A
     binary media type requires its content as a standard, padded base64
     string, decoded only when the input is resolved, within its policy's
-    cap. Any inline input may name its `origin` (ADR 0112).
+    cap. Any inline input may name its `origin` (ADR 0112), and its
+    `sensitivity` (ADR 0123); without one it is internal.
     """
 
     model_config = ConfigDict(
@@ -146,6 +151,7 @@ class InlineInput(BaseModel):
     value: JsonValue
     media_type: str = JSON_MEDIA_TYPE
     origin: InputOrigin | None = None
+    sensitivity: Sensitivity | None = None
 
     @field_validator("media_type")
     @classmethod
@@ -185,16 +191,19 @@ class InlineInput(BaseModel):
         self,
         handler: SerializerFunctionWrapHandler,
     ) -> dict[str, JsonValue]:
-        """Leave out an origin the input does not name.
+        """Leave out an origin and a sensitivity the input does not name.
 
-        A request without an origin then dumps, and digests (ADR 0097), exactly
-        as it did before inputs could name one.
+        A request without them then dumps, and digests (ADR 0097), exactly
+        as it did before inputs could name them.
         """
 
         data = cast(dict[str, JsonValue], handler(self))
 
         if self.origin is None:
             data.pop(ORIGIN_KEY, None)
+
+        if self.sensitivity is None:
+            data.pop(SENSITIVITY_KEY, None)
 
         return data
 
@@ -204,7 +213,8 @@ class ReferenceInput(BaseModel):
 
     The media type is required, because nothing else says how to decode the
     content. Which schemes may be resolved is decided where the input is
-    received, not here. A reference is its own origin, so it names none.
+    received, not here. A reference is its own origin, so it names none. It
+    may name its `sensitivity` (ADR 0123); without one it is internal.
     """
 
     model_config = ConfigDict(
@@ -214,6 +224,7 @@ class ReferenceInput(BaseModel):
 
     uri: str
     media_type: str
+    sensitivity: Sensitivity | None = None
 
     @field_validator("uri")
     @classmethod
@@ -251,6 +262,20 @@ class ReferenceInput(BaseModel):
         """Return the URI's scheme in lowercase."""
 
         return urlsplit(self.uri).scheme.lower()
+
+    @model_serializer(mode="wrap")
+    def omit_absent_sensitivity(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, JsonValue]:
+        """Leave out a sensitivity the reference does not name, so it dumps as it always has."""
+
+        data = cast(dict[str, JsonValue], handler(self))
+
+        if self.sensitivity is None:
+            data.pop(SENSITIVITY_KEY, None)
+
+        return data
 
 
 def _require_one_kind(
@@ -323,16 +348,17 @@ def decode_input_source(
         raise InputSourceError(ORIGIN_ON_REFERENCE_MESSAGE)
 
     allowed = (
-        {INLINE_INPUT_KEY, MEDIA_TYPE_KEY, ORIGIN_KEY}
+        {INLINE_INPUT_KEY, MEDIA_TYPE_KEY, ORIGIN_KEY, SENSITIVITY_KEY}
         if inline
-        else {REFERENCE_INPUT_KEY, MEDIA_TYPE_KEY}
+        else {REFERENCE_INPUT_KEY, MEDIA_TYPE_KEY, SENSITIVITY_KEY}
     )
     extra = sorted(key for key in data if key not in allowed)
 
     if extra:
         raise InputSourceError(
-            "An input source holds only 'value', 'media_type' and 'origin', or 'uri' and "
-            f"'media_type'; got {', '.join(repr(key) for key in extra)}."
+            "An input source holds only 'value', 'media_type', 'origin' and 'sensitivity', "
+            "or 'uri', 'media_type' and 'sensitivity'; "
+            f"got {', '.join(repr(key) for key in extra)}."
         )
 
     model = InlineInput if inline else ReferenceInput
@@ -356,6 +382,11 @@ def _validation_message(
         if detail["type"] == "missing":
             field = ".".join(str(part) for part in detail["loc"])
             message = f"Input reference is missing {field!r}."
+        elif tuple(detail["loc"]) == (SENSITIVITY_KEY,):
+            message = (
+                "An input's sensitivity is 'public', 'internal' or 'restricted'; "
+                f"got {detail.get('input')!r}."
+            )
 
         messages.append(message)
 
@@ -370,6 +401,7 @@ __all__ = [
     "ORIGIN_KEY",
     "ORIGIN_ON_REFERENCE_MESSAGE",
     "REFERENCE_INPUT_KEY",
+    "SENSITIVITY_KEY",
     "STANDARD_BASE64",
     "InlineInput",
     "InputOrigin",

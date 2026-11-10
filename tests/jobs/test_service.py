@@ -45,6 +45,7 @@ from azathoth.providers import (
     Prompt,
 )
 from azathoth.runtime import AzathothRuntime
+from azathoth.sensitivity import Sensitivity
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     IdempotencyKeyInUseError,
@@ -154,6 +155,7 @@ class RecordingInvoker:
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         self.calls.append(
@@ -162,6 +164,7 @@ class RecordingInvoker:
                 "payload": payload,
                 "caller_metadata": dict(caller_metadata),
                 "input_provenance": input_provenance,
+                "sensitivity": sensitivity,
                 "idempotency": idempotency,
             }
         )
@@ -217,6 +220,7 @@ class RacingInvoker:
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         self.calls += 1
@@ -320,6 +324,7 @@ def test_a_first_run_passes_the_request_to_the_invoker() -> None:
             "payload": {"change": "rename"},
             "caller_metadata": {"ticket": "OPS-12"},
             "input_provenance": None,
+            "sensitivity": None,
             "idempotency": InvocationIdempotency(
                 key=KEY,
                 request_digest=digest_of(request_data()),
@@ -515,6 +520,14 @@ def test_an_inline_input_is_passed_as_its_value_without_provenance() -> None:
     assert call["input_provenance"] is None
 
 
+def test_a_labelled_input_passes_its_label_to_the_invoker() -> None:
+    harness = Harness()
+
+    harness.run(request_data(input={"value": "Rename it.", "sensitivity": "restricted"}))
+
+    assert harness.invoker.calls[0]["sensitivity"] is Sensitivity.RESTRICTED
+
+
 def test_a_file_input_is_resolved_stored_and_passed_with_provenance(
     tmp_path: Path,
 ) -> None:
@@ -708,6 +721,7 @@ def test_a_key_in_use_that_cannot_be_found_is_not_hidden() -> None:
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         raise IdempotencyKeyInUseError(idempotency.key)

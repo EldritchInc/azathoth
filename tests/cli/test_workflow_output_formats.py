@@ -21,6 +21,7 @@ from azathoth.cli.output_format import (
 )
 from azathoth.providers import LanguageModelRegistry
 from azathoth.runtime import AzathothRuntime
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     SQLiteProductionInvocationRepository,
     SQLiteWorkflowProductionStateRepository,
@@ -564,6 +565,7 @@ def test_cli_passes_requested_output_format_to_run_and_invoke(
         *,
         workflow_input: WorkflowRunInput | None,
         output: WorkflowOutputFormat,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         requested.append(("run", output))
 
@@ -575,6 +577,7 @@ def test_cli_passes_requested_output_format_to_run_and_invoke(
         payload: JsonValue,
         output: WorkflowOutputFormat,
         idempotency_key: str | None = None,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         assert idempotency_key is None
 

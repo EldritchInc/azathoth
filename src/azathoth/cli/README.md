@@ -71,7 +71,8 @@ azathoth
 │   │   └── --revision <NUMBER>
 │   ├── run <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>
-│   │   └── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   └── --sensitivity <LABEL>   (only with an input)
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
@@ -82,6 +83,7 @@ azathoth
 │   ├── invoke <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
 │   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --sensitivity <LABEL>
 │   │   └── --idempotency-key <KEY>
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
@@ -1148,7 +1150,8 @@ Without `--input`, the run starts with an empty context, so a step bound to
 the workflow input fails to resolve it.
 
 `--input-file` supplies the input from a file instead; see
-[Input Files](#input-files).
+[Input Files](#input-files). `--sensitivity` labels either; see
+[Input Sensitivity](#input-sensitivity).
 
 Only a run that received input can later become a benchmark case; see
 [Add a Case From a Run](#add-a-case-from-a-run).
@@ -4498,6 +4501,35 @@ Cannot tell the media type of notes.log from its extension; give it with --media
 The CLI accepts only local files. Other schemes are for other entry points:
 the queue worker accepts `s3://` from the locations it allows, and never
 `file://` (see [Worker Inputs](#worker-inputs)).
+
+# Input Sensitivity
+
+`workflow run` and `workflow invoke` label their input with
+`--sensitivity public|internal|restricted` (ADR 0123):
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input-file claim.pdf --sensitivity restricted
+azathoth workflow invoke <WORKFLOW_ID> --input '{"claim":412}' --sensitivity restricted
+```
+
+Without it the input is internal. A labelled run records its label in a
+`workflow.input.sensitivity` event after its input's events, and every run
+it starts as a child inherits it: a child is never less sensitive than its
+parent. Restricted input reaches only models declared to neither retain nor
+train on data.
+
+The label is part of an invocation's request, so the same input under the
+same `--idempotency-key` with another label, or with none, is an
+`idempotency_conflict`.
+
+A label labels input, so `workflow run` given one without `--input` or
+`--input-file` starts nothing, prints, and exits with status 1:
+
+```text
+--sensitivity labels the run's input; give --input or --input-file too.
+```
+
+Any other label is a usage error.
 
 # End-to-End From Checked-In Examples
 

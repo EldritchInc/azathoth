@@ -34,6 +34,7 @@ from azathoth.inputs.source import (
 )
 from azathoth.inputs.store import ContentStore
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
+from azathoth.sensitivity import Sensitivity
 
 DEFAULT_MAX_INPUT_BYTES = 10 * 1024 * 1024
 
@@ -249,10 +250,11 @@ class InputProvenance(BaseModel):
 
 
 class ResolvedInput(BaseModel):
-    """The value a workflow receives, and its provenance when it has one.
+    """The value a workflow receives, its provenance when it has one, and its label.
 
     A reference always has provenance. An inline input has it when it is
-    binary or names an origin (ADR 0112).
+    binary or names an origin (ADR 0112). The sensitivity is the label its
+    source named, or None for an unlabelled, internal input (ADR 0123).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -260,6 +262,7 @@ class ResolvedInput(BaseModel):
     value: JsonValue
     media_type: str = Field(min_length=1)
     provenance: InputProvenance | None = None
+    sensitivity: Sensitivity | None = None
 
 
 def resolve_input(
@@ -348,6 +351,7 @@ def resolve_input(
     return ResolvedInput(
         value=value,
         media_type=source.media_type,
+        sensitivity=source.sensitivity,
         provenance=InputProvenance(
             uri=source.uri,
             origin=origin,
@@ -389,6 +393,7 @@ def resolve_inline_input(
         return ResolvedInput(
             value=source.value,
             media_type=source.media_type,
+            sensitivity=source.sensitivity,
         )
 
     if binary:
@@ -411,6 +416,7 @@ def resolve_inline_input(
     return ResolvedInput(
         value=value,
         media_type=source.media_type,
+        sensitivity=source.sensitivity,
         provenance=InputProvenance(
             inline=True,
             origin=source.origin,

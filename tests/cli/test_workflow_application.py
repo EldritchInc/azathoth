@@ -20,6 +20,7 @@ from azathoth.providers import (
     ModelRequirements,
     Prompt,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
@@ -326,6 +327,7 @@ def test_cli_workflow_run_dispatches_command(
         *,
         workflow_input: WorkflowRunInput | None,
         output: WorkflowOutputFormat,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         calls.append(
             (

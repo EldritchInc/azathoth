@@ -12,6 +12,7 @@ from azathoth.inputs import (
     ResolvedInput,
 )
 from azathoth.runtime import RuntimeEnvironment
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     WorkflowRun,
     WorkflowRunner,
@@ -27,11 +28,13 @@ class WorkflowRunInput:
 
     Wrapping the payload keeps a supplied JSON null distinct from no input at
     all: a run given null still receives a workflow input event. An input
-    resolved from a reference keeps its provenance (ADR 0096).
+    resolved from a reference keeps its provenance (ADR 0096), and a
+    labelled input its label (ADR 0123).
     """
 
     payload: JsonValue
     provenance: InputProvenance | None = None
+    sensitivity: Sensitivity | None = None
 
     @classmethod
     def from_resolved(
@@ -43,6 +46,7 @@ class WorkflowRunInput:
         return cls(
             payload=resolved.value,
             provenance=resolved.provenance,
+            sensitivity=resolved.sensitivity,
         )
 
 
@@ -55,7 +59,8 @@ def configured_run_context(
 
     A run given input starts with one canonical workflow input event, exactly
     as benchmark cases and production invocations do, followed by its
-    provenance when it was resolved from a reference. A run given no input
+    provenance when it was resolved from a reference and its label when it
+    was given one (ADR 0123). A run given no input
     starts with an empty context. A run started by a step of another run
     records its lineage last (ADR 0104).
     """
@@ -74,6 +79,7 @@ def configured_run_context(
                     value=workflow_input.payload,
                     media_type=provenance.media_type if provenance is not None else JSON_MEDIA_TYPE,
                     provenance=provenance,
+                    sensitivity=workflow_input.sensitivity,
                 ),
                 producer=CONFIGURED_RUN_PRODUCER,
             ),

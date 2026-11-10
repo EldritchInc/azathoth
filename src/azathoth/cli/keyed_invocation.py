@@ -35,6 +35,7 @@ from azathoth.jobs import (
     runtime_job_invoker,
     runtime_job_resumer,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job_invoker
 from azathoth.telemetry.runs import tracing_runner
@@ -45,18 +46,24 @@ def keyed_request(
     workflow_id: UUID,
     payload: JsonValue | WorkflowInputFile,
     idempotency_key: str,
+    sensitivity: Sensitivity | None = None,
 ) -> InvokeJobRequest:
     """Return the job request a keyed `workflow invoke` stands for.
+
+    A label given to the input is part of the request, as a job envelope's
+    input source names it (ADR 0123).
 
     Raises:
         InputSourceError: An input file's media type cannot be decided.
     """
 
-    source = (
+    unlabelled = (
         input_file_source(payload)
         if isinstance(payload, WorkflowInputFile)
         else InlineInput(value=payload)
     )
+
+    source = unlabelled.model_copy(update={"sensitivity": sensitivity})
 
     return InvokeJobRequest(
         kind="invoke",
@@ -95,6 +102,7 @@ def invoke_with_key(
     telemetry: Telemetry,
     lineage: WorkflowLineage | None,
     configuration: CliRuntimeConfiguration,
+    sensitivity: Sensitivity | None = None,
 ) -> int:
     """Invoke one production workflow under a key, and report it as `workflow invoke` does.
 
@@ -109,6 +117,7 @@ def invoke_with_key(
             workflow_id=workflow_id,
             payload=payload,
             idempotency_key=idempotency_key,
+            sensitivity=sensitivity,
         )
     except InputSourceError as exc:
         print(str(exc), file=sys.stderr)

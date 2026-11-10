@@ -15,6 +15,7 @@ from azathoth.cli.parsing.common import (
     json_value,
     media_type,
     positive_integer,
+    sensitivity,
 )
 
 WORKFLOW_COMMAND = "workflow"
@@ -49,6 +50,7 @@ WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE = "workflow_invocation_limit"
 WORKFLOW_OUTPUT_ATTRIBUTE = "workflow_output"
 
 WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE = "workflow_idempotency_key"
+WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE = "workflow_input_sensitivity"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE = "workflow_specification_revision"
@@ -416,6 +418,18 @@ def _add_input_file_arguments(
         help=(
             "Media type of --input-file: application/json, a text/* type, application/pdf, "
             "image/jpeg, image/png or image/webp."
+        ),
+    )
+
+    parser.add_argument(
+        "--sensitivity",
+        dest=WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
+        type=sensitivity,
+        default=None,
+        metavar="LABEL",
+        help=(
+            "How sensitive the input is: public, internal (the default) or restricted. "
+            "Restricted input reaches only models declared to neither retain nor train on data."
         ),
     )
 

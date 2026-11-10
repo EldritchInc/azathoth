@@ -29,6 +29,12 @@ binary media type requires standard, padded base64 with no whitespace. Any
 inline input may name its `origin`, an `InputOrigin` (see
 [Binary Content](#binary-content)).
 
+Either kind may name its `sensitivity`: `public`, `internal` or `restricted`
+(ADR 0123). A source that names none is internal, and dumps exactly as it did
+before labels existed, so its digest is unchanged. The label belongs to the
+input, never to the content: the same bytes may be restricted in one run and
+public in another, and the content store keeps them once.
+
 `ReferenceInput` names its content by URI, and must state its media type.
 The URI needs a scheme; a Windows drive letter is not one. Which schemes may
 be resolved is decided by the entry point that receives the input, not by
@@ -36,8 +42,15 @@ the source.
 
 The shape is closed. `decode_input_source(data)` reads one source from JSON
 and raises `InputSourceError` when the data holds both or neither of `value`
-and `uri`, a `uri` with an `origin`, or any key other than `media_type` and,
-beside `value`, `origin`. `WorkflowInputSource` is the
+and `uri`, a `uri` with an `origin`, or any key other than `media_type`,
+`sensitivity` and, beside `value`, `origin`:
+
+```text
+An input source holds only 'value', 'media_type', 'origin' and 'sensitivity', or 'uri', 'media_type' and 'sensitivity'; got 'size'.
+An input's sensitivity is 'public', 'internal' or 'restricted'; got 'secret'.
+```
+
+`WorkflowInputSource` is the
 same union as a pydantic type, so a model can embed a source and parse it by
 its key.
 
@@ -238,7 +251,11 @@ turns a resolved input into a run's initial events: the canonical
 `workflow.input.received` event with the value, followed, for an input that
 has provenance, by a `workflow.input.resolved` event holding it. A reference
 always has provenance; an inline input has it when it is binary or names an
-origin (ADR 0112).
+origin (ADR 0112). `resolve_input` keeps the source's label on the
+`ResolvedInput`, and a labelled input's events end with a
+`workflow.input.sensitivity` event holding it (see the context package's
+[Sensitivity](../context/README.md#sensitivity)). An unlabelled input records
+none.
 
 ## Content Store
 

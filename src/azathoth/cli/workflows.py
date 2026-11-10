@@ -2,6 +2,8 @@
 
 import asyncio
 import sys
+from dataclasses import replace
+from typing import Final
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -66,6 +68,7 @@ from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import tracing_runner
@@ -76,12 +79,18 @@ from azathoth.workflows import (
     WorkflowScoringPolicy,
 )
 
+SENSITIVITY_WITHOUT_INPUT_MESSAGE: Final = (
+    "--sensitivity labels the run's input; give --input or --input-file too."
+)
+"""What a run given a label but no input is refused with (ADR 0123)."""
+
 
 def run_workflow(
     workflow_id: UUID,
     *,
     workflow_input: WorkflowRunInput | WorkflowInputFile | None = None,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
+    sensitivity: Sensitivity | None = None,
 ) -> int:
     """Execute one configured workflow and persist its run as evidence.
 
@@ -107,6 +116,9 @@ def run_workflow(
     A run started by a step of another run records the lineage it was given
     in `AZATHOTH_LINEAGE` (ADR 0104). Lineage that is not valid, or a run
     nested too deeply, raises before anything is resolved or recorded.
+
+    The input is labelled with `sensitivity` when it is given (ADR 0123);
+    a run given a label needs input.
     """
 
     return run_traced(
@@ -115,6 +127,7 @@ def run_workflow(
             workflow_input=workflow_input,
             output=output,
             telemetry=telemetry,
+            sensitivity=sensitivity,
         )
     )
 
@@ -125,10 +138,16 @@ def _run_workflow(
     workflow_input: WorkflowRunInput | WorkflowInputFile | None,
     output: WorkflowOutputFormat,
     telemetry: Telemetry,
+    sensitivity: Sensitivity | None = None,
 ) -> int:
     """Execute one configured workflow, tracing it with the given telemetry."""
 
     lineage = parent_lineage(workflow_id)
+
+    if sensitivity is not None and workflow_input is None:
+        print(SENSITIVITY_WITHOUT_INPUT_MESSAGE, file=sys.stderr)
+
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -144,6 +163,9 @@ def _run_workflow(
             return 1
     else:
         run_input = workflow_input
+
+    if run_input is not None and sensitivity is not None:
+        run_input = replace(run_input, sensitivity=sensitivity)
 
     runtime = load_runtime(configuration)
 
@@ -277,6 +299,7 @@ def invoke_workflow(
     payload: JsonValue | WorkflowInputFile,
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
     idempotency_key: str | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> int:
     """Invoke one active production workflow.
 
@@ -299,6 +322,9 @@ def invoke_workflow(
     With an idempotency key, the invocation runs as `job run` runs a request
     under that key (ADR 0097): the same request again replays its result, or
     resumes it once nothing runs it (ADR 0105).
+
+    The input is labelled with `sensitivity` when it is given, and the label
+    is part of a keyed request (ADR 0123).
     """
 
     return run_traced(
@@ -308,6 +334,7 @@ def invoke_workflow(
             output=output,
             telemetry=telemetry,
             idempotency_key=idempotency_key,
+            sensitivity=sensitivity,
         )
     )
 
@@ -319,6 +346,7 @@ def _invoke_workflow(
     output: WorkflowOutputFormat,
     telemetry: Telemetry,
     idempotency_key: str | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> int:
     """Invoke one active production workflow, tracing it with the given telemetry."""
 
@@ -335,6 +363,7 @@ def _invoke_workflow(
             telemetry=telemetry,
             lineage=lineage,
             configuration=configuration,
+            sensitivity=sensitivity,
         )
 
     invocation_input: JsonValue
@@ -372,6 +401,7 @@ def _invoke_workflow(
                 invocation_run_repository=repositories(configuration).invocation_runs,
                 input_provenance=input_provenance,
                 lineage=lineage,
+                sensitivity=sensitivity,
                 runner=tracing_runner(
                     telemetry,
                     observer=step_observer(
@@ -484,6 +514,7 @@ def optimize_workflow(
 
 
 __all__ = [
+    "SENSITIVITY_WITHOUT_INPUT_MESSAGE",
     "export_workflow",
     "import_workflow",
     "invoke_workflow",
