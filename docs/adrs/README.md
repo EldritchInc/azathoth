@@ -144,3 +144,4 @@ requests that made it:
 - [ADR 0119: Call MCP-Served Tools](0119-call-mcp-served-tools.md)
 - [ADR 0120: Public Service API](0120-public-service-api.md)
 - [ADR 0121: Service API, Second Round](0121-service-api-second-round.md)
+- [ADR 0122: Lineage and Digests](0122-lineage-and-digests.md)

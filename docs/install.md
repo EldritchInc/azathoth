@@ -578,6 +578,39 @@ Remove-Item Env:AZATHOTH_OTEL
 The [telemetry reference](../src/azathoth/telemetry/README.md) lists every
 span and attribute.
 
+## Optional: Naming Who Imports
+
+Every workflow, tool and benchmark you import, and every model you
+authorize, records who did it
+([ADR 0122](adrs/0122-lineage-and-digests.md)). By default that is your
+operating system's username. To record your name and email instead, set
+`AZATHOTH_AUTHOR`:
+
+```bash
+export AZATHOTH_AUTHOR="Ada Lovelace <ada@example.com>"
+```
+
+```powershell
+$env:AZATHOTH_AUTHOR = "Ada Lovelace <ada@example.com>"
+```
+
+A name alone, such as `Ada Lovelace`, is fine too. `azathoth workflow show`
+then names you on each revision you import:
+
+```text
+Author: Ada Lovelace <ada@example.com>
+```
+
+An empty `AZATHOTH_AUTHOR` counts as unset. One that is neither form stops
+the import, so nothing is recorded under a name you didn't mean:
+
+```text
+AZATHOTH_AUTHOR is 'Ada <ada>'; set it to "Name <email>" or "Name".
+```
+
+The standard tools that `azathoth init` installs are recorded as Azathoth's,
+whoever runs it.
+
 ## Each New Terminal
 
 A venv and an environment variable last only as long as the terminal window.
@@ -599,6 +632,8 @@ On Windows, also apply the UTF-8 settings, unless your PowerShell profile
 already does (see
 [Windows: UTF-8 output](#windows-utf-8-output)).
 
+If you name who imports, set `AZATHOTH_AUTHOR` again too (see
+[Optional: Naming Who Imports](#optional-naming-who-imports)).
 If you trace, set `AZATHOTH_OTEL` and the `OTEL_*` variables again too (see
 [Optional: Tracing With OpenTelemetry](#optional-tracing-with-opentelemetry)).
 If you use Bedrock, set `AZATHOTH_BEDROCK`, `AWS_REGION` and

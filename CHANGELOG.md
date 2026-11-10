@@ -41,6 +41,34 @@ release dates are on the
   given, a file among them, reporting its events as a run does and keeping
   no run
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- Every workflow, tool and benchmark revision records its lineage: a
+  revision digest that covers its content and every revision before it, the
+  revision it was built on, and who imported it. Every portfolio entry
+  records its digest, who authorized it and when. The database schema is now
+  version 3; run `azathoth init` once to upgrade a PostgreSQL database, which
+  records the lineage it already holds. An SQLite file is upgraded when it is
+  opened
+  ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
+- Importing a document identical to the latest revision appends nothing and
+  says so: `Workflow <WORKFLOW_ID> is unchanged at revision <NUMBER>.`, and
+  likewise for tools and benchmarks. Before, it appended a duplicate
+  revision. Importing an earlier revision's document still appends a revert
+  ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
+- Who imports is `AZATHOTH_AUTHOR`, as `Name <email>` or `Name`, or else the
+  operating system's username; a malformed `AZATHOTH_AUTHOR` stops the
+  import, authorizing a model, and adding a benchmark case. The standard
+  tools are recorded as Azathoth's
+  ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
+- `workflow show` and `benchmark show` name each revision's digest, parent
+  and author, and history lines end with who imported each revision when
+  that is known
+  ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
+- `azathoth.api` reports each revision's revision digest, parent and author,
+  and each portfolio entry's digest, author and time. Imports take
+  `based_on`, building on an earlier revision to fork, and return
+  `WorkflowImport`, `ToolImport` and `BenchmarkImport`, which say whether a
+  revision was created; `api.open` takes the `author` to record
+  ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
 
 ## 1.3.0
 

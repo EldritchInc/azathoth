@@ -7,6 +7,7 @@ import pytest
 
 from azathoth.revisions import (
     AUTHOR_VARIABLE,
+    Author,
     AuthorError,
     BaseRevisionError,
     Lineage,
@@ -21,6 +22,10 @@ REVISIONS_README = PROJECT_ROOT / "src" / "azathoth" / "revisions" / "README.md"
 
 CLI_README = PROJECT_ROOT / "src" / "azathoth" / "cli" / "README.md"
 
+INSTALL_GUIDE = PROJECT_ROOT / "docs" / "install.md"
+
+LINEAGE_ADR = PROJECT_ROOT / "docs" / "adrs" / "0122-lineage-and-digests.md"
+
 
 def no_username() -> str:
     raise OSError("No username.")
@@ -33,7 +38,7 @@ def malformed_author_message() -> str:
     return str(caught.value)
 
 
-@pytest.mark.parametrize("guide", (REVISIONS_README, CLI_README))
+@pytest.mark.parametrize("guide", (REVISIONS_README, CLI_README, LINEAGE_ADR))
 def test_a_malformed_author_variable_is_quoted_exactly(
     guide: Path,
 ) -> None:
@@ -58,4 +63,18 @@ def test_an_unknown_base_revision_is_quoted_exactly() -> None:
 
     quoted = str(caught.value).replace(str(lineage.id), "<WORKFLOW_ID>")
 
-    assert f"\n{quoted}\n" in REVISIONS_README.read_text(encoding="utf-8")
+    for guide in (REVISIONS_README, LINEAGE_ADR):
+        assert f"\n{quoted}\n" in guide.read_text(encoding="utf-8"), guide.name
+
+
+def test_the_install_guide_quotes_the_author_it_sets_and_the_refusal_it_shows() -> None:
+    text = INSTALL_GUIDE.read_text(encoding="utf-8")
+
+    assert 'export AZATHOTH_AUTHOR="Ada Lovelace <ada@example.com>"\n' in text
+    assert '$env:AZATHOTH_AUTHOR = "Ada Lovelace <ada@example.com>"\n' in text
+    assert f"\nAuthor: {Author.parse('Ada Lovelace <ada@example.com>')}\n" in text
+
+    with pytest.raises(AuthorError) as caught:
+        resolve_author({AUTHOR_VARIABLE: "Ada <ada>"})
+
+    assert f"\n{caught.value}\n" in text
