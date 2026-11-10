@@ -65,6 +65,7 @@ from azathoth.cli.models import (
     deauthorize_model,
     list_models,
     list_portfolio_models,
+    model_policy,
     show_model,
 )
 from azathoth.cli.optimization import optimize_configured_workflow
@@ -180,6 +181,7 @@ __all__ = [
     "list_judges",
     "list_models",
     "list_portfolio_models",
+    "model_policy",
     "list_tool_history",
     "list_tool_implementations",
     "list_tool_test_cases",

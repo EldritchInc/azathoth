@@ -12,6 +12,7 @@ from azathoth.cli import (
     build_parser,
     main,
 )
+from azathoth.sensitivity import UNKNOWN_DATA_POLICY, DataPolicy
 
 FIRST_IDENTIFIER = "openrouter/example/model"
 
@@ -264,11 +265,15 @@ def test_cli_dispatches_model_authorize(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     identifiers: list[str] = []
+    policies: list[DataPolicy] = []
 
     def fake_authorize_model(
         identifier: str,
+        *,
+        data_policy: DataPolicy,
     ) -> int:
         identifiers.append(identifier)
+        policies.append(data_policy)
 
         return 31
 
@@ -290,6 +295,7 @@ def test_cli_dispatches_model_authorize(
     assert identifiers == [
         FIRST_IDENTIFIER,
     ]
+    assert policies == [UNKNOWN_DATA_POLICY]
 
 
 def test_cli_model_authorize_requires_identifier(

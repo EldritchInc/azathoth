@@ -42,7 +42,9 @@ A `DataPolicy` says whether a model's provider retains the data it is sent,
 `PolicyAnswer`: `yes`, `no` or `unknown`. Whoever authorizes the model
 declares it; Azathoth never assumes a provider's terms, so both are unknown
 until declared (`UNKNOWN_DATA_POLICY`). A policy that answers `no` to both is
-private (`PRIVATE_DATA_POLICY`).
+private (`PRIVATE_DATA_POLICY`). A model's policy is kept on its portfolio
+entry, declared with `azathoth model authorize` or `azathoth model policy`
+(see the CLI's "Declare a Model's Data Policy").
 
 `may_receive(policy, label)` decides whether a model may be sent data: any
 model may receive public and internal data, and only a private one may

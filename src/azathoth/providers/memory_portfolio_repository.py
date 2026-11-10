@@ -10,6 +10,7 @@ from azathoth.providers.portfolio_repository import (
     ModelPortfolioRepository,
 )
 from azathoth.revisions import Author, content_digest
+from azathoth.sensitivity import DataPolicy
 
 
 class InMemoryModelPortfolioRepository:
@@ -84,6 +85,28 @@ class InMemoryModelPortfolioRepository:
         """Return all portfolio entries in insertion order."""
 
         return tuple(self._entries.values())
+
+    def set_data_policy(
+        self,
+        identifier: str,
+        policy: DataPolicy,
+    ) -> ModelPortfolioEntry:
+        """Declare what one entry's provider does with data, keeping its place and provenance.
+
+        Raises:
+            ValueError: The entry does not exist.
+        """
+
+        entry = self._entries.get(identifier)
+
+        if entry is None:
+            raise ValueError(f"Model portfolio entry {identifier!r} does not exist.")
+
+        declared = entry.model_copy(update={"data_policy": policy})
+
+        self._entries[identifier] = declared
+
+        return declared
 
 
 def require_model_portfolio_repository(

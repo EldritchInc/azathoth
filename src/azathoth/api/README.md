@@ -115,12 +115,27 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | `models.get(identifier)` | One of them. | Yes |
 | `models.matching(requirements)` | The portfolio's models that meet a step's requirements, in the order a run tries them. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
-| `portfolio.add(identifier)` | Authorizes a model a provider serves now. | Yes |
+| `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
+| `portfolio.set_data_policy(identifier, data_policy)` | Declares what its provider does with data, as `azathoth model policy` does. | No |
 | `portfolio.remove(identifier, force=False)` | Removes a model, as `azathoth model deauthorize` does. | No |
 
 Listing models records what each provider reports, as `azathoth model list`
 does. A model's `authorized` says whether it is in the portfolio. Whatever a
 provider does not publish, such as a context window or a price, is `None`.
+
+A `PortfolioEntry` holds its `data_policy`, a `DataPolicy` of two
+`PolicyAnswer`s, `retains_data` and `trains_on_data`, each `yes`, `no` or
+`unknown` (ADR 0123). Both are unknown until declared, by `add` or by
+`set_data_policy`, which replaces the policy and raises `NotFoundError` for a
+model not authorized. `receives_restricted` says whether the model may be
+sent restricted input: only when both answers are `no`.
+
+```python
+instance.portfolio.set_data_policy(
+    "openrouter/openai/gpt-4o-mini",
+    api.DataPolicy(retains_data=api.PolicyAnswer.NO, trains_on_data=api.PolicyAnswer.NO),
+)
+```
 
 `portfolio.remove` keeps a model that active production uses, raising
 `ModelInUseError`, whose `dependents` names each workflow and step; with

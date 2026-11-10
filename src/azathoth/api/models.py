@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
+from azathoth.sensitivity import DataPolicy
+
 ApiStability = Literal["provisional", "stable"]
 """Whether the API is still provisional, or covered by the 1.x promise."""
 
@@ -307,6 +309,20 @@ class PortfolioEntry(ApiModel):
 
     added_at: datetime | None = Field(
         description="When it was authorized, or None for entries added before 1.4.",
+    )
+
+    data_policy: DataPolicy = Field(
+        description=(
+            "What was declared its provider does with data it is sent; unknown until "
+            "declared (ADR 0123)."
+        ),
+    )
+
+    receives_restricted: bool = Field(
+        description=(
+            "Whether it may be sent restricted input: only when its provider is declared to "
+            "neither retain nor train on data."
+        ),
     )
 
     command: str = Field(

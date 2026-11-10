@@ -7,6 +7,7 @@ from azathoth.providers.portfolio import (
 )
 from azathoth.providers.portfolio_provenance import PortfolioProvenance
 from azathoth.revisions import Author
+from azathoth.sensitivity import DataPolicy
 
 
 class ModelPortfolioRepository(Protocol):
@@ -53,5 +54,21 @@ class ModelPortfolioRepository(Protocol):
         identifier: str,
     ) -> None:
         """Delete one authorized model entry and its provenance."""
+
+        ...
+
+    def set_data_policy(
+        self,
+        identifier: str,
+        policy: DataPolicy,
+    ) -> ModelPortfolioEntry:
+        """Declare what one entry's provider does with data, and return the entry (ADR 0123).
+
+        The entry keeps its place in the portfolio and its provenance, which
+        records who added it.
+
+        Raises:
+            ValueError: The entry does not exist.
+        """
 
         ...

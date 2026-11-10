@@ -58,6 +58,7 @@ from azathoth.cli.models import (
     deauthorize_model,
     list_models,
     list_portfolio_models,
+    model_policy,
     show_model,
 )
 from azathoth.cli.parsing import (
@@ -339,6 +340,7 @@ def _dispatch(
             deauthorize_model=deauthorize_model,
             list_models=list_models,
             list_portfolio_models=list_portfolio_models,
+            model_policy=model_policy,
             model_usage=model_usage,
             show_model=show_model,
         )

@@ -135,6 +135,11 @@ azathoth
 │   ├── list
 │   ├── show <MODEL_IDENTIFIER>
 │   ├── authorize <MODEL_IDENTIFIER>
+│   │   ├── --no-retention | --retains-data yes|no|unknown
+│   │   └── --no-training | --trains-on-data yes|no|unknown
+│   ├── policy <MODEL_IDENTIFIER>
+│   │   ├── --no-retention | --retains-data yes|no|unknown
+│   │   └── --no-training | --trains-on-data yes|no|unknown
 │   ├── deauthorize <MODEL_IDENTIFIER>
 │   │   └── --force
 │   ├── portfolio
@@ -3248,6 +3253,7 @@ azathoth model
 ├── list
 ├── show
 ├── authorize
+├── policy
 ├── deauthorize
 ├── portfolio
 └── usage
@@ -3322,6 +3328,49 @@ model exists in ModelPortfolio
 ```
 
 Authorization does not create provider availability.
+
+# Declare a Model's Data Policy
+
+Restricted input reaches only a model whose provider is declared to neither
+retain nor train on the data it is sent (ADR 0123). Azathoth never assumes a
+provider's terms: whoever authorizes the model declares them, and until
+then both answers are unknown, which counts as not allowed.
+
+Declare them when authorizing:
+
+```bash
+azathoth model authorize <MODEL_IDENTIFIER> --no-retention --no-training
+```
+
+or at any time after, with `model policy`:
+
+```bash
+azathoth model policy <MODEL_IDENTIFIER> --no-retention --no-training
+```
+
+```text
+Declared the data policy of model <MODEL_IDENTIFIER>.
+Retains Data: no
+Trains On Data: no
+Restricted Input: allowed
+```
+
+`--no-retention` is `--retains-data no`, and `--no-training` is
+`--trains-on-data no`; each also takes `yes` or `unknown`. An answer
+`model policy` is not given is kept, and given none it shows the policy and
+changes nothing. Giving one answer both ways is a usage error.
+
+A policy is the operator's declaration, not something Azathoth checks with
+the provider. It is kept on the model's portfolio entry, which keeps its
+place and the record of who authorized it.
+
+`model policy` reads and writes durable state only. It never loads the
+runtime and needs no provider credentials. A model not authorized is
+refused, and nothing is written:
+
+```text
+Model '<MODEL_IDENTIFIER>' is not authorized.
+```
 
 # Authorization Requires Current Availability
 

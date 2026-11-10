@@ -11,23 +11,30 @@ from azathoth.cli.parsing import (
     MODEL_FORCE_ATTRIBUTE,
     MODEL_IDENTIFIER_ATTRIBUTE,
     MODEL_LIST_ACTION,
+    MODEL_POLICY_ACTION,
     MODEL_PORTFOLIO_ACTION,
+    MODEL_RETAINS_DATA_ATTRIBUTE,
     MODEL_SHOW_ACTION,
+    MODEL_TRAINS_ON_DATA_ATTRIBUTE,
     MODEL_USAGE_ACTION,
 )
+from azathoth.sensitivity import DataPolicy, PolicyAnswer
 
+ModelAuthorizeHandler = Callable[..., int]
 ModelDeauthorizeHandler = Callable[..., int]
 ModelIdentifierHandler = Callable[[str], int]
 ModelListHandler = Callable[[], int]
+ModelPolicyHandler = Callable[..., int]
 
 
 def dispatch_model_command(
     arguments: Namespace,
     *,
-    authorize_model: ModelIdentifierHandler,
+    authorize_model: ModelAuthorizeHandler,
     deauthorize_model: ModelDeauthorizeHandler,
     list_models: ModelListHandler,
     list_portfolio_models: ModelListHandler,
+    model_policy: ModelPolicyHandler,
     model_usage: ModelIdentifierHandler,
     show_model: ModelIdentifierHandler,
 ) -> int | None:
@@ -51,7 +58,24 @@ def dispatch_model_command(
             ),
         )
 
-        return authorize_model(model_identifier)
+        return authorize_model(
+            model_identifier,
+            data_policy=DataPolicy(
+                retains_data=(
+                    _answer(arguments, MODEL_RETAINS_DATA_ATTRIBUTE) or PolicyAnswer.UNKNOWN
+                ),
+                trains_on_data=(
+                    _answer(arguments, MODEL_TRAINS_ON_DATA_ATTRIBUTE) or PolicyAnswer.UNKNOWN
+                ),
+            ),
+        )
+
+    if action == MODEL_POLICY_ACTION:
+        return model_policy(
+            cast(str, getattr(arguments, MODEL_IDENTIFIER_ATTRIBUTE)),
+            retains_data=_answer(arguments, MODEL_RETAINS_DATA_ATTRIBUTE),
+            trains_on_data=_answer(arguments, MODEL_TRAINS_ON_DATA_ATTRIBUTE),
+        )
 
     if action == MODEL_DEAUTHORIZE_ACTION:
         model_identifier = cast(
@@ -103,3 +127,14 @@ def dispatch_model_command(
         return model_usage(model_identifier)
 
     return None
+
+
+def _answer(
+    arguments: Namespace,
+    attribute: str,
+) -> PolicyAnswer | None:
+    """Return one data policy answer a model command was given, if any (ADR 0123)."""
+
+    value = cast(str | None, getattr(arguments, attribute, None))
+
+    return None if value is None else PolicyAnswer(value)

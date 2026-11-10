@@ -109,7 +109,7 @@ from azathoth.api.running import (
     EventCallback,
     Runs,
 )
-from azathoth.sensitivity import Sensitivity
+from azathoth.sensitivity import DataPolicy, PolicyAnswer, Sensitivity
 
 __all__ = [
     "API_STABILITY",
@@ -133,6 +133,7 @@ __all__ = [
     "BenchmarkSummary",
     "Benchmarks",
     "CancellationToken",
+    "DataPolicy",
     "ConflictError",
     "ContextChanged",
     "Document",
@@ -158,6 +159,7 @@ __all__ = [
     "Models",
     "NotFoundError",
     "Portfolio",
+    "PolicyAnswer",
     "PortfolioEntry",
     "PortfolioRemoval",
     "ProductionDependent",

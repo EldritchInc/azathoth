@@ -8,6 +8,7 @@ from azathoth.providers.portfolio import (
 )
 from azathoth.providers.portfolio_provenance import PortfolioProvenance
 from azathoth.revisions import Author, content_digest
+from azathoth.sensitivity import DataPolicy
 
 MODEL_PORTFOLIO_TABLES = (
     Table(
@@ -216,6 +217,43 @@ class SqlModelPortfolioRepository:
             )
 
         return tuple(self._deserialize_payload(row[0]) for row in rows)
+
+    def set_data_policy(
+        self,
+        identifier: str,
+        policy: DataPolicy,
+    ) -> ModelPortfolioEntry:
+        """Declare what one entry's provider does with data, keeping its place and provenance.
+
+        Raises:
+            ValueError: The entry does not exist.
+        """
+
+        with self._database.transaction() as session:
+            row = session.fetchone(
+                """
+                SELECT payload
+                FROM model_portfolio_entries
+                WHERE identifier = ?
+                """,
+                (identifier,),
+            )
+
+            if row is None:
+                raise ValueError(f"Model portfolio entry {identifier!r} does not exist.")
+
+            declared = _entry(row[0]).model_copy(update={"data_policy": policy})
+
+            session.execute(
+                """
+                UPDATE model_portfolio_entries
+                SET payload = ?
+                WHERE identifier = ?
+                """,
+                (declared.model_dump_json(), identifier),
+            )
+
+        return declared
 
     def provenance(
         self,

@@ -312,6 +312,13 @@ A model being available does not authorize Azathoth to choose it.
 
 A model being authorized does not guarantee that it is currently available.
 
+Each entry also holds its `data_policy`, the `DataPolicy` whoever authorized
+it declared: whether its provider retains the data it is sent, and whether
+it trains on it (ADR 0123). Both are unknown until declared, and an entry
+whose policy is unknown serializes as an entry did before policies, so its
+digest is unchanged. Only an entry declared to neither retain nor train on
+data may be sent restricted input.
+
 ## Portfolio Persistence
 
 `ModelPortfolioRepository` persists organizational model authorization.
@@ -323,6 +330,10 @@ Implementations include:
 
 `ModelPortfolioLoader` reconstructs the immutable ordered portfolio from
 repository state.
+
+`set_data_policy(identifier, policy)` replaces one entry's declared policy
+and returns the entry. The entry keeps its place and its provenance, which
+records who added it; an entry not in the portfolio raises `ValueError`.
 
 Portfolio authorization is durable policy.
 
