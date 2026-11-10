@@ -18,6 +18,7 @@ from azathoth.runtime.exceptions import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
+from azathoth.strategies import Strategy
 from azathoth.tools import (
     ToolCatalog,
     ToolImplementationCatalog,
@@ -28,6 +29,8 @@ from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCatalog,
     WorkflowProductionState,
+    WorkflowStepSpecification,
+    generate_step_strategies,
     generate_workflow_candidate,
 )
 
@@ -204,6 +207,26 @@ class AzathothRuntime:
                     models=models,
                 ),
             )
+        )
+
+    def generate_step_strategies(
+        self,
+        step: WorkflowStepSpecification,
+    ) -> tuple[Strategy, ...]:
+        """Return the strategies one step could run as here, in the order they are tried.
+
+        Raises:
+            WorkflowGenerationError: A tool step's tool cannot be resolved,
+                or its implementation cannot be run.
+        """
+
+        return generate_step_strategies(
+            step,
+            self._models,
+            self._language_models,
+            portfolio=self._portfolio,
+            tool_resolver=self._tool_resolver,
+            tool_implementation_resolver=self._tool_implementation_resolver,
         )
 
     def generate_workflow_candidate(

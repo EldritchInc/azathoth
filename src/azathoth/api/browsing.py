@@ -9,11 +9,12 @@ callers.
 
 import json
 import shlex
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Final, TypeVar
 from uuid import UUID
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
+from pydantic_core import ErrorDetails
 
 from azathoth.api.errors import (
     InvalidArgumentError,
@@ -24,9 +25,11 @@ from azathoth.api.errors import (
 from azathoth.api.models import (
     BenchmarkDetail,
     BenchmarkSummary,
+    DocumentProblem,
     Revision,
     ToolDetail,
     ToolSummary,
+    WorkflowCheck,
     WorkflowDetail,
     WorkflowSummary,
 )
@@ -49,6 +52,7 @@ from azathoth.tools import (
 )
 from azathoth.workflows import (
     WorkflowDocumentError,
+    WorkflowSpecification,
     WorkflowSpecificationRevision,
     decode_workflow_document,
     earliest_identical_revision,
@@ -131,6 +135,185 @@ def _document(
     decoded: dict[str, JsonValue] = json.loads(encoded)
 
     return decoded
+
+
+Location = tuple[str | int, ...]
+"""Where in a document a value is: the keys and indexes leading to it."""
+
+
+def _parsed(
+    encoded: str,
+) -> JsonValue:
+    """Return a document's JSON values, or `None` when it is not JSON."""
+
+    try:
+        parsed: JsonValue = json.loads(encoded)
+    except ValueError:
+        return None
+
+    return parsed
+
+
+def _child(
+    node: JsonValue,
+    key: str | int,
+) -> tuple[bool, JsonValue]:
+    """Return whether a document's node holds a key, and the value it holds there."""
+
+    if isinstance(node, dict) and isinstance(key, str) and key in node:
+        return True, node[key]
+
+    if isinstance(node, list) and isinstance(key, int) and 0 <= key < len(node):
+        return True, node[key]
+
+    return False, None
+
+
+def _is_choice_label(
+    key: str | int,
+    *,
+    last: bool,
+) -> bool:
+    """Return whether a key a document does not hold names one choice of a union.
+
+    Pydantic labels each choice it tried by its model, or by its validator
+    and model; the document's own keys are lower case.
+    """
+
+    return isinstance(key, str) and (not last or key[:1].isupper() or "[" in key)
+
+
+def _split(
+    location: Sequence[str | int],
+    document: JsonValue,
+) -> tuple[Location, tuple[tuple[Location, str], ...]]:
+    """Return a location without its choice labels, and each choice it took, where.
+
+    Each choice is named by the error's location up to it, labels and all,
+    so that the same union within two different choices is two unions,
+    and by the label of the choice judged.
+    """
+
+    plain: list[str | int] = []
+    choices: list[tuple[Location, str]] = []
+    node: JsonValue = document
+
+    for index, key in enumerate(location):
+        held, value = _child(node, key)
+
+        if held:
+            plain.append(key)
+            node = value
+        elif isinstance(key, str) and _is_choice_label(key, last=index == len(location) - 1):
+            choices.append((tuple(location[:index]), key))
+        else:
+            plain.append(key)
+            node = None
+
+    return tuple(plain), tuple(choices)
+
+
+Split = tuple[Location, tuple[tuple[Location, str], ...], ErrorDetails]
+"""One validation error: where it is without labels, the choices it took, and the error."""
+
+
+def _nearest_choices(
+    errors: Sequence[Split],
+) -> list[Split]:
+    """Keep the errors of the choice each union most nearly matched.
+
+    The nearest choice lacks the fewest values the document does not have,
+    then has the fewest errors. Unions are decided from the innermost out,
+    so a choice is judged by the nearest of the choices within it. A tie
+    keeps the choice Pydantic tried first.
+    """
+
+    kept = list(errors)
+    unions = sorted(
+        {where for _, choices, _ in kept for where, _ in choices},
+        key=len,
+        reverse=True,
+    )
+
+    for where in unions:
+        scores: dict[str, tuple[int, int]] = {}
+
+        for _, choices, error in kept:
+            for at, label in choices:
+                if at == where:
+                    missing, count = scores.get(label, (0, 0))
+                    scores[label] = (missing + (error["type"] == "missing"), count + 1)
+
+        if not scores:
+            continue
+
+        nearest = min(scores, key=lambda label: scores[label])
+
+        kept = [
+            error
+            for error in kept
+            if all(label == nearest for at, label in error[1] if at == where)
+        ]
+
+    return kept
+
+
+def _follows_from_others(
+    location: Location,
+    error: ErrorDetails,
+    errors: Sequence[Split],
+) -> bool:
+    """Return whether an error only follows from errors within the value it is about.
+
+    A collection whose items were refused is too short once they are left
+    out, which says nothing the items' own problems do not.
+    """
+
+    return error["type"] == "too_short" and any(
+        len(other) > len(location) and other[: len(location)] == location for other, _, _ in errors
+    )
+
+
+def _step_id(
+    location: Location,
+    document: JsonValue,
+) -> UUID | None:
+    """Return the id of the step a location is in, when it is in a step whose id is valid."""
+
+    if len(location) < 2 or location[0] != "steps" or not isinstance(location[1], int):
+        return None
+
+    _, steps = _child(document, "steps")
+    _, step = _child(steps, location[1])
+    _, step_id = _child(step, "id")
+
+    if not isinstance(step_id, str):
+        return None
+
+    try:
+        return UUID(step_id)
+    except ValueError:
+        return None
+
+
+def _problems(
+    errors: Sequence[ErrorDetails],
+    document: JsonValue,
+) -> tuple[DocumentProblem, ...]:
+    """Return the problems a document's validation errors are, in order."""
+
+    split = [(*_split(error["loc"], document), error) for error in errors]
+    kept = _nearest_choices(split)
+
+    return tuple(
+        DocumentProblem(
+            message=str(error["msg"]).removeprefix("Value error, "),
+            location=location,
+            step_id=_step_id(location, document),
+        )
+        for location, _, error in kept
+        if not _follows_from_others(location, error, kept)
+    )
 
 
 class Workflows:
@@ -225,6 +408,49 @@ class Workflows:
             self._summary(selected, history, command=_workflow_command(selected))
             for selected in _newest_first(history, limit)
         )
+
+    def check(
+        self,
+        document: Document,
+    ) -> WorkflowCheck:
+        """Return whether importing a workflow document would accept it, and every reason not.
+
+        Nothing is saved and no provider is reached. Each problem says where
+        in the document it is, and names its step when it is in one. A step
+        is checked as the kind of step it most nearly is, so a prompt step
+        missing its model selection is not also told it lacks a tool. A rule
+        of the whole workflow, such as that a step depends only on steps in
+        it, is checked once every part is valid on its own.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+        """
+
+        self._repositories()
+
+        encoded = _encoded(document)
+
+        try:
+            specification = WorkflowSpecification.model_validate_json(encoded)
+        except ValidationError as exc:
+            return WorkflowCheck(
+                valid=False,
+                problems=_problems(exc.errors(), _parsed(encoded)),
+            )
+
+        if specification.result is None:
+            return WorkflowCheck(
+                valid=False,
+                problems=(
+                    DocumentProblem(
+                        message=RESULT_REQUIRED_MESSAGE,
+                        location=("result",),
+                        step_id=None,
+                    ),
+                ),
+            )
+
+        return WorkflowCheck(valid=True, problems=())
 
     def import_document(
         self,

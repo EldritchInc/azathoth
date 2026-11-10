@@ -27,6 +27,12 @@ release dates are on the
   document or an image, JSON or text, checked and kept as `--input-file`
   keeps one, and refused before anything runs when it is not its media type
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` checks a workflow document without saving it, naming every
+  problem with where it is and its step; says, step by step, whether a
+  document could run here now and on which models; and lists the
+  portfolio's models that meet a step's requirements, by the rules a run
+  uses
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
 
 ## 1.3.0
 

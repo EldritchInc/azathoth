@@ -6,7 +6,7 @@ from typing import NoReturn
 from uuid import UUID
 
 import pytest
-from pydantic import SecretStr
+from pydantic import JsonValue, SecretStr
 
 from azathoth import api
 from azathoth.cli.configuration import (
@@ -450,13 +450,98 @@ def test_forcing_without_dependents_is_an_ordinary_removal(
     assert removal.command == "azathoth model deauthorize provider-a/example/alpha"
 
 
+#
+# The models a step's needs match
+#
+
+
+def matching(
+    instance: api.Azathoth,
+    **requirements: JsonValue,
+) -> tuple[str, ...]:
+    """Return the identifiers of the portfolio's models that meet the requirements."""
+
+    return tuple(model.identifier for model in instance.models.matching(requirements))
+
+
+def test_the_portfolios_models_match_in_the_order_a_run_tries_them(
+    modelled: api.Azathoth,
+) -> None:
+    modelled.portfolio.add(BETA.identifier)
+    modelled.portfolio.add(ALPHA.identifier)
+
+    matched = modelled.models.matching({})
+
+    assert tuple(model.identifier for model in matched) == (BETA.identifier, ALPHA.identifier)
+    assert all(model.authorized for model in matched)
+    assert matched[1] == modelled.models.get(ALPHA.identifier)
+
+
+def test_a_served_model_outside_the_portfolio_never_matches(
+    modelled: api.Azathoth,
+) -> None:
+    modelled.portfolio.add(ALPHA.identifier)
+
+    assert matching(modelled) == (ALPHA.identifier,)
+
+
+def test_a_model_matches_only_what_it_meets(
+    modelled: api.Azathoth,
+) -> None:
+    modelled.portfolio.add(BETA.identifier)
+    modelled.portfolio.add(ALPHA.identifier)
+
+    assert matching(modelled, required_capabilities=["vision"]) == (ALPHA.identifier,)
+    assert matching(modelled, required_input_modalities=["image"]) == (ALPHA.identifier,)
+    assert matching(modelled, required_output_modalities=["image"]) == ()
+    assert matching(modelled, minimum_context_window_tokens=128_000) == (ALPHA.identifier,)
+    assert matching(modelled, minimum_context_window_tokens=128_001) == ()
+    assert matching(modelled, minimum_output_tokens=16_384) == (ALPHA.identifier,)
+    assert matching(modelled, maximum_input_usd_per_million_tokens=1.25) == (ALPHA.identifier,)
+    assert matching(modelled, maximum_input_usd_per_million_tokens=1.0) == ()
+    assert matching(modelled, maximum_output_usd_per_million_tokens=4.99) == ()
+    assert matching(modelled, require_known_pricing=True) == (ALPHA.identifier,)
+
+
+@pytest.mark.parametrize(
+    ("requirements", "message"),
+    [
+        ({"fast": True}, "Unknown model requirement 'fast'."),
+        (
+            {"required_capabilities": ["telepathy"]},
+            "Model requirement 'required_capabilities' is not valid: ",
+        ),
+        (
+            {"minimum_context_window_tokens": 0},
+            "Model requirement 'minimum_context_window_tokens' is not valid: "
+            "Input should be greater than 0",
+        ),
+    ],
+)
+def test_requirements_that_are_not_valid_are_refused(
+    modelled: api.Azathoth,
+    requirements: dict[str, JsonValue],
+    message: str,
+) -> None:
+    modelled.portfolio.add(ALPHA.identifier)
+
+    with pytest.raises(api.InvalidArgumentError) as raised:
+        modelled.models.matching(requirements)
+
+    assert str(raised.value).startswith(message)
+
+
 def test_a_closed_instance_refuses_models_and_the_portfolio(
     location: str,
 ) -> None:
     opened = api.open(location)
     opened.close()
 
-    for call in (opened.models.list, opened.portfolio.list):
+    for call in (
+        opened.models.list,
+        opened.portfolio.list,
+        lambda: opened.models.matching({}),
+    ):
         with pytest.raises(api.InstanceClosedError):
             call()
 

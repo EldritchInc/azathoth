@@ -113,6 +113,7 @@ from azathoth.workflows.feedback_repository import (
 )
 from azathoth.workflows.generation import (
     WorkflowGenerationError,
+    generate_step_strategies,
     generate_workflow_candidate,
 )
 from azathoth.workflows.input import (
@@ -699,6 +700,7 @@ __all__ = [
     "execute_production_invocation",
     "invoke_production_workflow",
     "generate_production_workflow_candidate",
+    "generate_step_strategies",
     "generate_workflow_candidate",
     "historical_model_usages",
     "historical_tool_usages",

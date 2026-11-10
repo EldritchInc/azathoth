@@ -16,6 +16,7 @@ token stops it.
 
 import asyncio
 import base64
+import json
 import threading
 from collections.abc import Callable, Coroutine, Mapping
 from typing import Any, Final, Literal, TypeVar
@@ -23,10 +24,11 @@ from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 
-from azathoth.api.browsing import RepositoriesAccess
+from azathoth.api.browsing import Document, RepositoriesAccess
 from azathoth.api.catalog import DirectoriesAccess, discover
 from azathoth.api.errors import (
     InvalidArgumentError,
+    InvalidDocumentError,
     NotFoundError,
     RunCancelledError,
     RunNotStartedError,
@@ -44,7 +46,10 @@ from azathoth.api.models import (
     RunResult,
     RunStarted,
     StepFinished,
+    StepKind,
+    StepReadiness,
     StepStarted,
+    WorkflowReadiness,
 )
 from azathoth.context import Context
 from azathoth.inputs import (
@@ -72,29 +77,41 @@ from azathoth.jobs import (
     runtime_job_resumer,
 )
 from azathoth.persistence.repositories import Repositories
+from azathoth.prompting import (
+    ContextPromptStrategy,
+    ContextPromptStrategySpec,
+    FixedModelSelection,
+    ModelSelection,
+    PromptStrategy,
+)
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
     ModelPortfolioLoader,
 )
 from azathoth.runtime import AzathothRuntime
+from azathoth.strategies import Strategy
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job_invoker
 from azathoth.telemetry.runs import tracing_runner
-from azathoth.tools import ToolCatalogLoader
+from azathoth.tools import ToolCatalogLoader, ToolStrategy
 from azathoth.workflows import (
     InvocationIdempotency,
     ProductionInvocationResult,
+    ToolStepSpecification,
     WorkflowCatalogLoader,
+    WorkflowDocumentError,
     WorkflowGenerationError,
     WorkflowResultError,
     WorkflowRun,
     WorkflowRunEvent,
     WorkflowSpecification,
     WorkflowStepFailure,
+    WorkflowStepSpecification,
     WorkflowStepStarted,
     WorkflowStepStatus,
     create_workflow_input_events,
+    decode_workflow_document,
     validate_idempotency_key,
     workflow_result,
 )
@@ -477,6 +494,43 @@ class Runs:
 
         return outcome.model_copy(update={"warnings": tuple(observer.warnings)})
 
+    def readiness(
+        self,
+        document: Document,
+    ) -> WorkflowReadiness:
+        """Return whether each step of a workflow document could run here now.
+
+        The providers are asked what they serve, as a run asks them, and
+        each step is resolved as a run resolves it: a prompt step to the
+        models it could run on, in the order a run tries them, and a tool
+        step to the implementation it would run. Nothing is saved, and the
+        document need not have been imported.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidDocumentError: It is not a workflow document.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        repositories = self._repositories()
+
+        try:
+            specification = decode_workflow_document(
+                document if isinstance(document, str) else json.dumps(dict(document))
+            )
+        except WorkflowDocumentError as exc:
+            raise InvalidDocumentError(str(exc)) from exc
+
+        runtime = self._runtime(repositories)
+        steps = tuple(_step_readiness(step, runtime) for step in specification.steps)
+
+        return WorkflowReadiness(
+            ready=all(step.ready for step in steps),
+            steps=steps,
+        )
+
     def _runtime(
         self,
         repositories: Repositories,
@@ -496,6 +550,111 @@ class Runs:
             tool_implementations=tool_loader.load_implementation_catalog(),
             judges=repositories.judges.rotation(),
         )
+
+
+NO_PORTFOLIO_MESSAGE: Final = "The portfolio authorizes no model."
+"""Why a step that chooses its model has none to choose from."""
+
+NO_MATCH_MESSAGE: Final = "No model in the portfolio meets what this step needs."
+"""Why a step that chooses its model finds none that meets its needs."""
+
+
+def _step_kind(
+    step: WorkflowStepSpecification,
+) -> StepKind:
+    """Return how a step runs."""
+
+    if isinstance(step.specification, ToolStepSpecification):
+        return "tool"
+
+    if isinstance(step.specification, ContextPromptStrategySpec):
+        return "context_prompt"
+
+    return "prompt"
+
+
+def _model_of(
+    strategy: Strategy,
+) -> str | None:
+    """Return the model a prompt strategy runs on, or `None` for any other strategy."""
+
+    if isinstance(strategy, PromptStrategy | ContextPromptStrategy):
+        binding = strategy.model_binding
+
+        return binding.identifier if binding is not None else None
+
+    return None
+
+
+def _no_model(
+    selection: ModelSelection,
+    runtime: AzathothRuntime,
+) -> str:
+    """Return why a prompt step choosing its model as `selection` says has none to run on."""
+
+    if isinstance(selection, FixedModelSelection):
+        if runtime.models.get(selection.identifier) is None:
+            return f"Model {selection.identifier!r} is not currently available."
+
+        return f"Model {selection.identifier!r} is served, but cannot be run here."
+
+    if not runtime.portfolio.entries:
+        return NO_PORTFOLIO_MESSAGE
+
+    return NO_MATCH_MESSAGE
+
+
+def _step_readiness(
+    step: WorkflowStepSpecification,
+    runtime: AzathothRuntime,
+) -> StepReadiness:
+    """Return whether one step could run here now, and on what."""
+
+    kind = _step_kind(step)
+    unready = StepReadiness(
+        step_id=step.id,
+        kind=kind,
+        ready=False,
+        models=(),
+        tool_id=None,
+        tool_version=None,
+        tool_implementation_id=None,
+        problem=None,
+    )
+
+    try:
+        strategies = runtime.generate_step_strategies(step)
+    except WorkflowGenerationError as exc:
+        return unready.model_copy(update={"problem": str(exc)})
+
+    specification = step.specification
+
+    if isinstance(specification, ToolStepSpecification):
+        [tool] = strategies
+
+        assert isinstance(tool, ToolStrategy)
+
+        implementation = tool.implementation
+
+        return unready.model_copy(
+            update={
+                "ready": True,
+                "tool_id": implementation.tool_id,
+                "tool_version": implementation.tool_version,
+                "tool_implementation_id": implementation.id,
+            }
+        )
+
+    models = tuple(
+        model for model in (_model_of(strategy) for strategy in strategies) if model is not None
+    )
+
+    if not models:
+        return unready.model_copy(
+            update={"problem": _no_model(specification.model_selection, runtime)}
+        )
+
+    return unready.model_copy(update={"ready": True, "models": models})
 
 
 async def _until_cancelled(

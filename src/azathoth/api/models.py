@@ -267,6 +267,80 @@ class PortfolioRemoval(ApiModel):
     )
 
 
+class DocumentProblem(ApiModel):
+    """One reason a workflow document would be refused (ADR 0121)."""
+
+    message: str = Field(
+        description="Why, as importing the document would say.",
+    )
+
+    location: tuple[str | int, ...] = Field(
+        description=(
+            "Where in the document: the keys and indexes leading to the value at fault, "
+            "empty when the fault is the whole document's."
+        ),
+    )
+
+    step_id: UUID | None = Field(
+        description="The step the problem is in, when it is in a step whose id is valid.",
+    )
+
+
+class WorkflowCheck(ApiModel):
+    """Whether a workflow document would be imported, and every reason it would not."""
+
+    valid: bool = Field(
+        description="Whether importing the document would accept it.",
+    )
+
+    problems: tuple[DocumentProblem, ...]
+
+
+StepKind = Literal["prompt", "context_prompt", "tool"]
+"""How a step runs: a prompt, a prompt rendered from the context, or a tool."""
+
+
+class StepReadiness(ApiModel):
+    """Whether one step of a workflow document could run here now (ADR 0121)."""
+
+    step_id: UUID
+
+    kind: StepKind
+
+    ready: bool
+
+    models: tuple[str, ...] = Field(
+        description=(
+            "The models a prompt step could run on, in the order a run tries them; "
+            "a run uses the first."
+        ),
+    )
+
+    tool_id: UUID | None = Field(
+        description="The tool a tool step would run, when it can run.",
+    )
+
+    tool_version: str | None
+
+    tool_implementation_id: UUID | None = Field(
+        description="The implementation of the tool a tool step would run, when it can run.",
+    )
+
+    problem: str | None = Field(
+        description="Why the step could not run here now, when it could not.",
+    )
+
+
+class WorkflowReadiness(ApiModel):
+    """Whether every step of a workflow document could run here now."""
+
+    ready: bool
+
+    steps: tuple[StepReadiness, ...] = Field(
+        description="Every step, in the document's order.",
+    )
+
+
 class RunInput(ApiModel):
     """The input a run is given; a run given none starts with an empty context.
 
@@ -578,6 +652,7 @@ __all__ = [
     "BenchmarkDetail",
     "BenchmarkSummary",
     "ContextChanged",
+    "DocumentProblem",
     "Initialization",
     "InstanceDescription",
     "InvocationDetail",
@@ -593,6 +668,7 @@ __all__ = [
     "Revision",
     "RunError",
     "RunEvent",
+    "RunFile",
     "RunFinished",
     "RunInput",
     "RunResult",
@@ -600,10 +676,14 @@ __all__ = [
     "RunStep",
     "StandardTool",
     "StepFinished",
+    "StepKind",
+    "StepReadiness",
     "StepStarted",
     "ToolDetail",
     "ToolSummary",
+    "WorkflowCheck",
     "WorkflowDetail",
+    "WorkflowReadiness",
     "WorkflowSummary",
     "parse_run_event",
 ]

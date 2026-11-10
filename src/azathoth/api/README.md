@@ -72,6 +72,14 @@ a workflow that declares no result, a tool implementation in a runtime
 Azathoth cannot run, or a tool artifact that belongs to another tool or
 version is refused with `InvalidDocumentError`, and nothing is saved.
 
+`workflows.check(document)` says whether importing a workflow document would
+accept it, saving nothing. Its `problems` are every reason it would not,
+each with its `message`, its `location` in the document, and the `step_id`
+of the step it is in. A step is checked as the kind of step it most nearly
+is, so a prompt step missing its model selection is not also told it lacks
+a tool; a rule of the whole workflow is checked once every part is valid on
+its own (ADR 0121).
+
 Each value carries its `revision`: the number, the content digest, when it
 was imported (`None` for revisions from before 1.1), and `identical_to`, the
 earliest earlier revision with the same content when the import reverted to
@@ -105,6 +113,7 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
+| `models.matching(requirements)` | The portfolio's models that meet a step's requirements, in the order a run tries them. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier)` | Authorizes a model a provider serves now. | Yes |
 | `portfolio.remove(identifier, force=False)` | Removes a model, as `azathoth model deauthorize` does. | No |
@@ -172,6 +181,14 @@ Steps of one layer run together, so their events interleave. A callback
 must return quickly. One that raises is detached for the rest of the run,
 and the result's `warnings` name what it raised; the run carries on. Every
 event is its own JSON, and `parse_run_event` reads one back.
+
+`instance.runs.readiness(document)` says whether each step of a workflow
+document, imported or not, could run here now, resolving it as a run would:
+a prompt step to the `models` it could run on, in the order a run tries
+them, and a tool step to the tool and implementation it would run. A step
+that could not run says why in its `problem`, such as a model no provider
+serves now or a tool not imported. It asks the providers, and saves nothing
+(ADR 0121).
 
 `instance.runs.invoke(workflow_id, input=..., idempotency_key=None,
 caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
