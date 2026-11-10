@@ -31,10 +31,10 @@ from pydantic import (
 from azathoth.context.models import Context, ContextEvent
 from azathoth.context.sensitivity import input_sensitivities
 from azathoth.sensitivity import (
-    DEFAULT_SENSITIVITY,
     Sensitivity,
     effective_sensitivity,
     most_sensitive,
+    stored_sensitivity,
 )
 
 LINEAGE_EVENT_TYPE = "workflow.lineage.received"
@@ -284,7 +284,7 @@ def run_lineage(
 
     lineage = lineage_of(context)
     label = context_sensitivity(context)
-    sensitivity = None if label is DEFAULT_SENSITIVITY else label
+    sensitivity = stored_sensitivity(label)
 
     if lineage is None:
         return RunLineage(run=run, depth=0, root=run, sensitivity=sensitivity)

@@ -9,6 +9,7 @@ from azathoth.sensitivity import (
     effective_sensitivity,
     most_sensitive,
     require_no_lower,
+    stored_sensitivity,
 )
 
 
@@ -116,3 +117,9 @@ def test_a_derived_label_lower_than_its_source_is_refused(
 
 def test_a_sensitivity_error_is_a_value_error() -> None:
     assert issubclass(SensitivityError, ValueError)
+
+
+def test_an_internal_label_is_stored_as_none() -> None:
+    assert stored_sensitivity(Sensitivity.INTERNAL) is None
+    assert stored_sensitivity(Sensitivity.PUBLIC) is Sensitivity.PUBLIC
+    assert stored_sensitivity(Sensitivity.RESTRICTED) is Sensitivity.RESTRICTED

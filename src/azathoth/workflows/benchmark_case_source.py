@@ -1,9 +1,10 @@
-"""Benchmark cases built from recorded workflow runs and from input files (ADR 0112, ADR 0117)."""
+"""Benchmark cases built from recorded workflow runs and from input files (ADR 0112, 0117, 0123)."""
 
 from collections.abc import Iterable
 
 from pydantic import JsonValue, ValidationError
 
+from azathoth.context import context_sensitivity
 from azathoth.evaluation import (
     BenchmarkCase,
     CitationExpectation,
@@ -12,6 +13,13 @@ from azathoth.evaluation import (
     json_schema_validator,
 )
 from azathoth.inputs import InputProvenance, ResolvedInput
+from azathoth.sensitivity import (
+    Sensitivity,
+    SensitivityError,
+    effective_sensitivity,
+    require_no_lower,
+    stored_sensitivity,
+)
 from azathoth.workflows.execution import WorkflowRun
 from azathoth.workflows.feedback import (
     WorkflowRunFeedback,
@@ -114,6 +122,7 @@ def benchmark_case_from_run(
     description: str | None = None,
     feedback: WorkflowRunFeedback | None = None,
     citations: CitationExpectation | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> BenchmarkCase:
     """Return a new benchmark case replaying one recorded run's input.
 
@@ -125,17 +134,34 @@ def benchmark_case_from_run(
     records the source run, and the feedback whose corrected output supplied
     the expected value when there is one.
 
+    The case is as sensitive as the run (ADR 0123): without `sensitivity` it
+    takes the run's label, and a label lower than the run's is refused. A
+    case may be labelled more sensitive than its run.
+
     Raises:
         BenchmarkCaseSourceError: The run did not receive workflow input
             exactly once, the feedback judges a different run, the expected
-            value is not a valid JSON Schema for a schema comparison, or the
-            run's provenance names content its input is not the handle of.
+            value is not a valid JSON Schema for a schema comparison, the
+            run's provenance names content its input is not the handle of, or
+            the label is lower than the run's.
     """
 
     if feedback is not None and feedback.run_id != run.id:
         raise BenchmarkCaseSourceError(f"Feedback {feedback.id} does not judge run {run.id}.")
 
     case_input = workflow_run_input(run)
+    floor = context_sensitivity(run.initial_context)
+
+    if sensitivity is not None:
+        try:
+            require_no_lower(
+                sensitivity,
+                floor,
+                source=f"Run {run.id}",
+                derived="a case made from it",
+            )
+        except SensitivityError as exc:
+            raise BenchmarkCaseSourceError(str(exc)) from exc
 
     metadata: dict[str, JsonValue] = {
         SOURCE_RUN_METADATA_KEY: str(run.id),
@@ -147,6 +173,7 @@ def benchmark_case_from_run(
     return _case(
         input=case_input,
         input_provenance=workflow_run_input_provenance(run),
+        sensitivity=stored_sensitivity(floor if sensitivity is None else sensitivity),
         expected=_expected_outcome(
             comparison=comparison,
             expected=expected,
@@ -171,7 +198,7 @@ def benchmark_case_from_input(
     The case holds the resolved value and its provenance, and expects the
     given value under the given comparison. A blank or absent description
     becomes one naming where the input was read from, and the case metadata
-    records it.
+    records it. The case takes the input's label (ADR 0123).
 
     Raises:
         BenchmarkCaseSourceError: The expected value is not a valid JSON
@@ -193,6 +220,7 @@ def benchmark_case_from_input(
     return _case(
         input=resolved.value,
         input_provenance=provenance,
+        sensitivity=stored_sensitivity(effective_sensitivity(resolved.sensitivity)),
         expected=_expected_outcome(
             comparison=comparison,
             expected=expected,

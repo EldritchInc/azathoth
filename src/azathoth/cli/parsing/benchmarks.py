@@ -11,6 +11,7 @@ from azathoth.cli.parsing.common import (
     json_value,
     media_type,
     positive_integer,
+    sensitivity,
 )
 from azathoth.cli.parsing.workflows import (
     TARGET_COST_ATTRIBUTE,
@@ -18,6 +19,7 @@ from azathoth.cli.parsing.workflows import (
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_INPUT_FILE_ATTRIBUTE,
     WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+    WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
 )
 from azathoth.evaluation.models import OutcomeComparison
 
@@ -229,6 +231,18 @@ def add_benchmark_parser(
         help=(
             "Media type of --input-file: application/json, a text/* type, application/pdf, "
             "image/jpeg, image/png or image/webp."
+        ),
+    )
+
+    benchmark_add_case_parser.add_argument(
+        "--sensitivity",
+        dest=WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
+        type=sensitivity,
+        default=None,
+        metavar="LABEL",
+        help=(
+            "How sensitive the case's input is: public, internal or restricted. A case from "
+            "a run takes the run's label by default, and cannot be labelled lower."
         ),
     )
 

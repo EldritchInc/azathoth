@@ -27,6 +27,7 @@ from azathoth.evaluation import (
     SQLiteBenchmarkRepository,
 )
 from azathoth.revisions import AUTHOR_VARIABLE, Author
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
@@ -783,6 +784,7 @@ def capture_add_case(
         *,
         run_id: UUID | None,
         input_file: WorkflowInputFile | None,
+        sensitivity: Sensitivity | None,
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,
@@ -794,6 +796,7 @@ def capture_add_case(
                 "benchmark_id": benchmark_id,
                 "run_id": run_id,
                 "input_file": input_file,
+                "sensitivity": sensitivity,
                 "comparison": comparison,
                 "expected": expected,
                 "description": description,
@@ -842,6 +845,7 @@ def test_cli_add_case_dispatches_the_complete_request(
             "benchmark_id": BENCHMARK_ID,
             "run_id": RUN_ID,
             "input_file": None,
+            "sensitivity": None,
             "comparison": OutcomeComparison.SEMANTIC,
             "expected": SuppliedExpectedValue(
                 value=expected_value,
@@ -923,6 +927,7 @@ def test_add_case_dispatch_converts_the_comparison() -> None:
         *,
         run_id: UUID | None,
         input_file: WorkflowInputFile | None,
+        sensitivity: Sensitivity | None,
         comparison: OutcomeComparison,
         expected: SuppliedExpectedValue | None,
         description: str | None,

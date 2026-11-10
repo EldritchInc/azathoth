@@ -191,6 +191,7 @@ azathoth
     │   ├── --expected <JSON>
     │   ├── --require-citation <SOURCE:SEGMENT>   (repeat for each segment)
     │   ├── --on-unverified fail|ignore
+    │   ├── --sensitivity <LABEL>
     │   └── --description <TEXT>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
@@ -4021,6 +4022,9 @@ workflow input received more than once
 no --expected and no corrected output
     Run <RUN_ID> has no corrected output; pass --expected.
 
+a --sensitivity lower than the run's
+    Run <RUN_ID> is restricted; a case made from it cannot be internal.
+
 a schema comparison whose value is not a JSON Schema
     Expected value cannot be used with comparison 'schema': <REASON>
 
@@ -4040,6 +4044,29 @@ or optimized against.
 
 `benchmark add-case` reads and writes durable state only. It never loads the
 runtime and needs no provider credentials.
+
+## Case Sensitivity
+
+A case is as sensitive as what it came from (ADR 0123). A case from a run
+takes the run's label, the most sensitive of its input's and its parent
+run's, so a case from a restricted run is restricted. `--sensitivity`
+labels it more sensitive than its run; one lower is refused, and nothing is
+written:
+
+```text
+Run <RUN_ID> is restricted; a case made from it cannot be internal.
+```
+
+A case from a file is internal unless `--sensitivity` labels it. A labelled
+case holds its label as `sensitivity`, and its run, every time the
+benchmark is run, compared or optimized against, is given that label as a
+run given `--sensitivity` is. An internal case holds none, so the
+benchmark's digest is what it was before labels.
+
+A benchmark is as sensitive as its most sensitive case, an unlabelled case
+counting as internal: adding one restricted case restricts it. Each
+benchmark execution and experiment records the label of the revision it
+ran against.
 
 # Add a Case From a File
 

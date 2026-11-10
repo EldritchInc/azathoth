@@ -24,7 +24,9 @@ reads an absent label that way.
 Labels are ordered by `rank`, from public to restricted, never by their
 names: as text, `internal` sorts before `public`. `most_sensitive(labels)`
 returns the most sensitive of some labels, which is the label of anything
-derived from them.
+derived from them. `stored_sensitivity(label)` is a label as data keeps it:
+`None` for internal, so data that is internal serializes, and digests, as it
+did before labels existed.
 
 A label is never lowered by deriving data. `require_no_lower(label, floor,
 source=..., derived=...)` refuses a label below what the data came from:

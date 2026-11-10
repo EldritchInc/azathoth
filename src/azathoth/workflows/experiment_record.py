@@ -8,10 +8,13 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
     model_validator,
 )
 
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows.candidate import WorkflowCandidateSignature
 from azathoth.workflows.models import WorkflowMetadata
 from azathoth.workflows.scorecard import WorkflowScorecard
@@ -173,6 +176,10 @@ class WorkflowExperimentRecord(BaseModel):
 
     The ranking lists observation identifiers, best first. Records written
     before benchmark-driven optimization have no benchmark identifier.
+
+    `sensitivity` is the label of the benchmark revision the candidates ran
+    against, the most sensitive of its cases', or None when it was internal;
+    a record without one serializes as it did before labels (ADR 0123).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -185,6 +192,8 @@ class WorkflowExperimentRecord(BaseModel):
         default=None,
         pattern=CONTENT_DIGEST_PATTERN,
     )
+
+    sensitivity: Sensitivity | None = None
 
     observations: tuple[
         WorkflowExperimentObservation,
@@ -200,6 +209,20 @@ class WorkflowExperimentRecord(BaseModel):
     recorded_at: datetime = Field(
         default_factory=utc_now,
     )
+
+    @model_serializer(mode="wrap")
+    def omit_internal_sensitivity(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        """Leave out `sensitivity` when the benchmark was internal."""
+
+        serialized: dict[str, Any] = handler(self)
+
+        if self.sensitivity is None:
+            serialized.pop("sensitivity", None)
+
+        return serialized
 
     @model_validator(mode="after")
     def validate_unique_observation_ids(

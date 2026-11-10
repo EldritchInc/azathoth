@@ -1233,6 +1233,7 @@ BenchmarkCase
 ├── id
 ├── input
 ├── input_provenance   (optional)
+├── sensitivity        (optional)
 ├── expected
 └── metadata
 ```
@@ -1244,6 +1245,10 @@ from and which content it was, as a run records it (ADR 0117). A case whose
 provenance names a PDF or an image gives exactly that content's handle as
 its input; the content stays in the content store. A case without
 provenance serializes without it.
+
+Its `sensitivity` is a `Sensitivity` labelling its input `public`,
+`internal` or `restricted` (ADR 0123). A case without one is internal and
+serializes without the key, so labels change no unlabelled dataset's digest.
 
 Its expected value is an `ExpectedOutcome`.
 
@@ -1339,6 +1344,11 @@ BenchmarkDataset
 
 The dataset provides stable identity and versioning for a reproducible
 evaluation workload.
+
+A dataset holds no label of its own. `BenchmarkDataset.sensitivity` is the
+most sensitive of its cases' labels, an unlabelled case counting as
+internal (ADR 0123): a dataset is public only when every case is, a dataset
+without cases is internal, and adding a restricted case restricts it.
 
 # Benchmark Dataset Identity
 

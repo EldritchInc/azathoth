@@ -47,6 +47,18 @@ def effective_sensitivity(
     return DEFAULT_SENSITIVITY if label is None else label
 
 
+def stored_sensitivity(
+    label: Sensitivity,
+) -> Sensitivity | None:
+    """Return a label as data keeps it: `None` for internal, so unlabelled data is unchanged.
+
+    Data that is internal, labelled or not, is kept without a label, so its
+    serialized form and digest are those it had before labels existed.
+    """
+
+    return None if label is DEFAULT_SENSITIVITY else label
+
+
 def most_sensitive(
     labels: Iterable[Sensitivity | None],
 ) -> Sensitivity:
@@ -93,4 +105,5 @@ __all__ = [
     "effective_sensitivity",
     "most_sensitive",
     "require_no_lower",
+    "stored_sensitivity",
 ]

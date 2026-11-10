@@ -903,14 +903,21 @@ A recorded run becomes a benchmark case only deliberately, through
   carries a corrected output, latest by `created_at` with ties going to the
   later record. Good feedback never supplies a value.
 - `benchmark_case_from_run(run, *, comparison, expected, description=None,
-  feedback=None)` builds a new case replaying the run's input. Its metadata
-  names the source run under `SOURCE_RUN_METADATA_KEY` (`source_run_id`) and,
-  when given, the feedback under `SOURCE_FEEDBACK_METADATA_KEY`
-  (`source_feedback_id`). The case holds the run's input provenance. A
-  schema comparison requires a valid JSON Schema.
+  feedback=None, citations=None, sensitivity=None)` builds a new case
+  replaying the run's input. Its metadata names the source run under
+  `SOURCE_RUN_METADATA_KEY` (`source_run_id`) and, when given, the feedback
+  under `SOURCE_FEEDBACK_METADATA_KEY` (`source_feedback_id`). The case holds
+  the run's input provenance. A schema comparison requires a valid JSON
+  Schema. The case takes the run's label, `context_sensitivity` of its
+  initial context, unless `sensitivity` labels it; a label lower than the
+  run's raises `BenchmarkCaseSourceError` (ADR 0123).
 - `benchmark_case_from_input(resolved, *, comparison, expected,
-  description=None)` builds a case of one resolved input, such as a file's,
-  naming its URI under `SOURCE_URI_METADATA_KEY` (`source_uri`).
+  description=None, citations=None)` builds a case of one resolved input,
+  such as a file's, naming its URI under `SOURCE_URI_METADATA_KEY`
+  (`source_uri`). The case takes the input's label.
+
+Either keeps an internal case unlabelled, `stored_sensitivity`, so it
+serializes as a case did before labels.
 
 A case whose expected outcome names `citations` is judged on what its run
 cited too (ADR 0117), by `workflows/citation_evaluation.py`:
@@ -935,9 +942,11 @@ runner gives its steps, `WorkflowRunner.content`.
 `benchmark_case_context(case)` is the initial context a case's run is
 given: its input, then, when the case names provenance, the
 `workflow.input.resolved` event recording it, both from
-`BENCHMARK_INPUT_PRODUCER` (`azathoth.benchmark`). A case's content is read
-from the content store by digest, so a runner given the content and a
-journal runs a document case as the run it came from ran.
+`BENCHMARK_INPUT_PRODUCER` (`azathoth.benchmark`), and, when the case is
+labelled, a `workflow.input.sensitivity` event holding its label (ADR 0123),
+so the case's run, and every run it starts, is as sensitive as the case. A
+case's content is read from the content store by digest, so a runner given
+the content and a journal runs a document case as the run it came from ran.
 
 ## Experiments
 
@@ -971,6 +980,7 @@ A durable record names its benchmark and holds one observation per candidate:
 WorkflowExperimentRecord
 ├── id                      shared with the in-memory WorkflowExperimentResult
 ├── benchmark_id            None for records written before benchmarks
+├── sensitivity             label of the benchmark revision, absent when internal
 ├── observations
 │   └── WorkflowExperimentObservation
 │       ├── id
@@ -1111,7 +1121,10 @@ Each `WorkflowBenchmarkCaseResult` exposes the same facts per case:
 `WorkflowBenchmarkResult.dataset_digest` and
 `WorkflowBenchmarkComparison.dataset_digest` hold the content digest of the
 exact benchmark revision executed. Saved execution and experiment records
-carry it as `benchmark_digest`.
+carry it as `benchmark_digest`. Their `dataset_sensitivity` is that
+revision's label, `BenchmarkDataset.sensitivity`, or None when it is
+internal; saved execution and experiment records carry it as `sensitivity`,
+left out of their JSON when None (ADR 0123).
 
 Benchmark results remain evidence.
 
@@ -1127,6 +1140,7 @@ WorkflowBenchmarkExecutionRecord
 ├── id                      shared with the WorkflowBenchmarkResult or Ranking
 ├── benchmark_id
 ├── benchmark_digest        content digest of the benchmark revision run
+├── sensitivity             label of that revision, absent when internal
 ├── kind                    run | compare
 ├── candidates
 │   └── WorkflowBenchmarkExecutionCandidate

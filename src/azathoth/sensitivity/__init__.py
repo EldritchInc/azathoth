@@ -7,6 +7,7 @@ from azathoth.sensitivity.labels import (
     effective_sensitivity,
     most_sensitive,
     require_no_lower,
+    stored_sensitivity,
 )
 from azathoth.sensitivity.policy import (
     PRIVATE_DATA_POLICY,
@@ -32,4 +33,5 @@ __all__ = [
     "most_sensitive",
     "require_no_lower",
     "restricted_refusal",
+    "stored_sensitivity",
 ]

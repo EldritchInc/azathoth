@@ -8,6 +8,7 @@ from azathoth.evaluation import (
     OutcomeEvaluator,
 )
 from azathoth.revisions import content_digest
+from azathoth.sensitivity import stored_sensitivity
 from azathoth.workflows.benchmark import (
     WorkflowBenchmarkResult,
     WorkflowBenchmarkRunner,
@@ -238,6 +239,7 @@ class WorkflowExperimentRunner:
             id=result.id,
             benchmark_id=dataset.id,
             benchmark_digest=content_digest(dataset),
+            sensitivity=stored_sensitivity(dataset.sensitivity),
             observations=observations,
             ranking=tuple(observations[index].id for index in ranking),
         )
