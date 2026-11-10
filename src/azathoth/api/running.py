@@ -6,12 +6,16 @@ evidence whether it succeeded or failed. `invoke` is what `azathoth job run`
 does: the workflow's active production state runs under an idempotency key,
 so the same request again replays its outcome, or resumes it.
 
+Either may be given a file as its input, checked and kept as the command
+line's `--input-file` is (ADR 0121).
+
 Each call returns when it has finished. While it runs, an optional callback
 receives each event on the caller's thread, and an optional cancellation
 token stops it.
 """
 
 import asyncio
+import base64
 import threading
 from collections.abc import Callable, Coroutine, Mapping
 from typing import Any, Final, Literal, TypeVar
@@ -34,6 +38,7 @@ from azathoth.api.models import (
     InvocationOutcome,
     RunError,
     RunEvent,
+    RunFile,
     RunFinished,
     RunInput,
     RunResult,
@@ -43,11 +48,20 @@ from azathoth.api.models import (
 )
 from azathoth.context import Context
 from azathoth.inputs import (
+    DEFAULT_MAX_INPUT_BYTES,
     JSON_MEDIA_TYPE,
+    ContentStore,
     InlineInput,
+    InputContentError,
     InputPolicy,
     InputProvenance,
+    InputResolutionError,
     ResolvedInput,
+    check_binary_signature,
+    decode_content,
+    is_binary_media_type,
+    resolve_inline_input,
+    validate_media_type,
 )
 from azathoth.jobs import (
     InvokeJobRequest,
@@ -96,6 +110,12 @@ GENERATED_KEY_PREFIX: Final = "api-"
 
 INLINE_ONLY: Final = InputPolicy()
 """An invocation's input is the value given: no reference is resolved."""
+
+MAX_INPUT_FILE_BYTES: Final = DEFAULT_MAX_INPUT_BYTES
+"""The largest file a run or an invocation is given, as for `--input-file`."""
+
+INPUT_FILE_NAME: Final = "The input file"
+"""What a refusal of a file given as input calls it."""
 
 EventCallback = Callable[[RunEvent], None]
 """Receive one run event, on the run's thread; it must return quickly."""
@@ -249,18 +269,22 @@ class Runs:
         self,
         workflow_id: UUID,
         *,
-        input: RunInput | None = None,
+        input: RunInput | RunFile | None = None,
         on_event: EventCallback | None = None,
         cancel: CancellationToken | None = None,
     ) -> RunResult:
         """Run a workflow's latest revision as configured, and keep the finished run.
 
         A run given input starts with it as its workflow input event; a run
-        given none starts with an empty context. The run is kept whether it
-        succeeded or failed, and its result says which.
+        given none starts with an empty context. A file given as input is
+        checked before anything else, and kept in the content store when it
+        is binary. The run is kept whether it succeeded or failed, and its
+        result says which.
 
         Raises:
             InstanceClosedError: The instance was closed.
+            InvalidArgumentError: A file given as input is not its media
+                type, is of one Azathoth does not accept, or is too large.
             NotFoundError: No workflow has this ID.
             RunNotStartedError: No executable candidate could be made, for
                 example because a step's tool or model is not available.
@@ -273,6 +297,7 @@ class Runs:
         if cancel is not None and cancel.cancelled:
             raise RunCancelledError()
 
+        source = file_input(input) if isinstance(input, RunFile) else input
         repositories = self._repositories()
         runtime = self._runtime(repositories)
         specification = runtime.workflows.get(workflow_id)
@@ -299,7 +324,7 @@ class Runs:
 
         run = asyncio.run(
             _until_cancelled(
-                runner.run_recording_failures(candidate, _context(input)),
+                runner.run_recording_failures(candidate, _context(source, repositories.content)),
                 cancel,
             )
         )
@@ -328,7 +353,7 @@ class Runs:
         self,
         workflow_id: UUID,
         *,
-        input: JsonValue,
+        input: JsonValue | RunFile,
         idempotency_key: str | None = None,
         caller_metadata: Mapping[str, JsonValue] | None = None,
         on_event: EventCallback | None = None,
@@ -342,7 +367,8 @@ class Runs:
         stopped is resumed from its journal. Without a key, one beginning
         `api-` is made. A workflow not in production, or that fails, is an
         outcome, not an error. The caller metadata is recorded with the
-        invocation.
+        invocation. A file given as input is checked before anything is
+        recorded, and is part of the request its key is recorded with.
 
         Events report the run as it happens, and `invocation_finished` ends
         every call, including a replay or a rejection.
@@ -350,7 +376,9 @@ class Runs:
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The idempotency key is empty, too long or
-                holds a control character.
+                holds a control character, or a file given as input is not
+                its media type, is of one Azathoth does not accept, or is too
+                large.
             RunCancelledError: The token was cancelled before the invocation
                 finished; the same request under the same key resumes it.
             ProviderConfigurationError: A provider is configured in a way
@@ -367,6 +395,10 @@ class Runs:
             validate_idempotency_key(key)
         except ValueError as exc:
             raise InvalidArgumentError(str(exc)) from exc
+
+        request_input = (
+            file_input(input) if isinstance(input, RunFile) else InlineInput(value=input)
+        )
 
         repositories = self._repositories()
         observer = _CallbackObserver(on_event)
@@ -416,7 +448,7 @@ class Runs:
                         version=1,
                         idempotency_key=key,
                         workflow_id=workflow_id,
-                        input=InlineInput(value=input),
+                        input=request_input,
                         caller_metadata=dict(caller_metadata or {}),
                     ),
                     policy=INLINE_ONLY,
@@ -544,20 +576,71 @@ def _invocation_outcome(
     )
 
 
+def file_input(
+    run_file: RunFile,
+    *,
+    max_bytes: int = MAX_INPUT_FILE_BYTES,
+) -> InlineInput:
+    """Return the inline input a file stands for, checked as `--input-file` is (ADR 0121).
+
+    JSON and text content is decoded into its value. Binary content is
+    checked against its media type's signature, and stands as base64 until
+    it is resolved and kept (ADR 0112).
+
+    Raises:
+        InvalidArgumentError: The media type is not one Azathoth accepts, the
+            content is larger than `max_bytes`, or it is not its media type.
+    """
+
+    try:
+        media_type = validate_media_type(run_file.media_type)
+    except ValueError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
+
+    if len(run_file.content) > max_bytes:
+        raise InvalidArgumentError(
+            f"{INPUT_FILE_NAME} is larger than the limit of {max_bytes} bytes."
+        )
+
+    try:
+        if is_binary_media_type(media_type):
+            check_binary_signature(run_file.content, media_type)
+
+            return InlineInput(
+                value=base64.b64encode(run_file.content).decode("ascii"),
+                media_type=media_type,
+            )
+
+        return InlineInput(
+            value=decode_content(run_file.content, media_type),
+            media_type=media_type,
+        )
+    except InputContentError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
+
+
 def _context(
-    run_input: RunInput | None,
+    run_input: RunInput | InlineInput | None,
+    store: ContentStore,
 ) -> Context:
-    """Return the context a run starts with: its input event, or nothing."""
+    """Return the context a run starts with: its input events, or nothing.
+
+    A file's input is resolved as an inline input is, so a binary one is
+    kept in the store, and its provenance follows the input event.
+    """
 
     if run_input is None:
         return Context()
 
-    return Context(
-        events=create_workflow_input_events(
-            ResolvedInput(value=run_input.payload, media_type=JSON_MEDIA_TYPE),
-            producer=RUN_PRODUCER,
-        )
-    )
+    if isinstance(run_input, RunInput):
+        resolved = ResolvedInput(value=run_input.payload, media_type=JSON_MEDIA_TYPE)
+    else:
+        try:
+            resolved = resolve_inline_input(run_input, policy=INLINE_ONLY, store=store)
+        except InputResolutionError as exc:
+            raise InvalidArgumentError(str(exc)) from exc
+
+    return Context(events=create_workflow_input_events(resolved, producer=RUN_PRODUCER))
 
 
 def _outcome(
@@ -615,9 +698,12 @@ def _outcome(
 __all__ = [
     "CANCEL_POLL_SECONDS",
     "GENERATED_KEY_PREFIX",
+    "INPUT_FILE_NAME",
+    "MAX_INPUT_FILE_BYTES",
     "RUN_PRODUCER",
     "CancellationToken",
     "EventCallback",
     "Runs",
+    "file_input",
     "step_status",
 ]

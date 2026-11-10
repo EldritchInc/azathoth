@@ -143,8 +143,15 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 ```
 
 `RunInput` wraps the payload, so a JSON null is input and `None` is no
-input: a run given none starts with an empty context. The `RunResult` says
-whether it `succeeded`, holds the declared `result` when `has_result`, and
+input: a run given none starts with an empty context. A run or an invocation
+may be given a file instead, `RunFile(content=..., media_type=...)`, checked
+and kept as `--input-file` is: JSON and text are decoded into the value, and
+a PDF, PNG, JPEG or WebP of at most `MAX_INPUT_FILE_BYTES` is kept in the
+content store and given to the workflow as a content handle; a file that is
+not its media type is refused before anything runs (ADR 0121).
+
+The `RunResult` says whether it `succeeded`, holds the declared `result`
+when `has_result`, and
 otherwise its `error`: the step that halted the run and its final failure
 (`workflow_execution_failed`), or that it did not produce its declared
 result (`result_not_produced`).

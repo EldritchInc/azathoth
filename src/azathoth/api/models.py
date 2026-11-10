@@ -277,6 +277,23 @@ class RunInput(ApiModel):
     payload: JsonValue
 
 
+class RunFile(ApiModel):
+    """A file a run or an invocation is given as its input (ADR 0121).
+
+    It is accepted as the command line's `--input-file` accepts one (ADR
+    0112): JSON and `text/*` content is decoded into the value the workflow
+    receives, and a PDF, PNG, JPEG or WebP is kept in the content store by
+    its digest and given to the workflow as a content handle. Content that
+    is not its media type is refused before anything runs or is kept.
+    """
+
+    content: bytes
+
+    media_type: str = Field(
+        description="The content's media type, such as application/pdf or text/plain.",
+    )
+
+
 class RunError(ApiModel):
     """Why a finished run has no result, as `azathoth workflow run` reports it."""
 

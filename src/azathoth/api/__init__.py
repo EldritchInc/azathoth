@@ -65,6 +65,7 @@ from azathoth.api.models import (
     Revision,
     RunError,
     RunEvent,
+    RunFile,
     RunFinished,
     RunInput,
     RunResult,
@@ -86,6 +87,7 @@ from azathoth.api.providers import (
 )
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
+    MAX_INPUT_FILE_BYTES,
     CancellationToken,
     EventCallback,
     Runs,
@@ -98,6 +100,7 @@ __all__ = [
     "CLOSED_MESSAGE",
     "GENERATED_KEY_PREFIX",
     "LIMIT_MESSAGE",
+    "MAX_INPUT_FILE_BYTES",
     "OPENROUTER_API_KEY_VARIABLE",
     "RESULT_REQUIRED_MESSAGE",
     "ApiError",
@@ -144,6 +147,7 @@ __all__ = [
     "RunCancelledError",
     "RunError",
     "RunEvent",
+    "RunFile",
     "RunFinished",
     "RunInput",
     "RunNotStartedError",

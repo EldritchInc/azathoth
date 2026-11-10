@@ -293,3 +293,33 @@ def test_a_closed_instance_invokes_nothing(
 
     with pytest.raises(api.InstanceClosedError):
         opened.runs.invoke(COUNT_WORKFLOW_ID, input="x")
+
+
+def test_a_file_is_an_invocations_input(
+    promoted: api.Azathoth,
+) -> None:
+    request = api.RunFile(content=b"one two three", media_type="text/plain")
+
+    outcome = promoted.runs.invoke(COUNT_WORKFLOW_ID, input=request, idempotency_key="file-1")
+    again = promoted.runs.invoke(COUNT_WORKFLOW_ID, input=request, idempotency_key="file-1")
+
+    assert outcome.status == "succeeded"
+    assert outcome.result == {"result": 3}
+    assert again.replayed
+
+
+def test_a_file_that_is_not_its_media_type_invokes_nothing(
+    promoted: api.Azathoth,
+    location: str,
+) -> None:
+    with pytest.raises(api.InvalidArgumentError) as refused:
+        promoted.runs.invoke(
+            COUNT_WORKFLOW_ID,
+            input=api.RunFile(content=b"not a pdf", media_type="application/pdf"),
+            idempotency_key="file-2",
+        )
+
+    assert str(refused.value) == (
+        "Content is not application/pdf: no PDF header in its first 1024 bytes."
+    )
+    assert open_repositories(location).invocations.invocation_for_idempotency_key("file-2") is None
