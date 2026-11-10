@@ -26,6 +26,7 @@ from azathoth.evaluation import (
     OutcomeComparison,
     SQLiteBenchmarkRepository,
 )
+from azathoth.revisions import AUTHOR_VARIABLE, Author
 from azathoth.workflows import (
     SOURCE_FEEDBACK_METADATA_KEY,
     SOURCE_RUN_METADATA_KEY,
@@ -1050,3 +1051,49 @@ def test_cli_add_case_rejects_invalid_expected_json(
 
     assert raised.value.code == 2
     assert "argument --expected: Value must be valid JSON" in captured.err
+
+
+def test_an_added_case_records_the_author_variables_author(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    database = configure(monkeypatch, tmp_path)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris@example.com>")
+
+    assert (
+        add_benchmark_case(
+            BENCHMARK_ID,
+            run_id=RUN_ID,
+            comparison=OutcomeComparison.EXACT,
+            expected=SuppliedExpectedValue(value=4),
+        )
+        == 0
+    )
+
+    _, added = SQLiteBenchmarkRepository(database).lineage(BENCHMARK_ID)
+
+    assert added.author == Author(name="Eris", email="eris@example.com")
+
+
+def test_a_case_is_not_added_when_who_adds_it_cannot_be_told(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = configure(monkeypatch, tmp_path)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    result = add_benchmark_case(
+        BENCHMARK_ID,
+        run_id=RUN_ID,
+        comparison=OutcomeComparison.EXACT,
+        expected=SuppliedExpectedValue(value=4),
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.err == (
+        'AZATHOTH_AUTHOR is \'Eris <eris>\'; set it to "Name <email>" or "Name".\n'
+    )
+    assert revisions(database) == 1

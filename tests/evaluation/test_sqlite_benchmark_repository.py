@@ -111,7 +111,7 @@ def test_sqlite_benchmark_repository_preserves_insertion_order(
     )
 
 
-def test_sqlite_benchmark_repository_appends_a_revision_for_a_resave(
+def test_sqlite_benchmark_repository_appends_nothing_for_an_unchanged_resave(
     tmp_path: Path,
 ) -> None:
     repository = SQLiteBenchmarkRepository(tmp_path / "benchmarks.db")
@@ -121,7 +121,8 @@ def test_sqlite_benchmark_repository_appends_a_revision_for_a_resave(
     first = repository.save(dataset)
     second = repository.save(dataset)
 
-    assert (first.number, second.number) == (1, 2)
+    assert second == first
+    assert len(repository.revisions(dataset.id)) == 1
     assert repository.datasets() == (dataset,)
 
 

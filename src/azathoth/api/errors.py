@@ -55,6 +55,12 @@ class InvalidDocumentError(InvalidArgumentError):
     code: ClassVar[str] = "invalid_document"
 
 
+class InvalidAuthorError(InvalidArgumentError):
+    """Who is importing was given in the wrong form, or could not be told (ADR 0122)."""
+
+    code: ClassVar[str] = "invalid_author"
+
+
 class NotFoundError(ApiError):
     """The workflow, tool or benchmark a call names is not configured."""
 
@@ -62,7 +68,7 @@ class NotFoundError(ApiError):
 
 
 class RevisionNotFoundError(NotFoundError):
-    """The component is configured, but has no revision with the number named."""
+    """The component is configured, but has no revision with the number or digest named."""
 
     code: ClassVar[str] = "revision_not_found"
 
@@ -145,6 +151,7 @@ __all__ = [
     "InstanceSchemaError",
     "InstanceUnavailableError",
     "InvalidArgumentError",
+    "InvalidAuthorError",
     "InvalidDocumentError",
     "ModelInUseError",
     "NotFoundError",

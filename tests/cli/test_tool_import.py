@@ -8,7 +8,10 @@ import pytest
 from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     import_tool,
+    install_standard_tools,
 )
+from azathoth.revisions import AUTHOR_VARIABLE
+from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDefinition,
@@ -310,7 +313,7 @@ def import_document(
     return import_tool(path)
 
 
-def test_tool_reimport_appends_an_identical_revision(
+def test_tool_reimport_of_unchanged_content_appends_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -330,7 +333,7 @@ def test_tool_reimport_appends_an_identical_revision(
     assert captured.err == ""
     assert captured.out.splitlines() == [
         f"Imported tool {TOOL_ID}@1.0.0 revision 1.",
-        f"Imported tool {TOOL_ID}@1.0.0 revision 2 (identical to revision 1).",
+        f"Tool {TOOL_ID}@1.0.0 is unchanged at revision 1.",
     ]
 
     repository = SQLiteToolRepository(database)
@@ -588,3 +591,44 @@ def test_the_cli_readme_documents_the_real_rename_message(
     readme = Path(__file__).parents[2] / "src" / "azathoth" / "cli" / "README.md"
 
     assert f"\n{documented}\n" in readme.read_text(encoding="utf-8")
+
+
+def test_tool_import_is_refused_when_who_imports_cannot_be_told(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    assert import_document(tmp_path, create_document()) == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.err == (
+        'AZATHOTH_AUTHOR is \'Eris <eris>\'; set it to "Name <email>" or "Name".\n'
+    )
+    assert SQLiteToolRepository(database).document_revisions(TOOL_ID) == ()
+
+
+def test_installed_standard_tools_are_recorded_as_azathoths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    assert install_standard_tools() == 0
+
+    repository = SQLiteToolRepository(database)
+
+    for standard in standard_tool_documents():
+        definition = standard.definition
+
+        (record,) = repository.document_lineage(definition.id, definition.version)
+
+        assert record.author == STANDARD_TOOL_AUTHOR

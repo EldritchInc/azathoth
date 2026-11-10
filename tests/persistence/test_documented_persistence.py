@@ -19,7 +19,7 @@ from azathoth.persistence import (
 )
 from azathoth.persistence.dialect import TOKENS, Dialect
 from azathoth.persistence.repositories import SCHEMA_TABLES
-from tests.persistence.test_schema_versions import VERSION_2_TABLE_NAMES
+from tests.persistence.test_schema_versions import VERSION_2_TABLE_NAMES, VERSION_3_TABLE_NAMES
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -153,6 +153,14 @@ def test_the_version_table_names_every_version_and_what_it_adds() -> None:
     added = re.findall(r"`([a-z_]+)`", line.split("|")[2])
 
     assert tuple(added) == VERSION_2_TABLE_NAMES
+
+    (line,) = (
+        line
+        for line in section(PERSISTENCE_README, "# The Schema").splitlines()
+        if line.startswith("| `3` |")
+    )
+
+    assert tuple(re.findall(r"`([a-z_]+)`", line.split("|")[2])) == VERSION_3_TABLE_NAMES
 
 
 @pytest.mark.parametrize("guide", UPGRADE_GUIDES)

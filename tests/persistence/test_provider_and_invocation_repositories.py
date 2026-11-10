@@ -16,6 +16,7 @@ import pytest
 from azathoth.inputs import CONTENT_TABLES, ContentStore, SqlContentStore, content_bytes_digest
 from azathoth.persistence import Database, PostgresDatabase, Table
 from azathoth.providers import (
+    MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     MODEL_TABLES,
     PROVIDER_MODEL_OBSERVATION_TABLES,
@@ -171,7 +172,11 @@ def test_a_duplicate_model_is_refused(
 def portfolio(
     database: Database,
 ) -> ModelPortfolioRepository:
-    return initialized(database, MODEL_PORTFOLIO_TABLES, SqlModelPortfolioRepository)
+    return initialized(
+        database,
+        (*MODEL_PORTFOLIO_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES),
+        SqlModelPortfolioRepository,
+    )
 
 
 def test_the_portfolio_keeps_order_and_deletes_one_entry(

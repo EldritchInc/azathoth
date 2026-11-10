@@ -3,6 +3,20 @@
 from uuid import UUID
 
 from azathoth.persistence import Database, Session, Table, require_integer, require_text
+from azathoth.revisions import (
+    PREVIOUS,
+    Author,
+    Lineage,
+    LineageRecord,
+    ParentChoice,
+    RevisionKind,
+    SavedRevision,
+    base_record,
+    content_digest,
+    lineage_records,
+    record_lineage,
+    tables_with_lineage,
+)
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.revision import WorkflowSpecificationRevision
 
@@ -39,22 +53,62 @@ class SqlWorkflowRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(WORKFLOW_SPECIFICATION_TABLES)
+        database.prepare(tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES))
 
     def save(
         self,
         specification: WorkflowSpecification,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
     ) -> WorkflowSpecificationRevision:
-        """Append one specification as its workflow's next revision.
+        """Append one specification as its workflow's next revision, and return it.
+
+        As `save_revision`, which says when nothing is appended.
+        """
+
+        return self.save_revision(
+            specification,
+            author=author,
+            based_on=based_on,
+        ).revision
+
+    def save_revision(
+        self,
+        specification: WorkflowSpecification,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
+    ) -> SavedRevision[WorkflowSpecificationRevision]:
+        """Append one specification as its workflow's next revision, built on another.
+
+        It builds on the revision whose revision digest is `based_on`, or on
+        the latest without one. A specification identical to the revision
+        it builds on appends nothing, and that revision is returned. One
+        built on an earlier revision than the latest forks: it is numbered
+        after the latest, and its parent is the one it was built on.
 
         The next number is read and written in one transaction holding the
         revision table's write lock, so concurrent imports of the same
         workflow never receive the same number.
+
+        Raises:
+            BaseRevisionError: No revision of the workflow has the digest
+                `based_on`.
         """
 
         workflow_id = specification.metadata.id
+        lineage = Lineage(kind=RevisionKind.WORKFLOW, id=workflow_id)
 
         with self._database.transaction(lock=WORKFLOW_SPECIFICATION_REVISIONS) as session:
+            parent = base_record(lineage_records(session, lineage), lineage, based_on)
+
+            if parent is not None:
+                built_on = _revision_in(session, workflow_id, parent.number)
+
+                if built_on.content_digest == content_digest(specification):
+                    return SavedRevision(revision=built_on, lineage=parent, created=False)
+
             row = session.fetchone(
                 """
                 SELECT COALESCE(MAX(number), 0)
@@ -74,9 +128,26 @@ class SqlWorkflowRepository:
                 number=latest + 1,
             )
 
-            insert_specification_revision(session, revision)
+            record = insert_specification_revision(
+                session,
+                revision,
+                author=author,
+                parent=parent,
+            )
 
-        return revision
+        return SavedRevision(revision=revision, lineage=record, created=True)
+
+    def lineage(
+        self,
+        workflow_id: UUID,
+    ) -> tuple[LineageRecord, ...]:
+        """Return the lineage record of every revision of a workflow, oldest first."""
+
+        with self._database.transaction() as session:
+            return lineage_records(
+                session,
+                Lineage(kind=RevisionKind.WORKFLOW, id=workflow_id),
+            )
 
     def get(
         self,
@@ -185,8 +256,14 @@ class SqlWorkflowRepository:
 def insert_specification_revision(
     session: Session,
     revision: WorkflowSpecificationRevision,
-) -> None:
-    """Insert one revision row."""
+    *,
+    author: Author | None = None,
+    parent: ParentChoice = PREVIOUS,
+) -> LineageRecord:
+    """Insert one revision row, record its lineage (ADR 0122), and return that record.
+
+    By default its parent is the revision numbered before it.
+    """
 
     session.execute(
         """
@@ -205,6 +282,44 @@ def insert_specification_revision(
             revision.model_dump_json(),
         ),
     )
+
+    return record_lineage(
+        session,
+        Lineage(
+            kind=RevisionKind.WORKFLOW,
+            id=revision.workflow_id,
+        ),
+        number=revision.number,
+        content_digest=revision.content_digest,
+        author=author,
+        parent=parent,
+    )
+
+
+def _revision_in(
+    session: Session,
+    workflow_id: UUID,
+    number: int,
+) -> WorkflowSpecificationRevision:
+    """Return one numbered revision of a workflow, read in an open transaction.
+
+    Raises:
+        LookupError: The workflow has no revision with that number.
+    """
+
+    row = session.fetchone(
+        """
+        SELECT payload
+        FROM workflow_specification_revisions
+        WHERE workflow_id = ? AND number = ?
+        """,
+        (str(workflow_id), number),
+    )
+
+    if row is None:
+        raise LookupError(f"Workflow {workflow_id} has no revision {number}.")
+
+    return _deserialize_revision(row[0])
 
 
 def _deserialize_revision(

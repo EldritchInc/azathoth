@@ -185,7 +185,7 @@ def test_sqlite_repository_preserves_insertion_order(
     )
 
 
-def test_sqlite_repository_appends_a_revision_for_a_resave(
+def test_sqlite_repository_appends_nothing_for_an_unchanged_resave(
     tmp_path: Path,
 ) -> None:
     repository = SQLiteWorkflowRepository(tmp_path / "workflows.db")
@@ -194,7 +194,8 @@ def test_sqlite_repository_appends_a_revision_for_a_resave(
     first = repository.save(specification)
     second = repository.save(specification)
 
-    assert (first.number, second.number) == (1, 2)
+    assert second == first
+    assert len(repository.revisions(specification.metadata.id)) == 1
     assert repository.specifications() == (specification,)
 
 

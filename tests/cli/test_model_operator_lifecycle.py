@@ -19,6 +19,7 @@ from azathoth.providers import (
     ModelPortfolio,
     SQLiteModelPortfolioRepository,
 )
+from azathoth.revisions import AUTHOR_VARIABLE, Author
 
 MODEL_IDENTIFIER = "openrouter/example/operator-model"
 MODEL = "example/operator-model"
@@ -222,3 +223,51 @@ def test_model_operator_lifecycle_cannot_reauthorize_unavailable_model(
     repository = SQLiteModelPortfolioRepository(database)
 
     assert repository.entries() == ()
+
+
+def test_authorizing_records_the_author_variables_author(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_environment(database=database, monkeypatch=monkeypatch)
+    configure_runtime_state(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(models=(create_current_model(),)),
+    )
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris@example.com>")
+
+    assert authorize_model(MODEL_IDENTIFIER) == 0
+
+    provenance = SQLiteModelPortfolioRepository(database).provenance(MODEL_IDENTIFIER)
+
+    assert provenance is not None
+    assert provenance.author == Author(name="Eris", email="eris@example.com")
+
+
+def test_authorizing_is_refused_when_who_authorizes_cannot_be_told(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_environment(database=database, monkeypatch=monkeypatch)
+    configure_runtime_state(
+        monkeypatch=monkeypatch,
+        database=database,
+        models=ModelCatalog(models=(create_current_model(),)),
+    )
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    assert authorize_model(MODEL_IDENTIFIER) == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err == (
+        'AZATHOTH_AUTHOR is \'Eris <eris>\'; set it to "Name <email>" or "Name".\n'
+    )
+    assert load_portfolio(database).entries == ()

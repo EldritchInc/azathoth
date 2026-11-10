@@ -11,6 +11,7 @@ from azathoth.persistence.database import (
     Parameter,
     Row,
     Table,
+    run_backfills,
 )
 from azathoth.persistence.dialect import Dialect, identifier, render
 from azathoth.persistence.errors import IntegrityError
@@ -167,7 +168,7 @@ class SQLiteDatabase:
         self,
         tables: Sequence[Table],
     ) -> InitializationOutcome:
-        """Create every table that is missing."""
+        """Create every table that is missing, then run every backfill."""
 
         with self.transaction() as session:
             existing = {
@@ -180,6 +181,8 @@ class SQLiteDatabase:
             for table in tables:
                 for statement in table.statements:
                     session.execute(statement)
+
+            run_backfills(session, tables)
 
         return InitializationOutcome.CREATED if missing else InitializationOutcome.CURRENT
 

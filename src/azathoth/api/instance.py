@@ -5,6 +5,7 @@ from pathlib import Path
 from types import TracebackType
 
 import azathoth
+from azathoth.api.authorship import author_access
 from azathoth.api.browsing import Benchmarks, Tools, Workflows
 from azathoth.api.catalog import Models, Portfolio
 from azathoth.api.errors import (
@@ -55,6 +56,7 @@ class Azathoth:
         telemetry: Telemetry = NO_TELEMETRY,
         directories: Sequence[ProviderModelDirectory] | None = None,
         language_models: LanguageModelRegistry | None = None,
+        author: str | None = None,
     ) -> None:
         """Serve the API over one database's repositories; `open` is the way to make one.
 
@@ -62,18 +64,29 @@ class Azathoth:
         made the first time models are needed. `directories`, when given,
         are used instead, as tests do, with `language_models` as the models
         runs execute. Runs and invocations are traced by `telemetry`.
+        Imports and portfolio additions are recorded as `author`'s, or, without
+        it, as `AZATHOTH_AUTHOR`'s or the operating system user's (ADR 0122).
+
+        Raises:
+            InvalidAuthorError: `author` is not `Name <email>` or `Name`.
         """
+
+        self._author = author_access(author)
 
         self._repositories = repositories
         self._providers = providers if providers is not None else ProviderSettings()
         self._directories = tuple(directories) if directories is not None else None
         self._given_language_models = language_models
         self._closed = False
-        self._workflows = Workflows(self._open_repositories)
-        self._tools = Tools(self._open_repositories)
-        self._benchmarks = Benchmarks(self._open_repositories)
+        self._workflows = Workflows(self._open_repositories, self._author)
+        self._tools = Tools(self._open_repositories, self._author)
+        self._benchmarks = Benchmarks(self._open_repositories, self._author)
         self._models = Models(self._open_repositories, self._model_directories)
-        self._portfolio = Portfolio(self._open_repositories, self._model_directories)
+        self._portfolio = Portfolio(
+            self._open_repositories,
+            self._model_directories,
+            self._author,
+        )
         self._injected = directories is not None
         self._runs = Runs(
             self._open_repositories,
@@ -246,6 +259,7 @@ def open(
     providers: ProviderSettings | None = None,
     telemetry: Telemetry = NO_TELEMETRY,
     content: S3ContentLocation | None = None,
+    author: str | None = None,
 ) -> Azathoth:
     """Open the Azathoth instance one database holds.
 
@@ -261,15 +275,20 @@ def open(
     `telemetry` traces runs and invocations, as `AZATHOTH_TRACING` does for
     the command line. `content` names the S3 location that keeps resolved
     content (ADR 0108), as `AZATHOTH_CONTENT_STORE` does; without it,
-    content is kept in the database.
+    content is kept in the database. `author`, as `Name <email>` or `Name`,
+    is who imports and portfolio additions are recorded as; without it they
+    are `AZATHOTH_AUTHOR`'s, or the operating system user's (ADR 0122).
 
     Raises:
+        InvalidAuthorError: `author` is not `Name <email>` or `Name`.
         InstanceNotFoundError: The SQLite file does not exist.
         InstanceUnavailableError: It is a PostgreSQL database, and the
             `postgres` extra is not installed.
         InstanceSchemaError: The PostgreSQL database does not hold this
             Azathoth's schema.
     """
+
+    author_access(author)
 
     location = (
         database
@@ -296,7 +315,7 @@ def open(
         except DatabaseSchemaError as exc:
             raise InstanceSchemaError(str(exc)) from exc
 
-    return Azathoth(repositories, providers=providers, telemetry=telemetry)
+    return Azathoth(repositories, providers=providers, telemetry=telemetry, author=author)
 
 
 __all__ = [

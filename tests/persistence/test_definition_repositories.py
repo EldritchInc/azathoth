@@ -6,8 +6,9 @@ numbered from 1 per artifact, read back exactly and in order, duplicates are
 refused, and, on PostgreSQL, concurrent writers never take the same number.
 """
 
+import itertools
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TypeVar
 from uuid import UUID
 
@@ -24,7 +25,7 @@ from azathoth.evaluation import (
 )
 from azathoth.goals import GOAL_TABLES, GoalRepository, SqlGoalRepository
 from azathoth.persistence import Database, PostgresDatabase, Table
-from azathoth.revisions import content_digest
+from azathoth.revisions import LineageRecord, content_digest, tables_with_lineage
 from azathoth.tools import (
     TOOL_TABLES,
     SqlToolRepository,
@@ -87,6 +88,21 @@ def initialized(
     return factory(database)
 
 
+def assert_one_chain(
+    lineage: Sequence[LineageRecord],
+    count: int,
+) -> None:
+    """Assert a lineage is one unbroken line: each revision built on the one before it."""
+
+    assert [record.number for record in lineage] == list(range(1, count + 1))
+    assert lineage[0].parent_digest is None
+    assert all(
+        record.parent_digest == previous.revision_digest
+        for previous, record in itertools.pairwise(lineage)
+    )
+    assert len({record.revision_digest for record in lineage}) == count
+
+
 def concurrently(
     postgres_url: str,
     tables: tuple[Table, ...],
@@ -130,7 +146,9 @@ def concurrently(
 def workflows(
     database: Database,
 ) -> WorkflowRepository:
-    return initialized(database, WORKFLOW_SPECIFICATION_TABLES, SqlWorkflowRepository)
+    return initialized(
+        database, tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES), SqlWorkflowRepository
+    )
 
 
 def test_workflow_revisions_are_numbered_and_read_back(
@@ -173,26 +191,29 @@ def test_workflows_list_their_latest_specification_in_first_import_order(
 def test_concurrent_imports_never_take_the_same_workflow_revision(
     postgres_url: str,
 ) -> None:
+    writes = itertools.count(1)
+
     def write(
         database: Database,
     ) -> None:
         repository = SqlWorkflowRepository(database)
 
         for _ in range(5):
-            repository.save(create_workflow())
+            repository.save(create_workflow(name=f"Concurrent write {next(writes)}"))
 
-    concurrently(postgres_url, WORKFLOW_SPECIFICATION_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 
     try:
-        numbers = [
-            revision.number for revision in SqlWorkflowRepository(database).revisions(WORKFLOW_ID)
-        ]
+        repository = SqlWorkflowRepository(database)
+        numbers = [revision.number for revision in repository.revisions(WORKFLOW_ID)]
+        lineage = repository.lineage(WORKFLOW_ID)
     finally:
         database.close()
 
     assert numbers == list(range(1, 21))
+    assert_one_chain(lineage, 20)
 
 
 # Production states
@@ -274,7 +295,7 @@ def test_a_duplicate_production_revision_is_refused(
 def tools(
     database: Database,
 ) -> ToolRepository:
-    return initialized(database, TOOL_TABLES, SqlToolRepository)
+    return initialized(database, tables_with_lineage(TOOL_TABLES), SqlToolRepository)
 
 
 def test_tool_documents_are_revisioned_per_version(
@@ -359,26 +380,37 @@ def test_a_version_saved_artifact_by_artifact_becomes_revision_1_when_a_document
 def test_concurrent_imports_never_take_the_same_tool_revision(
     postgres_url: str,
 ) -> None:
+    writes = itertools.count(1)
+
     def write(
         database: Database,
     ) -> None:
         repository = SqlToolRepository(database)
 
         for document in (create_document(), create_changed_document()) * 2:
-            repository.save_document(document)
+            repository.save_document(
+                document.model_copy(
+                    update={
+                        "definition": document.definition.model_copy(
+                            update={"description": f"Concurrent write {next(writes)}."},
+                        ),
+                    },
+                )
+            )
 
-    concurrently(postgres_url, TOOL_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(TOOL_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 
     try:
-        numbers = [
-            revision.number for revision in SqlToolRepository(database).document_revisions(TOOL_ID)
-        ]
+        repository = SqlToolRepository(database)
+        numbers = [revision.number for revision in repository.document_revisions(TOOL_ID)]
+        lineage = repository.document_lineage(TOOL_ID, "1.0.0")
     finally:
         database.close()
 
     assert numbers == list(range(1, 17))
+    assert_one_chain(lineage, 16)
 
 
 # Benchmarks
@@ -387,7 +419,7 @@ def test_concurrent_imports_never_take_the_same_tool_revision(
 def benchmarks(
     database: Database,
 ) -> BenchmarkRepository:
-    return initialized(database, BENCHMARK_TABLES, SqlBenchmarkRepository)
+    return initialized(database, tables_with_lineage(BENCHMARK_TABLES), SqlBenchmarkRepository)
 
 
 def test_benchmark_revisions_are_numbered_and_read_back(
@@ -411,26 +443,33 @@ def test_benchmark_revisions_are_numbered_and_read_back(
 def test_concurrent_imports_never_take_the_same_benchmark_revision(
     postgres_url: str,
 ) -> None:
+    writes = itertools.count(1)
+
     def write(
         database: Database,
     ) -> None:
         repository = SqlBenchmarkRepository(database)
 
         for _ in range(5):
-            repository.save(create_dataset())
+            repository.save(
+                create_dataset().model_copy(
+                    update={"description": f"Concurrent write {next(writes)}."},
+                )
+            )
 
-    concurrently(postgres_url, BENCHMARK_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(BENCHMARK_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 
     try:
-        numbers = [
-            revision.number for revision in SqlBenchmarkRepository(database).revisions(BENCHMARK_ID)
-        ]
+        repository = SqlBenchmarkRepository(database)
+        numbers = [revision.number for revision in repository.revisions(BENCHMARK_ID)]
+        lineage = repository.lineage(BENCHMARK_ID)
     finally:
         database.close()
 
     assert numbers == list(range(1, 21))
+    assert_one_chain(lineage, 20)
 
 
 # Goals

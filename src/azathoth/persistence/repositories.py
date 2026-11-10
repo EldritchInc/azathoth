@@ -32,6 +32,7 @@ from azathoth.persistence.location import (
 from azathoth.persistence.postgres import PostgresDatabase
 from azathoth.persistence.sqlite import SQLiteDatabase
 from azathoth.providers import (
+    MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     MODEL_TABLES,
     PROVIDER_MODEL_OBSERVATION_TABLES,
@@ -45,6 +46,7 @@ from azathoth.providers import (
     SqlModelRepository,
     SqlProviderModelObservationRepository,
 )
+from azathoth.revisions import REVISION_LINEAGE_TABLES
 from azathoth.tools import (
     TOOL_TABLES,
     SQLiteToolRepository,
@@ -124,6 +126,8 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *PROVIDER_MODEL_OBSERVATION_TABLES,
     *CONTENT_TABLES,
     *RUN_PROGRESS_TABLES,
+    *REVISION_LINEAGE_TABLES,
+    *MODEL_PORTFOLIO_PROVENANCE_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 

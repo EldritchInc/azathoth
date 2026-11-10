@@ -5,6 +5,7 @@ import sys
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.service import current_author
 from azathoth.providers import (
     ModelCapability,
     ModelMetadata,
@@ -90,13 +91,19 @@ def authorize_model(
 
         return 1
 
+    author = current_author()
+
+    if author is None:
+        return 1
+
     repository = repositories(configuration).portfolio
 
     repository.save(
         ModelPortfolioEntry(
             provider=model.provider,
             model=model.model,
-        )
+        ),
+        author=author,
     )
 
     print(f"Authorized model {identifier}.")

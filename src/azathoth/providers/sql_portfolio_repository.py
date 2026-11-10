@@ -1,9 +1,13 @@
 """The organizational model portfolio, in either database (ADR 0102)."""
 
-from azathoth.persistence import Database, IntegrityError, Table, require_text
+from datetime import UTC, datetime
+
+from azathoth.persistence import Database, IntegrityError, Row, Session, Table, require_text
 from azathoth.providers.portfolio import (
     ModelPortfolioEntry,
 )
+from azathoth.providers.portfolio_provenance import PortfolioProvenance
+from azathoth.revisions import Author, content_digest
 
 MODEL_PORTFOLIO_TABLES = (
     Table(
@@ -33,6 +37,65 @@ MODEL_PORTFOLIO_TABLES = (
 """The tables the model portfolio is kept in."""
 
 
+def _fill_portfolio_provenance(
+    session: Session,
+    present: frozenset[str],
+) -> None:
+    """Record the provenance of every portfolio entry that lacks one, without author or time."""
+
+    if "model_portfolio_entries" not in present:
+        return
+
+    rows = session.fetchall(
+        """
+        SELECT e.payload
+        FROM model_portfolio_entries e
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM model_portfolio_provenance p
+            WHERE p.identifier = e.identifier
+        )
+        ORDER BY e.sequence
+        """
+    )
+
+    for row in rows:
+        entry = _entry(row[0])
+
+        _insert_provenance(
+            session,
+            PortfolioProvenance(
+                identifier=entry.identifier,
+                content_digest=content_digest(entry),
+            ),
+        )
+
+
+MODEL_PORTFOLIO_PROVENANCE_TABLES = (
+    Table(
+        name="model_portfolio_provenance",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS
+                model_portfolio_provenance (
+                    identifier TEXT NOT NULL PRIMARY KEY,
+                    content_digest TEXT NOT NULL,
+                    author_name TEXT,
+                    author_email TEXT,
+                    added_at TEXT
+                )
+            """,
+        ),
+        backfill=_fill_portfolio_provenance,
+    ),
+)
+"""The table portfolio provenance is kept in (ADR 0122).
+
+Its backfill records the provenance of entries added before it existed,
+with their digest and no author or time.
+"""
+
+
 class SqlModelPortfolioRepository:
     """Persist authorized model portfolio entries in a database."""
 
@@ -41,13 +104,15 @@ class SqlModelPortfolioRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(MODEL_PORTFOLIO_TABLES)
+        database.prepare((*MODEL_PORTFOLIO_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES))
 
     def save(
         self,
         entry: ModelPortfolioEntry,
+        *,
+        author: Author | None = None,
     ) -> None:
-        """Persist one entry without replacing existing policy.
+        """Persist one entry without replacing existing policy, and record its provenance.
 
         Raises:
             ValueError: An entry with the same identifier already exists.
@@ -70,6 +135,16 @@ class SqlModelPortfolioRepository:
                         entry.provider,
                         entry.model,
                         entry.model_dump_json(),
+                    ),
+                )
+
+                _insert_provenance(
+                    session,
+                    PortfolioProvenance(
+                        identifier=entry.identifier,
+                        content_digest=content_digest(entry),
+                        author=author,
+                        added_at=datetime.now(UTC),
                     ),
                 )
         except IntegrityError as exc:
@@ -100,7 +175,7 @@ class SqlModelPortfolioRepository:
         self,
         identifier: str,
     ) -> None:
-        """Delete one authorized model entry.
+        """Delete one authorized model entry and its provenance.
 
         Raises:
             ValueError: The entry does not exist.
@@ -110,6 +185,14 @@ class SqlModelPortfolioRepository:
             deleted = session.execute(
                 """
                 DELETE FROM model_portfolio_entries
+                WHERE identifier = ?
+                """,
+                (identifier,),
+            )
+
+            session.execute(
+                """
+                DELETE FROM model_portfolio_provenance
                 WHERE identifier = ?
                 """,
                 (identifier,),
@@ -134,18 +217,108 @@ class SqlModelPortfolioRepository:
 
         return tuple(self._deserialize_payload(row[0]) for row in rows)
 
+    def provenance(
+        self,
+        identifier: str,
+    ) -> PortfolioProvenance | None:
+        """Return the provenance of one portfolio entry, if it is in the portfolio."""
+
+        with self._database.transaction() as session:
+            row = session.fetchone(
+                """
+                SELECT identifier, content_digest, author_name, author_email, added_at
+                FROM model_portfolio_provenance
+                WHERE identifier = ?
+                """,
+                (identifier,),
+            )
+
+        return None if row is None else _provenance(row)
+
     @staticmethod
     def _deserialize_payload(
         payload: object,
     ) -> ModelPortfolioEntry:
         """Reconstruct one persisted portfolio entry."""
 
-        return ModelPortfolioEntry.model_validate_json(
-            require_text(payload, "Persisted model portfolio entry payload was not text.")
+        return _entry(payload)
+
+
+def _entry(
+    payload: object,
+) -> ModelPortfolioEntry:
+    """Reconstruct one persisted portfolio entry."""
+
+    return ModelPortfolioEntry.model_validate_json(
+        require_text(payload, "Persisted model portfolio entry payload was not text.")
+    )
+
+
+def _insert_provenance(
+    session: Session,
+    provenance: PortfolioProvenance,
+) -> None:
+    """Insert one entry's provenance row."""
+
+    author = provenance.author
+
+    session.execute(
+        """
+        INSERT INTO model_portfolio_provenance (
+            identifier,
+            content_digest,
+            author_name,
+            author_email,
+            added_at
         )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            provenance.identifier,
+            provenance.content_digest,
+            None if author is None else author.name,
+            None if author is None else author.email,
+            None if provenance.added_at is None else provenance.added_at.isoformat(),
+        ),
+    )
+
+
+def _provenance(
+    row: Row,
+) -> PortfolioProvenance:
+    """Return the provenance one row holds."""
+
+    name = row[2]
+    email = row[3]
+    added_at = row[4]
+
+    return PortfolioProvenance(
+        identifier=require_text(row[0], "A portfolio provenance identifier was not text."),
+        content_digest=require_text(row[1], "A portfolio provenance digest was not text."),
+        author=(
+            None
+            if name is None
+            else Author(
+                name=require_text(name, "A portfolio author name was not text."),
+                email=(
+                    None
+                    if email is None
+                    else require_text(email, "A portfolio author email was not text.")
+                ),
+            )
+        ),
+        added_at=(
+            None
+            if added_at is None
+            else datetime.fromisoformat(
+                require_text(added_at, "A portfolio provenance time was not text.")
+            )
+        ),
+    )
 
 
 __all__ = [
+    "MODEL_PORTFOLIO_PROVENANCE_TABLES",
     "MODEL_PORTFOLIO_TABLES",
     "SqlModelPortfolioRepository",
 ]

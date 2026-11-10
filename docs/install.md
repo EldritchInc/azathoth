@@ -396,11 +396,12 @@ When you upgrade Azathoth to a release with a newer schema, every command
 stops until the database is upgraded too:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 2; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
 ```
 
 Upgrade Azathoth on every machine, then run `init` once, from any one of
-them. It adds the tables the database lacks and keeps everything in it:
+them. It adds the tables the database lacks, fills in what they need for the
+rows it already holds, and keeps everything in it:
 
 ```bash
 azathoth init
@@ -411,7 +412,7 @@ azathoth init
 ```
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 2)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
 ```
 
 An SQLite file needs no such step: Azathoth adds the tables it lacks the
@@ -577,6 +578,39 @@ Remove-Item Env:AZATHOTH_OTEL
 The [telemetry reference](../src/azathoth/telemetry/README.md) lists every
 span and attribute.
 
+## Optional: Naming Who Imports
+
+Every workflow, tool and benchmark you import, and every model you
+authorize, records who did it
+([ADR 0122](adrs/0122-lineage-and-digests.md)). By default that is your
+operating system's username. To record your name and email instead, set
+`AZATHOTH_AUTHOR`:
+
+```bash
+export AZATHOTH_AUTHOR="Ada Lovelace <ada@example.com>"
+```
+
+```powershell
+$env:AZATHOTH_AUTHOR = "Ada Lovelace <ada@example.com>"
+```
+
+A name alone, such as `Ada Lovelace`, is fine too. `azathoth workflow show`
+then names you on each revision you import:
+
+```text
+Author: Ada Lovelace <ada@example.com>
+```
+
+An empty `AZATHOTH_AUTHOR` counts as unset. One that is neither form stops
+the import, so nothing is recorded under a name you didn't mean:
+
+```text
+AZATHOTH_AUTHOR is 'Ada <ada>'; set it to "Name <email>" or "Name".
+```
+
+The standard tools that `azathoth init` installs are recorded as Azathoth's,
+whoever runs it.
+
 ## Each New Terminal
 
 A venv and an environment variable last only as long as the terminal window.
@@ -598,6 +632,8 @@ On Windows, also apply the UTF-8 settings, unless your PowerShell profile
 already does (see
 [Windows: UTF-8 output](#windows-utf-8-output)).
 
+If you name who imports, set `AZATHOTH_AUTHOR` again too (see
+[Optional: Naming Who Imports](#optional-naming-who-imports)).
 If you trace, set `AZATHOTH_OTEL` and the `OTEL_*` variables again too (see
 [Optional: Tracing With OpenTelemetry](#optional-tracing-with-opentelemetry)).
 If you use Bedrock, set `AZATHOTH_BEDROCK`, `AWS_REGION` and

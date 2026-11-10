@@ -402,14 +402,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 2; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
 ```
 
-`init` then adds the tables the database lacks, keeps everything it holds,
-and marks it upgraded:
+`init` then adds the tables the database lacks, fills in what they need for
+the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 2)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -897,7 +897,8 @@ The identifier is a workflow UUID.
 
 The command renders the latest revision by default, or the one named with
 `--revision <NUMBER>`. It shows the revision, its import time and content
-digest, workflow metadata, the declared result, and configured step
+digest, its revision digest, the revision it was built on and who imported it
+(ADR 0122), workflow metadata, the declared result, and configured step
 structure:
 
 ```text
@@ -905,12 +906,18 @@ ID: <WORKFLOW_ID>
 Revision: 2 of 2
 Imported: 2026-10-23T15:30:40+00:00
 Content Digest: <SHA256>
+Revision Digest: <SHA256>
+Parent: revision 1
+Author: Eris <eris@example.com>
 Name: simple prompt
 Version: 1.0.0
 Description: Return a concise answer to one request.
 Result: step <STEP_ID> output answer
 Steps: 1
 ```
+
+A workflow's first revision shows `Parent: none`, and one imported before 1.4
+shows `Author: unknown`.
 
 A name-only result renders as:
 
@@ -971,8 +978,8 @@ to inspect it, and it reads durable state only, without provider credentials.
 
 # Workflow Revisions
 
-The workflow ID is a lineage. Every `workflow import` appends the next
-revision under it; nothing is ever edited in place:
+The workflow ID is a lineage. Every `workflow import` of new content appends
+the next revision under it; nothing is ever edited in place:
 
 ```text
 workflow import v1.json   ──►  revision 1
@@ -988,6 +995,13 @@ content:
 Imported workflow <WORKFLOW_ID> revision 3 (identical to revision 1).
 ```
 
+Importing a document identical to the latest revision appends nothing
+(ADR 0122):
+
+```text
+Workflow <WORKFLOW_ID> is unchanged at revision 3.
+```
+
 Content identity is a sha256 digest of the specification's canonical JSON, so
 key order and formatting in the file do not matter.
 
@@ -999,13 +1013,24 @@ azathoth workflow history <WORKFLOW_ID> --limit <COUNT>
 ```
 
 ```text
-3  2026-10-23T15:31:02+00:00  4f1a9c0e2b7d  1.0.0  simple prompt  identical to revision 1
-2  2026-10-23T15:30:40+00:00  91d07a3c55e2  1.0.0  simple prompt
+3  2026-10-23T15:31:02+00:00  4f1a9c0e2b7d  1.0.0  simple prompt  identical to revision 1  by Eris
+2  2026-10-23T15:30:40+00:00  91d07a3c55e2  1.0.0  simple prompt  by Eris
 1  unknown                    4f1a9c0e2b7d  1.0.0  simple prompt
 ```
 
 Each line contains the revision number, import time, the first twelve
-characters of the content digest, the declared version, and the name.
+characters of the content digest, the declared version, and the name. It ends
+with who imported the revision, when that is known: revisions imported before
+1.4 name nobody (ADR 0122). `tool history` and `benchmark history` lines end
+the same way.
+
+Every import is recorded as the author `AZATHOTH_AUTHOR` names, as
+`Name <email>` or `Name`, or else as the operating system's username. A
+malformed `AZATHOTH_AUTHOR` stops the import:
+
+```text
+AZATHOTH_AUTHOR is '<VALUE>'; set it to "Name <email>" or "Name".
+```
 
 Print any revision as a document `workflow import` accepts with:
 
@@ -3558,12 +3583,20 @@ Python tools.
 # Tool Revisions
 
 A tool document bundles one exact definition version with its
-implementations and test cases. Every `tool import` appends the next revision
-of that `<TOOL_ID>@<VERSION>`; nothing is ever rejected for already existing:
+implementations and test cases. Every `tool import` of new content appends the
+next revision of that `<TOOL_ID>@<VERSION>`; nothing is ever rejected for
+already existing:
 
 ```text
 Imported tool <TOOL_ID>@1.0.0 revision 2.
 Imported tool <TOOL_ID>@1.0.0 revision 3 (identical to revision 1).
+```
+
+A document identical to the latest revision of its version appends nothing
+(ADR 0122):
+
+```text
+Tool <TOOL_ID>@1.0.0 is unchanged at revision 3.
 ```
 
 The latest revision of each version defines the current artifacts that
@@ -3886,14 +3919,22 @@ azathoth benchmark cases <BENCHMARK_ID>
 azathoth benchmark case-show <BENCHMARK_ID> <CASE_ID>
 ```
 
-Benchmarks are revisioned exactly like workflows. Every import appends the
-next revision; re-importing an earlier document reverts to its content:
+Benchmarks are revisioned exactly like workflows. Every import of new content
+appends the next revision; re-importing an earlier document reverts to its
+content:
 
 ```text
 Imported benchmark dataset <BENCHMARK_ID> revision 3 (identical to revision 1).
 ```
 
-`benchmark show` adds `Revision`, `Imported`, and `Content Digest` lines, and
+A document identical to the latest revision appends nothing (ADR 0122):
+
+```text
+Benchmark dataset <BENCHMARK_ID> is unchanged at revision 3.
+```
+
+`benchmark show` adds `Revision`, `Imported`, `Content Digest`,
+`Revision Digest`, `Parent`, and `Author` lines, as `workflow show` does, and
 `benchmark history` lists one line per revision, newest first:
 
 ```text

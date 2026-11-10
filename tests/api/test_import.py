@@ -46,8 +46,10 @@ def test_a_workflow_document_is_imported_as_its_first_revision(
     instance: api.Azathoth,
     location: str,
 ) -> None:
-    imported = instance.workflows.import_document(example("workflows", "simple-prompt.json"))
+    result = instance.workflows.import_document(example("workflows", "simple-prompt.json"))
+    imported = result.workflow
 
+    assert result.created
     assert imported.id == WORKFLOW_ID
     assert imported.revision.number == 1
     assert imported.revision.identical_to is None
@@ -62,18 +64,19 @@ def test_a_workflow_can_be_imported_from_json_values(
 ) -> None:
     imported = instance.workflows.import_document(example_json("workflows", "simple-prompt.json"))
 
-    assert imported == instance.workflows.get(WORKFLOW_ID)
+    assert imported.workflow == instance.workflows.get(WORKFLOW_ID)
 
 
-def test_importing_again_appends_a_revision_identical_to_the_first(
+def test_importing_unchanged_content_again_appends_nothing(
     instance: api.Azathoth,
 ) -> None:
-    instance.workflows.import_document(example("workflows", "simple-prompt.json"))
+    first = instance.workflows.import_document(example("workflows", "simple-prompt.json"))
 
     again = instance.workflows.import_document(example("workflows", "simple-prompt.json"))
 
-    assert again.revision.number == 2
-    assert again.revision.identical_to == 1
+    assert first.created
+    assert not again.created
+    assert again.workflow == first.workflow
 
 
 def test_a_workflow_document_that_is_not_one_is_refused(
@@ -113,8 +116,10 @@ def test_a_workflow_without_a_result_is_refused(
 def test_a_tool_document_is_imported_as_its_versions_first_revision(
     instance: api.Azathoth,
 ) -> None:
-    imported = instance.tools.import_document(example("tools", "word-count.json"))
+    result = instance.tools.import_document(example("tools", "word-count.json"))
+    imported = result.tool
 
+    assert result.created
     assert (imported.id, imported.version) == (TOOL_ID, "1.0.0")
     assert imported.revision.number == 1
     assert imported.implementation_count == 1
@@ -187,8 +192,10 @@ def test_a_tool_whose_implementation_belongs_to_another_version_is_refused(
 def test_a_benchmark_document_is_imported_as_its_first_revision(
     instance: api.Azathoth,
 ) -> None:
-    imported = instance.benchmarks.import_document(example("benchmarks", "word-count.json"))
+    result = instance.benchmarks.import_document(example("benchmarks", "word-count.json"))
+    imported = result.benchmark
 
+    assert result.created
     assert imported.id == BENCHMARK_ID
     assert imported.revision.number == 1
     assert imported.case_count == 1

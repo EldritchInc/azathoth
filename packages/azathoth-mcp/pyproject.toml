@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "azathoth-mcp"
-version = "1.4.0a2"
+version = "1.4.0a3"
 description = "Serve promoted Azathoth workflows as Model Context Protocol tools."
 readme = "README.md"
 requires-python = ">=3.11"

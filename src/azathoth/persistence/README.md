@@ -75,16 +75,21 @@ table.
 `init` upgrades a database of an earlier version: it creates the tables that
 version lacks, keeps every row it holds, records the new version, and marks
 the database `upgraded to schema version <VERSION>`. It never initializes
-over a newer schema. A version only adds tables:
+over a newer schema. A version only adds tables. A table added later may
+need rows for what the earlier tables hold, such as the lineage of revisions
+imported before it existed: its backfill writes them, as part of the same
+`init`, and writes nothing that is already there:
 
 | Version | Adds |
 | --- | --- |
 | `1` | The tables of Azathoth 1.1. |
 | `2` | `run_journal`, `run_leases` and `run_children`, which record a run while it executes so it can be resumed (ADR 0105). |
+| `3` | `revision_lineage` and `model_portfolio_provenance`, which record where each revision sits in its lineage, who authored it, and who added each portfolio entry (ADR 0122). |
 
 An SQLite file needs no `init` to be used: each repository creates its
 tables when it opens the file, so a file of an earlier version gains the
-tables it lacks when they are first used, and a file from before 1.1 is
+tables it lacks, and their backfilled rows, when they are first used, and a
+file from before 1.1 is
 upgraded in place, as it always has been. `init` still installs the standard tools into it.
 
 ## Tables
@@ -120,6 +125,8 @@ upgraded in place, as it always has been. `init` still installs the standard too
 | `run_journal` | `azathoth.workflows` |
 | `run_leases` | `azathoth.workflows` |
 | `run_children` | `azathoth.workflows` |
+| `revision_lineage` | `azathoth.revisions` |
+| `model_portfolio_provenance` | `azathoth.providers` |
 
 Documents and evidence stay JSON text, never `JSONB`, so what Azathoth reads
 back is byte for byte what it wrote, and digests over it hold in either

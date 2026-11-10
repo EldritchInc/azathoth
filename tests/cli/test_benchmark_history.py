@@ -20,6 +20,7 @@ from azathoth.evaluation import (
     SQLiteBenchmarkRepository,
     encode_benchmark_document,
 )
+from azathoth.revisions import Author
 from tests.cli.test_benchmark_import import (
     BENCHMARK_ID,
     configure_database,
@@ -411,3 +412,54 @@ def test_export_rejects_unknown_benchmarks_and_revisions(
 
     assert captured.out == ""
     assert captured.err == f"Benchmark dataset {BENCHMARK_ID} has no revision 9.\n"
+
+
+def test_show_names_the_revisions_digest_parent_and_author(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+
+    repository = SQLiteBenchmarkRepository(database)
+    repository.save(create_dataset())
+    repository.save(create_changed_dataset(), author=Author(name="Eris", email="e@example.com"))
+
+    first, second = repository.lineage(BENCHMARK_ID)
+
+    assert show_benchmark(BENCHMARK_ID) == 0
+
+    latest = capsys.readouterr().out
+
+    assert (
+        f"Revision Digest: {second.revision_digest}\n"
+        "Parent: revision 1\n"
+        "Author: Eris <e@example.com>\n"
+    ) in latest
+
+    assert show_benchmark(BENCHMARK_ID, revision=1) == 0
+
+    earliest = capsys.readouterr().out
+
+    assert f"Revision Digest: {first.revision_digest}\nParent: none\nAuthor: unknown\n" in earliest
+
+
+def test_history_names_who_imported_a_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+
+    repository = SQLiteBenchmarkRepository(database)
+    repository.save(create_dataset(), author=Author(name="Eris"))
+
+    assert list_benchmark_history(BENCHMARK_ID) == 0
+
+    (line,) = capsys.readouterr().out.splitlines()
+
+    assert line.endswith("  by Eris")

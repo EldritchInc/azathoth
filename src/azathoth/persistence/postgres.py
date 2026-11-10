@@ -18,6 +18,7 @@ from azathoth.persistence.database import (
     Parameter,
     Row,
     Table,
+    run_backfills,
 )
 from azathoth.persistence.dialect import Dialect, identifier, render
 from azathoth.persistence.errors import (
@@ -336,8 +337,9 @@ class PostgresDatabase:
 
         Several processes may initialize at once: each waits for the lock,
         and the later ones find the schema already there. A schema of an
-        earlier version gains the tables it lacks, and is then recorded as
-        this version.
+        earlier version gains the tables it lacks, every backfill fills the
+        rows they need for what the database already holds, and it is then
+        recorded as this version.
 
         Raises:
             DatabaseSchemaTooNewError: The schema is newer than this Azathoth's.
@@ -365,6 +367,8 @@ class PostgresDatabase:
             for table in tables:
                 for statement in table.statements:
                     session.execute(statement)
+
+            run_backfills(session, tables)
 
             session.execute(
                 f"""

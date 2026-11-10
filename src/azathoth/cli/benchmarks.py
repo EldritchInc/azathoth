@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID
 
@@ -26,7 +27,14 @@ from azathoth.cli.rendering import (
     render_workflow_benchmark_execution_summaries,
     render_workflow_benchmark_result,
 )
-from azathoth.cli.service import history_line, identical_note, import_note, service_instance
+from azathoth.cli.service import (
+    author_note,
+    history_line,
+    identical_note,
+    import_note,
+    lineage_lines,
+    service_instance,
+)
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDatasetRevision,
@@ -35,6 +43,7 @@ from azathoth.evaluation import (
     UnsupportedComparisonError,
     encode_benchmark_document,
 )
+from azathoth.revisions import LineageRecord
 from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
@@ -83,6 +92,7 @@ def show_benchmark(
     _print_benchmark_dataset(
         selected,
         latest_number=latest.number if latest is not None else selected.number,
+        lineage=repository.lineage(benchmark_id),
     )
 
     return 0
@@ -95,8 +105,8 @@ def export_benchmark(
 ) -> int:
     """Print one imported benchmark revision as an importable JSON document.
 
-    Importing the output again appends a revision with identical content.
-    Only durable state is read.
+    Importing the latest revision's export again appends nothing; importing
+    an earlier one's reverts to it (ADR 0122). Only durable state is read.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -144,7 +154,7 @@ def list_benchmark_history(
     for entry in history:
         print(
             f"{history_line(entry)}  {entry.version}  "
-            f"{entry.case_count} cases  {entry.name}{identical_note(entry)}"
+            f"{entry.case_count} cases  {entry.name}{identical_note(entry)}{author_note(entry)}"
         )
 
     return 0
@@ -268,8 +278,9 @@ def _print_benchmark_dataset(
     revision: BenchmarkDatasetRevision,
     *,
     latest_number: int,
+    lineage: Sequence[LineageRecord],
 ) -> None:
-    """Render one imported revision of a reusable benchmark workload."""
+    """Render one imported revision of a reusable benchmark workload, and its lineage."""
 
     dataset = revision.dataset
 
@@ -277,6 +288,9 @@ def _print_benchmark_dataset(
     print(f"Revision: {revision.number} of {latest_number}")
     print(f"Imported: {_render_imported_at(revision)}")
     print(f"Content Digest: {revision.content_digest}")
+
+    for line in lineage_lines(revision.number, lineage):
+        print(line)
     print(f"Name: {dataset.name}")
     print(f"Version: {dataset.version}")
     print(f"Description: {dataset.description}")
@@ -395,7 +409,7 @@ def import_benchmark(
 
     try:
         imported = service_instance(configuration).benchmarks.import_document(document)
-    except api.InvalidDocumentError as exc:
+    except (api.InvalidDocumentError, api.InvalidAuthorError) as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -403,9 +417,19 @@ def import_benchmark(
 
         return 1
 
+    benchmark = imported.benchmark
+
+    if not imported.created:
+        print(
+            f"Benchmark dataset {benchmark.id} is unchanged at revision "
+            f"{benchmark.revision.number}."
+        )
+
+        return 0
+
     print(
-        f"Imported benchmark dataset {imported.id} revision {imported.revision.number}"
-        f"{import_note(imported)}."
+        f"Imported benchmark dataset {benchmark.id} revision {benchmark.revision.number}"
+        f"{import_note(benchmark)}."
     )
 
     return 0

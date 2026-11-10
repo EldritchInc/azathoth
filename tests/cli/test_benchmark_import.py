@@ -17,6 +17,7 @@ from azathoth.evaluation import (
     SQLiteBenchmarkRepository,
     encode_benchmark_document,
 )
+from azathoth.revisions import AUTHOR_VARIABLE
 
 BENCHMARK_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -164,7 +165,7 @@ def test_benchmark_import_rejects_invalid_document_before_creating_database(
     assert not database.exists()
 
 
-def test_benchmark_reimport_appends_an_identical_revision(
+def test_benchmark_reimport_of_unchanged_content_appends_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -200,9 +201,30 @@ def test_benchmark_reimport_appends_an_identical_revision(
 
     assert result == 0
     assert captured.err == ""
-    assert captured.out == (
-        f"Imported benchmark dataset {BENCHMARK_ID} revision 2 (identical to revision 1).\n"
-    )
+    assert captured.out == f"Benchmark dataset {BENCHMARK_ID} is unchanged at revision 1.\n"
 
     assert repository.datasets() == (create_dataset(),)
-    assert tuple(revision.number for revision in repository.revisions(BENCHMARK_ID)) == (1, 2)
+    assert tuple(revision.number for revision in repository.revisions(BENCHMARK_ID)) == (1,)
+
+
+def test_benchmark_import_is_refused_when_who_imports_cannot_be_told(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document_path = tmp_path / "benchmark.json"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    document_path.write_text(encode_benchmark_document(create_dataset()), encoding="utf-8")
+
+    assert import_benchmark(document_path) == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.err == (
+        'AZATHOTH_AUTHOR is \'Eris <eris>\'; set it to "Name <email>" or "Name".\n'
+    )
+    assert SQLiteBenchmarkRepository(database).datasets() == ()

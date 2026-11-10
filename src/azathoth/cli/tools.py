@@ -9,9 +9,15 @@ from uuid import UUID
 from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
-from azathoth.cli.service import history_line, identical_note, import_note, service_instance
+from azathoth.cli.service import (
+    author_note,
+    history_line,
+    identical_note,
+    import_note,
+    service_instance,
+)
 from azathoth.revisions import content_digest
-from azathoth.standard import standard_tool_documents
+from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 from azathoth.tools import (
     ToolDefinition,
     ToolImplementation,
@@ -340,7 +346,7 @@ def list_tool_history(
         print(
             f"{entry.version}  {history_line(entry)}  "
             f"{entry.implementation_count} implementations  "
-            f"{entry.test_case_count} test cases{identical_note(entry)}"
+            f"{entry.test_case_count} test cases{identical_note(entry)}{author_note(entry)}"
         )
 
     return 0
@@ -355,8 +361,9 @@ def export_tool(
     """Print one imported tool revision as an importable JSON document.
 
     The latest revision of the exact version is exported unless another is
-    named. Importing the output again appends a revision with identical
-    content. Only durable state is read.
+    named. Importing the latest revision's export again appends nothing;
+    importing an earlier one's reverts to it (ADR 0122). Only durable state
+    is read.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
@@ -429,7 +436,7 @@ def import_tool(
 
     try:
         imported = service_instance(configuration).tools.import_document(encoded)
-    except api.InvalidDocumentError as exc:
+    except (api.InvalidDocumentError, api.InvalidAuthorError) as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -437,9 +444,16 @@ def import_tool(
 
         return 1
 
+    tool = imported.tool
+
+    if not imported.created:
+        print(f"Tool {tool.id}@{tool.version} is unchanged at revision {tool.revision.number}.")
+
+        return 0
+
     print(
-        f"Imported tool {imported.id}@{imported.version} revision {imported.revision.number}"
-        f"{import_note(imported)}."
+        f"Imported tool {tool.id}@{tool.version} revision {tool.revision.number}"
+        f"{import_note(tool)}."
     )
 
     return 0
@@ -480,7 +494,7 @@ def install_standard_tools() -> int:
             continue
 
         try:
-            revision = repository.save_document(document)
+            revision = repository.save_document(document, author=STANDARD_TOOL_AUTHOR)
         except ValueError as exc:
             print(
                 str(exc),

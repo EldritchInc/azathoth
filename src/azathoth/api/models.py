@@ -56,6 +56,14 @@ class InstanceDescription(ApiModel):
     api_stability: ApiStability
 
 
+class Author(ApiModel):
+    """Who imported a revision, or added a portfolio entry (ADR 0122)."""
+
+    name: str
+
+    email: str | None
+
+
 class Revision(ApiModel):
     """One imported revision of a workflow, tool version or benchmark."""
 
@@ -73,6 +81,26 @@ class Revision(ApiModel):
 
     identical_to: int | None = Field(
         description="The earliest earlier revision with the same content, when it reverted to one.",
+    )
+
+    revision_digest: str = Field(
+        description=(
+            "Identifies this revision wherever it is kept: the sha256 of its lineage, content "
+            "digest and parent's revision digest (ADR 0122)."
+        ),
+    )
+
+    parent_digest: str | None = Field(
+        description="The revision digest of the revision it was built on, or None for the first.",
+    )
+
+    parent_number: int | None = Field(
+        ge=1,
+        description="The number of the revision it was built on, or None for the first.",
+    )
+
+    author: Author | None = Field(
+        description="Who imported it, or None for revisions from before 1.4.",
     )
 
 
@@ -181,6 +209,45 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class WorkflowImport(ApiModel):
+    """What importing one workflow document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `workflow` then is."
+        ),
+    )
+
+    workflow: WorkflowDetail
+
+
+class ToolImport(ApiModel):
+    """What importing one tool document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `tool` then is."
+        ),
+    )
+
+    tool: ToolDetail
+
+
+class BenchmarkImport(ApiModel):
+    """What importing one benchmark document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `benchmark` then is."
+        ),
+    )
+
+    benchmark: BenchmarkDetail
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 
@@ -229,6 +296,18 @@ class PortfolioEntry(ApiModel):
     provider: str
 
     model: str
+
+    content_digest: str = Field(
+        description="The sha256 of the entry's canonical JSON (ADR 0122).",
+    )
+
+    author: Author | None = Field(
+        description="Who authorized it, or None for entries added before 1.4.",
+    )
+
+    added_at: datetime | None = Field(
+        description="When it was authorized, or None for entries added before 1.4.",
+    )
 
     command: str = Field(
         description="The `azathoth` command that shows the model.",
@@ -783,8 +862,10 @@ __all__ = [
     "API_STABILITY",
     "ApiModel",
     "ApiStability",
+    "Author",
     "Backend",
     "BenchmarkDetail",
+    "BenchmarkImport",
     "BenchmarkSummary",
     "ContextChanged",
     "DocumentProblem",
@@ -821,9 +902,11 @@ __all__ = [
     "StepStarted",
     "StepTrial",
     "ToolDetail",
+    "ToolImport",
     "ToolSummary",
     "WorkflowCheck",
     "WorkflowDetail",
+    "WorkflowImport",
     "WorkflowReadiness",
     "WorkflowSummary",
     "parse_run_event",

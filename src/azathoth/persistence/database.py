@@ -1,6 +1,6 @@
 """The database every repository is written against (ADR 0102)."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from enum import StrEnum
@@ -12,10 +12,12 @@ from azathoth.persistence.location import DatabaseLocation
 SCHEMA_TABLE: Final = "azathoth_schema"
 """The table in which a PostgreSQL database records its schema version."""
 
-SCHEMA_VERSION: Final = 2
+SCHEMA_VERSION: Final = 3
 """The schema version this Azathoth uses.
 
 Version 2 adds the tables that record a run while it executes (ADR 0105).
+Version 3 adds the tables that record revision lineage and portfolio
+provenance (ADR 0122).
 """
 
 Parameter = str | int | float | bytes | None
@@ -32,10 +34,18 @@ class Table:
     The statements use `IF NOT EXISTS` and the dialect tokens, such as
     `{sequence}`, so they create the same table in either database, and
     creating it again changes nothing.
+
+    A table added after others may need rows for what those tables already
+    hold, such as the lineage of revisions imported before it existed. Its
+    `backfill` writes them. Initializing runs every backfill once all of its
+    tables are created, in the same transaction, given the names of those
+    tables, so a backfill reads only tables that exist. A backfill writes
+    only rows that are missing, so running it again changes nothing.
     """
 
     name: str
     statements: tuple[str, ...]
+    backfill: "Callable[[Session, frozenset[str]], None] | None" = None
 
 
 class InitializationOutcome(StrEnum):
@@ -141,7 +151,7 @@ class Database(Protocol):
         self,
         tables: Sequence[Table],
     ) -> InitializationOutcome:
-        """Create every table that is missing, and record the schema version.
+        """Create every table that is missing, run every backfill, and record the schema version.
 
         It is safe to run again, and, in PostgreSQL, from several processes
         at once.
@@ -161,6 +171,19 @@ class Database(Protocol):
         ...
 
 
+def run_backfills(
+    session: Session,
+    tables: Sequence[Table],
+) -> None:
+    """Run every table's backfill, in order, given the names of all the tables."""
+
+    present = frozenset(table.name for table in tables)
+
+    for table in tables:
+        if table.backfill is not None:
+            table.backfill(session, present)
+
+
 __all__ = [
     "SCHEMA_TABLE",
     "SCHEMA_VERSION",
@@ -170,4 +193,5 @@ __all__ = [
     "Row",
     "Session",
     "Table",
+    "run_backfills",
 ]

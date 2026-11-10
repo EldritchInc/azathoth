@@ -14,7 +14,7 @@ from azathoth.cli import (
     list_tool_history,
 )
 from azathoth.cli.dispatching import dispatch_tool_command
-from azathoth.revisions import content_digest
+from azathoth.revisions import Author, content_digest
 from azathoth.tools import (
     SQLiteToolRepository,
     ToolDocumentRevision,
@@ -440,3 +440,21 @@ def test_tool_runs_record_the_digest_of_the_code_that_ran() -> None:
     (implementation,) = runtime.tool_implementations.implementations
 
     assert binding.attributes["implementation_digest"] == content_digest(implementation)
+
+
+def test_history_names_who_imported_a_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+
+    configure_database(database=database, monkeypatch=monkeypatch)
+
+    SQLiteToolRepository(database).save_document(create_document(), author=Author(name="Eris"))
+
+    assert list_tool_history(TOOL_ID) == 0
+
+    (line,) = capsys.readouterr().out.splitlines()
+
+    assert line.endswith("  1 test cases  by Eris")

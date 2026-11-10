@@ -1459,6 +1459,12 @@ BenchmarkDatasetRevision
 Re-saving earlier content appends a revision whose digest matches the earlier
 one; `earliest_identical_benchmark_revision` names it.
 
+A save builds on the latest revision, or, with `based_on`, on the revision
+whose revision digest it names; one built on an earlier revision forks
+(ADR 0122). It records who authored it with `author`, and `lineage(id)` reads
+where each revision sits. Content identical to the revision it builds on
+appends nothing: `save_revision` returns that revision with `created` false.
+
 The repository stores complete immutable `BenchmarkDataset` objects.
 
 It does not execute them.

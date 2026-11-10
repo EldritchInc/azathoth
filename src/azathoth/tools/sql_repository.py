@@ -10,6 +10,20 @@ from azathoth.persistence import (
     require_text,
 )
 from azathoth.persistence.dialect import identifier
+from azathoth.revisions import (
+    PREVIOUS,
+    Author,
+    Lineage,
+    LineageRecord,
+    ParentChoice,
+    RevisionKind,
+    SavedRevision,
+    base_record,
+    content_digest,
+    lineage_records,
+    record_lineage,
+    tables_with_lineage,
+)
 from azathoth.tools.definition import ToolDefinition
 from azathoth.tools.document import ToolDocument
 from azathoth.tools.implementation import ToolImplementation
@@ -102,7 +116,7 @@ class SqlToolRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(TOOL_TABLES)
+        database.prepare(tables_with_lineage(TOOL_TABLES))
 
     def save_definition(
         self,
@@ -246,8 +260,36 @@ class SqlToolRepository:
     def save_document(
         self,
         document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
     ) -> ToolDocumentRevision:
-        """Append one document as the next revision of its tool version.
+        """Append one document as the next revision of its tool version, and return it.
+
+        As `save_document_revision`, which says when nothing is appended.
+        """
+
+        return self.save_document_revision(
+            document,
+            author=author,
+            based_on=based_on,
+        ).revision
+
+    def save_document_revision(
+        self,
+        document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
+    ) -> SavedRevision[ToolDocumentRevision]:
+        """Append one document as the next revision of its tool version, built on another.
+
+        It builds on the revision of its tool version whose revision digest
+        is `based_on`, or on the latest without one. A document identical to
+        the revision it builds on appends nothing and changes no artifact,
+        and that revision is returned. One built on an earlier revision than
+        the latest forks: it is numbered after the latest, and its parent is
+        the one it was built on.
 
         The revision and the change to current artifacts are written in one
         transaction holding the revision table's write lock, so concurrent
@@ -260,6 +302,8 @@ class SqlToolRepository:
             ValueError: The tool ID is saved under another name, an artifact
                 ID in the document belongs to another tool, or an
                 implementation ID to another version.
+            BaseRevisionError: No revision of the tool version has the
+                digest `based_on`.
         """
 
         definition = document.definition
@@ -279,6 +323,20 @@ class SqlToolRepository:
                 session,
                 tool_id=definition.id,
             )
+
+            lineage = Lineage(
+                kind=RevisionKind.TOOL,
+                id=definition.id,
+                version=definition.version,
+            )
+
+            parent = base_record(lineage_records(session, lineage), lineage, based_on)
+
+            if parent is not None:
+                built_on = _revision_in(session, definition.id, definition.version, parent.number)
+
+                if built_on.content_digest == content_digest(document):
+                    return SavedRevision(revision=built_on, lineage=parent, created=False)
 
             previous = latest_revision(
                 session,
@@ -300,9 +358,11 @@ class SqlToolRepository:
                 ),
             )
 
-            insert_revision(
+            record = insert_revision(
                 session,
                 revision,
+                author=author,
+                parent=parent,
             )
 
             for implementation_id in retired_implementations:
@@ -351,7 +411,20 @@ class SqlToolRepository:
                     payload=test_case.model_dump_json(),
                 )
 
-        return revision
+        return SavedRevision(revision=revision, lineage=record, created=True)
+
+    def document_lineage(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> tuple[LineageRecord, ...]:
+        """Return the lineage record of every revision of one exact tool version, oldest first."""
+
+        with self._database.transaction() as session:
+            return lineage_records(
+                session,
+                Lineage(kind=RevisionKind.TOOL, id=tool_id, version=version),
+            )
 
     def latest_document_revision(
         self,
@@ -550,8 +623,14 @@ def _upsert(
 def insert_revision(
     session: Session,
     revision: ToolDocumentRevision,
-) -> None:
-    """Insert one tool document revision row."""
+    *,
+    author: Author | None = None,
+    parent: ParentChoice = PREVIOUS,
+) -> LineageRecord:
+    """Insert one tool document revision row, record its lineage (ADR 0122), and return it.
+
+    By default its parent is the revision numbered before it.
+    """
 
     session.execute(
         """
@@ -572,6 +651,46 @@ def insert_revision(
             revision.model_dump_json(),
         ),
     )
+
+    return record_lineage(
+        session,
+        Lineage(
+            kind=RevisionKind.TOOL,
+            id=revision.tool_id,
+            version=revision.tool_version,
+        ),
+        number=revision.number,
+        content_digest=revision.content_digest,
+        author=author,
+        parent=parent,
+    )
+
+
+def _revision_in(
+    session: Session,
+    tool_id: UUID,
+    version: str,
+    number: int,
+) -> ToolDocumentRevision:
+    """Return one numbered revision of one exact tool version, read in an open transaction.
+
+    Raises:
+        LookupError: The tool version has no revision with that number.
+    """
+
+    row = session.fetchone(
+        """
+        SELECT payload
+        FROM tool_document_revisions
+        WHERE tool_id = ? AND tool_version = ? AND number = ?
+        """,
+        (str(tool_id), version, number),
+    )
+
+    if row is None:
+        raise LookupError(f"Tool {tool_id}@{version} has no revision {number}.")
+
+    return _deserialize_revision(row[0])
 
 
 def latest_revision(

@@ -17,6 +17,7 @@ from azathoth.providers import (
     ModelRequirements,
     Prompt,
 )
+from azathoth.revisions import AUTHOR_VARIABLE, Author
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     SQLiteWorkflowRepository,
@@ -225,7 +226,7 @@ def test_workflow_import_rejects_invalid_workflow_document(
     assert not database.exists()
 
 
-def test_workflow_reimport_appends_an_identical_revision(
+def test_workflow_reimport_of_unchanged_content_appends_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -250,14 +251,12 @@ def test_workflow_reimport_appends_an_identical_revision(
 
     assert result == 0
     assert captured.err == ""
-    assert captured.out == (
-        f"Imported workflow {WORKFLOW_ID} revision 2 (identical to revision 1).\n"
-    )
+    assert captured.out == f"Workflow {WORKFLOW_ID} is unchanged at revision 1.\n"
 
     repository = SQLiteWorkflowRepository(database)
 
     assert repository.specifications() == (create_workflow(),)
-    assert tuple(revision.number for revision in repository.revisions(WORKFLOW_ID)) == (1, 2)
+    assert tuple(revision.number for revision in repository.revisions(WORKFLOW_ID)) == (1,)
 
 
 def test_workflow_import_of_changed_content_appends_a_new_revision(
@@ -372,3 +371,45 @@ def test_workflow_import_does_not_require_provider_credentials(
 
     assert result == 0
     assert captured.err == ""
+
+
+def test_workflow_import_is_refused_when_who_imports_cannot_be_told(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document = tmp_path / "workflow.json"
+
+    write_workflow_document(document)
+    configure_database(database=database, monkeypatch=monkeypatch)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    result = import_workflow(document)
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.out == ""
+    assert captured.err == (
+        'AZATHOTH_AUTHOR is \'Eris <eris>\'; set it to "Name <email>" or "Name".\n'
+    )
+    assert SQLiteWorkflowRepository(database).specifications() == ()
+
+
+def test_workflow_import_records_the_author_variables_author(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document = tmp_path / "workflow.json"
+
+    write_workflow_document(document)
+    configure_database(database=database, monkeypatch=monkeypatch)
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Discordia")
+
+    assert import_workflow(document) == 0
+
+    (record,) = SQLiteWorkflowRepository(database).lineage(WORKFLOW_ID)
+
+    assert record.author == Author(name="Discordia")

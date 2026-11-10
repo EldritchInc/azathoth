@@ -181,7 +181,7 @@ def test_installed_workflow_import_lifecycle_requires_no_provider_credentials(
     assert shown.returncode == 0
 
 
-def test_installed_workflow_reimport_appends_identical_revision(
+def test_installed_workflow_reimport_of_unchanged_content_appends_nothing(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "azathoth.db"
@@ -204,9 +204,7 @@ def test_installed_workflow_reimport_appends_identical_revision(
 
     assert second.returncode == 0
 
-    assert second.stdout == (
-        f"Imported workflow {WORKFLOW_ID} revision 2 (identical to revision 1).\n"
-    )
+    assert second.stdout == f"Workflow {WORKFLOW_ID} is unchanged at revision 1.\n"
 
     assert second.stderr == ""
 

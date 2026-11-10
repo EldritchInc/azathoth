@@ -860,8 +860,8 @@ Only process tool implementations may declare a command or timeout.
 
 An implementation that leaves `command` and `timeout_seconds` unset serializes
 without them. Existing Python tools therefore keep byte-identical documents and
-unchanged content digests, and re-importing them is still reported as
-identical to their earlier revision.
+unchanged content digests, and re-importing one over its latest revision
+appends nothing.
 
 # ToolExecutor
 
@@ -1583,6 +1583,8 @@ for each, plus revisioned tool documents:
 
 ```text
 save_document(document)                        appends the next revision
+save_document_revision(document)               also says where it sits, and whether it is new
+document_lineage(tool_id, version)             every revision's lineage, oldest first
 latest_document_revision(tool_id, version)
 document_revision(tool_id, version, number)
 document_revisions(tool_id)                    every version, import order
@@ -1604,6 +1606,13 @@ ToolDocumentRevision
 ├── content_digest    sha256 of the document's canonical JSON
 └── imported_at       None for versions saved before revisions existed
 ```
+
+A save builds on the latest revision of its version, or, with `based_on`, on
+the revision whose revision digest it names; one built on an earlier revision
+forks (ADR 0122). It records who authored it with `author`. A document
+identical to the revision it builds on appends nothing and changes no
+artifact: `save_document_revision` returns that revision with `created`
+false.
 
 The definition, implementation, and test case collections hold the current
 artifacts, defined by the latest revision of each version:
