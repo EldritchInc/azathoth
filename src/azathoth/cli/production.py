@@ -54,6 +54,7 @@ async def invoke_active_production_workflow(
         ),
         catalog=runtime.models,
         registry=runtime.language_models,
+        portfolio=runtime.portfolio,
         invocation_repository=invocation_repository,
         run_repository=run_repository,
         invocation_run_repository=invocation_run_repository,

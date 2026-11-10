@@ -113,7 +113,7 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
-| `models.matching(requirements)` | The portfolio's models that meet a step's requirements, in the order a run tries them. | Yes |
+| `models.matching(requirements, sensitivity=None)` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
 | `portfolio.set_data_policy(identifier, data_policy)` | Declares what its provider does with data, as `azathoth model policy` does. | No |
@@ -218,7 +218,10 @@ a prompt step to the `models` it could run on, in the order a run tries
 them, and a tool step to the tool and implementation it would run. A step
 that could not run says why in its `problem`, such as a model no provider
 serves now or a tool not imported. It asks the providers, and saves nothing
-(ADR 0121).
+(ADR 0121). With `sensitivity=`, each step is resolved as for a run whose
+input is so labelled: a context prompt step of a restricted run could run
+only on models declared to neither retain nor train on data, and one with
+none says so, as the run's refusal would (ADR 0123).
 
 `instance.runs.invoke(workflow_id, input=..., sensitivity=None,
 idempotency_key=None, caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's

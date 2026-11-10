@@ -63,3 +63,19 @@ If its provider neither retains nor trains on data, declare that with `azathoth 
 Labels guard Azathoth's own paths out, to models, child workflows, push,
 pull and telemetry, against mistakes. They are not a boundary against a tool
 written to carry data elsewhere: tools gain data policies after 1.4.
+
+## Where Labels Are Enforced
+
+In 1.4.0a4 a restricted run's data may leave Azathoth through models, and
+every model path is guarded:
+
+| Path | Guard |
+| --- | --- |
+| A context prompt step | `ContextPromptStrategy` refuses to send to a model that may not receive the running step's label, `active_step_lineage().sensitivity` |
+| Choosing a step's model | Candidate generation tries the models that may receive the run's label first; production prefers such a model among the primary and its approved substitutes |
+| Semantic judges | `outcome_evaluator(semantic=True, sensitivity=...)` refuses a judge that may not receive the label of the cases it judges |
+| Optimization | Substitution offers a restricted context prompt only private models |
+| Child workflows | A child inherits its parent's label through lineage, so its own prompts are guarded the same way |
+
+A fixed prompt holds only its own text, so it is not guarded. Tools are not
+guarded in 1.4.

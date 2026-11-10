@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
-from azathoth.context import Context, WorkflowLineage, create_lineage_event
+from azathoth.context import Context, WorkflowLineage, context_sensitivity, create_lineage_event
 from azathoth.inputs import (
     JSON_MEDIA_TYPE,
     InputProvenance,
@@ -106,11 +106,14 @@ async def execute_configured_workflow(
         WorkflowGenerationError: No executable candidate could be generated.
     """
 
-    candidate = runtime.generate_workflow_candidate(workflow_id)
+    execution_context = context if context is not None else Context()
+
+    candidate = runtime.generate_workflow_candidate(
+        workflow_id,
+        sensitivity=context_sensitivity(execution_context),
+    )
 
     workflow_runner = runner if runner is not None else WorkflowRunner()
-
-    execution_context = context if context is not None else Context()
 
     return await workflow_runner.run_recording_failures(
         candidate,

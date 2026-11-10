@@ -42,7 +42,7 @@ from azathoth.providers import (
     ProviderModelObserver,
     model_catalog_for_portfolio,
 )
-from azathoth.sensitivity import UNKNOWN_DATA_POLICY, DataPolicy
+from azathoth.sensitivity import UNKNOWN_DATA_POLICY, DataPolicy, Sensitivity, may_receive
 from azathoth.workflows import WorkflowProductionModelUsageRole, model_usage_report
 
 DirectoriesAccess = Callable[[], tuple[ProviderModelDirectory, ...]]
@@ -139,6 +139,15 @@ def _entry(
     )
 
 
+def _receives(
+    entry: ModelPortfolioEntry | None,
+    sensitivity: Sensitivity | None,
+) -> bool:
+    """Return whether a portfolio entry's model may receive input with a label (ADR 0123)."""
+
+    return may_receive(None if entry is None else entry.data_policy, sensitivity)
+
+
 def _requirements(
     requirements: Mapping[str, JsonValue],
 ) -> ModelRequirements:
@@ -231,8 +240,14 @@ class Models:
     def matching(
         self,
         requirements: Mapping[str, JsonValue],
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> tuple[ModelSummary, ...]:
         """Return the portfolio's models that meet a step's model requirements (ADR 0121).
+
+        With `sensitivity`, only the models that may receive input so
+        labelled match: for restricted input, those declared to neither
+        retain nor train on data (ADR 0123).
 
         The requirements are a step's `requirements`, as its document holds
         them; one left out is its default, so a step reads and writes text
@@ -250,14 +265,16 @@ class Models:
 
         parsed = _requirements(requirements)
         repositories = self._repositories()
+        portfolio = ModelPortfolioLoader(repositories.portfolio).load_portfolio()
         catalog = model_catalog_for_portfolio(
             catalog=discover(repositories, self._directories()),
-            portfolio=ModelPortfolioLoader(repositories.portfolio).load_portfolio(),
+            portfolio=portfolio,
         )
 
         return tuple(
             _summary(model, authorized=True)
             for model in catalog.find(ModelQuery.from_requirements(parsed))
+            if _receives(portfolio.get(model.identifier), sensitivity)
         )
 
 

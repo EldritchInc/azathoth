@@ -22,6 +22,7 @@ from azathoth.providers import (
     ModelQuery,
     model_catalog_for_portfolio,
 )
+from azathoth.sensitivity import Sensitivity, may_receive
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -36,11 +37,15 @@ def generate_model_substitutions(
     catalog: ModelCatalog,
     portfolio: ModelPortfolio,
     registry: LanguageModelRegistry,
+    sensitivity: Sensitivity | None = None,
 ) -> tuple[WorkflowCandidate, ...]:
     """Generate one-step substitutions using strictly cheaper eligible models.
 
     Both fixed-prompt and context-prompt steps whose selection is a portfolio
     selection are substituted, one step at a time, in workflow step order.
+    A substitute keeps its portfolio entry's declared data policy, and a
+    context prompt step of runs labelled `sensitivity` is substituted only
+    by models that may receive input so labelled (ADR 0123).
     """
 
     if specification.metadata.id != candidate.metadata.id:
@@ -116,12 +121,23 @@ def generate_model_substitutions(
             ):
                 continue
 
+            entry = portfolio.get(target_model.identifier)
+
+            assert entry is not None
+
+            if isinstance(prompt_specification, ContextPromptStrategySpec) and not may_receive(
+                entry.data_policy,
+                sensitivity,
+            ):
+                continue
+
             substitutions.append(
                 _replace_prompt_step_model(
                     specification=prompt_specification,
                     candidate=candidate,
                     candidate_step=candidate_step,
                     target_model=target_model,
+                    entry=entry,
                     registry=registry,
                 )
             )
@@ -135,22 +151,17 @@ def _replace_prompt_step_model(
     candidate: WorkflowCandidate,
     candidate_step: WorkflowCandidateStep,
     target_model: ModelMetadata,
+    entry: ModelPortfolioEntry,
     registry: LanguageModelRegistry,
 ) -> WorkflowCandidate:
-    """Return one candidate with a single prompt step rebound.
+    """Return one candidate with a single prompt step rebound to an authorized model.
 
-    Every other candidate attribute, including the declared result, is kept.
+    Every other candidate attribute, including the declared result, is kept,
+    and the rebound step holds the model's declared data policy.
     """
 
     catalog = ModelCatalog(models=(target_model,))
-    portfolio = ModelPortfolio(
-        entries=(
-            ModelPortfolioEntry(
-                provider=target_model.provider,
-                model=target_model.model,
-            ),
-        )
-    )
+    portfolio = ModelPortfolio(entries=(entry,))
 
     generated: tuple[PromptStrategy, ...] | tuple[ContextPromptStrategy, ...]
 

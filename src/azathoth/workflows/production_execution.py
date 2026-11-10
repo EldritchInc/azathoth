@@ -4,9 +4,11 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.context import context_sensitivity
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.tools import (
     ToolImplementationResolver,
@@ -68,8 +70,14 @@ async def execute_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     resume_run_id: UUID | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> WorkflowRun:
     """Execute one production invocation against current production state.
+
+    `portfolio` is the portfolio as it is now: it supplies the declared data
+    policy of each model the invocation may send its input to, and the
+    invocation's label, from its initial context, decides which may receive
+    it (ADR 0123). Without one, no model may receive restricted input.
 
     A step failure never escapes as an exception: the completed run, failed or
     not, is persisted and associated with the invocation before it is
@@ -102,6 +110,8 @@ async def execute_production_invocation(
         registry=registry,
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
+        portfolio=portfolio,
+        sensitivity=context_sensitivity(invocation.initial_context),
     )
 
     if resume_run_id is None:
@@ -146,10 +156,12 @@ async def complete_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     resume_run_id: UUID | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> ProductionInvocationResult:
     """Execute one invocation and persist its caller-visible terminal result.
 
     With `resume_run_id`, its unfinished run is resumed instead (ADR 0105).
+    `portfolio` supplies its models' declared data policies (ADR 0123).
 
     A declared result, emitted as `result`, that breaks the promoted
     workflow's output schema fails the invocation with `invalid_output`, its
@@ -179,6 +191,7 @@ async def complete_production_invocation(
             tool_resolver=tool_resolver,
             tool_implementation_resolver=tool_implementation_resolver,
             resume_run_id=resume_run_id,
+            portfolio=portfolio,
         )
 
         if run.failed:

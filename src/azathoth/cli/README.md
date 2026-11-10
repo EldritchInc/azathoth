@@ -4607,6 +4607,37 @@ A label labels input, so `workflow run` given one without `--input` or
 
 Any other label is a usage error.
 
+## Where Restricted Input May Go
+
+A context prompt step shows its model the run's input, so a restricted
+run's context prompt is sent only to a model whose portfolio entry is
+declared to neither retain nor train on data; see
+[Declare a Model's Data Policy](#declare-a-models-data-policy). A step that
+may choose among the portfolio's models runs on the first private one it
+may use. A step pinned to one model, or with no private model to choose,
+sends nothing and fails, saying why:
+
+```text
+Step <STEP_ID> sent nothing. <MODEL_IDENTIFIER> cannot receive restricted input: its portfolio entry does not say whether its provider retains data, and does not say whether it trains on data. If its provider neither retains nor trains on data, declare that with `azathoth model policy <MODEL_IDENTIFIER> --no-retention --no-training`; otherwise choose a model that may receive restricted input.
+```
+
+A fixed prompt shows its model only its own text, so its model is chosen
+as for any run.
+
+`workflow invoke` chooses among the production primary and its approved
+substitutes the same way: the first executable one that is private. It
+reads the portfolio as it is when the invocation runs, so a model declared
+private serves the next restricted invocation, without promoting again. A
+queue worker reads the portfolio when it composes its runtime, as it reads
+production state.
+
+A restricted benchmark's cases run as restricted runs do, and its semantic
+judges must be private too. Optimizing against it substitutes only private
+models into its context prompts.
+
+Tools are not judged by labels in 1.4: a tool step receives a restricted
+run's data as any run's (ADR 0123).
+
 # End-to-End From Checked-In Examples
 
 The sentiment examples exercise every stage from bash:

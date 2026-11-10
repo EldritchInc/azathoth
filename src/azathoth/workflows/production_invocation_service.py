@@ -10,6 +10,7 @@ from azathoth.inputs import InputProvenance
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
@@ -56,12 +57,15 @@ async def invoke_production_workflow(
     idempotency: InvocationIdempotency | None = None,
     lineage: WorkflowLineage | None = None,
     sensitivity: Sensitivity | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> ProductionInvocationResult:
     """Invoke one workflow against its active production state.
 
     An input resolved from a reference passes its provenance, which the
     invocation records beside the input (ADR 0096), and a labelled input its
-    label (ADR 0123).
+    label (ADR 0123). `portfolio`, as it is now, supplies the declared data
+    policy of each model the input may be sent to; without one, no model may
+    receive restricted input.
 
     An invocation started through a job envelope passes its idempotency,
     which is recorded with the invocation before anything runs (ADR 0097).
@@ -141,4 +145,5 @@ async def invoke_production_workflow(
         invocation_run_repository=invocation_run_repository,
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
+        portfolio=portfolio,
     )

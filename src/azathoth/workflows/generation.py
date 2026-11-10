@@ -11,6 +11,7 @@ from azathoth.providers import (
     ModelCatalog,
     ModelPortfolio,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.strategies import (
     Strategy,
     StrategyMetadata,
@@ -43,11 +44,16 @@ def generate_workflow_candidate(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     revision: int | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> WorkflowCandidate:
     """Generate one executable candidate from a workflow specification.
 
     The revision names the imported specification revision being generated,
     and is carried by the candidate into its signature and every run.
+
+    `sensitivity` is the label of the run the candidate is for: a context
+    prompt step of a restricted run runs on the first model it may use that
+    may receive restricted input, if it has one (ADR 0123).
     """
 
     executable_steps: list[WorkflowCandidateStep] = []
@@ -60,6 +66,7 @@ def generate_workflow_candidate(
             portfolio=portfolio,
             tool_resolver=tool_resolver,
             tool_implementation_resolver=tool_implementation_resolver,
+            sensitivity=sensitivity,
         )
 
         if not strategies:
@@ -108,12 +115,15 @@ def generate_step_strategies(
     portfolio: ModelPortfolio,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> tuple[Strategy, ...]:
     """Return the executable strategies one step could run as, in the order they are tried.
 
     A tool step resolves to the one implementation it would run. A prompt
     step's strategies are one per model it could run on, the first being the
     one a candidate uses; there are none when no model it may use is served.
+    For a run labelled `sensitivity`, a context prompt step's models that may
+    receive input so labelled come first (ADR 0123).
 
     Raises:
         WorkflowGenerationError: A tool step's tool cannot be resolved, or
@@ -137,6 +147,7 @@ def generate_step_strategies(
             catalog=catalog,
             registry=registry,
             portfolio=portfolio,
+            sensitivity=sensitivity,
         )
 
     assert isinstance(step_specification, PromptStrategySpec)

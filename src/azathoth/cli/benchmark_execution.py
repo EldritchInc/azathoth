@@ -11,6 +11,7 @@ from azathoth.evaluation import (
 )
 from azathoth.persistence.repositories import Repositories
 from azathoth.runtime import RuntimeEnvironment
+from azathoth.sensitivity import Sensitivity, most_sensitive
 from azathoth.workflows import (
     WorkflowBenchmarkComparator,
     WorkflowBenchmarkEvidenceRecorder,
@@ -85,6 +86,7 @@ async def execute_configured_benchmark(
 
     candidate = runtime.generate_workflow_candidate(
         workflow_id,
+        sensitivity=dataset.sensitivity,
     )
 
     result = await benchmark_runner.run(
@@ -153,6 +155,7 @@ async def compare_configured_benchmarks(
     candidates = {
         str(workflow_id): runtime.generate_workflow_candidate(
             workflow_id,
+            sensitivity=dataset.sensitivity,
         )
         for workflow_id in workflow_ids
     }
@@ -206,6 +209,9 @@ def _outcome_evaluator(
 ) -> OutcomeEvaluator:
     """Return the runtime evaluator, with judges only when the dataset needs them.
 
+    Judges see what the semantic cases' runs return, so every judge must be
+    allowed to receive the most sensitive of those cases (ADR 0123).
+
     Raises:
         JudgeUnavailableError: The dataset has semantic cases and a judge
             cannot be used.
@@ -213,10 +219,24 @@ def _outcome_evaluator(
 
     return runtime.outcome_evaluator(
         semantic=dataset.uses_comparison(OutcomeComparison.SEMANTIC),
+        sensitivity=judged_sensitivity(dataset),
+    )
+
+
+def judged_sensitivity(
+    dataset: BenchmarkDataset,
+) -> Sensitivity:
+    """Return the label of what a dataset's judges are sent: its semantic cases' (ADR 0123)."""
+
+    return most_sensitive(
+        case.sensitivity
+        for case in dataset.cases
+        if case.expected.comparison is OutcomeComparison.SEMANTIC
     )
 
 
 __all__ = [
     "compare_configured_benchmarks",
     "execute_configured_benchmark",
+    "judged_sensitivity",
 ]

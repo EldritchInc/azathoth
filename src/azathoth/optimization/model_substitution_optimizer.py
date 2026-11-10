@@ -14,6 +14,7 @@ from azathoth.providers import (
     ModelCatalog,
     ModelPortfolio,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     WorkflowCandidate,
     WorkflowCandidateSignature,
@@ -32,7 +33,11 @@ class ModelSubstitutionWorkflowOptimizer:
         models: ModelCatalog,
         portfolio: ModelPortfolio,
         registry: LanguageModelRegistry,
+        sensitivity: Sensitivity | None = None,
     ) -> None:
+        """Keep what substitutions are drawn from, for runs labelled `sensitivity` (ADR 0123)."""
+
+        self._sensitivity = sensitivity
         self._workflows = workflows
         self._models = models
         self._registry = registry
@@ -69,6 +74,7 @@ class ModelSubstitutionWorkflowOptimizer:
             catalog=self._models,
             portfolio=self._portfolio,
             registry=self._registry,
+            sensitivity=self._sensitivity,
         )
 
         for proposal in substitutions:

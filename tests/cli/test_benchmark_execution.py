@@ -20,6 +20,7 @@ from azathoth.runtime import (
     AzathothRuntime,
     WorkflowNotConfiguredError,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
     ToolCatalog,
     ToolDefinition,
@@ -350,10 +351,12 @@ def test_configured_benchmark_generates_the_candidate_once(
 
     def counting_generate(
         workflow_id: UUID,
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> WorkflowCandidate:
         generated.append(workflow_id)
 
-        return generate(workflow_id)
+        return generate(workflow_id, sensitivity=sensitivity)
 
     monkeypatch.setattr(
         runtime,

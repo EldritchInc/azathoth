@@ -96,7 +96,12 @@ from azathoth.providers import (
     ModelPortfolioLoader,
 )
 from azathoth.runtime import AzathothRuntime
-from azathoth.sensitivity import Sensitivity
+from azathoth.sensitivity import (
+    RESTRICTED_REFUSAL_HINT,
+    Sensitivity,
+    may_receive,
+    restricted_refusal,
+)
 from azathoth.strategies import Strategy
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job_invoker
@@ -350,7 +355,7 @@ class Runs:
             raise NotFoundError(f"Workflow {workflow_id} is not configured.")
 
         try:
-            candidate = runtime.generate_workflow_candidate(workflow_id)
+            candidate = runtime.generate_workflow_candidate(workflow_id, sensitivity=sensitivity)
         except WorkflowGenerationError as exc:
             raise RunNotStartedError(str(exc)) from exc
 
@@ -664,10 +669,15 @@ class Runs:
         # The step is made executable before a file given is kept, so a
         # step that cannot start keeps nothing.
         #
-        _candidate(specification, _alone(step, plain | dict.fromkeys(files)), runtime)
+        _candidate(
+            specification,
+            _alone(step, plain | dict.fromkeys(files)),
+            runtime,
+            sensitivity,
+        )
 
         resolved = {name: _resolved(each, repositories.content) for name, each in files.items()}
-        candidate = _candidate(specification, _alone(step, plain | resolved), runtime)
+        candidate = _candidate(specification, _alone(step, plain | resolved), runtime, sensitivity)
 
         observer = _CallbackObserver(on_event)
         runner = WorkflowRunner(observer=observer, content=repositories.tool_content)
@@ -690,6 +700,8 @@ class Runs:
     def readiness(
         self,
         document: Document,
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> WorkflowReadiness:
         """Return whether each step of a workflow document could run here now.
 
@@ -698,6 +710,11 @@ class Runs:
         models it could run on, in the order a run tries them, and a tool
         step to the implementation it would run. Nothing is saved, and the
         document need not have been imported.
+
+        With `sensitivity`, each step is resolved as for a run whose input is
+        so labelled (ADR 0123): a context prompt step of a restricted run
+        could run only on models declared to neither retain nor train on
+        data, and one with none says why.
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -711,7 +728,7 @@ class Runs:
 
         specification = _decoded(document)
         runtime = self._runtime(repositories)
-        steps = tuple(_step_readiness(step, runtime) for step in specification.steps)
+        steps = tuple(_step_readiness(step, runtime, sensitivity) for step in specification.steps)
 
         return WorkflowReadiness(
             ready=all(step.ready for step in steps),
@@ -810,8 +827,9 @@ def _candidate(
     specification: WorkflowSpecification,
     step: WorkflowStepSpecification,
     runtime: AzathothRuntime,
+    sensitivity: Sensitivity | None,
 ) -> WorkflowCandidate:
-    """Return the candidate of a workflow of one step alone, as a run would make it.
+    """Return the candidate of a workflow of one step alone, as a run labelled so would make it.
 
     Raises:
         RunNotStartedError: The step could not be made executable.
@@ -825,6 +843,7 @@ def _candidate(
             portfolio=runtime.portfolio,
             tool_resolver=runtime.tool_resolver,
             tool_implementation_resolver=runtime.tool_implementation_resolver,
+            sensitivity=sensitivity,
         )
     except WorkflowGenerationError as exc:
         raise RunNotStartedError(str(exc)) from exc
@@ -1039,8 +1058,9 @@ def _no_model(
 def _step_readiness(
     step: WorkflowStepSpecification,
     runtime: AzathothRuntime,
+    sensitivity: Sensitivity | None,
 ) -> StepReadiness:
-    """Return whether one step could run here now, and on what."""
+    """Return whether one step could run here now, for a run labelled so, and on what."""
 
     kind = _step_kind(step)
     unready = StepReadiness(
@@ -1085,6 +1105,31 @@ def _step_readiness(
         return unready.model_copy(
             update={"problem": _no_model(specification.model_selection, runtime)}
         )
+
+    receiving = tuple(
+        strategy
+        for strategy in strategies
+        if not isinstance(strategy, ContextPromptStrategy)
+        or may_receive(strategy.data_policy, sensitivity)
+    )
+
+    if not receiving:
+        [first, *_] = strategies
+
+        assert isinstance(first, ContextPromptStrategy)
+
+        model = models[0]
+
+        return unready.model_copy(
+            update={
+                "problem": (
+                    f"{restricted_refusal(model, first.data_policy)} "
+                    f"{RESTRICTED_REFUSAL_HINT.format(model=model)}"
+                )
+            }
+        )
+
+    models = tuple(model for model in map(_model_of, receiving) if model is not None)
 
     return unready.model_copy(update={"ready": True, "models": models})
 

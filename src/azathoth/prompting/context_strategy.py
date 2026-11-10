@@ -14,6 +14,7 @@ from azathoth.prompting.citations import (
     check_citations,
     check_native_citations,
 )
+from azathoth.prompting.exceptions import RestrictedInputRefusedError
 from azathoth.prompting.execution import execute_prompt_response
 from azathoth.prompting.models import ModelBinding, PromptTemplate
 from azathoth.prompting.output_format import PromptOutputFormat
@@ -25,6 +26,12 @@ from azathoth.providers import (
     Prompt,
     PromptContentError,
 )
+from azathoth.sensitivity import (
+    RESTRICTED_REFUSAL_HINT,
+    DataPolicy,
+    may_receive,
+    restricted_refusal,
+)
 from azathoth.strategies import (
     StrategyMetadata,
     StrategyOutcome,
@@ -33,7 +40,13 @@ from azathoth.tools.content import active_tool_content, received_origin
 
 
 class ContextPromptStrategy:
-    """Render a prompt from context and execute it with a language model."""
+    """Render a prompt from context and execute it with a language model.
+
+    `data_policy` is what the bound model's portfolio entry declares its
+    provider does with data, or None for a model outside the portfolio. A
+    step of a restricted run sends its prompt only to a model declared to
+    neither retain nor train on data (ADR 0123).
+    """
 
     def __init__(
         self,
@@ -46,6 +59,7 @@ class ContextPromptStrategy:
         output_format: PromptOutputFormat = PromptOutputFormat.TEXT,
         model_input_modalities: frozenset[ModelModality] | None = None,
         citations: CitationPolicy | None = None,
+        data_policy: DataPolicy | None = None,
     ) -> None:
         self._metadata = metadata
         self._template = template
@@ -55,6 +69,7 @@ class ContextPromptStrategy:
         self._output_format = output_format
         self._model_input_modalities = model_input_modalities
         self._citations = citations
+        self._data_policy = data_policy
 
     @property
     def metadata(self) -> StrategyMetadata:
@@ -98,6 +113,12 @@ class ContextPromptStrategy:
 
         return self._citations
 
+    @property
+    def data_policy(self) -> DataPolicy | None:
+        """Return the bound model's declared data policy, or None outside the portfolio."""
+
+        return self._data_policy
+
     async def run(self, context: Context) -> StrategyOutcome:
         """Render and execute the prompt against the supplied context.
 
@@ -105,12 +126,16 @@ class ContextPromptStrategy:
         check, and the checks kept and recorded as a resource (ADR 0116).
 
         Raises:
+            RestrictedInputRefusedError: The step's run is restricted, and the
+                bound model may not receive restricted input; nothing is sent.
             PromptContentError: The prompt shows content of a modality the
                 bound model does not take; the model is not called. Or a cited
                 step's run has no content store to keep its checks in.
             CitationCheckError: A cited step's reply cites a source its prompt
                 did not show, or, under `fail`, what the source does not hold.
         """
+
+        self._require_receivable_run()
 
         prompt, shown = self._template.render_with_sources(
             context,
@@ -180,6 +205,32 @@ class ContextPromptStrategy:
 
         return outcome.model_copy(
             update={"output": output, "resources": (*outcome.resources, record)},
+        )
+
+    def _require_receivable_run(
+        self,
+    ) -> None:
+        """Refuse to send a restricted run's prompt to a model that may not receive it (ADR 0123).
+
+        The label is the running step's, from its lineage: the most sensitive
+        of its run's input and its parent run's.
+        """
+
+        step = active_step_lineage()
+
+        if step is None or may_receive(self._data_policy, step.sensitivity):
+            return
+
+        model = (
+            self._model_binding.identifier
+            if self._model_binding is not None
+            else self._metadata.name
+        )
+
+        raise RestrictedInputRefusedError(
+            f"Step {step.step.step_id} sent nothing. "
+            f"{restricted_refusal(model, self._data_policy)} "
+            f"{RESTRICTED_REFUSAL_HINT.format(model=model)}"
         )
 
     def _require_extractions_of_documents(
