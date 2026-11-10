@@ -54,6 +54,7 @@ from azathoth.api.models import (
     StepMetrics,
     StepReadiness,
     StepStarted,
+    StepTrial,
     WorkflowReadiness,
 )
 from azathoth.context import Context
@@ -105,12 +106,17 @@ from azathoth.workflows import (
     InvocationIdempotency,
     ProductionInvocationResult,
     ToolStepSpecification,
+    WorkflowCandidate,
     WorkflowCatalogLoader,
+    WorkflowConstantValue,
     WorkflowDocumentError,
     WorkflowGenerationError,
+    WorkflowInputBinding,
+    WorkflowNamedValueReference,
     WorkflowResultError,
     WorkflowRun,
     WorkflowRunEvent,
+    WorkflowRunner,
     WorkflowSpecification,
     WorkflowSpecificationRevision,
     WorkflowStepFailure,
@@ -118,8 +124,10 @@ from azathoth.workflows import (
     WorkflowStepSpecification,
     WorkflowStepStarted,
     WorkflowStepStatus,
+    WorkflowValueReference,
     create_workflow_input_events,
     decode_workflow_document,
+    generate_workflow_candidate,
     journal_resumes,
     validate_idempotency_key,
     workflow_result,
@@ -575,6 +583,89 @@ class Runs:
             steps=tuple(_step_detail(step) for step in run.steps),
         )
 
+    def try_step(
+        self,
+        document: Document,
+        step_id: UUID,
+        *,
+        inputs: Mapping[str, JsonValue | RunFile] | None = None,
+        input: RunInput | RunFile | None = None,
+        on_event: EventCallback | None = None,
+        cancel: CancellationToken | None = None,
+    ) -> StepTrial:
+        """Try one step of a workflow document alone, and keep nothing of it (ADR 0121).
+
+        The step runs as a run would run it, on the inputs given: each value
+        `inputs` names takes the place of that input's source, a file being
+        checked and kept as a run's file is. An input not given keeps its
+        source: a constant its value, and a field of the run's input the
+        field of `input`. An input taking a value another step produces has
+        no step to produce it, so it must be given.
+
+        The step's conditions are not asked, and it is retried as its retry
+        policy says. Its events reach `on_event` as a run's do, without the
+        run's own. No run, journal or trace is kept, and the document need
+        not have been imported; what the step keeps by its digest in the
+        content store, such as a file given, is kept as any run keeps it.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidDocumentError: It is not a workflow document.
+            NotFoundError: The document has no step with this ID.
+            InvalidArgumentError: An input given is not one the step takes,
+                one another step produces is not given, or a file given is
+                not one Azathoth accepts.
+            RunNotStartedError: The step could not be made executable, for
+                example because its tool or model is not available.
+            RunCancelledError: The token was cancelled before the step finished.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        if cancel is not None and cancel.cancelled:
+            raise RunCancelledError()
+
+        repositories = self._repositories()
+        specification = _decoded(document)
+        step = next((each for each in specification.steps if each.id == step_id), None)
+
+        if step is None:
+            raise NotFoundError(f"The workflow document has no step {step_id}.")
+
+        given = dict(inputs or {})
+        _check_inputs(step, given)
+        source = file_input(input) if isinstance(input, RunFile) else input
+        files = {
+            name: file_input(value) for name, value in given.items() if isinstance(value, RunFile)
+        }
+        runtime = self._runtime(repositories)
+        plain = {name: value for name, value in given.items() if not isinstance(value, RunFile)}
+
+        #
+        # The step is made executable before a file given is kept, so a
+        # step that cannot start keeps nothing.
+        #
+        _candidate(specification, _alone(step, plain | dict.fromkeys(files)), runtime)
+
+        resolved = {name: _resolved(each, repositories.content) for name, each in files.items()}
+        candidate = _candidate(specification, _alone(step, plain | resolved), runtime)
+
+        observer = _CallbackObserver(on_event)
+        runner = WorkflowRunner(observer=observer, content=repositories.tool_content)
+
+        run = asyncio.run(
+            _until_cancelled(
+                runner.run_recording_failures(candidate, _context(source, repositories.content)),
+                cancel,
+            )
+        )
+
+        return StepTrial(
+            step=_step_detail(run.steps[0]),
+            warnings=tuple(observer.warnings),
+        )
+
     def readiness(
         self,
         document: Document,
@@ -597,13 +688,7 @@ class Runs:
 
         repositories = self._repositories()
 
-        try:
-            specification = decode_workflow_document(
-                document if isinstance(document, str) else json.dumps(dict(document))
-            )
-        except WorkflowDocumentError as exc:
-            raise InvalidDocumentError(str(exc)) from exc
-
+        specification = _decoded(document)
         runtime = self._runtime(repositories)
         steps = tuple(_step_readiness(step, runtime) for step in specification.steps)
 
@@ -631,6 +716,120 @@ class Runs:
             tool_implementations=tool_loader.load_implementation_catalog(),
             judges=repositories.judges.rotation(),
         )
+
+
+def _decoded(
+    document: Document,
+) -> WorkflowSpecification:
+    """Return the specification a workflow document holds.
+
+    Raises:
+        InvalidDocumentError: It is not a workflow document.
+    """
+
+    try:
+        return decode_workflow_document(
+            document if isinstance(document, str) else json.dumps(dict(document))
+        )
+    except WorkflowDocumentError as exc:
+        raise InvalidDocumentError(str(exc)) from exc
+
+
+def _check_inputs(
+    step: WorkflowStepSpecification,
+    given: Mapping[str, JsonValue | RunFile],
+) -> None:
+    """Refuse the inputs given a step tried alone that it could not run on.
+
+    Raises:
+        InvalidArgumentError: An input given is not one the step takes, or
+            one another step produces is not given.
+    """
+
+    names = {binding.name for binding in step.inputs}
+    unknown = next((name for name in given if name not in names), None)
+
+    if unknown is not None:
+        raise InvalidArgumentError(f"Step {step.id} has no input {unknown!r}.")
+
+    produced = next(
+        (
+            binding.name
+            for binding in step.inputs
+            if binding.name not in given
+            and isinstance(binding.source, WorkflowValueReference | WorkflowNamedValueReference)
+        ),
+        None,
+    )
+
+    if produced is not None:
+        raise InvalidArgumentError(
+            f"Step {step.id} input {produced!r} takes a value another step produces, "
+            "so trying the step alone needs it given."
+        )
+
+
+def _resolved(
+    given: InlineInput,
+    store: ContentStore,
+) -> JsonValue:
+    """Return the value a file given as a step's input stands for, keeping it when binary.
+
+    Raises:
+        InvalidArgumentError: The file could not be resolved.
+    """
+
+    try:
+        return resolve_inline_input(given, policy=INLINE_ONLY, store=store).value
+    except InputResolutionError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
+
+
+def _candidate(
+    specification: WorkflowSpecification,
+    step: WorkflowStepSpecification,
+    runtime: AzathothRuntime,
+) -> WorkflowCandidate:
+    """Return the candidate of a workflow of one step alone, as a run would make it.
+
+    Raises:
+        RunNotStartedError: The step could not be made executable.
+    """
+
+    try:
+        return generate_workflow_candidate(
+            WorkflowSpecification(metadata=specification.metadata, steps=(step,)),
+            runtime.models,
+            runtime.language_models,
+            portfolio=runtime.portfolio,
+            tool_resolver=runtime.tool_resolver,
+            tool_implementation_resolver=runtime.tool_implementation_resolver,
+        )
+    except WorkflowGenerationError as exc:
+        raise RunNotStartedError(str(exc)) from exc
+
+
+def _alone(
+    step: WorkflowStepSpecification,
+    values: Mapping[str, JsonValue],
+) -> WorkflowStepSpecification:
+    """Return a step as it runs alone: on the values given, depending on nothing, unconditioned."""
+
+    return step.model_copy(
+        update={
+            "depends_on": (),
+            "conditions": (),
+            "inputs": tuple(
+                WorkflowInputBinding(
+                    name=binding.name,
+                    source=WorkflowConstantValue(value=values[binding.name]),
+                )
+                if binding.name in values
+                else binding
+                for binding in step.inputs
+            ),
+        }
+    )
 
 
 def _unfinished_message(

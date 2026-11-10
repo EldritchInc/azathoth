@@ -37,6 +37,10 @@ release dates are on the
   newest first, and one run with its input, its result, and each step's
   output, values, measurements and failed attempts
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` tries one step of a workflow document alone, on the inputs
+  given, a file among them, reporting its events as a run does and keeping
+  no run
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
 
 ## 1.3.0
 

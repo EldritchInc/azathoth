@@ -220,6 +220,16 @@ name, and every attempt that failed. A run that has not finished is not
 kept yet, so `get` raises `NotFoundError` saying how to resume it
 (ADR 0121).
 
+`instance.runs.try_step(document, step_id, inputs=None, input=None,
+on_event=None, cancel=None)` tries one step of a workflow document alone,
+imported or not, and keeps no run. Each value `inputs` names, JSON or a
+`RunFile`, takes the place of that input's source; an input not given keeps
+its source, a constant its value and a field of the run's input the field of
+`input`, while one another step produces must be given. The step's
+conditions are not asked, it is retried as its policy says, its events
+reach `on_event` as a run's do, and the `StepTrial` holds the step as
+`runs.get` would show it (ADR 0121).
+
 ## Invocations
 
 `instance.invocations.get(invocation_id)` reads one invocation back, as

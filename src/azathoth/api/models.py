@@ -622,6 +622,16 @@ class RunDetail(RunSummary):
     )
 
 
+class StepTrial(ApiModel):
+    """One step of a workflow document, tried alone and kept nowhere (ADR 0121)."""
+
+    step: RunStepDetail
+
+    warnings: tuple[str, ...] = Field(
+        description="What went wrong beside the step, such as an event callback that raised.",
+    )
+
+
 class InvocationDetail(ApiModel):
     """One invocation as it was recorded: its input, who made it, its outcome and its run."""
 
@@ -809,6 +819,7 @@ __all__ = [
     "StepMetrics",
     "StepReadiness",
     "StepStarted",
+    "StepTrial",
     "ToolDetail",
     "ToolSummary",
     "WorkflowCheck",

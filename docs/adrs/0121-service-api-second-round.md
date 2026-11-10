@@ -163,6 +163,44 @@ raises `NotFoundError` with what `run show` says of it:
 Run <run-id> has not finished; resume it with azathoth run resume <run-id>.
 ```
 
+### Trying one step
+
+`runs.try_step(document, step_id, *, inputs=None, input=None, on_event=None,
+cancel=None)` runs one step of a workflow document alone and returns a
+`StepTrial`: the step as a `RunStepDetail`, as `runs.get` shows a run's, and
+the warnings a run's result carries. The document need not have been
+imported.
+
+The step runs as the only step of a workflow of its own, made executable
+as a run's candidate is, with what it depends on and its conditions taken
+away:
+
+- Each value `inputs` names takes the place of that input's source, as a
+  constant would. A `RunFile` among them is checked and kept as a run's
+  file is, and the step receives what a run would: a content handle for a
+  document or an image, the value for JSON or text.
+- An input not given keeps its source. A constant keeps its value, and a
+  field of the run's input reads `input`, given as `runs.run` takes it; a
+  field it was not given fails the step as it would fail a run's.
+- An input that takes a value another step produces has no step to produce
+  it, so it is refused with `InvalidArgumentError` unless it is given. So is
+  a name the step has no input for.
+- Its conditions are not asked: a step is tried to see what it does, not
+  whether it would run.
+- It is retried as its retry policy says, and its failure is the step's
+  status, never an error.
+
+Its `StepStarted`, `StepFinished` and `ContextChanged` events reach
+`on_event` as a run's do; there is no run to start or finish, so neither
+`RunStarted` nor `RunFinished` is sent. A cancellation token stops it as it
+stops a run.
+
+Nothing of the trial is kept: no run, no journal, no trace. The step is made
+executable before a file given is kept, so a step that cannot start keeps
+nothing; a file a step that starts was given stays in the content store,
+by its digest, as any run's does. A step whose tool starts other workflows
+starts them as a run's step would.
+
 ## Consequences
 
 - The editor can run a workflow on a document someone drops on it, through
@@ -176,5 +214,7 @@ Run <run-id> has not finished; resume it with azathoth run resume <run-id>.
   repeating Azathoth's rules in TypeScript, and so cannot drift from them.
 - The editor shows a finished run, its own or another's, from what the
   instance kept, with the same values a run it watched reported as it ran.
+- The editor tries a step as it is written, on a document someone drops on
+  it, before the workflow is saved or its other steps are finished.
 - Candidate generation and readiness resolve a step through one function,
   so readiness never says a step could run where a run would refuse it.
