@@ -27,7 +27,7 @@ from azathoth.persistence.repositories import (
     open_repositories,
 )
 from azathoth.revisions import content_digest
-from azathoth.standard import standard_tool_documents
+from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 
 OUTCOMES: Final[Mapping[InitializationOutcome, Literal["created", "upgraded", "current"]]] = {
     InitializationOutcome.CREATED: "created",
@@ -128,7 +128,7 @@ def _install_standard_tools(
             continue
 
         try:
-            revision = repository.save_document(document)
+            revision = repository.save_document(document, author=STANDARD_TOOL_AUTHOR)
         except ValueError as exc:
             raise ConflictError(str(exc)) from exc
 

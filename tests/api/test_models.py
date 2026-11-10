@@ -27,6 +27,7 @@ from azathoth.providers import (
     Prompt,
     ProviderModel,
 )
+from azathoth.revisions import AUTHOR_VARIABLE, Author
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowMetadata,
@@ -605,3 +606,32 @@ def test_opening_with_providers_reaches_none_until_models_are_asked_for(
 
     assert str(raised.value) == str(BedrockUnavailableError())
     assert raised.value.code == "provider_configuration"
+
+
+def test_an_authorized_model_records_who_added_it(
+    location: str,
+) -> None:
+    with api.Azathoth(
+        open_repositories(location),
+        directories=(StaticDirectory("provider-a", (ALPHA,)),),
+        author="Eris <eris@example.com>",
+    ) as instance:
+        instance.portfolio.add(ALPHA.identifier)
+
+    provenance = open_repositories(location).portfolio.provenance(ALPHA.identifier)
+
+    assert provenance is not None
+    assert provenance.author == Author(name="Eris", email="eris@example.com")
+
+
+def test_a_model_is_not_authorized_when_who_adds_it_cannot_be_told(
+    modelled: api.Azathoth,
+    location: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(AUTHOR_VARIABLE, "Eris <eris>")
+
+    with pytest.raises(api.InvalidAuthorError):
+        modelled.portfolio.add(ALPHA.identifier)
+
+    assert open_repositories(location).portfolio.entries() == ()

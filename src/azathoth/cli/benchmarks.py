@@ -395,7 +395,7 @@ def import_benchmark(
 
     try:
         imported = service_instance(configuration).benchmarks.import_document(document)
-    except api.InvalidDocumentError as exc:
+    except (api.InvalidDocumentError, api.InvalidAuthorError) as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -403,9 +403,19 @@ def import_benchmark(
 
         return 1
 
+    benchmark = imported.benchmark
+
+    if not imported.created:
+        print(
+            f"Benchmark dataset {benchmark.id} is unchanged at revision "
+            f"{benchmark.revision.number}."
+        )
+
+        return 0
+
     print(
-        f"Imported benchmark dataset {imported.id} revision {imported.revision.number}"
-        f"{import_note(imported)}."
+        f"Imported benchmark dataset {benchmark.id} revision {benchmark.revision.number}"
+        f"{import_note(benchmark)}."
     )
 
     return 0

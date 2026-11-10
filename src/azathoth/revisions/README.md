@@ -61,6 +61,25 @@ same digest hold the same content reached by the same revisions. A revert is
 a new revision: its content digest matches the revision it reverts to, and its
 revision digest does not.
 
+## Saving on a revision
+
+Every repository that appends revisions records each one's `LineageRecord` in
+`revision_lineage`, in the same transaction: its number, revision digest,
+parent and author. A save builds on the latest revision of its lineage, or,
+with `based_on`, on the revision whose revision digest it names; one built on
+an earlier revision forks, numbered after the latest. `base_record` chooses
+it, and refuses a digest that is not a revision of the lineage with
+`BaseRevisionError`:
+
+```text
+Revision <DIGEST> is not a revision of workflow <WORKFLOW_ID>.
+```
+
+Content identical to the revision a save builds on appends nothing. A
+repository's `save_revision` returns a `SavedRevision`: the revision, its
+lineage record, and `created`, false when nothing was appended. A revert to
+an earlier revision's content, built on the latest, is still appended.
+
 ## Authors
 
 Every new revision records its `Author`, a name and an optional email. The

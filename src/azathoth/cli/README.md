@@ -971,8 +971,8 @@ to inspect it, and it reads durable state only, without provider credentials.
 
 # Workflow Revisions
 
-The workflow ID is a lineage. Every `workflow import` appends the next
-revision under it; nothing is ever edited in place:
+The workflow ID is a lineage. Every `workflow import` of new content appends
+the next revision under it; nothing is ever edited in place:
 
 ```text
 workflow import v1.json   ──►  revision 1
@@ -986,6 +986,13 @@ content:
 
 ```text
 Imported workflow <WORKFLOW_ID> revision 3 (identical to revision 1).
+```
+
+Importing a document identical to the latest revision appends nothing
+(ADR 0122):
+
+```text
+Workflow <WORKFLOW_ID> is unchanged at revision 3.
 ```
 
 Content identity is a sha256 digest of the specification's canonical JSON, so
@@ -3558,12 +3565,20 @@ Python tools.
 # Tool Revisions
 
 A tool document bundles one exact definition version with its
-implementations and test cases. Every `tool import` appends the next revision
-of that `<TOOL_ID>@<VERSION>`; nothing is ever rejected for already existing:
+implementations and test cases. Every `tool import` of new content appends the
+next revision of that `<TOOL_ID>@<VERSION>`; nothing is ever rejected for
+already existing:
 
 ```text
 Imported tool <TOOL_ID>@1.0.0 revision 2.
 Imported tool <TOOL_ID>@1.0.0 revision 3 (identical to revision 1).
+```
+
+A document identical to the latest revision of its version appends nothing
+(ADR 0122):
+
+```text
+Tool <TOOL_ID>@1.0.0 is unchanged at revision 3.
 ```
 
 The latest revision of each version defines the current artifacts that
@@ -3886,11 +3901,18 @@ azathoth benchmark cases <BENCHMARK_ID>
 azathoth benchmark case-show <BENCHMARK_ID> <CASE_ID>
 ```
 
-Benchmarks are revisioned exactly like workflows. Every import appends the
-next revision; re-importing an earlier document reverts to its content:
+Benchmarks are revisioned exactly like workflows. Every import of new content
+appends the next revision; re-importing an earlier document reverts to its
+content:
 
 ```text
 Imported benchmark dataset <BENCHMARK_ID> revision 3 (identical to revision 1).
+```
+
+A document identical to the latest revision appends nothing (ADR 0122):
+
+```text
+Benchmark dataset <BENCHMARK_ID> is unchanged at revision 3.
 ```
 
 `benchmark show` adds `Revision`, `Imported`, and `Content Digest` lines, and

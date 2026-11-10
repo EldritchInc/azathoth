@@ -167,6 +167,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "InstanceSchemaError": "instance_schema",
         "InstanceUnavailableError": "instance_unavailable",
         "InvalidArgumentError": "invalid_argument",
+        "InvalidAuthorError": "invalid_author",
         "InvalidDocumentError": "invalid_document",
         "ModelInUseError": "model_in_use",
         "NotFoundError": "not_found",

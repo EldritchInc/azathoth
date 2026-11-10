@@ -1,7 +1,9 @@
 """The standard tool library that ships inside the package (ADR 0095)."""
 
 from importlib.resources import files
+from typing import Final
 
+from azathoth.revisions import Author
 from azathoth.tools import (
     ToolDocument,
     decode_tool_document,
@@ -24,6 +26,13 @@ STANDARD_TOOL_FILES = (
 )
 """The packaged tool documents, in the order they are installed."""
 
+STANDARD_TOOL_AUTHOR: Final = Author(name="Azathoth")
+"""Who installed standard tool revisions are recorded as authored by (ADR 0122).
+
+The standard library is Azathoth's own work, the same on every instance, so
+installing it never needs to know who is installing.
+"""
+
 
 def standard_tool_documents() -> tuple[ToolDocument, ...]:
     """Return the standard tool documents, in the order they are installed."""
@@ -41,6 +50,7 @@ def standard_tool_documents() -> tuple[ToolDocument, ...]:
 
 
 __all__ = [
+    "STANDARD_TOOL_AUTHOR",
     "STANDARD_TOOL_FILES",
     "standard_tool_documents",
 ]

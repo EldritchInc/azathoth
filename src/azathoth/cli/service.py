@@ -5,9 +5,12 @@ the configured database, so the command line, azathoth-mcp and the local
 editor share one way to read and change it.
 """
 
+import sys
+
 from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.revisions import Author, AuthorError, resolve_author
 
 
 def service_instance(
@@ -58,7 +61,23 @@ def import_note(
     return f" (identical to revision {identical})" if identical is not None else ""
 
 
+def current_author() -> Author | None:
+    """Return who a command records as the author, or say why it cannot tell (ADR 0122).
+
+    It is `AZATHOTH_AUTHOR`, or the operating system's username. When neither
+    can be used, the reason is printed to standard error and None returned.
+    """
+
+    try:
+        return resolve_author()
+    except AuthorError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return None
+
+
 __all__ = [
+    "current_author",
     "history_line",
     "identical_note",
     "import_note",

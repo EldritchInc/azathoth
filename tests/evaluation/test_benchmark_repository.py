@@ -93,7 +93,7 @@ def test_in_memory_benchmark_repository_preserves_insertion_order() -> None:
     )
 
 
-def test_in_memory_benchmark_repository_appends_a_revision_for_a_resave() -> None:
+def test_in_memory_benchmark_repository_appends_nothing_for_an_unchanged_resave() -> None:
     repository = InMemoryBenchmarkRepository()
 
     dataset = create_dataset()
@@ -101,7 +101,8 @@ def test_in_memory_benchmark_repository_appends_a_revision_for_a_resave() -> Non
     first = repository.save(dataset)
     second = repository.save(dataset)
 
-    assert (first.number, second.number) == (1, 2)
+    assert second == first
+    assert len(repository.revisions(dataset.id)) == 1
     assert repository.datasets() == (dataset,)
 
 

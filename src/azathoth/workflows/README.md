@@ -1261,9 +1261,16 @@ WorkflowSpecificationRevision
 ```
 
 `get` and `specifications` return the latest revisions; `latest_revision`,
-`revision(id, number)`, and `revisions(id)` read history. Re-saving earlier
+`revision(id, number)`, and `revisions(id)` read history, and `lineage(id)`
+reads where each revision sits in its lineage (ADR 0122). Re-saving earlier
 content appends a revision whose digest matches the earlier one, which
 `earliest_identical_revision` names.
+
+A save builds on the latest revision, or, with `based_on`, on the revision
+whose revision digest it names; one built on an earlier revision forks. It
+records who authored it with `author`. Content identical to the revision it
+builds on appends nothing: `save_revision` returns that revision with
+`created` false, and `save` returns it.
 
 `SQLiteWorkflowRepository` stores revisions in
 `workflow_specification_revisions` and, on opening a database written before

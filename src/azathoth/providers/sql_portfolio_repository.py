@@ -2,17 +2,12 @@
 
 from datetime import UTC, datetime
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
-
 from azathoth.persistence import Database, IntegrityError, Row, Session, Table, require_text
 from azathoth.providers.portfolio import (
     ModelPortfolioEntry,
 )
-from azathoth.revisions import CONTENT_DIGEST_PATTERN, Author, content_digest
+from azathoth.providers.portfolio_provenance import PortfolioProvenance
+from azathoth.revisions import Author, content_digest
 
 MODEL_PORTFOLIO_TABLES = (
     Table(
@@ -40,30 +35,6 @@ MODEL_PORTFOLIO_TABLES = (
     ),
 )
 """The tables the model portfolio is kept in."""
-
-
-class PortfolioProvenance(BaseModel):
-    """Who added one portfolio entry, when, and the digest of what they added (ADR 0122).
-
-    Entries added before provenance was recorded have no author and no time.
-    """
-
-    model_config = ConfigDict(
-        frozen=True,
-        extra="forbid",
-    )
-
-    identifier: str = Field(
-        min_length=1,
-    )
-
-    content_digest: str = Field(
-        pattern=CONTENT_DIGEST_PATTERN,
-    )
-
-    author: Author | None = None
-
-    added_at: datetime | None = None
 
 
 def _fill_portfolio_provenance(
@@ -138,6 +109,8 @@ class SqlModelPortfolioRepository:
     def save(
         self,
         entry: ModelPortfolioEntry,
+        *,
+        author: Author | None = None,
     ) -> None:
         """Persist one entry without replacing existing policy, and record its provenance.
 
@@ -170,6 +143,7 @@ class SqlModelPortfolioRepository:
                     PortfolioProvenance(
                         identifier=entry.identifier,
                         content_digest=content_digest(entry),
+                        author=author,
                         added_at=datetime.now(UTC),
                     ),
                 )
@@ -346,6 +320,5 @@ def _provenance(
 __all__ = [
     "MODEL_PORTFOLIO_PROVENANCE_TABLES",
     "MODEL_PORTFOLIO_TABLES",
-    "PortfolioProvenance",
     "SqlModelPortfolioRepository",
 ]

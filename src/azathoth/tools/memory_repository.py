@@ -3,6 +3,16 @@
 from collections.abc import Mapping
 from uuid import UUID
 
+from azathoth.revisions import (
+    Author,
+    Lineage,
+    LineageRecord,
+    RevisionKind,
+    SavedRevision,
+    base_record,
+    child_record,
+    content_digest,
+)
 from azathoth.tools.definition import ToolDefinition
 from azathoth.tools.document import ToolDocument
 from azathoth.tools.implementation import ToolImplementation
@@ -29,6 +39,10 @@ class InMemoryToolRepository:
         self._implementations: dict[UUID, ToolImplementation] = {}
         self._test_cases: dict[UUID, ToolTestCase] = {}
         self._revisions: list[ToolDocumentRevision] = []
+        self._lineage: dict[
+            ToolDefinitionReference,
+            list[LineageRecord],
+        ] = {}
 
     def save_definition(
         self,
@@ -124,18 +138,40 @@ class InMemoryToolRepository:
     def save_document(
         self,
         document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
     ) -> ToolDocumentRevision:
-        """Append one document as the next revision of its tool version.
+        """Append one document as the next revision of its tool version, and return it."""
+
+        return self.save_document_revision(
+            document,
+            author=author,
+            based_on=based_on,
+        ).revision
+
+    def save_document_revision(
+        self,
+        document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
+    ) -> SavedRevision[ToolDocumentRevision]:
+        """Append one document on the revision it builds on, unless it is identical to it.
 
         Versions of the tool saved artifact by artifact are first recorded
-        as revision 1 of their own. Current artifacts then follow the new
-        revision: retired implementations and test cases are removed, and
-        the document's artifacts are added or replaced in place.
+        as revision 1 of their own. A document identical to the revision it
+        builds on appends nothing and changes no artifact. Otherwise current
+        artifacts follow the new revision: retired implementations and test
+        cases are removed, and the document's artifacts are added or
+        replaced in place.
 
         Raises:
             ValueError: The tool ID is saved under another name, an artifact
                 ID in the document belongs to another tool, or an
                 implementation ID to another version.
+            BaseRevisionError: No revision of the tool version has the
+                digest `based_on`.
         """
 
         definition = document.definition
@@ -152,10 +188,27 @@ class InMemoryToolRepository:
 
         self._record_unrevisioned_versions(definition.id)
 
-        previous = self.latest_document_revision(
-            definition.id,
-            definition.version,
+        lineage = Lineage(
+            kind=RevisionKind.TOOL,
+            id=definition.id,
+            version=definition.version,
         )
+
+        parent = base_record(
+            self._lineage.get((definition.id, definition.version), ()),
+            lineage,
+            based_on,
+        )
+
+        history = self._version_history(definition.id, definition.version)
+
+        if parent is not None:
+            built_on = history[parent.number - 1]
+
+            if built_on.content_digest == content_digest(document):
+                return SavedRevision(revision=built_on, lineage=parent, created=False)
+
+        previous = history[-1] if history else None
 
         revision = ToolDocumentRevision.create(
             document,
@@ -168,7 +221,7 @@ class InMemoryToolRepository:
             other_versions=self._latest_documents_of_other_versions(definition),
         )
 
-        self._revisions.append(revision)
+        record = self._append(revision, parent=parent, author=author)
 
         for implementation_id in retired_implementations:
             self._implementations.pop(implementation_id, None)
@@ -184,7 +237,42 @@ class InMemoryToolRepository:
         for test_case in document.test_cases:
             self._test_cases[test_case.id] = test_case
 
-        return revision
+        return SavedRevision(revision=revision, lineage=record, created=True)
+
+    def document_lineage(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> tuple[LineageRecord, ...]:
+        """Return the lineage record of every revision of one exact tool version, oldest first."""
+
+        return tuple(self._lineage.get((tool_id, version), ()))
+
+    def _append(
+        self,
+        revision: ToolDocumentRevision,
+        *,
+        parent: LineageRecord | None,
+        author: Author | None,
+    ) -> LineageRecord:
+        """Append one revision and its lineage record, and return the record."""
+
+        record = child_record(
+            Lineage(
+                kind=RevisionKind.TOOL,
+                id=revision.tool_id,
+                version=revision.tool_version,
+            ),
+            number=revision.number,
+            content_digest=revision.content_digest,
+            parent=parent,
+            author=author,
+        )
+
+        self._revisions.append(revision)
+        self._lineage.setdefault((revision.tool_id, revision.tool_version), []).append(record)
+
+        return record
 
     def latest_document_revision(
         self,
@@ -276,7 +364,7 @@ class InMemoryToolRepository:
             if self.latest_document_revision(definition.id, definition.version) is not None:
                 continue
 
-            self._revisions.append(
+            self._append(
                 ToolDocumentRevision.create(
                     unrevisioned_document(
                         definition,
@@ -288,7 +376,9 @@ class InMemoryToolRepository:
                     update={
                         "imported_at": None,
                     },
-                )
+                ),
+                parent=None,
+                author=None,
             )
 
     @staticmethod

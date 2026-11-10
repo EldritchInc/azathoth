@@ -1,8 +1,8 @@
 """Where the lineage of every revision is kept, in either database (ADR 0122)."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import (
@@ -18,6 +18,9 @@ from azathoth.revisions.lineage import Lineage, RevisionKind, revision_digest
 
 REVISION_LINEAGE: Final = "revision_lineage"
 """The table every revision's lineage is kept in."""
+
+PREVIOUS: Final = "previous"
+"""The parent of a revision recorded without one given: the revision numbered before it."""
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,89 @@ class LineageRecord(BaseModel):
     author: Author | None = None
 
 
+ParentChoice = Literal["previous"] | LineageRecord | None
+"""A revision's parent: the one numbered before it, a recorded revision, or none."""
+
+Revision = TypeVar("Revision")
+
+
+class BaseRevisionError(ValueError):
+    """A revision to build on is not a revision of the lineage being appended to."""
+
+
+@dataclass(frozen=True)
+class SavedRevision(Generic[Revision]):
+    """What saving a document did: the revision it is now, where it sits, and whether it is new.
+
+    Saving content identical to the revision it builds on creates nothing:
+    the result is that revision, and `created` is false.
+    """
+
+    revision: Revision
+    lineage: LineageRecord
+    created: bool
+
+
+def child_record(
+    lineage: Lineage,
+    *,
+    number: int,
+    content_digest: str,
+    parent: LineageRecord | None,
+    author: Author | None = None,
+) -> LineageRecord:
+    """Return the lineage record of a new revision appended on a parent, or as a first one.
+
+    Raises:
+        BaseRevisionError: The parent is a revision of another lineage.
+    """
+
+    if parent is not None and parent.lineage != lineage:
+        raise BaseRevisionError(
+            f"Revision {parent.revision_digest} is not a revision of {lineage}."
+        )
+
+    parent_digest = None if parent is None else parent.revision_digest
+
+    return LineageRecord(
+        lineage=lineage,
+        number=number,
+        revision_digest=revision_digest(
+            lineage,
+            content_digest=content_digest,
+            parent_digest=parent_digest,
+        ),
+        parent_digest=parent_digest,
+        author=author,
+    )
+
+
+def base_record(
+    records: Iterable[LineageRecord],
+    lineage: Lineage,
+    based_on: str | None,
+) -> LineageRecord | None:
+    """Return the revision a new one builds on, from a lineage's records.
+
+    Without `based_on` it is the latest revision, or none for a lineage's
+    first. With it, it is the revision whose revision digest it is.
+
+    Raises:
+        BaseRevisionError: No revision of the lineage has that digest.
+    """
+
+    history = tuple(records)
+
+    if based_on is None:
+        return max(history, key=lambda record: record.number, default=None)
+
+    for record in history:
+        if record.revision_digest == based_on:
+            return record
+
+    raise BaseRevisionError(f"Revision {based_on} is not a revision of {lineage}.")
+
+
 def _fill_revision_lineage(
     session: Session,
     present: frozenset[str],
@@ -157,38 +243,40 @@ def record_lineage(
     number: int,
     content_digest: str,
     author: Author | None = None,
+    parent: ParentChoice = PREVIOUS,
 ) -> LineageRecord:
     """Record the lineage of a revision just appended to its lineage, and return it.
 
-    Its parent is the revision numbered before it, which must already be
-    recorded; the first revision has none.
+    By default its parent is the revision numbered before it, which must
+    already be recorded, and the first revision has none. A given parent,
+    or None, is used instead: a revision built on an earlier one forks.
 
     Raises:
         LookupError: The revision numbered before it has no lineage record.
+        BaseRevisionError: The given parent is a revision of another lineage.
         IntegrityError: The revision's lineage is already recorded.
     """
 
-    parent_digest: str | None = None
+    if isinstance(parent, str):
+        previous: LineageRecord | None = None
 
-    if number > 1:
-        parent = lineage_record(session, lineage, number - 1)
+        if number > 1:
+            previous = lineage_record(session, lineage, number - 1)
 
-        if parent is None:
-            raise LookupError(f"Revision {number - 1} of {lineage} has no lineage record.")
+            if previous is None:
+                raise LookupError(f"Revision {number - 1} of {lineage} has no lineage record.")
 
-        parent_digest = parent.revision_digest
+        parent = previous
 
-    record = LineageRecord(
-        lineage=lineage,
+    record = child_record(
+        lineage,
         number=number,
-        revision_digest=revision_digest(
-            lineage,
-            content_digest=content_digest,
-            parent_digest=parent_digest,
-        ),
-        parent_digest=parent_digest,
+        content_digest=content_digest,
+        parent=parent,
         author=author,
     )
+
+    parent_digest = record.parent_digest
 
     session.execute(
         """
@@ -376,14 +464,20 @@ def tables_with_lineage(
 
 __all__ = [
     "BENCHMARK_REVISION_TABLE",
+    "PREVIOUS",
     "REVISION_LINEAGE",
     "REVISION_LINEAGE_TABLES",
     "REVISION_TABLES",
     "TOOL_REVISION_TABLE",
     "WORKFLOW_REVISION_TABLE",
+    "BaseRevisionError",
     "LineageRecord",
+    "ParentChoice",
     "RevisionTable",
+    "SavedRevision",
     "backfill_lineage",
+    "base_record",
+    "child_record",
     "lineage_record",
     "lineage_records",
     "record_lineage",

@@ -16,6 +16,7 @@ from uuid import UUID
 from pydantic import JsonValue, ValidationError
 from pydantic_core import ErrorDetails
 
+from azathoth.api.authorship import AuthorAccess
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -24,13 +25,16 @@ from azathoth.api.errors import (
 )
 from azathoth.api.models import (
     BenchmarkDetail,
+    BenchmarkImport,
     BenchmarkSummary,
     DocumentProblem,
     Revision,
     ToolDetail,
+    ToolImport,
     ToolSummary,
     WorkflowCheck,
     WorkflowDetail,
+    WorkflowImport,
     WorkflowSummary,
 )
 from azathoth.evaluation import (
@@ -41,6 +45,7 @@ from azathoth.evaluation import (
     encode_benchmark_document,
 )
 from azathoth.persistence.repositories import Repositories
+from azathoth.revisions import BaseRevisionError
 from azathoth.tools import (
     ToolDocumentError,
     ToolDocumentRevision,
@@ -322,10 +327,15 @@ class Workflows:
     def __init__(
         self,
         repositories: RepositoriesAccess,
+        author: AuthorAccess,
     ) -> None:
-        """Browse the workflows of the repositories `repositories` returns."""
+        """Browse the workflows of the repositories `repositories` returns.
+
+        Imports are recorded as the author `author` returns (ADR 0122).
+        """
 
         self._repositories = repositories
+        self._author = author
 
     def list(
         self,
@@ -455,16 +465,25 @@ class Workflows:
     def import_document(
         self,
         document: Document,
-    ) -> WorkflowDetail:
+        *,
+        based_on: str | None = None,
+    ) -> WorkflowImport:
         """Import one workflow document as its workflow's next revision, as `workflow import` does.
 
-        A workflow must declare its result. Nothing is saved when the
-        document is refused.
+        The revision builds on the one whose revision digest is `based_on`,
+        or on the latest without one; built on an earlier one than the
+        latest, it forks (ADR 0122). A document identical to the revision it
+        builds on appends nothing, and that revision is returned. A workflow
+        must declare its result. Nothing is saved when the document is
+        refused.
 
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidDocumentError: It is not a workflow document, or declares
                 no result.
+            RevisionNotFoundError: No revision of the workflow has the
+                digest `based_on`.
+            InvalidAuthorError: Who is importing could not be told.
         """
 
         try:
@@ -475,9 +494,21 @@ class Workflows:
         if specification.result is None:
             raise InvalidDocumentError(RESULT_REQUIRED_MESSAGE)
 
-        revision = self._repositories().workflows.save(specification)
+        repository = self._repositories().workflows
 
-        return self.get(specification.metadata.id, revision=revision.number)
+        try:
+            saved = repository.save_revision(
+                specification,
+                author=self._author(),
+                based_on=based_on,
+            )
+        except BaseRevisionError as exc:
+            raise RevisionNotFoundError(str(exc)) from exc
+
+        return WorkflowImport(
+            created=saved.created,
+            workflow=self.get(specification.metadata.id, revision=saved.revision.number),
+        )
 
     def _history(
         self,
@@ -523,10 +554,15 @@ class Tools:
     def __init__(
         self,
         repositories: RepositoriesAccess,
+        author: AuthorAccess,
     ) -> None:
-        """Browse the tools of the repositories `repositories` returns."""
+        """Browse the tools of the repositories `repositories` returns.
+
+        Imports are recorded as the author `author` returns (ADR 0122).
+        """
 
         self._repositories = repositories
+        self._author = author
 
     def list(
         self,
@@ -632,17 +668,26 @@ class Tools:
     def import_document(
         self,
         document: Document,
-    ) -> ToolDetail:
+        *,
+        based_on: str | None = None,
+    ) -> ToolImport:
         """Import one tool document as its exact version's next revision, as `tool import` does.
 
-        A document whose implementations use a runtime Azathoth cannot run,
-        or whose artifacts belong to another tool or version, is refused and
-        nothing is saved.
+        The revision builds on the one of its tool version whose revision
+        digest is `based_on`, or on the latest without one; built on an
+        earlier one than the latest, it forks (ADR 0122). A document
+        identical to the revision it builds on appends nothing, and that
+        revision is returned. A document whose implementations use a runtime
+        Azathoth cannot run, or whose artifacts belong to another tool or
+        version, is refused and nothing is saved.
 
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidDocumentError: It is not a tool document, or cannot be
                 imported.
+            RevisionNotFoundError: No revision of the tool version has the
+                digest `based_on`.
+            InvalidAuthorError: Who is importing could not be told.
         """
 
         try:
@@ -657,13 +702,25 @@ class Tools:
                 raise InvalidDocumentError(unsupported_runtime_message(implementation))
 
         repository = self._repositories().tools
+        author = self._author()
 
         try:
-            revision = repository.save_document(decoded)
+            saved = repository.save_document_revision(
+                decoded,
+                author=author,
+                based_on=based_on,
+            )
+        except BaseRevisionError as exc:
+            raise RevisionNotFoundError(str(exc)) from exc
         except ValueError as exc:
             raise InvalidDocumentError(str(exc)) from exc
 
-        return self.get(revision.tool_id, revision.tool_version, revision=revision.number)
+        revision = saved.revision
+
+        return ToolImport(
+            created=saved.created,
+            tool=self.get(revision.tool_id, revision.tool_version, revision=revision.number),
+        )
 
     def _version_history(
         self,
@@ -707,10 +764,15 @@ class Benchmarks:
     def __init__(
         self,
         repositories: RepositoriesAccess,
+        author: AuthorAccess,
     ) -> None:
-        """Browse the benchmarks of the repositories `repositories` returns."""
+        """Browse the benchmarks of the repositories `repositories` returns.
+
+        Imports are recorded as the author `author` returns (ADR 0122).
+        """
 
         self._repositories = repositories
+        self._author = author
 
     def list(
         self,
@@ -799,12 +861,22 @@ class Benchmarks:
     def import_document(
         self,
         document: Document,
-    ) -> BenchmarkDetail:
+        *,
+        based_on: str | None = None,
+    ) -> BenchmarkImport:
         """Import one benchmark document as its dataset's next revision, as `benchmark import` does.
+
+        The revision builds on the one whose revision digest is `based_on`,
+        or on the latest without one; built on an earlier one than the
+        latest, it forks (ADR 0122). A document identical to the revision it
+        builds on appends nothing, and that revision is returned.
 
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidDocumentError: It is not a benchmark document.
+            RevisionNotFoundError: No revision of the benchmark has the
+                digest `based_on`.
+            InvalidAuthorError: Who is importing could not be told.
         """
 
         try:
@@ -812,9 +884,21 @@ class Benchmarks:
         except BenchmarkDocumentError as exc:
             raise InvalidDocumentError(str(exc)) from exc
 
-        revision = self._repositories().benchmarks.save(dataset)
+        repository = self._repositories().benchmarks
 
-        return self.get(dataset.id, revision=revision.number)
+        try:
+            saved = repository.save_revision(
+                dataset,
+                author=self._author(),
+                based_on=based_on,
+            )
+        except BaseRevisionError as exc:
+            raise RevisionNotFoundError(str(exc)) from exc
+
+        return BenchmarkImport(
+            created=saved.created,
+            benchmark=self.get(dataset.id, revision=saved.revision.number),
+        )
 
     def _history(
         self,

@@ -3,6 +3,7 @@
 from typing import Protocol
 from uuid import UUID
 
+from azathoth.revisions import Author, LineageRecord, SavedRevision
 from azathoth.tools.definition import ToolDefinition
 from azathoth.tools.document import ToolDocument
 from azathoth.tools.implementation import ToolImplementation
@@ -87,13 +88,46 @@ class ToolRepository(Protocol):
     def save_document(
         self,
         document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
     ) -> ToolDocumentRevision:
-        """Append one document as the next revision of its tool version.
+        """Append one document as the next revision of its tool version, and return it.
 
         Raises:
             ValueError: An artifact ID in the document belongs to another
                 tool, or an implementation ID to another version.
         """
+
+        ...
+
+    def save_document_revision(
+        self,
+        document: ToolDocument,
+        *,
+        author: Author | None = None,
+        based_on: str | None = None,
+    ) -> SavedRevision[ToolDocumentRevision]:
+        """Append one document on the revision it builds on, unless it is identical to it.
+
+        It builds on the revision of its tool version whose revision digest
+        is `based_on`, or on the latest without one (ADR 0122).
+
+        Raises:
+            ValueError: An artifact ID in the document belongs to another
+                tool, or an implementation ID to another version.
+            BaseRevisionError: No revision of the tool version has that
+                digest.
+        """
+
+        ...
+
+    def document_lineage(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> tuple[LineageRecord, ...]:
+        """Return the lineage record of every revision of one exact tool version, oldest first."""
 
         ...
 

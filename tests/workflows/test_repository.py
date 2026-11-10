@@ -180,14 +180,15 @@ def test_in_memory_repository_preserves_insertion_order() -> None:
     )
 
 
-def test_in_memory_repository_appends_a_revision_for_a_resave() -> None:
+def test_in_memory_repository_appends_nothing_for_an_unchanged_resave() -> None:
     repository = InMemoryWorkflowRepository()
     specification = create_workflow()
 
     first = repository.save(specification)
     second = repository.save(specification)
 
-    assert (first.number, second.number) == (1, 2)
+    assert second == first
+    assert tuple(revision.number for revision in repository.revisions(WORKFLOW_ID)) == (1,)
     assert repository.specifications() == (specification,)
 
 

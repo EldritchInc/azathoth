@@ -275,7 +275,7 @@ def import_workflow(
 
     try:
         imported = service_instance(configuration).workflows.import_document(document)
-    except api.InvalidDocumentError as exc:
+    except (api.InvalidDocumentError, api.InvalidAuthorError) as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -283,9 +283,16 @@ def import_workflow(
 
         return 1
 
+    workflow = imported.workflow
+
+    if not imported.created:
+        print(f"Workflow {workflow.id} is unchanged at revision {workflow.revision.number}.")
+
+        return 0
+
     print(
-        f"Imported workflow {imported.id} revision {imported.revision.number}"
-        f"{import_note(imported)}."
+        f"Imported workflow {workflow.id} revision {workflow.revision.number}"
+        f"{import_note(workflow)}."
     )
 
     return 0

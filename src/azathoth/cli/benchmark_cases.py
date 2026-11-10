@@ -9,6 +9,7 @@ from pydantic import JsonValue
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.inputs import WorkflowInputFile, resolve_input_file
 from azathoth.cli.persistence import repositories
+from azathoth.cli.service import current_author
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkCaseConflictError,
@@ -117,7 +118,12 @@ def add_benchmark_case(
 
         return 1
 
-    revision = benchmarks.save(extended)
+    author = current_author()
+
+    if author is None:
+        return 1
+
+    revision = benchmarks.save(extended, author=author)
 
     print(
         f"Added benchmark case {case.id} to benchmark dataset {benchmark_id} "

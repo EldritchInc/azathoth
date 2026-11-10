@@ -626,3 +626,17 @@ def test_an_sqlite_portfolio_from_before_provenance_gains_it_when_opened(
     assert provenance is not None
     assert provenance.content_digest == content_digest(ENTRY)
     assert provenance.added_at is None
+
+
+def test_a_revision_recorded_with_no_parent_is_a_root_whatever_its_number(
+    database: Database,
+) -> None:
+    database.initialize(REVISION_LINEAGE_TABLES)
+
+    with database.transaction() as session:
+        first = record_lineage(session, WORKFLOW, number=1, content_digest="a" * 64)
+        root = record_lineage(session, WORKFLOW, number=2, content_digest="b" * 64, parent=None)
+        child = record_lineage(session, WORKFLOW, number=3, content_digest="c" * 64, parent=first)
+
+    assert root.parent_digest is None
+    assert child.parent_digest == first.revision_digest

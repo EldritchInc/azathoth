@@ -181,6 +181,45 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class WorkflowImport(ApiModel):
+    """What importing one workflow document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `workflow` then is."
+        ),
+    )
+
+    workflow: WorkflowDetail
+
+
+class ToolImport(ApiModel):
+    """What importing one tool document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `tool` then is."
+        ),
+    )
+
+    tool: ToolDetail
+
+
+class BenchmarkImport(ApiModel):
+    """What importing one benchmark document did (ADR 0122)."""
+
+    created: bool = Field(
+        description=(
+            "Whether a revision was appended. False when the document is identical to the "
+            "revision it builds on, which `benchmark` then is."
+        ),
+    )
+
+    benchmark: BenchmarkDetail
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 
@@ -785,6 +824,7 @@ __all__ = [
     "ApiStability",
     "Backend",
     "BenchmarkDetail",
+    "BenchmarkImport",
     "BenchmarkSummary",
     "ContextChanged",
     "DocumentProblem",
@@ -821,9 +861,11 @@ __all__ = [
     "StepStarted",
     "StepTrial",
     "ToolDetail",
+    "ToolImport",
     "ToolSummary",
     "WorkflowCheck",
     "WorkflowDetail",
+    "WorkflowImport",
     "WorkflowReadiness",
     "WorkflowSummary",
     "parse_run_event",

@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 
 from pydantic import JsonValue, ValidationError
 
+from azathoth.api.authorship import AuthorAccess
 from azathoth.api.browsing import RepositoriesAccess
 from azathoth.api.errors import (
     ConflictError,
@@ -252,11 +253,16 @@ class Portfolio:
         self,
         repositories: RepositoriesAccess,
         directories: DirectoriesAccess,
+        author: AuthorAccess,
     ) -> None:
-        """Keep the portfolio of the repositories `repositories` returns."""
+        """Keep the portfolio of the repositories `repositories` returns.
+
+        Additions are recorded as the author `author` returns (ADR 0122).
+        """
 
         self._repositories = repositories
         self._directories = directories
+        self._author = author
 
     def list(
         self,
@@ -284,6 +290,7 @@ class Portfolio:
             ProviderConfigurationError: A provider is configured in a way
                 that cannot be used.
             ProviderUnavailableError: A provider could not be asked.
+            InvalidAuthorError: Who is adding it could not be told.
         """
 
         repositories = self._repositories()
@@ -297,7 +304,7 @@ class Portfolio:
 
         entry = ModelPortfolioEntry(provider=model.provider, model=model.model)
 
-        repositories.portfolio.save(entry)
+        repositories.portfolio.save(entry, author=self._author())
 
         return _entry(entry)
 
