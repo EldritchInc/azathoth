@@ -497,6 +497,131 @@ class InvocationRun(ApiModel):
     steps: tuple[RunStep, ...] = ()
 
 
+class RunSummary(ApiModel):
+    """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
+
+    run_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name in the revision that ran.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The revision that ran, or None for a run recorded before revisions.",
+    )
+
+    invocation_id: UUID | None = Field(
+        description="The production invocation the run executed, when it executed one.",
+    )
+
+    succeeded: bool = Field(
+        description="Whether the run finished with its declared result, or without one declared.",
+    )
+
+    error: RunError | None
+
+    started_at: datetime
+
+    completed_at: datetime
+
+    command: str = Field(
+        description="The `azathoth` command that shows the run.",
+    )
+
+
+class StepMetrics(ApiModel):
+    """What a step's strategy measured as it ran; what it did not measure is None."""
+
+    provider: str | None
+
+    model: str | None
+
+    prompt_tokens: int | None
+
+    completion_tokens: int | None
+
+    total_tokens: int | None
+
+    latency_ms: int | None
+
+    estimated_cost_usd: float | None
+
+
+class StepFailure(ApiModel):
+    """One attempt of a step that failed."""
+
+    attempt: int = Field(
+        ge=1,
+    )
+
+    exception_type: str
+
+    message: str
+
+
+class RunStepDetail(RunStep):
+    """One step of a kept run, with what it produced and every attempt that failed."""
+
+    layer: int = Field(
+        ge=0,
+        description="The dependency layer the step ran in.",
+    )
+
+    started_at: datetime | None = Field(
+        description="When its first attempt started; None for a step that never ran.",
+    )
+
+    completed_at: datetime | None = Field(
+        description="When its last attempt finished; None for a step that never ran.",
+    )
+
+    strategy: str | None = Field(
+        description="The name of the strategy an executed step ran: its prompt, or its tool.",
+    )
+
+    metrics: StepMetrics | None
+
+    output: JsonValue = Field(
+        default=None,
+        description="What an executed step's strategy returned; None for any other.",
+    )
+
+    values: dict[str, JsonValue] = Field(
+        description="The values the step added to the run's context, by name.",
+    )
+
+    failures: tuple[StepFailure, ...] = Field(
+        description="Each attempt that failed, in order; a failed step's last is its failure.",
+    )
+
+
+class RunDetail(RunSummary):
+    """One kept run with its input, its result and each of its steps."""
+
+    has_result: bool = Field(
+        description="Whether `result` holds the declared result, so a null result is not absence.",
+    )
+
+    result: JsonValue = None
+
+    has_input: bool = Field(
+        description="Whether `input` holds the run's input, so a null input is not absence.",
+    )
+
+    input: JsonValue = None
+
+    resumes: int = Field(
+        ge=0,
+        description="How often another process resumed the run.",
+    )
+
+    steps: tuple[RunStepDetail, ...] = Field(
+        description="Every step, in the order the run recorded them.",
+    )
+
+
 class InvocationDetail(ApiModel):
     """One invocation as it was recorded: its input, who made it, its outcome and its run."""
 
@@ -666,6 +791,7 @@ __all__ = [
     "ProductionDependent",
     "ProductionStepUsage",
     "Revision",
+    "RunDetail",
     "RunError",
     "RunEvent",
     "RunFile",
@@ -674,9 +800,13 @@ __all__ = [
     "RunResult",
     "RunStarted",
     "RunStep",
+    "RunStepDetail",
+    "RunSummary",
     "StandardTool",
+    "StepFailure",
     "StepFinished",
     "StepKind",
+    "StepMetrics",
     "StepReadiness",
     "StepStarted",
     "ToolDetail",

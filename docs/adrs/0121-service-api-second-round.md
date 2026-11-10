@@ -123,6 +123,46 @@ valid, is refused with `InvalidArgumentError`, rather than ignored.
 It names the models that meet the requirements, not that a provider here
 can run them; `runs.readiness` says that.
 
+### The runs already made
+
+`runs.list(workflow_id, limit=None)` returns a workflow's kept runs as
+`RunSummary` values, newest first, as `azathoth workflow runs` lists them: a
+workflow since removed from configuration keeps its runs, and one neither
+configured nor run is not found. `runs.get(run_id)` returns one as a
+`RunDetail`, as `azathoth run show` shows it.
+
+A run is judged by the revision that ran, so a run made before its
+workflow's result was renamed still has its result. A run recorded before
+revisions is judged by the latest; a run of a workflow no longer
+configured has no declared result to judge it by, so it failed only if it
+halted. `succeeded` and `error` mean what they mean for `runs.run`.
+
+A run names the production `invocation_id` it executed, when it executed
+one. Whether a run came from a benchmark or an experiment is not reported:
+those records name their runs, and the API reads neither yet.
+
+A `RunDetail` adds the run's input, kept apart from absence by `has_input`
+as its result is by `has_result`; how often it was resumed; and every step
+as a `RunStepDetail`, which extends the `RunStep` an invocation's run
+already shows:
+
+| Field | Holds |
+| --- | --- |
+| `layer` | The dependency layer it ran in. |
+| `started_at`, `completed_at` | When its first attempt started and its last finished; None for a step that never ran. |
+| `strategy` | The strategy an executed step ran. |
+| `metrics` | Its provider, model, tokens, latency and estimated cost, as far as they were measured. |
+| `output` | What an executed step's strategy returned. |
+| `values` | The values it added to the run's context, by name, as `ContextChanged` reported them. |
+| `failures` | Each attempt that failed, with its number, exception type and message. |
+
+A run that journaled but never finished is not kept, so `runs.get`
+raises `NotFoundError` with what `run show` says of it:
+
+```text
+Run <run-id> has not finished; resume it with azathoth run resume <run-id>.
+```
+
 ## Consequences
 
 - The editor can run a workflow on a document someone drops on it, through
@@ -134,5 +174,7 @@ can run them; `runs.readiness` says that.
 - The editor asks Azathoth what is wrong with a document, which models a
   step could choose, and whether the workflow could run, instead of
   repeating Azathoth's rules in TypeScript, and so cannot drift from them.
+- The editor shows a finished run, its own or another's, from what the
+  instance kept, with the same values a run it watched reported as it ran.
 - Candidate generation and readiness resolve a step through one function,
   so readiness never says a step could run where a run would refuse it.

@@ -208,6 +208,18 @@ and `RunCancelledError` is raised; a cancelled invocation resumes when the
 same request is made under its key. A token cancelled beforehand starts
 nothing.
 
+`instance.runs.list(workflow_id, limit=None)` returns a workflow's kept
+runs newest first, as `azathoth workflow runs` lists them, and
+`instance.runs.get(run_id)` one of them, as `azathoth run show` shows it.
+Each run is judged by the revision that ran, and names the production
+invocation it executed, if it executed one. A `RunDetail` holds the run's
+input and result, how often it was resumed, and each step: its status and
+layer, when its first attempt started and its last finished, its strategy
+and what it measured, its output, the values it added to the context by
+name, and every attempt that failed. A run that has not finished is not
+kept yet, so `get` raises `NotFoundError` saying how to resume it
+(ADR 0121).
+
 ## Invocations
 
 `instance.invocations.get(invocation_id)` reads one invocation back, as

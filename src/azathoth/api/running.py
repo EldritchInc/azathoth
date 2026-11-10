@@ -24,7 +24,7 @@ from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 
-from azathoth.api.browsing import Document, RepositoriesAccess
+from azathoth.api.browsing import LIMIT_MESSAGE, Document, RepositoriesAccess
 from azathoth.api.catalog import DirectoriesAccess, discover
 from azathoth.api.errors import (
     InvalidArgumentError,
@@ -38,6 +38,7 @@ from azathoth.api.models import (
     InvocationError,
     InvocationFinished,
     InvocationOutcome,
+    RunDetail,
     RunError,
     RunEvent,
     RunFile,
@@ -45,8 +46,12 @@ from azathoth.api.models import (
     RunInput,
     RunResult,
     RunStarted,
+    RunStepDetail,
+    RunSummary,
+    StepFailure,
     StepFinished,
     StepKind,
+    StepMetrics,
     StepReadiness,
     StepStarted,
     WorkflowReadiness,
@@ -96,6 +101,7 @@ from azathoth.telemetry.invocations import traced_job_invoker
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.tools import ToolCatalogLoader, ToolStrategy
 from azathoth.workflows import (
+    WORKFLOW_INPUT_EVENT_TYPE,
     InvocationIdempotency,
     ProductionInvocationResult,
     ToolStepSpecification,
@@ -106,12 +112,15 @@ from azathoth.workflows import (
     WorkflowRun,
     WorkflowRunEvent,
     WorkflowSpecification,
+    WorkflowSpecificationRevision,
     WorkflowStepFailure,
+    WorkflowStepRun,
     WorkflowStepSpecification,
     WorkflowStepStarted,
     WorkflowStepStatus,
     create_workflow_input_events,
     decode_workflow_document,
+    journal_resumes,
     validate_idempotency_key,
     workflow_result,
 )
@@ -494,6 +503,78 @@ class Runs:
 
         return outcome.model_copy(update={"warnings": tuple(observer.warnings)})
 
+    def list(
+        self,
+        workflow_id: UUID,
+        *,
+        limit: int | None = None,
+    ) -> tuple[RunSummary, ...]:
+        """Return a workflow's kept runs newest first, at most `limit` of them (ADR 0121).
+
+        A workflow's runs are listed as `azathoth workflow runs` lists them:
+        a workflow since removed from configuration keeps its runs. Each is
+        judged by the revision that ran. A run that has not finished is not
+        kept yet, so it is not listed.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The limit is below 1.
+            NotFoundError: The workflow is neither configured nor has runs.
+        """
+
+        if limit is not None and limit < 1:
+            raise InvalidArgumentError(LIMIT_MESSAGE)
+
+        repositories = self._repositories()
+        runs = repositories.runs.runs_for_workflow(workflow_id)
+        history = repositories.workflows.revisions(workflow_id)
+
+        if not runs and not history:
+            raise NotFoundError(f"Workflow {workflow_id} is not configured.")
+
+        newest_first = sorted(runs, key=lambda run: run.started_at, reverse=True)[:limit]
+        invocations = _invocations(repositories)
+
+        return tuple(
+            _summary(run, _judged(run, history), invocations.get(run.id)) for run in newest_first
+        )
+
+    def get(
+        self,
+        run_id: UUID,
+    ) -> RunDetail:
+        """Return one kept run with its input, its result and each step's evidence (ADR 0121).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No run has this ID, or it has not finished.
+        """
+
+        repositories = self._repositories()
+        run = repositories.runs.get(run_id)
+        entries = repositories.run_journal.entries(run_id)
+
+        if run is None:
+            raise NotFoundError(
+                _unfinished_message(run_id, entries[0].invocation_id)
+                if entries
+                else f"Run {run_id} was not found."
+            )
+
+        has_result, value, error = _judged(run, repositories.workflows.revisions(run.workflow.id))
+        summary = _summary(run, (has_result, value, error), _invocations(repositories).get(run.id))
+        has_input, given = _run_input(run)
+
+        return RunDetail(
+            **summary.model_dump(),
+            has_result=has_result,
+            result=value,
+            has_input=has_input,
+            input=given,
+            resumes=journal_resumes(entries),
+            steps=tuple(_step_detail(step) for step in run.steps),
+        )
+
     def readiness(
         self,
         document: Document,
@@ -550,6 +631,137 @@ class Runs:
             tool_implementations=tool_loader.load_implementation_catalog(),
             judges=repositories.judges.rotation(),
         )
+
+
+def _unfinished_message(
+    run_id: UUID,
+    invocation_id: UUID | None,
+) -> str:
+    """Return what `run show` says of a run that journaled but never finished."""
+
+    if invocation_id is not None:
+        return (
+            f"Run {run_id} has not finished; resume it with "
+            f"azathoth invocation resume {invocation_id}."
+        )
+
+    return f"Run {run_id} has not finished; resume it with azathoth run resume {run_id}."
+
+
+def _invocations(
+    repositories: Repositories,
+) -> dict[UUID, UUID]:
+    """Return the production invocation each run that executed one executed, by run."""
+
+    return {
+        association.run_id: association.invocation_id
+        for association in repositories.invocation_runs.associations()
+    }
+
+
+def _judged(
+    run: WorkflowRun,
+    history: tuple[WorkflowSpecificationRevision, ...],
+) -> tuple[bool, JsonValue, RunError | None]:
+    """Return whether a kept run has its result, the result, and why not, by the revision it ran.
+
+    A run recorded before revisions is judged by the latest. A run of a
+    workflow removed from configuration has no declared result to judge it
+    by, so it failed only when it halted.
+    """
+
+    specification = (
+        (history[-1].specification if history else None)
+        if run.workflow_revision is None
+        else next(
+            (
+                revision.specification
+                for revision in history
+                if revision.number == run.workflow_revision
+            ),
+            None,
+        )
+    )
+
+    if specification is None:
+        return False, None, _halt(run)
+
+    return _outcome(run, specification)
+
+
+def _summary(
+    run: WorkflowRun,
+    judged: tuple[bool, JsonValue, RunError | None],
+    invocation_id: UUID | None,
+) -> RunSummary:
+    """Return the API's view of one kept run, as `_judged` judged it."""
+
+    error = judged[2]
+
+    return RunSummary(
+        run_id=run.id,
+        workflow_id=run.workflow.id,
+        workflow_name=run.workflow.name,
+        workflow_revision=run.workflow_revision,
+        invocation_id=invocation_id,
+        succeeded=error is None,
+        error=error,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        command=f"azathoth run show {run.id}",
+    )
+
+
+def _run_input(
+    run: WorkflowRun,
+) -> tuple[bool, JsonValue]:
+    """Return whether a run was given input, and the input, as its workflow input event holds it.
+
+    A run of a production invocation is given its invocation's input this
+    way too.
+    """
+
+    for event in run.initial_context.events:
+        if event.event_type == WORKFLOW_INPUT_EVENT_TYPE:
+            return True, event.payload.get("input")
+
+    return False, None
+
+
+def _step_detail(
+    step: WorkflowStepRun,
+) -> RunStepDetail:
+    """Return the API's view of one step of a kept run."""
+
+    execution = step.execution
+    metrics = execution.metrics if execution is not None else None
+
+    return RunStepDetail(
+        step_id=step.step_id,
+        status=step_status(step.status),
+        attempts=len(step.attempts),
+        confidence=step.confidence,
+        layer=step.layer_index,
+        started_at=step.attempts[0].started_at if step.attempts else None,
+        completed_at=step.attempts[-1].completed_at if step.attempts else None,
+        strategy=execution.strategy_name if execution is not None else None,
+        metrics=(
+            StepMetrics(**metrics.model_dump(include=set(StepMetrics.model_fields)))
+            if metrics is not None
+            else None
+        ),
+        output=execution.output if execution is not None else None,
+        values={value.name: value.value for value in step.values},
+        failures=tuple(
+            StepFailure(
+                attempt=attempt.attempt_number,
+                exception_type=attempt.failure.exception_type,
+                message=attempt.failure.message,
+            )
+            for attempt in step.attempts
+            if attempt.failure is not None
+        ),
+    )
 
 
 NO_PORTFOLIO_MESSAGE: Final = "The portfolio authorizes no model."
@@ -802,6 +1014,30 @@ def _context(
     return Context(events=create_workflow_input_events(resolved, producer=RUN_PRODUCER))
 
 
+def _halt(
+    run: WorkflowRun,
+) -> RunError | None:
+    """Return the step that halted a run and its final failure, or None for a run that did not."""
+
+    if not run.failed:
+        return None
+
+    failed = next(
+        step
+        for step in run.steps
+        if step.status is WorkflowStepStatus.FAILED
+        and (run.halting_step_id is None or step.step_id == run.halting_step_id)
+    )
+    failure = failed.attempts[-1].failure
+
+    return RunError(
+        code="workflow_execution_failed",
+        step_id=failed.step_id,
+        exception_type=failure.exception_type if failure is not None else None,
+        message=failure.message if failure is not None else "The step failed.",
+    )
+
+
 def _outcome(
     run: WorkflowRun,
     specification: WorkflowSpecification,
@@ -814,25 +1050,10 @@ def _outcome(
     succeeded with none.
     """
 
-    if run.failed:
-        failed = next(
-            step
-            for step in run.steps
-            if step.status is WorkflowStepStatus.FAILED
-            and (run.halting_step_id is None or step.step_id == run.halting_step_id)
-        )
-        failure = failed.attempts[-1].failure
+    halt = _halt(run)
 
-        return (
-            False,
-            None,
-            RunError(
-                code="workflow_execution_failed",
-                step_id=failed.step_id,
-                exception_type=failure.exception_type if failure is not None else None,
-                message=failure.message if failure is not None else "The step failed.",
-            ),
-        )
+    if halt is not None:
+        return False, None, halt
 
     if specification.result is None:
         return False, None, None

@@ -33,6 +33,10 @@ release dates are on the
   portfolio's models that meet a step's requirements, by the rules a run
   uses
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
+- `azathoth.api` reads back the runs an instance kept: a workflow's runs
+  newest first, and one run with its input, its result, and each step's
+  output, values, measurements and failed attempts
+  ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
 
 ## 1.3.0
 
