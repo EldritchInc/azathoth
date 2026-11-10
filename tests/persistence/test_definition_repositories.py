@@ -24,7 +24,7 @@ from azathoth.evaluation import (
 )
 from azathoth.goals import GOAL_TABLES, GoalRepository, SqlGoalRepository
 from azathoth.persistence import Database, PostgresDatabase, Table
-from azathoth.revisions import content_digest
+from azathoth.revisions import content_digest, tables_with_lineage
 from azathoth.tools import (
     TOOL_TABLES,
     SqlToolRepository,
@@ -130,7 +130,9 @@ def concurrently(
 def workflows(
     database: Database,
 ) -> WorkflowRepository:
-    return initialized(database, WORKFLOW_SPECIFICATION_TABLES, SqlWorkflowRepository)
+    return initialized(
+        database, tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES), SqlWorkflowRepository
+    )
 
 
 def test_workflow_revisions_are_numbered_and_read_back(
@@ -181,7 +183,7 @@ def test_concurrent_imports_never_take_the_same_workflow_revision(
         for _ in range(5):
             repository.save(create_workflow())
 
-    concurrently(postgres_url, WORKFLOW_SPECIFICATION_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 
@@ -274,7 +276,7 @@ def test_a_duplicate_production_revision_is_refused(
 def tools(
     database: Database,
 ) -> ToolRepository:
-    return initialized(database, TOOL_TABLES, SqlToolRepository)
+    return initialized(database, tables_with_lineage(TOOL_TABLES), SqlToolRepository)
 
 
 def test_tool_documents_are_revisioned_per_version(
@@ -367,7 +369,7 @@ def test_concurrent_imports_never_take_the_same_tool_revision(
         for document in (create_document(), create_changed_document()) * 2:
             repository.save_document(document)
 
-    concurrently(postgres_url, TOOL_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(TOOL_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 
@@ -387,7 +389,7 @@ def test_concurrent_imports_never_take_the_same_tool_revision(
 def benchmarks(
     database: Database,
 ) -> BenchmarkRepository:
-    return initialized(database, BENCHMARK_TABLES, SqlBenchmarkRepository)
+    return initialized(database, tables_with_lineage(BENCHMARK_TABLES), SqlBenchmarkRepository)
 
 
 def test_benchmark_revisions_are_numbered_and_read_back(
@@ -419,7 +421,7 @@ def test_concurrent_imports_never_take_the_same_benchmark_revision(
         for _ in range(5):
             repository.save(create_dataset())
 
-    concurrently(postgres_url, BENCHMARK_TABLES, write)
+    concurrently(postgres_url, tables_with_lineage(BENCHMARK_TABLES), write)
 
     database = PostgresDatabase(postgres_url)
 

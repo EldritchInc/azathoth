@@ -396,11 +396,12 @@ When you upgrade Azathoth to a release with a newer schema, every command
 stops until the database is upgraded too:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 2; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
 ```
 
 Upgrade Azathoth on every machine, then run `init` once, from any one of
-them. It adds the tables the database lacks and keeps everything in it:
+them. It adds the tables the database lacks, fills in what they need for the
+rows it already holds, and keeps everything in it:
 
 ```bash
 azathoth init
@@ -411,7 +412,7 @@ azathoth init
 ```
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 2)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
 ```
 
 An SQLite file needs no such step: Azathoth adds the tables it lacks the

@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from azathoth.persistence import Database, Session, Table, require_integer, require_text
+from azathoth.revisions import Lineage, RevisionKind, record_lineage, tables_with_lineage
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.revision import WorkflowSpecificationRevision
 
@@ -39,7 +40,7 @@ class SqlWorkflowRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(WORKFLOW_SPECIFICATION_TABLES)
+        database.prepare(tables_with_lineage(WORKFLOW_SPECIFICATION_TABLES))
 
     def save(
         self,
@@ -186,7 +187,7 @@ def insert_specification_revision(
     session: Session,
     revision: WorkflowSpecificationRevision,
 ) -> None:
-    """Insert one revision row."""
+    """Insert one revision row, and record its lineage (ADR 0122)."""
 
     session.execute(
         """
@@ -204,6 +205,16 @@ def insert_specification_revision(
             revision.content_digest,
             revision.model_dump_json(),
         ),
+    )
+
+    record_lineage(
+        session,
+        Lineage(
+            kind=RevisionKind.WORKFLOW,
+            id=revision.workflow_id,
+        ),
+        number=revision.number,
+        content_digest=revision.content_digest,
     )
 
 

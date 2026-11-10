@@ -5,6 +5,7 @@ from uuid import UUID
 from azathoth.evaluation.benchmark import BenchmarkDataset
 from azathoth.evaluation.benchmark_revision import BenchmarkDatasetRevision
 from azathoth.persistence import Database, Session, Table, require_integer, require_text
+from azathoth.revisions import Lineage, RevisionKind, record_lineage, tables_with_lineage
 
 BENCHMARK_DATASET_REVISIONS = "benchmark_dataset_revisions"
 
@@ -39,7 +40,7 @@ class SqlBenchmarkRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(BENCHMARK_TABLES)
+        database.prepare(tables_with_lineage(BENCHMARK_TABLES))
 
     def save(
         self,
@@ -184,7 +185,7 @@ def insert_benchmark_revision(
     session: Session,
     revision: BenchmarkDatasetRevision,
 ) -> None:
-    """Insert one revision row."""
+    """Insert one revision row, and record its lineage (ADR 0122)."""
 
     session.execute(
         """
@@ -202,6 +203,16 @@ def insert_benchmark_revision(
             revision.content_digest,
             revision.model_dump_json(),
         ),
+    )
+
+    record_lineage(
+        session,
+        Lineage(
+            kind=RevisionKind.BENCHMARK,
+            id=revision.dataset_id,
+        ),
+        number=revision.number,
+        content_digest=revision.content_digest,
     )
 
 

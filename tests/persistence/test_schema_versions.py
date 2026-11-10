@@ -1,12 +1,15 @@
 """Tests of the schema's versions: what each adds, and how `initialize` upgrades (ADR 0105).
 
 A version only adds tables. Version 1 is the schema of 1.1 before resume;
-version 2 adds the tables that record a run while it executes. A table added
-without a new version, or a version that drops a table, fails here.
+version 2 adds the tables that record a run while it executes; version 3
+adds the tables that record revision lineage and portfolio provenance
+(ADR 0122). A table added without a new version, or a version that drops a
+table, fails here.
 """
 
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -24,6 +27,15 @@ from azathoth.persistence import (
     Table,
 )
 from azathoth.persistence.repositories import SCHEMA_TABLES
+from azathoth.providers import MODEL_PORTFOLIO_PROVENANCE_TABLES
+from azathoth.revisions import (
+    REVISION_LINEAGE_TABLES,
+    Lineage,
+    LineageRecord,
+    RevisionKind,
+    lineage_records,
+    revision_digest,
+)
 from azathoth.workflows import (
     RUN_CHILD_TABLES,
     RUN_JOURNAL_TABLES,
@@ -64,7 +76,16 @@ VERSION_2_TABLE_NAMES = (
     "run_children",
 )
 
-VERSION_1_TABLES = tuple(table for table in SCHEMA_TABLES if table not in RUN_PROGRESS_TABLES)
+VERSION_3_TABLE_NAMES = (
+    "revision_lineage",
+    "model_portfolio_provenance",
+)
+
+VERSION_3_TABLES = (*REVISION_LINEAGE_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES)
+
+VERSION_2_TABLES = tuple(table for table in SCHEMA_TABLES if table not in VERSION_3_TABLES)
+
+VERSION_1_TABLES = tuple(table for table in VERSION_2_TABLES if table not in RUN_PROGRESS_TABLES)
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=UTC).isoformat()
 
@@ -132,6 +153,15 @@ def initialize_version_1(
     record_version(database, 1)
 
 
+def initialize_version_2(
+    database: PostgresDatabase,
+) -> None:
+    """Initialize a PostgreSQL database as an Azathoth of schema version 2 did."""
+
+    database.initialize(VERSION_2_TABLES)
+    record_version(database, 2)
+
+
 def execute(
     database: Database,
     statement: str,
@@ -146,8 +176,8 @@ def execute(
 # What each version holds
 
 
-def test_this_azathoth_uses_schema_version_2() -> None:
-    assert SCHEMA_VERSION == 2
+def test_this_azathoth_uses_schema_version_3() -> None:
+    assert SCHEMA_VERSION == 3
 
 
 def test_version_1_holds_the_tables_of_1_1() -> None:
@@ -155,13 +185,26 @@ def test_version_1_holds_the_tables_of_1_1() -> None:
 
 
 def test_version_2_adds_the_run_progress_tables_after_every_earlier_table() -> None:
-    assert names(SCHEMA_TABLES) == VERSION_1_TABLE_NAMES + VERSION_2_TABLE_NAMES
+    assert names(VERSION_2_TABLES) == VERSION_1_TABLE_NAMES + VERSION_2_TABLE_NAMES
     assert names(RUN_PROGRESS_TABLES) == VERSION_2_TABLE_NAMES
     assert RUN_PROGRESS_TABLES == RUN_JOURNAL_TABLES + RUN_LEASE_TABLES + RUN_CHILD_TABLES
 
 
+def test_version_3_adds_lineage_and_provenance_after_every_earlier_table() -> None:
+    assert names(SCHEMA_TABLES) == (
+        VERSION_1_TABLE_NAMES + VERSION_2_TABLE_NAMES + VERSION_3_TABLE_NAMES
+    )
+    assert names(VERSION_3_TABLES) == VERSION_3_TABLE_NAMES
+
+
+def test_only_the_version_3_tables_backfill() -> None:
+    assert tuple(table.name for table in SCHEMA_TABLES if table.backfill is not None) == (
+        VERSION_3_TABLE_NAMES
+    )
+
+
 def test_every_table_is_created_only_if_it_does_not_exist() -> None:
-    for table in RUN_PROGRESS_TABLES:
+    for table in (*RUN_PROGRESS_TABLES, *VERSION_3_TABLES):
         for statement in table.statements:
             assert "IF NOT EXISTS" in statement, table.name
 
@@ -259,12 +302,14 @@ def test_an_sqlite_file_of_version_1_gains_the_new_tables_when_they_are_prepared
 # Upgrading a PostgreSQL database
 
 
-def test_a_fresh_postgresql_database_is_created_at_version_2(
+def test_a_fresh_postgresql_database_is_created_at_version_3(
     postgres_database: PostgresDatabase,
 ) -> None:
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.CREATED
-    assert recorded_version(postgres_database) == 2
-    assert all(has_table(postgres_database, name) for name in VERSION_2_TABLE_NAMES)
+    assert recorded_version(postgres_database) == 3
+    assert all(
+        has_table(postgres_database, name) for name in VERSION_2_TABLE_NAMES + VERSION_3_TABLE_NAMES
+    )
 
 
 def test_a_version_1_database_is_refused_until_initialized(
@@ -279,7 +324,7 @@ def test_a_version_1_database_is_refused_until_initialized(
         with pytest.raises(DatabaseSchemaOutdatedError) as error:
             reader.prepare(SCHEMA_TABLES)
 
-        assert "has schema version 1, but this Azathoth uses version 2; run azathoth init" in str(
+        assert "has schema version 1, but this Azathoth uses version 3; run azathoth init" in str(
             error.value
         )
         assert not has_table(writer, "run_journal")
@@ -303,8 +348,9 @@ def test_initializing_a_version_1_database_upgrades_it_and_keeps_its_rows(
         )
 
         assert writer.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-        assert recorded_version(writer) == 2
+        assert recorded_version(writer) == 3
         assert all(has_table(writer, name) for name in VERSION_2_TABLE_NAMES)
+        assert all(has_table(writer, name) for name in VERSION_3_TABLE_NAMES)
 
         reader.prepare(SCHEMA_TABLES)
 
@@ -337,3 +383,47 @@ def test_a_newer_schema_is_never_upgraded_over(
 
     assert recorded_version(postgres_database) == SCHEMA_VERSION + 1
     assert not has_table(postgres_database, "run_journal")
+
+
+def test_initializing_a_version_2_database_records_the_lineage_it_already_holds(
+    postgres_database: PostgresDatabase,
+) -> None:
+    initialize_version_2(postgres_database)
+
+    digest = "a" * 64
+
+    execute(
+        postgres_database,
+        "INSERT INTO workflow_specification_revisions "
+        "(workflow_id, number, content_digest, payload) VALUES (?, ?, ?, ?)",
+        (WORKFLOW_ID, 1, digest, "{}"),
+    )
+    execute(
+        postgres_database,
+        "INSERT INTO model_portfolio_entries (identifier, provider, model, payload) "
+        "VALUES (?, ?, ?, ?)",
+        (
+            "openrouter/example/frontier",
+            "openrouter",
+            "example/frontier",
+            '{"provider":"openrouter","model":"example/frontier"}',
+        ),
+    )
+
+    assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
+    assert recorded_version(postgres_database) == 3
+
+    lineage = Lineage(kind=RevisionKind.WORKFLOW, id=UUID(WORKFLOW_ID))
+
+    with postgres_database.transaction() as session:
+        assert lineage_records(session, lineage) == (
+            LineageRecord(
+                lineage=lineage,
+                number=1,
+                revision_digest=revision_digest(lineage, content_digest=digest, parent_digest=None),
+                parent_digest=None,
+            ),
+        )
+        assert session.fetchall(
+            "SELECT identifier, author_name, added_at FROM model_portfolio_provenance"
+        ) == [("openrouter/example/frontier", None, None)]

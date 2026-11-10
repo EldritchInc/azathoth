@@ -126,7 +126,9 @@ from azathoth.providers.registry import LanguageModelRegistry
 from azathoth.providers.repository import ModelRepository
 from azathoth.providers.requirements import ModelRequirements
 from azathoth.providers.sql_portfolio_repository import (
+    MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
+    PortfolioProvenance,
     SqlModelPortfolioRepository,
 )
 from azathoth.providers.sql_provider_observation_repository import (
@@ -173,10 +175,12 @@ __all__ = [
     "boto3_driver",
     "configure_bedrock",
     "load_bedrock_pricing",
+    "MODEL_PORTFOLIO_PROVENANCE_TABLES",
     "MODEL_PORTFOLIO_TABLES",
     "MODEL_TABLES",
     "OPENROUTER_PDF_ENGINE",
     "PROVIDER_MODEL_OBSERVATION_TABLES",
+    "PortfolioProvenance",
     "SqlModelPortfolioRepository",
     "SqlModelRepository",
     "SqlProviderModelObservationRepository",

@@ -10,6 +10,7 @@ from azathoth.persistence import (
     require_text,
 )
 from azathoth.persistence.dialect import identifier
+from azathoth.revisions import Lineage, RevisionKind, record_lineage, tables_with_lineage
 from azathoth.tools.definition import ToolDefinition
 from azathoth.tools.document import ToolDocument
 from azathoth.tools.implementation import ToolImplementation
@@ -102,7 +103,7 @@ class SqlToolRepository:
         database: Database,
     ) -> None:
         self._database = database
-        database.prepare(TOOL_TABLES)
+        database.prepare(tables_with_lineage(TOOL_TABLES))
 
     def save_definition(
         self,
@@ -551,7 +552,7 @@ def insert_revision(
     session: Session,
     revision: ToolDocumentRevision,
 ) -> None:
-    """Insert one tool document revision row."""
+    """Insert one tool document revision row, and record its lineage (ADR 0122)."""
 
     session.execute(
         """
@@ -571,6 +572,17 @@ def insert_revision(
             revision.content_digest,
             revision.model_dump_json(),
         ),
+    )
+
+    record_lineage(
+        session,
+        Lineage(
+            kind=RevisionKind.TOOL,
+            id=revision.tool_id,
+            version=revision.tool_version,
+        ),
+        number=revision.number,
+        content_digest=revision.content_digest,
     )
 
 
