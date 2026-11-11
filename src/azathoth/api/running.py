@@ -57,7 +57,7 @@ from azathoth.api.models import (
     StepTrial,
     WorkflowReadiness,
 )
-from azathoth.context import Context
+from azathoth.context import Context, context_sensitivity, create_input_sensitivity_event
 from azathoth.inputs import (
     DEFAULT_MAX_INPUT_BYTES,
     JSON_MEDIA_TYPE,
@@ -96,6 +96,12 @@ from azathoth.providers import (
     ModelPortfolioLoader,
 )
 from azathoth.runtime import AzathothRuntime
+from azathoth.sensitivity import (
+    RESTRICTED_REFUSAL_HINT,
+    Sensitivity,
+    may_receive,
+    restricted_refusal,
+)
 from azathoth.strategies import Strategy
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_job_invoker
@@ -132,6 +138,9 @@ from azathoth.workflows import (
     validate_idempotency_key,
     workflow_result,
 )
+
+SENSITIVITY_WITHOUT_INPUT_MESSAGE: Final = "A sensitivity labels a run's input; give input too."
+"""What a run given a label but no input is refused with (ADR 0123)."""
 
 RUN_PRODUCER: Final = "azathoth.api"
 """The producer of the input event a run given input starts with."""
@@ -304,6 +313,7 @@ class Runs:
         workflow_id: UUID,
         *,
         input: RunInput | RunFile | None = None,
+        sensitivity: Sensitivity | None = None,
         on_event: EventCallback | None = None,
         cancel: CancellationToken | None = None,
     ) -> RunResult:
@@ -312,13 +322,15 @@ class Runs:
         A run given input starts with it as its workflow input event; a run
         given none starts with an empty context. A file given as input is
         checked before anything else, and kept in the content store when it
-        is binary. The run is kept whether it succeeded or failed, and its
+        is binary. The input is labelled `sensitivity` when it is given
+        (ADR 0123). The run is kept whether it succeeded or failed, and its
         result says which.
 
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: A file given as input is not its media
-                type, is of one Azathoth does not accept, or is too large.
+                type, is of one Azathoth does not accept, or is too large,
+                or a sensitivity is given without input.
             NotFoundError: No workflow has this ID.
             RunNotStartedError: No executable candidate could be made, for
                 example because a step's tool or model is not available.
@@ -331,6 +343,9 @@ class Runs:
         if cancel is not None and cancel.cancelled:
             raise RunCancelledError()
 
+        if sensitivity is not None and input is None:
+            raise InvalidArgumentError(SENSITIVITY_WITHOUT_INPUT_MESSAGE)
+
         source = file_input(input) if isinstance(input, RunFile) else input
         repositories = self._repositories()
         runtime = self._runtime(repositories)
@@ -340,7 +355,7 @@ class Runs:
             raise NotFoundError(f"Workflow {workflow_id} is not configured.")
 
         try:
-            candidate = runtime.generate_workflow_candidate(workflow_id)
+            candidate = runtime.generate_workflow_candidate(workflow_id, sensitivity=sensitivity)
         except WorkflowGenerationError as exc:
             raise RunNotStartedError(str(exc)) from exc
 
@@ -358,7 +373,10 @@ class Runs:
 
         run = asyncio.run(
             _until_cancelled(
-                runner.run_recording_failures(candidate, _context(source, repositories.content)),
+                runner.run_recording_failures(
+                    candidate,
+                    _context(source, repositories.content, sensitivity),
+                ),
                 cancel,
             )
         )
@@ -388,6 +406,7 @@ class Runs:
         workflow_id: UUID,
         *,
         input: JsonValue | RunFile,
+        sensitivity: Sensitivity | None = None,
         idempotency_key: str | None = None,
         caller_metadata: Mapping[str, JsonValue] | None = None,
         on_event: EventCallback | None = None,
@@ -402,7 +421,8 @@ class Runs:
         `api-` is made. A workflow not in production, or that fails, is an
         outcome, not an error. The caller metadata is recorded with the
         invocation. A file given as input is checked before anything is
-        recorded, and is part of the request its key is recorded with.
+        recorded, and is part of the request its key is recorded with, as
+        the input's `sensitivity` is when it is given (ADR 0123).
 
         Events report the run as it happens, and `invocation_finished` ends
         every call, including a replay or a rejection.
@@ -430,9 +450,8 @@ class Runs:
         except ValueError as exc:
             raise InvalidArgumentError(str(exc)) from exc
 
-        request_input = (
-            file_input(input) if isinstance(input, RunFile) else InlineInput(value=input)
-        )
+        unlabelled = file_input(input) if isinstance(input, RunFile) else InlineInput(value=input)
+        request_input = unlabelled.model_copy(update={"sensitivity": sensitivity})
 
         repositories = self._repositories()
         observer = _CallbackObserver(on_event)
@@ -462,6 +481,7 @@ class Runs:
             payload: JsonValue,
             caller_metadata: Mapping[str, JsonValue],
             input_provenance: InputProvenance | None,
+            sensitivity: Sensitivity | None,
             idempotency: InvocationIdempotency,
         ) -> ProductionInvocationResult:
             observer.emit(RunStarted(workflow_id=workflow_id))
@@ -471,6 +491,7 @@ class Runs:
                 payload=payload,
                 caller_metadata=caller_metadata,
                 input_provenance=input_provenance,
+                sensitivity=sensitivity,
                 idempotency=idempotency,
             )
 
@@ -590,6 +611,7 @@ class Runs:
         *,
         inputs: Mapping[str, JsonValue | RunFile] | None = None,
         input: RunInput | RunFile | None = None,
+        sensitivity: Sensitivity | None = None,
         on_event: EventCallback | None = None,
         cancel: CancellationToken | None = None,
     ) -> StepTrial:
@@ -600,7 +622,8 @@ class Runs:
         checked and kept as a run's file is. An input not given keeps its
         source: a constant its value, and a field of the run's input the
         field of `input`. An input taking a value another step produces has
-        no step to produce it, so it must be given.
+        no step to produce it, so it must be given. `sensitivity` labels
+        everything the step is given, `inputs` as well as `input` (ADR 0123).
 
         The step's conditions are not asked, and it is retried as its retry
         policy says. Its events reach `on_event` as a run's do, without the
@@ -646,17 +669,25 @@ class Runs:
         # The step is made executable before a file given is kept, so a
         # step that cannot start keeps nothing.
         #
-        _candidate(specification, _alone(step, plain | dict.fromkeys(files)), runtime)
+        _candidate(
+            specification,
+            _alone(step, plain | dict.fromkeys(files)),
+            runtime,
+            sensitivity,
+        )
 
         resolved = {name: _resolved(each, repositories.content) for name, each in files.items()}
-        candidate = _candidate(specification, _alone(step, plain | resolved), runtime)
+        candidate = _candidate(specification, _alone(step, plain | resolved), runtime, sensitivity)
 
         observer = _CallbackObserver(on_event)
         runner = WorkflowRunner(observer=observer, content=repositories.tool_content)
 
         run = asyncio.run(
             _until_cancelled(
-                runner.run_recording_failures(candidate, _context(source, repositories.content)),
+                runner.run_recording_failures(
+                    candidate,
+                    _context(source, repositories.content, sensitivity),
+                ),
                 cancel,
             )
         )
@@ -669,6 +700,8 @@ class Runs:
     def readiness(
         self,
         document: Document,
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> WorkflowReadiness:
         """Return whether each step of a workflow document could run here now.
 
@@ -677,6 +710,11 @@ class Runs:
         models it could run on, in the order a run tries them, and a tool
         step to the implementation it would run. Nothing is saved, and the
         document need not have been imported.
+
+        With `sensitivity`, each step is resolved as for a run whose input is
+        so labelled (ADR 0123): a context prompt step of a restricted run
+        could run only on models declared to neither retain nor train on
+        data, and one with none says why.
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -690,7 +728,7 @@ class Runs:
 
         specification = _decoded(document)
         runtime = self._runtime(repositories)
-        steps = tuple(_step_readiness(step, runtime) for step in specification.steps)
+        steps = tuple(_step_readiness(step, runtime, sensitivity) for step in specification.steps)
 
         return WorkflowReadiness(
             ready=all(step.ready for step in steps),
@@ -789,8 +827,9 @@ def _candidate(
     specification: WorkflowSpecification,
     step: WorkflowStepSpecification,
     runtime: AzathothRuntime,
+    sensitivity: Sensitivity | None,
 ) -> WorkflowCandidate:
-    """Return the candidate of a workflow of one step alone, as a run would make it.
+    """Return the candidate of a workflow of one step alone, as a run labelled so would make it.
 
     Raises:
         RunNotStartedError: The step could not be made executable.
@@ -804,6 +843,7 @@ def _candidate(
             portfolio=runtime.portfolio,
             tool_resolver=runtime.tool_resolver,
             tool_implementation_resolver=runtime.tool_implementation_resolver,
+            sensitivity=sensitivity,
         )
     except WorkflowGenerationError as exc:
         raise RunNotStartedError(str(exc)) from exc
@@ -905,6 +945,7 @@ def _summary(
         invocation_id=invocation_id,
         succeeded=error is None,
         error=error,
+        sensitivity=context_sensitivity(run.initial_context),
         started_at=run.started_at,
         completed_at=run.completed_at,
         command=f"azathoth run show {run.id}",
@@ -1018,8 +1059,9 @@ def _no_model(
 def _step_readiness(
     step: WorkflowStepSpecification,
     runtime: AzathothRuntime,
+    sensitivity: Sensitivity | None,
 ) -> StepReadiness:
-    """Return whether one step could run here now, and on what."""
+    """Return whether one step could run here now, for a run labelled so, and on what."""
 
     kind = _step_kind(step)
     unready = StepReadiness(
@@ -1064,6 +1106,31 @@ def _step_readiness(
         return unready.model_copy(
             update={"problem": _no_model(specification.model_selection, runtime)}
         )
+
+    receiving = tuple(
+        strategy
+        for strategy in strategies
+        if not isinstance(strategy, ContextPromptStrategy)
+        or may_receive(strategy.data_policy, sensitivity)
+    )
+
+    if not receiving:
+        [first, *_] = strategies
+
+        assert isinstance(first, ContextPromptStrategy)
+
+        model = models[0]
+
+        return unready.model_copy(
+            update={
+                "problem": (
+                    f"{restricted_refusal(model, first.data_policy)} "
+                    f"{RESTRICTED_REFUSAL_HINT.format(model=model)}"
+                )
+            }
+        )
+
+    models = tuple(model for model in map(_model_of, receiving) if model is not None)
 
     return unready.model_copy(update={"ready": True, "models": models})
 
@@ -1192,15 +1259,20 @@ def file_input(
 def _context(
     run_input: RunInput | InlineInput | None,
     store: ContentStore,
+    sensitivity: Sensitivity | None = None,
 ) -> Context:
     """Return the context a run starts with: its input events, or nothing.
 
     A file's input is resolved as an inline input is, so a binary one is
-    kept in the store, and its provenance follows the input event.
+    kept in the store, and its provenance follows the input event. A label
+    follows them (ADR 0123); one given without input is recorded alone.
     """
 
     if run_input is None:
-        return Context()
+        if sensitivity is None:
+            return Context()
+
+        return Context(events=(create_input_sensitivity_event(sensitivity, producer=RUN_PRODUCER),))
 
     if isinstance(run_input, RunInput):
         resolved = ResolvedInput(value=run_input.payload, media_type=JSON_MEDIA_TYPE)
@@ -1210,7 +1282,9 @@ def _context(
         except InputResolutionError as exc:
             raise InvalidArgumentError(str(exc)) from exc
 
-    return Context(events=create_workflow_input_events(resolved, producer=RUN_PRODUCER))
+    labelled = resolved.model_copy(update={"sensitivity": sensitivity})
+
+    return Context(events=create_workflow_input_events(labelled, producer=RUN_PRODUCER))
 
 
 def _halt(
@@ -1280,6 +1354,7 @@ __all__ = [
     "INPUT_FILE_NAME",
     "MAX_INPUT_FILE_BYTES",
     "RUN_PRODUCER",
+    "SENSITIVITY_WITHOUT_INPUT_MESSAGE",
     "CancellationToken",
     "EventCallback",
     "Runs",

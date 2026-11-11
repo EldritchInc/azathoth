@@ -16,6 +16,7 @@ import pytest
 from azathoth.inputs import CONTENT_TABLES, ContentStore, SqlContentStore, content_bytes_digest
 from azathoth.persistence import Database, PostgresDatabase, Table
 from azathoth.providers import (
+    MODEL_PORTFOLIO_POLICY_TABLES,
     MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     MODEL_TABLES,
@@ -174,7 +175,11 @@ def portfolio(
 ) -> ModelPortfolioRepository:
     return initialized(
         database,
-        (*MODEL_PORTFOLIO_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES),
+        (
+            *MODEL_PORTFOLIO_TABLES,
+            *MODEL_PORTFOLIO_PROVENANCE_TABLES,
+            *MODEL_PORTFOLIO_POLICY_TABLES,
+        ),
         SqlModelPortfolioRepository,
     )
 

@@ -144,6 +144,7 @@ def test_a_run_is_one_span_with_its_steps_under_it() -> None:
         "azathoth.run.steps.executed": 1,
         "azathoth.run.steps.failed": 0,
         "azathoth.run.steps.skipped": 0,
+        "azathoth.sensitivity": "internal",
     }
     assert run_span.error_type is None
 

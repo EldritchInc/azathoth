@@ -300,6 +300,10 @@ def test_an_authorized_model_is_in_the_portfolio_and_marked_in_the_catalog(
         "content_digest": content_digest(
             ModelPortfolioEntry(provider="provider-a", model="example/alpha")
         ),
+        "data_policy": {"retains_data": "unknown", "trains_on_data": "unknown"},
+        "receives_restricted": False,
+        "policy_declared_by": None,
+        "policy_declared_at": None,
         "command": "azathoth model show provider-a/example/alpha",
     }
     assert entry.added_at is not None

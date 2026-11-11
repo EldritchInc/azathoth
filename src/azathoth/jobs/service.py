@@ -32,6 +32,7 @@ from azathoth.jobs.envelope import (
     rejected_job_result,
 )
 from azathoth.runtime import AzathothRuntime
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     IdempotencyKeyInUseError,
     InvocationIdempotency,
@@ -69,6 +70,7 @@ class JobInvoker(Protocol):
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         """Invoke one workflow and return its terminal result."""
@@ -129,6 +131,7 @@ def runtime_job_resumer(
             current_state=runtime.production_state(invocation.workflow_id),
             catalog=runtime.models,
             registry=runtime.language_models,
+            portfolio=runtime.portfolio,
             runner=runner,
             journal=journal,
             run_repository=run_repository,
@@ -170,6 +173,7 @@ def runtime_job_invoker(
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         if not runtimes:
@@ -186,6 +190,7 @@ def runtime_job_invoker(
             ),
             catalog=runtime.models,
             registry=runtime.language_models,
+            portfolio=runtime.portfolio,
             invocation_repository=invocation_repository,
             run_repository=run_repository,
             invocation_run_repository=invocation_run_repository,
@@ -193,6 +198,7 @@ def runtime_job_invoker(
             tool_resolver=runtime.tool_resolver,
             tool_implementation_resolver=runtime.tool_implementation_resolver,
             input_provenance=input_provenance,
+            sensitivity=sensitivity,
             idempotency=idempotency,
             lineage=lineage,
         )
@@ -298,6 +304,7 @@ async def run_invoke_job(
             payload=resolved.value,
             caller_metadata=request.caller_metadata,
             input_provenance=resolved.provenance,
+            sensitivity=resolved.sensitivity,
             idempotency=InvocationIdempotency(
                 key=key,
                 request_digest=digest,

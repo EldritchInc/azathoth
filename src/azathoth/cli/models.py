@@ -11,6 +11,12 @@ from azathoth.providers import (
     ModelMetadata,
     ModelModality,
     ModelPortfolioEntry,
+    PolicyDeclaration,
+)
+from azathoth.sensitivity import (
+    UNKNOWN_DATA_POLICY,
+    DataPolicy,
+    PolicyAnswer,
 )
 from azathoth.workflows import (
     WorkflowModelUsageReport,
@@ -67,8 +73,14 @@ def list_portfolio_models() -> int:
 
 def authorize_model(
     identifier: str,
+    *,
+    data_policy: DataPolicy = UNKNOWN_DATA_POLICY,
 ) -> int:
-    """Authorize one currently available provider model."""
+    """Authorize one currently available provider model.
+
+    `data_policy` is what the operator declares the model's provider does
+    with data it is sent; unknown unless declared (ADR 0123).
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
@@ -102,6 +114,7 @@ def authorize_model(
         ModelPortfolioEntry(
             provider=model.provider,
             model=model.model,
+            data_policy=data_policy,
         ),
         author=author,
     )
@@ -109,6 +122,84 @@ def authorize_model(
     print(f"Authorized model {identifier}.")
 
     return 0
+
+
+def model_policy(
+    identifier: str,
+    *,
+    retains_data: PolicyAnswer | None = None,
+    trains_on_data: PolicyAnswer | None = None,
+) -> int:
+    """Show, or declare, what one authorized model's provider does with data (ADR 0123).
+
+    An answer given replaces the one declared; an answer not given is kept.
+    Given none, the policy is shown and nothing is written. Who declares it,
+    and when, is recorded, and shown with it. Only durable state is read,
+    so the runtime is never loaded and no provider credentials are needed.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    repository = repositories(configuration).portfolio
+
+    entry = repository.get(identifier)
+
+    if entry is None:
+        print(
+            f"Model {identifier!r} is not authorized.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    if retains_data is None and trains_on_data is None:
+        _print_data_policy(entry, repository.policy_declaration(identifier))
+
+        return 0
+
+    author = current_author()
+
+    if author is None:
+        return 1
+
+    declared = repository.set_data_policy(
+        identifier,
+        DataPolicy(
+            retains_data=(entry.data_policy.retains_data if retains_data is None else retains_data),
+            trains_on_data=(
+                entry.data_policy.trains_on_data if trains_on_data is None else trains_on_data
+            ),
+        ),
+        author=author,
+    )
+
+    print(f"Declared the data policy of model {identifier}.")
+
+    _print_data_policy(declared, repository.policy_declaration(identifier))
+
+    return 0
+
+
+def _print_data_policy(
+    entry: ModelPortfolioEntry,
+    declaration: PolicyDeclaration | None,
+) -> None:
+    """Render what one portfolio entry declares its provider does with data, and who declared it.
+
+    A policy never declared names no declaration; one declared without a
+    recorded author names its author as unknown.
+    """
+
+    policy = entry.data_policy
+
+    print(f"Retains Data: {policy.retains_data.value}")
+    print(f"Trains On Data: {policy.trains_on_data.value}")
+    print(f"Restricted Input: {'allowed' if policy.private else 'refused'}")
+
+    if declaration is not None:
+        author = declaration.author
+
+        print(f"Declared By: {'unknown' if author is None else author}")
+        print(f"Declared At: {declaration.declared_at.isoformat()}")
 
 
 def deauthorize_model(

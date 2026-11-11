@@ -9,6 +9,8 @@ from azathoth.cli.rendering._json import render_json_value
 from azathoth.cli.rendering.citations import RecordedCitations, render_citation_lines
 from azathoth.cli.rendering.lineage import render_lineage_lines
 from azathoth.cli.rendering.resumes import render_resume_lines
+from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
+from azathoth.context import context_sensitivity
 from azathoth.workflows import (
     WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
     ProductionInvocation,
@@ -75,11 +77,13 @@ def render_production_invocation(
     run names its depth, the parent step and the root run (ADR 0104). One
     whose run was resumed names how often, after its run (ADR 0105). One
     whose run had cited steps ends with every check they kept (ADR 0116),
-    each with its link when `link` gives one (ADR 0117).
+    each with its link when `link` gives one (ADR 0117). One whose label is
+    not internal names it right after its ID (ADR 0123).
     """
 
     lines = [
         f"Invocation ID: {invocation.id}",
+        *render_sensitivity_lines(context_sensitivity(invocation.initial_context)),
         f"Workflow ID: {invocation.workflow_id}",
         f"Created At: {invocation.created_at.isoformat()}",
         f"Outcome: {production_invocation_outcome(result)}",

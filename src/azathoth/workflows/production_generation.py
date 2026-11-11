@@ -8,6 +8,7 @@ from azathoth.providers import (
     ModelCatalog,
     ModelPortfolio,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
     ToolImplementationResolver,
     ToolResolver,
@@ -29,24 +30,37 @@ def generate_production_workflow_candidate(
     registry: LanguageModelRegistry,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    portfolio: ModelPortfolio | None = None,
+    sensitivity: Sensitivity | None = None,
 ) -> WorkflowCandidate:
     """Generate one executable candidate using production model authority.
 
     The candidate carries the promoted specification revision, so production
     runs name the revision they execute.
+
+    Production chooses its models from the production state, never from the
+    portfolio. The portfolio, as it is when the invocation runs, supplies
+    only each model's declared data policy: without one, no model may
+    receive restricted input. For an invocation labelled `sensitivity`, each
+    context prompt step runs on the first approved model that may receive
+    it, if there is one (ADR 0123).
     """
+
+    policies = portfolio if portfolio is not None else ModelPortfolio()
 
     specification = _resolve_production_specification(
         state=state,
         catalog=catalog,
         registry=registry,
+        portfolio=policies,
+        sensitivity=sensitivity,
     )
 
     return generate_workflow_candidate(
         specification=specification,
         catalog=catalog,
         registry=registry,
-        portfolio=ModelPortfolio(),
+        portfolio=policies,
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
         revision=state.specification_revision,
@@ -58,6 +72,8 @@ def _resolve_production_specification(
     state: WorkflowProductionState,
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
+    portfolio: ModelPortfolio,
+    sensitivity: Sensitivity | None,
 ) -> WorkflowSpecification:
     """Resolve production prompt steps to their executable fixed models."""
 
@@ -67,6 +83,8 @@ def _resolve_production_specification(
             step=step,
             catalog=catalog,
             registry=registry,
+            portfolio=portfolio,
+            sensitivity=sensitivity,
         )
         for step in state.specification.steps
     )
@@ -84,6 +102,8 @@ def _resolve_production_step(
     step: WorkflowStepSpecification,
     catalog: ModelCatalog,
     registry: LanguageModelRegistry,
+    portfolio: ModelPortfolio,
+    sensitivity: Sensitivity | None,
 ) -> WorkflowStepSpecification:
     """Resolve one production prompt step while preserving all other state.
 
@@ -105,6 +125,8 @@ def _resolve_production_step(
         step_id=step.id,
         catalog=catalog,
         registry=registry,
+        portfolio=portfolio,
+        sensitivity=sensitivity,
     )
 
     resolved_prompt = specification.model_copy(

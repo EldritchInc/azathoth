@@ -30,6 +30,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_INPUT_ATTRIBUTE,
     WORKFLOW_INPUT_FILE_ATTRIBUTE,
     WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+    WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
     WORKFLOW_INVOCATION_LIMIT_ATTRIBUTE,
     WORKFLOW_INVOCATIONS_ACTION,
     WORKFLOW_INVOKE_ACTION,
@@ -47,6 +48,7 @@ from azathoth.cli.parsing import (
     WORKFLOW_SHOW_ACTION,
     WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE,
 )
+from azathoth.sensitivity import Sensitivity
 
 WorkflowIdentifierHandler = Callable[[UUID], int]
 WorkflowImportHandler = Callable[[Path], int]
@@ -170,6 +172,7 @@ def dispatch_workflow_command(
             workflow_id,
             workflow_input=_run_input(arguments),
             output=_output_format(arguments),
+            sensitivity=_sensitivity(arguments),
         )
 
     if action == WORKFLOW_RUNS_ACTION:
@@ -286,6 +289,7 @@ def dispatch_workflow_command(
                 str | None,
                 getattr(arguments, WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE, None),
             ),
+            sensitivity=_sensitivity(arguments),
         )
 
     if action == WORKFLOW_PROMOTE_ACTION:
@@ -393,6 +397,17 @@ def _input_file(
                 None,
             ),
         ),
+    )
+
+
+def _sensitivity(
+    arguments: Namespace,
+) -> Sensitivity | None:
+    """Return the label given to a workflow execution command's input, if any (ADR 0123)."""
+
+    return cast(
+        Sensitivity | None,
+        getattr(arguments, WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE, None),
     )
 
 

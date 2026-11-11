@@ -17,6 +17,7 @@ from azathoth.evaluation import (
 )
 from azathoth.persistence import Database, SQLiteDatabase
 from azathoth.providers import (
+    MODEL_PORTFOLIO_POLICY_TABLES,
     MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     InMemoryModelPortfolioRepository,
@@ -151,7 +152,13 @@ def portfolio(
         return InMemoryModelPortfolioRepository()
 
     database = open_database()
-    database.initialize((*MODEL_PORTFOLIO_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES))
+    database.initialize(
+        (
+            *MODEL_PORTFOLIO_TABLES,
+            *MODEL_PORTFOLIO_PROVENANCE_TABLES,
+            *MODEL_PORTFOLIO_POLICY_TABLES,
+        )
+    )
 
     return SqlModelPortfolioRepository(database)
 

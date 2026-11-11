@@ -1099,6 +1099,33 @@ strategies.
 The difference is that its prompt is rendered from the supplied execution
 context before the language model is called.
 
+# Restricted Input
+
+A context prompt shows its model the run's data, so it is where a
+restricted run's data could leave Azathoth (ADR 0123). Each
+`ContextPromptStrategy` holds its bound model's `data_policy`, the
+`DataPolicy` its portfolio entry declares, or None for a model outside the
+portfolio; candidate generation sets it from the portfolio it is given.
+
+Before rendering, the strategy reads the running step's label,
+`active_step_lineage().sensitivity`, and refuses to send a restricted
+run's prompt to a model that may not receive it, raising
+`RestrictedInputRefusedError`. Nothing is sent, and the message says which
+step, which model, which declaration forbids it, and how to fix it:
+
+```text
+Step <STEP_ID> sent nothing. <MODEL> cannot receive restricted input: its portfolio entry does not say whether its provider retains data, and does not say whether it trains on data. If its provider neither retains nor trains on data, declare that with `azathoth model policy <MODEL> --no-retention --no-training`; otherwise choose a model that may receive restricted input.
+```
+
+`generate_context_prompt_candidates(..., sensitivity=...)` puts the
+candidates whose model may receive input so labelled first, each group in
+its own order, so a restricted run runs on the first private model its
+step may use. When it has none, the candidates keep their order, and the
+run is refused, saying why, when it sends.
+
+A `PromptStrategy` is not judged: its prompt is its own text, and holds
+none of the run's data.
+
 # PromptStrategy Versus ContextPromptStrategy
 
 The V1 prompting package supports two executable prompt forms.

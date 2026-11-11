@@ -21,6 +21,7 @@ from azathoth.inputs import (
     content_ref_from_value,
     is_binary_media_type,
 )
+from azathoth.sensitivity import Sensitivity, most_sensitive
 
 
 class BenchmarkCaseConflictError(ValueError):
@@ -36,6 +37,10 @@ class BenchmarkCase(BaseModel):
     provenance names a PDF or an image gives that content's handle as its
     input. A case without provenance serializes without it, so no existing
     dataset's digest changes.
+
+    `sensitivity` labels the case's input (ADR 0123), and its run is given
+    that label. An unlabelled case is internal, and serializes without the
+    key, so labels change no existing dataset's digest either.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -43,6 +48,7 @@ class BenchmarkCase(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     input: JsonValue
     input_provenance: InputProvenance | None = None
+    sensitivity: Sensitivity | None = None
     expected: ExpectedOutcome
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
 
@@ -78,12 +84,15 @@ class BenchmarkCase(BaseModel):
         self,
         handler: SerializerFunctionWrapHandler,
     ) -> dict[str, Any]:
-        """Leave out `input_provenance` when the case has none."""
+        """Leave out `input_provenance` and `sensitivity` when the case has neither."""
 
         serialized: dict[str, Any] = handler(self)
 
         if self.input_provenance is None:
             serialized.pop("input_provenance", None)
+
+        if self.sensitivity is None:
+            serialized.pop("sensitivity", None)
 
         return serialized
 
@@ -109,6 +118,18 @@ class BenchmarkDataset(BaseModel):
             raise ValueError("Benchmark dataset cannot contain duplicate case identifiers.")
 
         return self
+
+    @property
+    def sensitivity(
+        self,
+    ) -> Sensitivity:
+        """Return the dataset's label: the most sensitive of its cases' (ADR 0123).
+
+        An unlabelled case counts as internal, so a dataset is public only
+        when every case is, and a dataset without cases is internal.
+        """
+
+        return most_sensitive(case.sensitivity for case in self.cases)
 
     def with_case(
         self,

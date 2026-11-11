@@ -1,4 +1,4 @@
-"""Who added each portfolio entry, and when (ADR 0122)."""
+"""Who added each portfolio entry, and who declared its data policy, and when (ADR 0122, 0123)."""
 
 from datetime import datetime
 
@@ -35,6 +35,28 @@ class PortfolioProvenance(BaseModel):
     added_at: datetime | None = None
 
 
+class PolicyDeclaration(BaseModel):
+    """Who declared one portfolio entry's current data policy, and when (ADR 0123).
+
+    It is recorded beside the entry, never in it, so who declares a policy
+    is no part of the entry's digest.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    identifier: str = Field(
+        min_length=1,
+    )
+
+    author: Author | None = None
+
+    declared_at: datetime
+
+
 __all__ = [
+    "PolicyDeclaration",
     "PortfolioProvenance",
 ]

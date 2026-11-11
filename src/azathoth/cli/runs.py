@@ -17,6 +17,8 @@ from azathoth.cli.rendering import (
     render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
+from azathoth.cli.rendering.sensitivity import warn_if_restricted
+from azathoth.context import context_sensitivity
 from azathoth.workflows import (
     WorkflowRunFeedback,
     WorkflowRunFeedbackDisposition,
@@ -124,6 +126,8 @@ def show_run(
             )
         )
     )
+
+    warn_if_restricted(context_sensitivity(run.initial_context), f"Run {run_id}")
 
     return 0
 

@@ -10,6 +10,7 @@ import pytest
 from azathoth.evaluation import BENCHMARK_TABLES, BenchmarkDatasetRevision, SqlBenchmarkRepository
 from azathoth.persistence import Database, IntegrityError, SQLiteDatabase
 from azathoth.providers import (
+    MODEL_PORTFOLIO_POLICY_TABLES,
     MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     ModelPortfolioEntry,
@@ -509,7 +510,13 @@ def test_an_sqlite_file_from_before_revisions_gains_their_lineage_when_opened(
 def portfolio(
     database: Database,
 ) -> SqlModelPortfolioRepository:
-    database.initialize((*MODEL_PORTFOLIO_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES))
+    database.initialize(
+        (
+            *MODEL_PORTFOLIO_TABLES,
+            *MODEL_PORTFOLIO_PROVENANCE_TABLES,
+            *MODEL_PORTFOLIO_POLICY_TABLES,
+        )
+    )
 
     return SqlModelPortfolioRepository(database)
 

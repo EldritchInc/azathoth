@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from azathoth.context import Context
+from azathoth.context import Context, create_input_sensitivity_event
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -20,6 +20,7 @@ from azathoth.revisions import (
     CONTENT_DIGEST_PATTERN,
     content_digest,
 )
+from azathoth.sensitivity import Sensitivity, stored_sensitivity
 from azathoth.workflows.candidate import (
     WorkflowCandidate,
     WorkflowCandidateStep,
@@ -68,14 +69,28 @@ def benchmark_case_context(
     provenance (ADR 0117). A case's content is read from the content store by
     digest, as any run's is, so content the store does not hold fails the
     steps that read it, and the case is judged on that run.
+
+    A labelled case's input events end with a `workflow.input.sensitivity`
+    event holding its label, so its run, and every run that run starts, is
+    as sensitive as the case (ADR 0123).
     """
 
     if case.input_provenance is None:
+        received = create_workflow_input_event(
+            case.input,
+            producer=BENCHMARK_INPUT_PRODUCER,
+        )
+
+        if case.sensitivity is None:
+            return Context(events=(received,))
+
         return Context(
             events=(
-                create_workflow_input_event(
-                    case.input,
+                received,
+                create_input_sensitivity_event(
+                    case.sensitivity,
                     producer=BENCHMARK_INPUT_PRODUCER,
+                    occurred_at=received.occurred_at,
                 ),
             )
         )
@@ -86,6 +101,7 @@ def benchmark_case_context(
                 value=case.input,
                 media_type=case.input_provenance.media_type,
                 provenance=case.input_provenance,
+                sensitivity=case.sensitivity,
             ),
             producer=BENCHMARK_INPUT_PRODUCER,
         )
@@ -141,7 +157,9 @@ class WorkflowBenchmarkResult(BaseModel):
 
     The identifier is shared by the durable execution record of a recorded
     benchmark run. The dataset digest is the content digest of the exact
-    benchmark revision executed; it is absent for results built by hand.
+    benchmark revision executed; it is absent for results built by hand. The
+    dataset sensitivity is that revision's label, or None when it is
+    internal (ADR 0123).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -153,6 +171,7 @@ class WorkflowBenchmarkResult(BaseModel):
         default=None,
         pattern=CONTENT_DIGEST_PATTERN,
     )
+    dataset_sensitivity: Sensitivity | None = None
     cases: tuple[WorkflowBenchmarkCaseResult, ...] = ()
 
     @property
@@ -284,7 +303,8 @@ class WorkflowBenchmarkComparison(BaseModel):
     """Side-by-side benchmark evidence for multiple workflow candidates.
 
     The dataset digest is the content digest of the exact benchmark revision
-    every candidate executed.
+    every candidate executed, and the dataset sensitivity that revision's
+    label, or None when it is internal (ADR 0123).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -295,6 +315,7 @@ class WorkflowBenchmarkComparison(BaseModel):
         default=None,
         pattern=CONTENT_DIGEST_PATTERN,
     )
+    dataset_sensitivity: Sensitivity | None = None
     candidates: tuple[WorkflowBenchmarkComparisonEntry, ...] = ()
 
     @model_validator(mode="after")
@@ -449,6 +470,7 @@ class WorkflowBenchmarkRunner:
         return WorkflowBenchmarkResult(
             dataset_id=dataset.id,
             dataset_digest=content_digest(dataset),
+            dataset_sensitivity=stored_sensitivity(dataset.sensitivity),
             cases=tuple(results),
         )
 
@@ -554,6 +576,7 @@ class WorkflowBenchmarkComparator:
         return WorkflowBenchmarkComparison(
             dataset_id=dataset.id,
             dataset_digest=content_digest(dataset),
+            dataset_sensitivity=stored_sensitivity(dataset.sensitivity),
             candidates=tuple(candidates),
         )
 

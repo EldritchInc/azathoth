@@ -12,6 +12,7 @@ from azathoth.providers import (
     ModelCatalog,
     ModelPortfolio,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
     ToolCatalog,
     ToolImplementationCatalog,
@@ -91,15 +92,18 @@ class RuntimeEnvironment(Protocol):
         self,
         *,
         semantic: bool = False,
+        sensitivity: Sensitivity | None = None,
     ) -> OutcomeEvaluator:
-        """Return the evaluator that judges outcomes, with judges when requested."""
+        """Return the evaluator that judges outcomes, with judges allowed to see the label."""
 
         ...
 
     def generate_workflow_candidate(
         self,
         workflow_id: UUID,
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> WorkflowCandidate:
-        """Generate an executable candidate for one configured workflow."""
+        """Generate an executable candidate for runs of one configured workflow with a label."""
 
         ...

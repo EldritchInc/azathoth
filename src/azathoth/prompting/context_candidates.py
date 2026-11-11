@@ -22,6 +22,7 @@ from azathoth.providers import (
     ModelRequirements,
     model_catalog_for_portfolio,
 )
+from azathoth.sensitivity import DataPolicy, Sensitivity, may_receive
 from azathoth.strategies import StrategyMetadata
 
 
@@ -31,8 +32,16 @@ def generate_context_prompt_candidates(
     registry: LanguageModelRegistry,
     *,
     portfolio: ModelPortfolio,
+    sensitivity: Sensitivity | None = None,
 ) -> tuple[ContextPromptStrategy, ...]:
-    """Generate executable context prompt candidates allowed by authority."""
+    """Generate executable context prompt candidates allowed by authority.
+
+    Each candidate holds its model's declared data policy from the portfolio,
+    or None for a model outside it (ADR 0123). For a run labelled
+    `sensitivity`, the candidates whose model may receive input so labelled
+    come first, in their own order; the rest follow, so a restricted run
+    that has no such model is refused, saying why, when it sends.
+    """
 
     selection = specification.model_selection
 
@@ -71,18 +80,31 @@ def generate_context_prompt_candidates(
         if language_model is None:
             continue
 
+        entry = portfolio.get(model_metadata.identifier)
+
         candidates.append(
             _build_candidate(
                 specification=specification,
                 model_metadata=model_metadata,
                 language_model=language_model,
                 model_requirements=model_requirements,
+                data_policy=None if entry is None else entry.data_policy,
             )
         )
 
-    return tuple(
-        candidates,
+    return (
+        *(candidate for candidate in candidates if _receives(candidate, sensitivity)),
+        *(candidate for candidate in candidates if not _receives(candidate, sensitivity)),
     )
+
+
+def _receives(
+    candidate: ContextPromptStrategy,
+    sensitivity: Sensitivity | None,
+) -> bool:
+    """Return whether a candidate's model may receive input with this label."""
+
+    return may_receive(candidate.data_policy, sensitivity)
 
 
 def _build_candidate(
@@ -91,6 +113,7 @@ def _build_candidate(
     model_metadata: ModelMetadata,
     language_model: LanguageModel,
     model_requirements: ModelRequirements | None,
+    data_policy: DataPolicy | None,
 ) -> ContextPromptStrategy:
     """Build one executable context-aware prompt strategy candidate."""
 
@@ -113,4 +136,5 @@ def _build_candidate(
         output_format=specification.output_format,
         model_input_modalities=model_metadata.input_modalities,
         citations=specification.citations,
+        data_policy=data_policy,
     )

@@ -44,8 +44,10 @@ from azathoth.cli.parsing import (
     WORKFLOW_ID_ATTRIBUTE,
     WORKFLOW_INPUT_FILE_ATTRIBUTE,
     WORKFLOW_INPUT_MEDIA_TYPE_ATTRIBUTE,
+    WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
 )
 from azathoth.evaluation.models import CitationExpectation, CitedSegment, OutcomeComparison
+from azathoth.sensitivity import Sensitivity
 
 BenchmarkAddCaseHandler = Callable[..., int]
 BenchmarkIdentifierHandler = Callable[[UUID], int]
@@ -210,6 +212,10 @@ def dispatch_benchmark_command(
                 ),
             ),
             input_file=input_file,
+            sensitivity=cast(
+                Sensitivity | None,
+                getattr(arguments, WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE, None),
+            ),
             comparison=OutcomeComparison(
                 cast(
                     str,

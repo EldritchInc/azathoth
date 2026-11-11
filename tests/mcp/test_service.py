@@ -895,6 +895,7 @@ def test_evidence_names_how_often_a_run_was_resumed_and_each_steps_attempts() ->
         error=None,
         idempotency_key="ticket-42",
         input=TICKET,
+        sensitivity=api.Sensitivity.INTERNAL,
         caller_metadata={"mcp": {"transport": "stdio", "tool": "summarize"}},
         run=api.InvocationRun(
             run_id=BROKEN_ID,
@@ -941,6 +942,7 @@ def test_evidence_of_a_failed_invocation_carries_its_job_error_code() -> None:
         ),
         idempotency_key=None,
         input="x",
+        sensitivity=api.Sensitivity.INTERNAL,
         caller_metadata={},
         run=None,
         command=f"azathoth invocation show {HIDDEN_ID}",
@@ -963,6 +965,7 @@ def test_evidence_names_a_run_that_has_not_finished() -> None:
         error=None,
         idempotency_key=None,
         input=TICKET,
+        sensitivity=api.Sensitivity.INTERNAL,
         caller_metadata={},
         run=api.InvocationRun(run_id=HIDDEN_ID, finished=False, resumes=1),
         command=f"azathoth invocation show {SUMMARIZE_ID}",

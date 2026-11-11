@@ -27,6 +27,7 @@ from azathoth.cli.rendering import (
     render_workflow_benchmark_execution_summaries,
     render_workflow_benchmark_result,
 )
+from azathoth.cli.rendering.sensitivity import render_sensitivity_lines, warn_if_restricted
 from azathoth.cli.service import (
     author_note,
     history_line,
@@ -48,6 +49,7 @@ from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
+from azathoth.sensitivity import effective_sensitivity
 from azathoth.workflows import (
     WorkflowBenchmarkEvidenceRecorder,
     WorkflowGenerationError,
@@ -121,6 +123,8 @@ def export_benchmark(
         return 1
 
     print(encode_benchmark_document(selected.dataset))
+
+    warn_if_restricted(selected.dataset.sensitivity, f"Benchmark {benchmark_id}")
 
     return 0
 
@@ -271,6 +275,11 @@ def show_benchmark_case(
         case,
     )
 
+    warn_if_restricted(
+        effective_sensitivity(case.sensitivity),
+        f"Benchmark case {case_id}",
+    )
+
     return 0
 
 
@@ -296,6 +305,9 @@ def _print_benchmark_dataset(
     print(f"Description: {dataset.description}")
     print(f"Cases: {len(dataset.cases)}")
 
+    for line in render_sensitivity_lines(dataset.sensitivity):
+        print(line)
+
     cited = sum(case.expected.citations is not None for case in dataset.cases)
 
     if cited:
@@ -315,9 +327,12 @@ def _print_benchmark_dataset(
 def _print_benchmark_case(
     case: BenchmarkCase,
 ) -> None:
-    """Render one durable benchmark case."""
+    """Render one durable benchmark case, naming its label when it is not internal (ADR 0123)."""
 
     print(f"ID: {case.id}")
+
+    for line in render_sensitivity_lines(effective_sensitivity(case.sensitivity)):
+        print(line)
 
     print("Input:")
     print(

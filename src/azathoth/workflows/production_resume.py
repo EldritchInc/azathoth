@@ -11,7 +11,7 @@ never journaled its start starts one now.
 from collections.abc import Sequence
 from uuid import UUID
 
-from azathoth.providers import LanguageModelRegistry, ModelCatalog
+from azathoth.providers import LanguageModelRegistry, ModelCatalog, ModelPortfolio
 from azathoth.tools import ToolImplementationResolver, ToolResolver
 from azathoth.workflows.production import WorkflowProductionRevision, WorkflowProductionState
 from azathoth.workflows.production_execution import complete_production_invocation
@@ -106,11 +106,13 @@ async def resume_production_invocation(
     invocation_run_repository: ProductionInvocationRunRepository,
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> ProductionInvocationResult:
     """Resume one incomplete invocation from the state it started from, and record its result.
 
     Its run is resumed from its journal under the same run ID; an invocation
-    whose run never journaled its start runs from the beginning.
+    whose run never journaled its start runs from the beginning. `portfolio`,
+    as it is now, supplies its models' declared data policies (ADR 0123).
 
     Raises:
         ProductionInvocationResumeError: The invocation already completed, or
@@ -140,6 +142,7 @@ async def resume_production_invocation(
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
         resume_run_id=journal.invocation_run_id(invocation.id),
+        portfolio=portfolio,
     )
 
 

@@ -6,6 +6,7 @@ workflow received, produced or said is ever an attribute.
 
 from uuid import UUID
 
+from azathoth.context import context_sensitivity
 from azathoth.jobs import JobResult
 from azathoth.strategies import StrategyExecutionMetrics
 from azathoth.telemetry.api import AttributeValue
@@ -27,6 +28,7 @@ from azathoth.telemetry.conventions import (
     RUN_ID,
     RUN_SKIPPED_STEPS,
     RUN_STATUS,
+    SENSITIVITY,
     STEP_ATTEMPTS,
     STEP_CONFIDENCE,
     STEP_ID,
@@ -96,7 +98,11 @@ def step_attributes(
 def run_attributes(
     run: WorkflowRun,
 ) -> dict[str, AttributeValue]:
-    """Return the attributes of one completed run."""
+    """Return the attributes of one completed run, with its label (ADR 0123).
+
+    The label is an attribute, never content: a collector can route or drop
+    restricted runs' spans by it.
+    """
 
     statistics = run.statistics
 
@@ -107,6 +113,7 @@ def run_attributes(
         RUN_EXECUTED_STEPS: statistics.executed_steps,
         RUN_FAILED_STEPS: statistics.failed_steps,
         RUN_SKIPPED_STEPS: statistics.skipped_steps,
+        SENSITIVITY: context_sensitivity(run.initial_context).value,
     }
 
     if run.workflow_revision is not None:

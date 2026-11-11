@@ -1,21 +1,50 @@
 """Organizational authorization of models available to Azathoth."""
 
+from typing import Any
+
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
     model_validator,
 )
 
+from azathoth.sensitivity import UNKNOWN_DATA_POLICY, DataPolicy
+
 
 class ModelPortfolioEntry(BaseModel):
-    """Authorize one provider model for general Azathoth selection."""
+    """Authorize one provider model for general Azathoth selection.
+
+    `data_policy` is what whoever authorized the model declared its provider
+    does with data it is sent (ADR 0123). Azathoth never assumes a
+    provider's terms, so it is unknown until declared, and an entry whose
+    policy is unknown serializes without it: no existing entry's digest
+    changes.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     provider: str = Field(min_length=1)
 
     model: str = Field(min_length=1)
+
+    data_policy: DataPolicy = UNKNOWN_DATA_POLICY
+
+    @model_serializer(mode="wrap")
+    def omit_unknown_data_policy(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        """Leave out `data_policy` while neither of its answers is declared."""
+
+        serialized: dict[str, Any] = handler(self)
+
+        if self.data_policy.unknown:
+            serialized.pop("data_policy", None)
+
+        return serialized
 
     @property
     def identifier(

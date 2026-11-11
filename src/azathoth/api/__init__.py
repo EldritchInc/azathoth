@@ -104,10 +104,12 @@ from azathoth.api.providers import (
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
     MAX_INPUT_FILE_BYTES,
+    SENSITIVITY_WITHOUT_INPUT_MESSAGE,
     CancellationToken,
     EventCallback,
     Runs,
 )
+from azathoth.sensitivity import DataPolicy, PolicyAnswer, Sensitivity
 
 __all__ = [
     "API_STABILITY",
@@ -119,6 +121,7 @@ __all__ = [
     "MAX_INPUT_FILE_BYTES",
     "OPENROUTER_API_KEY_VARIABLE",
     "RESULT_REQUIRED_MESSAGE",
+    "SENSITIVITY_WITHOUT_INPUT_MESSAGE",
     "ApiError",
     "ApiModel",
     "ApiStability",
@@ -130,6 +133,7 @@ __all__ = [
     "BenchmarkSummary",
     "Benchmarks",
     "CancellationToken",
+    "DataPolicy",
     "ConflictError",
     "ContextChanged",
     "Document",
@@ -155,6 +159,7 @@ __all__ = [
     "Models",
     "NotFoundError",
     "Portfolio",
+    "PolicyAnswer",
     "PortfolioEntry",
     "PortfolioRemoval",
     "ProductionDependent",
@@ -178,6 +183,7 @@ __all__ = [
     "RunStepDetail",
     "RunSummary",
     "Runs",
+    "Sensitivity",
     "StandardTool",
     "StepFailure",
     "StepFinished",

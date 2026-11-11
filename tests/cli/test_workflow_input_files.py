@@ -13,8 +13,10 @@ from azathoth.cli import (
     WorkflowRunInput,
     main,
 )
+from azathoth.cli.keyed_invocation import keyed_request
 from azathoth.cli.output_format import WorkflowOutputFormat
-from azathoth.context import Context
+from azathoth.cli.workflows import SENSITIVITY_WITHOUT_INPUT_MESSAGE
+from azathoth.context import INPUT_SENSITIVITY_EVENT_TYPE, Context, context_sensitivity
 from azathoth.inputs import (
     FileInputResolver,
     InputPolicy,
@@ -23,6 +25,7 @@ from azathoth.inputs import (
     content_bytes_digest,
     file_uri,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
     WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
@@ -150,6 +153,7 @@ def test_run_dispatches_an_input_file(
         *,
         workflow_input: WorkflowRunInput | WorkflowInputFile | None,
         output: WorkflowOutputFormat,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         received.append(workflow_input)
 
@@ -189,6 +193,7 @@ def test_invoke_dispatches_an_input_file_as_its_payload(
         payload: object,
         output: WorkflowOutputFormat,
         idempotency_key: str | None = None,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         assert idempotency_key is None
 
@@ -643,3 +648,219 @@ def test_the_media_type_help_names_every_accepted_media_type(
         "Media type of --input-file: application/json, a text/* type, application/pdf, "
         "image/jpeg, image/png or image/webp." in help_text
     )
+
+
+# Labelling the input (ADR 0123)
+
+
+def labels_of(
+    context: Context,
+) -> list[object]:
+    """Return the labels a context's sensitivity events record."""
+
+    return [
+        event.payload["sensitivity"]
+        for event in context.events
+        if event.event_type == INPUT_SENSITIVITY_EVENT_TYPE
+    ]
+
+
+def test_run_records_the_label_given_to_its_json_input(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    status, _, _ = run_status(
+        capsys,
+        "workflow",
+        "run",
+        str(WORKFLOW_ID),
+        "--input",
+        json.dumps(TEXT),
+        "--sensitivity",
+        "restricted",
+        "--output",
+        "result",
+    )
+
+    context = initial_context(database)
+
+    assert status == 0
+    assert labels_of(context) == ["restricted"]
+    assert context_sensitivity(context) is Sensitivity.RESTRICTED
+
+
+def test_run_records_the_label_given_to_its_file_input(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = write(tmp_path / "words.md", CONTENT)
+
+    status, _, _ = run_status(
+        capsys,
+        "workflow",
+        "run",
+        str(WORKFLOW_ID),
+        "--input-file",
+        str(path),
+        "--sensitivity",
+        "public",
+        "--output",
+        "result",
+    )
+
+    assert status == 0
+    assert [event.event_type for event in initial_context(database).events] == [
+        WORKFLOW_INPUT_EVENT_TYPE,
+        WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
+        INPUT_SENSITIVITY_EVENT_TYPE,
+    ]
+    assert labels_of(initial_context(database)) == ["public"]
+
+
+def test_run_without_a_label_records_none(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_status(capsys, "workflow", "run", str(WORKFLOW_ID), "--input", json.dumps(TEXT))
+
+    assert labels_of(initial_context(database)) == []
+
+
+def test_a_label_without_input_starts_no_run(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    status, out, err = run_status(
+        capsys,
+        "workflow",
+        "run",
+        str(WORKFLOW_ID),
+        "--sensitivity",
+        "restricted",
+    )
+
+    assert (status, out) == (1, "")
+    assert err == f"{SENSITIVITY_WITHOUT_INPUT_MESSAGE}\n"
+    assert err == "--sensitivity labels the run's input; give --input or --input-file too.\n"
+    assert SQLiteWorkflowRunRepository(database).runs_for_workflow(WORKFLOW_ID) == ()
+
+
+def test_an_unknown_label_is_a_usage_error(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exited:
+        main(("workflow", "run", str(WORKFLOW_ID), "--input", "1", "--sensitivity", "secret"))
+
+    assert exited.value.code == 2
+    assert "'secret' is not a sensitivity; choose public, internal, restricted." in (
+        capsys.readouterr().err
+    )
+
+
+def test_invoke_records_the_label_given_to_its_input(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_cli(capsys, "workflow", "promote", str(WORKFLOW_ID))
+
+    path = write(tmp_path / "words.md", CONTENT)
+
+    for arguments in (
+        ("--input", json.dumps(TEXT)),
+        ("--input-file", str(path)),
+    ):
+        status, _, _ = run_status(
+            capsys,
+            "workflow",
+            "invoke",
+            str(WORKFLOW_ID),
+            *arguments,
+            "--sensitivity",
+            "restricted",
+            "--output",
+            "result",
+        )
+
+        assert status == 0
+
+    from_json, from_file = SQLiteProductionInvocationRepository(database).invocations_for_workflow(
+        WORKFLOW_ID
+    )
+
+    assert labels_of(from_json.initial_context) == ["restricted"]
+    assert labels_of(from_file.initial_context) == ["restricted"]
+
+    runs = SQLiteWorkflowRunRepository(database).runs_for_workflow(WORKFLOW_ID)
+
+    assert {context_sensitivity(run.initial_context) for run in runs} == {Sensitivity.RESTRICTED}
+
+
+def test_a_keyed_invoke_makes_the_label_part_of_its_request(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_cli(capsys, "workflow", "promote", str(WORKFLOW_ID))
+
+    def invoke(
+        *labels: str,
+    ) -> tuple[int, str, str]:
+        return run_status(
+            capsys,
+            "workflow",
+            "invoke",
+            str(WORKFLOW_ID),
+            "--input",
+            json.dumps(TEXT),
+            "--idempotency-key",
+            "claim-412",
+            *labels,
+            "--output",
+            "result",
+        )
+
+    first, _, _ = invoke("--sensitivity", "restricted")
+    conflict, _, err = invoke()
+
+    (invocation,) = SQLiteProductionInvocationRepository(database).invocations_for_workflow(
+        WORKFLOW_ID,
+    )
+
+    assert first == 0
+    assert labels_of(invocation.initial_context) == ["restricted"]
+    assert conflict == 1
+    assert "claim-412" in err
+
+
+def test_keyed_request_carries_the_label_on_its_source() -> None:
+    request = keyed_request(
+        workflow_id=WORKFLOW_ID,
+        payload={"claim": 412},
+        idempotency_key="claim-412",
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+
+    assert request.input.sensitivity is Sensitivity.RESTRICTED
+    assert keyed_request(
+        workflow_id=WORKFLOW_ID,
+        payload={"claim": 412},
+        idempotency_key="claim-412",
+    ).input.model_dump(mode="json") == {"value": {"claim": 412}, "media_type": "application/json"}
+
+
+def test_the_label_option_is_described_in_help(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for action in ("run", "invoke"):
+        with pytest.raises(SystemExit):
+            main(("workflow", action, "--help"))
+
+        assert "--sensitivity LABEL" in capsys.readouterr().out
+
+
+def test_the_documented_label_refusal_is_the_one_given() -> None:
+    readme = Path(__file__).parents[2] / "src" / "azathoth" / "cli" / "README.md"
+
+    assert f"\n{SENSITIVITY_WITHOUT_INPUT_MESSAGE}\n" in readme.read_text(encoding="utf-8")

@@ -18,6 +18,12 @@ from azathoth.runtime.exceptions import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
+from azathoth.sensitivity import (
+    RESTRICTED_REFUSAL_HINT,
+    Sensitivity,
+    may_receive,
+    restricted_refusal,
+)
 from azathoth.strategies import Strategy
 from azathoth.tools import (
     ToolCatalog,
@@ -166,6 +172,7 @@ class AzathothRuntime:
         self,
         *,
         semantic: bool = False,
+        sensitivity: Sensitivity | None = None,
     ) -> OutcomeEvaluator:
         """Return the evaluator that judges benchmark and experiment outcomes.
 
@@ -175,10 +182,15 @@ class AzathothRuntime:
         never starts with a judge it cannot use. Without `semantic`, judges are
         not resolved, so an unusable judge never blocks deterministic work.
 
+        A judge is sent what a case's run returned, so judging a benchmark
+        labelled `sensitivity` also requires every judge to be allowed to
+        receive it: for a restricted benchmark, declared to neither retain
+        nor train on data (ADR 0123).
+
         Raises:
             JudgeUnavailableError: Semantic judging was requested and the
-                rotation is empty, or a judge is not authorized or not
-                currently available.
+                rotation is empty, a judge is not authorized or not currently
+                available, or a judge may not receive the benchmark's label.
         """
 
         if not semantic:
@@ -190,8 +202,16 @@ class AzathothRuntime:
         models: dict[str, LanguageModel] = {}
 
         for identifier in self._judges.identifiers:
-            if self._portfolio.get(identifier) is None:
+            entry = self._portfolio.get(identifier)
+
+            if entry is None:
                 raise JudgeUnavailableError(f"Judge model {identifier} is not authorized.")
+
+            if not may_receive(entry.data_policy, sensitivity):
+                raise JudgeUnavailableError(
+                    f"Judge model {restricted_refusal(identifier, entry.data_policy)} "
+                    f"{RESTRICTED_REFUSAL_HINT.format(model=identifier)}"
+                )
 
             language_model = self._language_models.get(identifier)
 
@@ -232,11 +252,16 @@ class AzathothRuntime:
     def generate_workflow_candidate(
         self,
         workflow_id: UUID,
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> WorkflowCandidate:
         """Generate an executable candidate for one configured workflow.
 
         The candidate carries the catalogued revision of the specification,
         so its signature and every run of it name the revision executed.
+        For runs labelled `sensitivity`, each context prompt step runs on
+        the first model it may use that may receive input so labelled, if it
+        has one (ADR 0123).
         """
 
         specification = self._workflows.get(workflow_id)
@@ -252,4 +277,5 @@ class AzathothRuntime:
             tool_resolver=self._tool_resolver,
             tool_implementation_resolver=(self._tool_implementation_resolver),
             revision=self._workflows.revision_number(workflow_id),
+            sensitivity=sensitivity,
         )

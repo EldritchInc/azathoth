@@ -2,17 +2,21 @@
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
     model_validator,
 )
 
 from azathoth.evaluation import OutcomeComparison
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows.benchmark import WorkflowBenchmarkComparisonTally
 from azathoth.workflows.candidate import WorkflowCandidateSignature
 from azathoth.workflows.models import WorkflowMetadata
@@ -217,6 +221,10 @@ class WorkflowBenchmarkExecutionRecord(BaseModel):
     holds at least two scored candidates judged on the same cases, the
     scoring policy that scored them, and a ranking of candidate identifiers,
     best first.
+
+    `sensitivity` is the label of the benchmark revision executed, the most
+    sensitive of its cases', or None when it was internal; a record without
+    one serializes as it did before labels (ADR 0123).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -229,6 +237,8 @@ class WorkflowBenchmarkExecutionRecord(BaseModel):
         default=None,
         pattern=CONTENT_DIGEST_PATTERN,
     )
+
+    sensitivity: Sensitivity | None = None
 
     kind: WorkflowBenchmarkExecutionKind
 
@@ -246,6 +256,20 @@ class WorkflowBenchmarkExecutionRecord(BaseModel):
     recorded_at: datetime = Field(
         default_factory=utc_now,
     )
+
+    @model_serializer(mode="wrap")
+    def omit_internal_sensitivity(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        """Leave out `sensitivity` when the benchmark was internal."""
+
+        serialized: dict[str, Any] = handler(self)
+
+        if self.sensitivity is None:
+            serialized.pop("sensitivity", None)
+
+        return serialized
 
     @model_validator(mode="after")
     def validate_unique_candidate_ids(

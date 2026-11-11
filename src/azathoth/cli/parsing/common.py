@@ -8,6 +8,7 @@ from pydantic import JsonValue
 
 from azathoth.evaluation.models import CitedSegment
 from azathoth.inputs import validate_media_type
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import validate_idempotency_key
 
 COMMAND_ATTRIBUTE = "command"
@@ -65,6 +66,23 @@ def media_type(
         return validate_media_type(value)
     except ValueError as exc:
         raise ArgumentTypeError(str(exc)) from exc
+
+
+def sensitivity(
+    value: str,
+) -> Sensitivity:
+    """Parse one sensitivity label command-line value (ADR 0123).
+
+    Raises:
+        ArgumentTypeError: The value is not public, internal or restricted.
+    """
+
+    try:
+        return Sensitivity(value)
+    except ValueError as exc:
+        labels = ", ".join(label.value for label in Sensitivity)
+
+        raise ArgumentTypeError(f"{value!r} is not a sensitivity; choose {labels}.") from exc
 
 
 def cited_segment(

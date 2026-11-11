@@ -14,6 +14,7 @@ from pydantic import JsonValue
 
 from azathoth.inputs import InputProvenance
 from azathoth.jobs import JobInvoker, JobResult, JobStatus
+from azathoth.sensitivity import Sensitivity
 from azathoth.telemetry.api import Telemetry, TelemetrySpan, traced
 from azathoth.telemetry.attributes import invocation_attributes, job_attributes
 from azathoth.telemetry.conventions import INVOCATION_SPAN, JOB_SPAN, WORKFLOW_ID
@@ -122,6 +123,7 @@ def traced_job_invoker(
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         with traced_invocation(telemetry, workflow_id=workflow_id) as trace:
@@ -130,6 +132,7 @@ def traced_job_invoker(
                 payload=payload,
                 caller_metadata=caller_metadata,
                 input_provenance=input_provenance,
+                sensitivity=sensitivity,
                 idempotency=idempotency,
             )
 

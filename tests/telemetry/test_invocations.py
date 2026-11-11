@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from azathoth.inputs import InputProvenance
 from azathoth.jobs import JobError, JobErrorCode, JobResult, JobStatus
+from azathoth.sensitivity import Sensitivity
 from azathoth.telemetry import ATTRIBUTE_KEYS
 from azathoth.telemetry.invocations import (
     traced_invocation,
@@ -199,6 +200,7 @@ def test_a_traced_invoker_traces_each_invocation_under_the_job() -> None:
         payload: JsonValue,
         caller_metadata: Mapping[str, JsonValue],
         input_provenance: InputProvenance | None,
+        sensitivity: Sensitivity | None,
         idempotency: InvocationIdempotency,
     ) -> ProductionInvocationResult:
         calls.append(workflow_id)
@@ -217,6 +219,7 @@ def test_a_traced_invoker_traces_each_invocation_under_the_job() -> None:
                 payload={"note": SECRET},
                 caller_metadata={},
                 input_provenance=None,
+                sensitivity=None,
                 idempotency=InvocationIdempotency(key=KEY, request_digest=DIGEST),
             )
         )

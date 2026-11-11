@@ -84,7 +84,8 @@ Each value carries its `revision`: the number, the content digest, when it
 was imported (`None` for revisions from before 1.1), and `identical_to`, the
 earliest earlier revision with the same content when the import reverted to
 one. A `get` also carries `latest_number` and the `document`, exactly what
-the matching `import` command accepts.
+the matching `import` command accepts. A benchmark also carries its
+`sensitivity`, the most sensitive of its cases' labels (ADR 0123).
 
 Each value's `command` is the `azathoth` command that shows the same thing:
 `workflow show` and `benchmark show`, with `--revision` for a revision named
@@ -113,14 +114,32 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
-| `models.matching(requirements)` | The portfolio's models that meet a step's requirements, in the order a run tries them. | Yes |
+| `models.matching(requirements, sensitivity=None)` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
-| `portfolio.add(identifier)` | Authorizes a model a provider serves now. | Yes |
+| `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
+| `portfolio.set_data_policy(identifier, data_policy)` | Declares what its provider does with data, as `azathoth model policy` does. | No |
 | `portfolio.remove(identifier, force=False)` | Removes a model, as `azathoth model deauthorize` does. | No |
 
 Listing models records what each provider reports, as `azathoth model list`
 does. A model's `authorized` says whether it is in the portfolio. Whatever a
 provider does not publish, such as a context window or a price, is `None`.
+
+A `PortfolioEntry` holds its `data_policy`, a `DataPolicy` of two
+`PolicyAnswer`s, `retains_data` and `trains_on_data`, each `yes`, `no` or
+`unknown` (ADR 0123). Both are unknown until declared, by `add` or by
+`set_data_policy`, which replaces the policy and raises `NotFoundError` for a
+model not authorized. `receives_restricted` says whether the model may be
+sent restricted input: only when both answers are `no`.
+`policy_declared_by` and `policy_declared_at` say who last declared the
+policy, as the author the instance records, and when; both are None for a
+policy never declared.
+
+```python
+instance.portfolio.set_data_policy(
+    "openrouter/openai/gpt-4o-mini",
+    api.DataPolicy(retains_data=api.PolicyAnswer.NO, trains_on_data=api.PolicyAnswer.NO),
+)
+```
 
 `portfolio.remove` keeps a model that active production uses, raising
 `ModelInUseError`, whose `dependents` names each workflow and step; with
@@ -129,7 +148,8 @@ semantic judge is always kept until it leaves the judge rotation.
 
 ## Runs
 
-`instance.runs.run(workflow_id, input=None, on_event=None, cancel=None)`
+`instance.runs.run(workflow_id, input=None, sensitivity=None, on_event=None,
+cancel=None)`
 runs a workflow's latest revision as configured, as `azathoth workflow run`
 does, and keeps the finished run whether it succeeded or failed. It returns
 when the run has finished.
@@ -158,6 +178,20 @@ and kept as `--input-file` is: JSON and text are decoded into the value, and
 a PDF, PNG, JPEG or WebP of at most `MAX_INPUT_FILE_BYTES` is kept in the
 content store and given to the workflow as a content handle; a file that is
 not its media type is refused before anything runs (ADR 0121).
+
+`run`, `invoke` and `try_step` each take `sensitivity`, a `Sensitivity`
+labelling the input `PUBLIC`, `INTERNAL` or `RESTRICTED` (ADR 0123); without
+one it is internal. The label is recorded with the run and inherited by
+every child run it starts. It labels input, so `run` given one without
+`input` raises `InvalidArgumentError` with
+`SENSITIVITY_WITHOUT_INPUT_MESSAGE`:
+
+```text
+A sensitivity labels a run's input; give input too.
+```
+
+For `invoke` the label is part of the request a key is recorded with, and
+for `try_step` it labels whatever `inputs` and `input` the step is given.
 
 The `RunResult` says whether it `succeeded`, holds the declared `result`
 when `has_result`, and
@@ -188,10 +222,13 @@ a prompt step to the `models` it could run on, in the order a run tries
 them, and a tool step to the tool and implementation it would run. A step
 that could not run says why in its `problem`, such as a model no provider
 serves now or a tool not imported. It asks the providers, and saves nothing
-(ADR 0121).
+(ADR 0121). With `sensitivity=`, each step is resolved as for a run whose
+input is so labelled: a context prompt step of a restricted run could run
+only on models declared to neither retain nor train on data, and one with
+none says so, as the run's refusal would (ADR 0123).
 
-`instance.runs.invoke(workflow_id, input=..., idempotency_key=None,
-caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
+`instance.runs.invoke(workflow_id, input=..., sensitivity=None,
+idempotency_key=None, caller_metadata=None, on_event=None, cancel=None)` invokes the workflow's
 active production state, as `azathoth job run` does, and returns an
 `InvocationOutcome`: `succeeded` or `failed` with the invocation,
 `rejected` when no invocation was made (such as an `idempotency_conflict`),
@@ -218,10 +255,12 @@ layer, when its first attempt started and its last finished, its strategy
 and what it measured, its output, the values it added to the context by
 name, and every attempt that failed. A run that has not finished is not
 kept yet, so `get` raises `NotFoundError` saying how to resume it
-(ADR 0121).
+(ADR 0121). Every `RunSummary` holds the run's `sensitivity`: the most
+sensitive of its input's label and its parent run's, `INTERNAL` when
+neither is labelled (ADR 0123).
 
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
-on_event=None, cancel=None)` tries one step of a workflow document alone,
+sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a
 `RunFile`, takes the place of that input's source; an input not given keeps
 its source, a constant its value and a field of the run's input the field of
@@ -235,7 +274,8 @@ reach `on_event` as a run's do, and the `StepTrial` holds the step as
 `instance.invocations.get(invocation_id)` reads one invocation back, as
 `azathoth invocation show` reports it: its workflow, when it was made, its
 `status` (`succeeded`, `failed` or `incomplete`), its result or error, its
-idempotency key, the input it was given, its caller metadata, and its run.
+idempotency key, the input it was given, its `sensitivity`, its caller
+metadata, and its run.
 A finished run lists each step's status, attempts and confidence; a run
 that has not finished names only its ID and how often it was resumed. Who
 may read which invocation is the caller's to decide: azathoth-mcp, for

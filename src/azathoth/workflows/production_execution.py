@@ -4,9 +4,12 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.context import context_sensitivity
+from azathoth.prompting import RestrictedInputRefusedError
 from azathoth.providers import (
     LanguageModelRegistry,
     ModelCatalog,
+    ModelPortfolio,
 )
 from azathoth.tools import (
     ToolImplementationResolver,
@@ -68,8 +71,14 @@ async def execute_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     resume_run_id: UUID | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> WorkflowRun:
     """Execute one production invocation against current production state.
+
+    `portfolio` is the portfolio as it is now: it supplies the declared data
+    policy of each model the invocation may send its input to, and the
+    invocation's label, from its initial context, decides which may receive
+    it (ADR 0123). Without one, no model may receive restricted input.
 
     A step failure never escapes as an exception: the completed run, failed or
     not, is persisted and associated with the invocation before it is
@@ -102,6 +111,8 @@ async def execute_production_invocation(
         registry=registry,
         tool_resolver=tool_resolver,
         tool_implementation_resolver=tool_implementation_resolver,
+        portfolio=portfolio,
+        sensitivity=context_sensitivity(invocation.initial_context),
     )
 
     if resume_run_id is None:
@@ -146,10 +157,12 @@ async def complete_production_invocation(
     tool_resolver: ToolResolver | None = None,
     tool_implementation_resolver: ToolImplementationResolver | None = None,
     resume_run_id: UUID | None = None,
+    portfolio: ModelPortfolio | None = None,
 ) -> ProductionInvocationResult:
     """Execute one invocation and persist its caller-visible terminal result.
 
     With `resume_run_id`, its unfinished run is resumed instead (ADR 0105).
+    `portfolio` supplies its models' declared data policies (ADR 0123).
 
     A declared result, emitted as `result`, that breaks the promoted
     workflow's output schema fails the invocation with `invalid_output`, its
@@ -179,13 +192,14 @@ async def complete_production_invocation(
             tool_resolver=tool_resolver,
             tool_implementation_resolver=tool_implementation_resolver,
             resume_run_id=resume_run_id,
+            portfolio=portfolio,
         )
 
         if run.failed:
             result: ProductionInvocationResult = ProductionInvocationFailure(
                 invocation_id=invocation.id,
                 error_code=ProductionInvocationErrorCode.WORKFLOW_EXECUTION_FAILED,
-                message="Production workflow execution failed.",
+                message=_failure_message(run),
             )
         else:
             try:
@@ -324,3 +338,25 @@ def _validate_invocation_state(
         raise ValueError(
             "Production invocation workflow does not match the supplied production state."
         )
+
+
+def _failure_message(
+    run: WorkflowRun,
+) -> str:
+    """Return what a caller is told of a failed run.
+
+    A caller is told only that production failed, except when a step
+    refused to send restricted input: that says which step, which model and
+    how to fix it, and holds none of the input, so a caller can tell an
+    operator what to declare (ADR 0123).
+    """
+
+    refusals = (
+        attempt.failure.message
+        for step in run.steps
+        for attempt in step.attempts
+        if attempt.failure is not None
+        and attempt.failure.exception_type == RestrictedInputRefusedError.__name__
+    )
+
+    return next(refusals, "Production workflow execution failed.")

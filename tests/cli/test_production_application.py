@@ -8,6 +8,7 @@ from pydantic import JsonValue
 import azathoth.cli.application as cli_application
 from azathoth.cli import main
 from azathoth.cli.output_format import WorkflowOutputFormat
+from azathoth.sensitivity import Sensitivity
 
 WORKFLOW_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -28,6 +29,7 @@ def test_cli_workflow_invoke_dispatches_structured_input(
         payload: JsonValue,
         output: WorkflowOutputFormat,
         idempotency_key: str | None = None,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         assert idempotency_key is None
 
@@ -113,6 +115,7 @@ def test_cli_workflow_invoke_accepts_any_json_value(
         payload: JsonValue,
         output: WorkflowOutputFormat,
         idempotency_key: str | None = None,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         assert idempotency_key is None
 
@@ -153,6 +156,7 @@ def test_cli_workflow_invoke_propagates_command_status(
         payload: JsonValue,
         output: WorkflowOutputFormat,
         idempotency_key: str | None = None,
+        sensitivity: Sensitivity | None = None,
     ) -> int:
         assert idempotency_key is None
 

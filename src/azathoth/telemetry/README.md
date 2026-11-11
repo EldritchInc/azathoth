@@ -124,6 +124,7 @@ Spans carry identifiers, statuses and measurements, and nothing else:
 | `azathoth.run.steps.executed` | run | How many steps executed |
 | `azathoth.run.steps.failed` | run | How many steps failed |
 | `azathoth.run.steps.skipped` | run | How many steps were skipped |
+| `azathoth.sensitivity` | run | The run's label: `public`, `internal` or `restricted` (ADR 0123) |
 | `azathoth.step.id` | step | The step |
 | `azathoth.step.status` | step | `executed`, `failed` or `skipped` |
 | `azathoth.step.attempts` | step | How many attempts it made |
@@ -147,6 +148,9 @@ value, tool input or output, tool stderr, and no error message, which can
 quote any of those. A job span does not carry its idempotency key either,
 which callers may build from their own identifiers. Content capture is not
 offered in 1.1.
+
+A run's label is an attribute, not content, so a collector can route a
+restricted run's spans, or drop them, by `azathoth.sensitivity`.
 
 What happened is recorded in Azathoth's database, as it always was. A span
 names the run, step and invocation it describes, so an operator follows a

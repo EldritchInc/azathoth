@@ -22,6 +22,7 @@ from azathoth.inputs import (
     InputSourceError,
     is_binary_media_type,
 )
+from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import (
     BenchmarkCaseSourceError,
     benchmark_case_from_input,
@@ -47,6 +48,7 @@ def add_benchmark_case(
     *,
     run_id: UUID | None = None,
     input_file: WorkflowInputFile | None = None,
+    sensitivity: Sensitivity | None = None,
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None = None,
     description: str | None = None,
@@ -64,6 +66,10 @@ def add_benchmark_case(
     `workflow run --input-file` keeps it, and needs a supplied value. The
     benchmark need not belong to any one workflow, because any workflow can
     run against any benchmark. Either case may name what its run must cite.
+
+    `sensitivity` labels the case (ADR 0123). A case from a run takes the
+    run's label without one, and is refused one lower than the run's; a case
+    from a file is internal without one.
 
     Nothing is written to the benchmark when any check fails. Only durable
     state is read, so the runtime is never loaded and no provider credentials
@@ -87,6 +93,7 @@ def add_benchmark_case(
     if input_file is not None:
         case = _case_from_file(
             input_file,
+            sensitivity=sensitivity,
             configuration=configuration,
             comparison=comparison,
             expected=expected,
@@ -98,6 +105,7 @@ def add_benchmark_case(
 
         case = _case_from_run(
             run_id,
+            sensitivity=sensitivity,
             configuration=configuration,
             comparison=comparison,
             expected=expected,
@@ -136,6 +144,7 @@ def add_benchmark_case(
 def _case_from_run(
     run_id: UUID,
     *,
+    sensitivity: Sensitivity | None,
     configuration: CliRuntimeConfiguration,
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None,
@@ -191,6 +200,7 @@ def _case_from_run(
             description=description,
             feedback=feedback,
             citations=citations,
+            sensitivity=sensitivity,
         )
     except BenchmarkCaseSourceError as exc:
         print(
@@ -217,6 +227,7 @@ def _case_from_run(
 def _case_from_file(
     input_file: WorkflowInputFile,
     *,
+    sensitivity: Sensitivity | None,
     configuration: CliRuntimeConfiguration,
     comparison: OutcomeComparison,
     expected: SuppliedExpectedValue | None,
@@ -240,7 +251,7 @@ def _case_from_file(
         )
 
         return benchmark_case_from_input(
-            resolved,
+            resolved.model_copy(update={"sensitivity": sensitivity}),
             comparison=comparison,
             expected=expected.value,
             description=description,

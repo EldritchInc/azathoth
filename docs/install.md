@@ -396,7 +396,7 @@ When you upgrade Azathoth to a release with a newer schema, every command
 stops until the database is upgraded too:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
 ```
 
 Upgrade Azathoth on every machine, then run `init` once, from any one of
@@ -412,7 +412,7 @@ azathoth init
 ```
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
 ```
 
 An SQLite file needs no such step: Azathoth adds the tables it lacks the
@@ -610,6 +610,59 @@ AZATHOTH_AUTHOR is 'Ada <ada>'; set it to "Name <email>" or "Name".
 
 The standard tools that `azathoth init` installs are recorded as Azathoth's,
 whoever runs it.
+
+## Optional: Running Restricted Data
+
+If you run data that must not reach just any model, patient records under
+HIPAA say, label it restricted
+([ADR 0123](adrs/0123-sensitivity-labels.md)). Restricted input reaches
+only models you declare to neither retain nor train on what they are sent.
+Azathoth never assumes a provider's terms, so declare each model you have
+an agreement for:
+
+```bash
+azathoth model policy openrouter/openai/gpt-4o-mini --no-retention --no-training
+```
+
+```powershell
+azathoth model policy openrouter/openai/gpt-4o-mini --no-retention --no-training
+```
+
+```text
+Declared the data policy of model openrouter/openai/gpt-4o-mini.
+Retains Data: no
+Trains On Data: no
+Restricted Input: allowed
+Declared By: Ada Lovelace <ada@example.com>
+Declared At: 2026-11-10T22:00:00+00:00
+```
+
+Then give the label with the input:
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input-file chart.pdf --sensitivity restricted
+```
+
+```powershell
+azathoth workflow run <WORKFLOW_ID> --input-file chart.pdf --sensitivity restricted
+```
+
+A step that would send the input to a model not declared private sends
+nothing, and its failure says which model and what to declare. Every run
+the workflow starts is restricted too, and `run show` names the label:
+
+```text
+Sensitivity: restricted
+```
+
+A command that prints restricted data says so on standard error, so you
+know what you are holding:
+
+```text
+Run <RUN_ID> is restricted; its output contains restricted data.
+```
+
+Unlabelled data is internal, and runs as it always did.
 
 ## Each New Terminal
 

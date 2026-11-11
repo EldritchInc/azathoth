@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from azathoth.cli.benchmark_execution import judged_sensitivity
 from azathoth.evaluation import (
     BenchmarkDataset,
     OutcomeComparison,
@@ -67,6 +68,7 @@ async def optimize_configured_workflow(
 
     evaluator = runtime.outcome_evaluator(
         semantic=dataset.uses_comparison(OutcomeComparison.SEMANTIC),
+        sensitivity=judged_sensitivity(dataset),
     )
 
     for case in dataset.cases:
@@ -77,6 +79,7 @@ async def optimize_configured_workflow(
 
     initial_candidate = runtime.generate_workflow_candidate(
         workflow_id,
+        sensitivity=dataset.sensitivity,
     )
 
     experiment_runner = WorkflowExperimentRunner(
@@ -93,6 +96,7 @@ async def optimize_configured_workflow(
         models=runtime.models,
         portfolio=runtime.portfolio,
         registry=runtime.language_models,
+        sensitivity=dataset.sensitivity,
     )
 
     session_runner = WorkflowOptimizationSessionRunner(

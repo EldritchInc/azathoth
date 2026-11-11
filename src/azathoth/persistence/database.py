@@ -12,12 +12,13 @@ from azathoth.persistence.location import DatabaseLocation
 SCHEMA_TABLE: Final = "azathoth_schema"
 """The table in which a PostgreSQL database records its schema version."""
 
-SCHEMA_VERSION: Final = 3
+SCHEMA_VERSION: Final = 4
 """The schema version this Azathoth uses.
 
 Version 2 adds the tables that record a run while it executes (ADR 0105).
 Version 3 adds the tables that record revision lineage and portfolio
-provenance (ADR 0122).
+provenance (ADR 0122). Version 4 adds the table that records who declared
+each portfolio entry's data policy (ADR 0123).
 """
 
 Parameter = str | int | float | bytes | None

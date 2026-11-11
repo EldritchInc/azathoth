@@ -71,7 +71,8 @@ azathoth
 │   │   └── --revision <NUMBER>
 │   ├── run <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>
-│   │   └── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   └── --sensitivity <LABEL>   (only with an input)
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
@@ -82,6 +83,7 @@ azathoth
 │   ├── invoke <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
 │   │   ├── --media-type <TYPE>     (only with --input-file)
+│   │   ├── --sensitivity <LABEL>
 │   │   └── --idempotency-key <KEY>
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
@@ -133,6 +135,11 @@ azathoth
 │   ├── list
 │   ├── show <MODEL_IDENTIFIER>
 │   ├── authorize <MODEL_IDENTIFIER>
+│   │   ├── --no-retention | --retains-data yes|no|unknown
+│   │   └── --no-training | --trains-on-data yes|no|unknown
+│   ├── policy <MODEL_IDENTIFIER>
+│   │   ├── --no-retention | --retains-data yes|no|unknown
+│   │   └── --no-training | --trains-on-data yes|no|unknown
 │   ├── deauthorize <MODEL_IDENTIFIER>
 │   │   └── --force
 │   ├── portfolio
@@ -189,6 +196,7 @@ azathoth
     │   ├── --expected <JSON>
     │   ├── --require-citation <SOURCE:SEGMENT>   (repeat for each segment)
     │   ├── --on-unverified fail|ignore
+    │   ├── --sensitivity <LABEL>
     │   └── --description <TEXT>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
@@ -402,14 +410,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 3; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 3)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -1148,7 +1156,8 @@ Without `--input`, the run starts with an empty context, so a step bound to
 the workflow input fails to resolve it.
 
 `--input-file` supplies the input from a file instead; see
-[Input Files](#input-files).
+[Input Files](#input-files). `--sensitivity` labels either; see
+[Input Sensitivity](#input-sensitivity).
 
 Only a run that received input can later become a benchmark case; see
 [Add a Case From a Run](#add-a-case-from-a-run).
@@ -1163,7 +1172,7 @@ Only a run that received input can later become a benchmark case; see
 
 | Format | stdout | stderr |
 |---|---|---|
-| `jsonl` | step records live, then one terminal record | nothing once execution starts |
+| `jsonl` | step records live, then one terminal record | nothing once execution starts, but the restricted-output warning |
 | `text` | the human-readable report | step messages, one per line |
 | `result` | the result value as JSON, or nothing when no result is declared | the error message |
 
@@ -3244,6 +3253,7 @@ azathoth model
 ├── list
 ├── show
 ├── authorize
+├── policy
 ├── deauthorize
 ├── portfolio
 └── usage
@@ -3318,6 +3328,58 @@ model exists in ModelPortfolio
 ```
 
 Authorization does not create provider availability.
+
+# Declare a Model's Data Policy
+
+Restricted input reaches only a model whose provider is declared to neither
+retain nor train on the data it is sent (ADR 0123). Azathoth never assumes a
+provider's terms: whoever authorizes the model declares them, and until
+then both answers are unknown, which counts as not allowed.
+
+Declare them when authorizing:
+
+```bash
+azathoth model authorize <MODEL_IDENTIFIER> --no-retention --no-training
+```
+
+or at any time after, with `model policy`:
+
+```bash
+azathoth model policy <MODEL_IDENTIFIER> --no-retention --no-training
+```
+
+```text
+Declared the data policy of model <MODEL_IDENTIFIER>.
+Retains Data: no
+Trains On Data: no
+Restricted Input: allowed
+Declared By: <AUTHOR>
+Declared At: <TIME>
+```
+
+Who declares a policy, `AZATHOTH_AUTHOR` or the operating system's
+username as for every authored change, and when, is recorded beside the
+entry, never in it, so it is no part of the entry's digest. Each
+declaration replaces the last; `model authorize` with a declared policy
+records its author as having declared it. A policy never declared shows no
+`Declared` lines.
+
+`--no-retention` is `--retains-data no`, and `--no-training` is
+`--trains-on-data no`; each also takes `yes` or `unknown`. An answer
+`model policy` is not given is kept, and given none it shows the policy and
+changes nothing. Giving one answer both ways is a usage error.
+
+A policy is the operator's declaration, not something Azathoth checks with
+the provider. It is kept on the model's portfolio entry, which keeps its
+place and the record of who authorized it.
+
+`model policy` reads and writes durable state only. It never loads the
+runtime and needs no provider credentials. A model not authorized is
+refused, and nothing is written:
+
+```text
+Model '<MODEL_IDENTIFIER>' is not authorized.
+```
 
 # Authorization Requires Current Availability
 
@@ -4018,6 +4080,9 @@ workflow input received more than once
 no --expected and no corrected output
     Run <RUN_ID> has no corrected output; pass --expected.
 
+a --sensitivity lower than the run's
+    Run <RUN_ID> is restricted; a case made from it cannot be internal.
+
 a schema comparison whose value is not a JSON Schema
     Expected value cannot be used with comparison 'schema': <REASON>
 
@@ -4037,6 +4102,29 @@ or optimized against.
 
 `benchmark add-case` reads and writes durable state only. It never loads the
 runtime and needs no provider credentials.
+
+## Case Sensitivity
+
+A case is as sensitive as what it came from (ADR 0123). A case from a run
+takes the run's label, the most sensitive of its input's and its parent
+run's, so a case from a restricted run is restricted. `--sensitivity`
+labels it more sensitive than its run; one lower is refused, and nothing is
+written:
+
+```text
+Run <RUN_ID> is restricted; a case made from it cannot be internal.
+```
+
+A case from a file is internal unless `--sensitivity` labels it. A labelled
+case holds its label as `sensitivity`, and its run, every time the
+benchmark is run, compared or optimized against, is given that label as a
+run given `--sensitivity` is. An internal case holds none, so the
+benchmark's digest is what it was before labels.
+
+A benchmark is as sensitive as its most sensitive case, an unlabelled case
+counting as internal: adding one restricted case restricts it. Each
+benchmark execution and experiment records the label of the revision it
+ran against.
 
 # Add a Case From a File
 
@@ -4498,6 +4586,98 @@ Cannot tell the media type of notes.log from its extension; give it with --media
 The CLI accepts only local files. Other schemes are for other entry points:
 the queue worker accepts `s3://` from the locations it allows, and never
 `file://` (see [Worker Inputs](#worker-inputs)).
+
+# Input Sensitivity
+
+`workflow run` and `workflow invoke` label their input with
+`--sensitivity public|internal|restricted` (ADR 0123):
+
+```bash
+azathoth workflow run <WORKFLOW_ID> --input-file claim.pdf --sensitivity restricted
+azathoth workflow invoke <WORKFLOW_ID> --input '{"claim":412}' --sensitivity restricted
+```
+
+Without it the input is internal. A labelled run records its label in a
+`workflow.input.sensitivity` event after its input's events, and every run
+it starts as a child inherits it: a child is never less sensitive than its
+parent. Restricted input reaches only models declared to neither retain nor
+train on data.
+
+The label is part of an invocation's request, so the same input under the
+same `--idempotency-key` with another label, or with none, is an
+`idempotency_conflict`.
+
+A label labels input, so `workflow run` given one without `--input` or
+`--input-file` starts nothing, prints, and exits with status 1:
+
+```text
+--sensitivity labels the run's input; give --input or --input-file too.
+```
+
+Any other label is a usage error.
+
+## Seeing Labels
+
+`run show`, `invocation show`, `benchmark show`, `benchmark case-show`,
+`benchmark execution-show` and `experiment show` name a label that is not
+internal, as `Sensitivity:`, after the ID they show:
+
+```text
+Run ID: <RUN_ID>
+Sensitivity: restricted
+```
+
+A run's label is the most sensitive of its input's and its parent run's; a
+benchmark's, the most sensitive of its cases'. Internal data shows as it
+always did, with no line.
+
+A command whose output holds a restricted run's, invocation's or
+benchmark's data warns of it on standard error, after the output, in every
+output format: `workflow run`, `workflow invoke`, `run resume`, `invocation
+resume`, `job run`, `run show`, `invocation show`, `benchmark case-show` and
+`benchmark export`:
+
+```text
+Run <RUN_ID> is restricted; its output contains restricted data.
+Invocation <INVOCATION_ID> is restricted; its output contains restricted data.
+Benchmark <BENCHMARK_ID> is restricted; its output contains restricted data.
+Benchmark case <CASE_ID> is restricted; its output contains restricted data.
+```
+
+Nothing is redacted, in 1.4: the warning says what the operator now holds.
+A run's span names its label as `azathoth.sensitivity`, so a collector can
+route or drop restricted runs' traces.
+
+## Where Restricted Input May Go
+
+A context prompt step shows its model the run's input, so a restricted
+run's context prompt is sent only to a model whose portfolio entry is
+declared to neither retain nor train on data; see
+[Declare a Model's Data Policy](#declare-a-models-data-policy). A step that
+may choose among the portfolio's models runs on the first private one it
+may use. A step pinned to one model, or with no private model to choose,
+sends nothing and fails, saying why:
+
+```text
+Step <STEP_ID> sent nothing. <MODEL_IDENTIFIER> cannot receive restricted input: its portfolio entry does not say whether its provider retains data, and does not say whether it trains on data. If its provider neither retains nor trains on data, declare that with `azathoth model policy <MODEL_IDENTIFIER> --no-retention --no-training`; otherwise choose a model that may receive restricted input.
+```
+
+A fixed prompt shows its model only its own text, so its model is chosen
+as for any run.
+
+`workflow invoke` chooses among the production primary and its approved
+substitutes the same way: the first executable one that is private. It
+reads the portfolio as it is when the invocation runs, so a model declared
+private serves the next restricted invocation, without promoting again. A
+queue worker reads the portfolio when it composes its runtime, as it reads
+production state.
+
+A restricted benchmark's cases run as restricted runs do, and its semantic
+judges must be private too. Optimizing against it substitutes only private
+models into its context prompts.
+
+Tools are not judged by labels in 1.4: a tool step receives a restricted
+run's data as any run's (ADR 0123).
 
 # End-to-End From Checked-In Examples
 

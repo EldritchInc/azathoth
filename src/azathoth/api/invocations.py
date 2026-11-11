@@ -19,6 +19,7 @@ from azathoth.api.models import (
     RunStep,
 )
 from azathoth.api.running import step_status
+from azathoth.context import context_sensitivity
 from azathoth.workflows import (
     ProductionInvocation,
     ProductionInvocationFailure,
@@ -95,6 +96,7 @@ class Invocations:
             error=error,
             idempotency_key=invocation.idempotency.key if invocation.idempotency else None,
             input=_input(invocation),
+            sensitivity=context_sensitivity(invocation.initial_context),
             caller_metadata=dict(invocation.caller_metadata),
             run=_run(run_id, run, resumes),
             command=f"azathoth invocation show {invocation.id}",

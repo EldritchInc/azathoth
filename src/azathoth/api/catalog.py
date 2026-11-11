@@ -36,12 +36,14 @@ from azathoth.providers import (
     ModelPortfolioLoader,
     ModelQuery,
     ModelRequirements,
+    PolicyDeclaration,
     PortfolioProvenance,
     ProviderModelCatalogSynchronizer,
     ProviderModelDirectory,
     ProviderModelObserver,
     model_catalog_for_portfolio,
 )
+from azathoth.sensitivity import UNKNOWN_DATA_POLICY, DataPolicy, Sensitivity, may_receive
 from azathoth.workflows import WorkflowProductionModelUsageRole, model_usage_report
 
 DirectoriesAccess = Callable[[], tuple[ProviderModelDirectory, ...]]
@@ -115,8 +117,11 @@ def _summary(
 def _entry(
     entry: ModelPortfolioEntry,
     provenance: PortfolioProvenance | None,
+    declaration: PolicyDeclaration | None,
 ) -> PortfolioEntry:
-    """Return the API's view of one portfolio entry and who added it (ADR 0122).
+    """Return the API's view of one portfolio entry, who added it and who declared its policy.
+
+    See ADR 0122 and ADR 0123.
 
     Raises:
         LookupError: The entry's provenance is not recorded.
@@ -132,8 +137,21 @@ def _entry(
         content_digest=provenance.content_digest,
         author=author_view(provenance.author),
         added_at=provenance.added_at,
+        data_policy=entry.data_policy,
+        receives_restricted=entry.data_policy.private,
+        policy_declared_by=None if declaration is None else author_view(declaration.author),
+        policy_declared_at=None if declaration is None else declaration.declared_at,
         command=_show_command(entry.identifier),
     )
+
+
+def _receives(
+    entry: ModelPortfolioEntry | None,
+    sensitivity: Sensitivity | None,
+) -> bool:
+    """Return whether a portfolio entry's model may receive input with a label (ADR 0123)."""
+
+    return may_receive(None if entry is None else entry.data_policy, sensitivity)
 
 
 def _requirements(
@@ -228,8 +246,14 @@ class Models:
     def matching(
         self,
         requirements: Mapping[str, JsonValue],
+        *,
+        sensitivity: Sensitivity | None = None,
     ) -> tuple[ModelSummary, ...]:
         """Return the portfolio's models that meet a step's model requirements (ADR 0121).
+
+        With `sensitivity`, only the models that may receive input so
+        labelled match: for restricted input, those declared to neither
+        retain nor train on data (ADR 0123).
 
         The requirements are a step's `requirements`, as its document holds
         them; one left out is its default, so a step reads and writes text
@@ -247,14 +271,16 @@ class Models:
 
         parsed = _requirements(requirements)
         repositories = self._repositories()
+        portfolio = ModelPortfolioLoader(repositories.portfolio).load_portfolio()
         catalog = model_catalog_for_portfolio(
             catalog=discover(repositories, self._directories()),
-            portfolio=ModelPortfolioLoader(repositories.portfolio).load_portfolio(),
+            portfolio=portfolio,
         )
 
         return tuple(
             _summary(model, authorized=True)
             for model in catalog.find(ModelQuery.from_requirements(parsed))
+            if _receives(portfolio.get(model.identifier), sensitivity)
         )
 
 
@@ -290,14 +316,25 @@ class Portfolio:
         portfolio = self._repositories().portfolio
 
         return tuple(
-            _entry(entry, portfolio.provenance(entry.identifier)) for entry in portfolio.entries()
+            _entry(
+                entry,
+                portfolio.provenance(entry.identifier),
+                portfolio.policy_declaration(entry.identifier),
+            )
+            for entry in portfolio.entries()
         )
 
     def add(
         self,
         identifier: str,
+        *,
+        data_policy: DataPolicy = UNKNOWN_DATA_POLICY,
     ) -> PortfolioEntry:
         """Authorize one model a configured provider serves now.
+
+        `data_policy` declares what its provider does with data it is sent,
+        as `azathoth model authorize --no-retention --no-training` does;
+        unknown unless declared (ADR 0123).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -318,11 +355,49 @@ class Portfolio:
         if repositories.portfolio.get(identifier) is not None:
             raise ConflictError(f"Model {identifier!r} is already authorized.")
 
-        entry = ModelPortfolioEntry(provider=model.provider, model=model.model)
+        entry = ModelPortfolioEntry(
+            provider=model.provider,
+            model=model.model,
+            data_policy=data_policy,
+        )
 
         repositories.portfolio.save(entry, author=self._author())
 
-        return _entry(entry, repositories.portfolio.provenance(entry.identifier))
+        return _entry(
+            entry,
+            repositories.portfolio.provenance(entry.identifier),
+            repositories.portfolio.policy_declaration(entry.identifier),
+        )
+
+    def set_data_policy(
+        self,
+        identifier: str,
+        data_policy: DataPolicy,
+    ) -> PortfolioEntry:
+        """Declare what one authorized model's provider does with data (ADR 0123).
+
+        The policy replaces the one declared, as `azathoth model policy`
+        does. Only a model declared to neither retain nor train on data may
+        be sent restricted input. The entry keeps its place and provenance,
+        and no provider is asked. Who declares it, as the author the
+        instance records, and when, are recorded.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: It is not authorized.
+            InvalidAuthorError: Who is declaring it could not be told.
+        """
+
+        portfolio = self._repositories().portfolio
+
+        if portfolio.get(identifier) is None:
+            raise NotFoundError(f"Model {identifier!r} is not authorized.")
+
+        entry = portfolio.set_data_policy(identifier, data_policy, author=self._author())
+
+        return _entry(
+            entry, portfolio.provenance(identifier), portfolio.policy_declaration(identifier)
+        )
 
     def remove(
         self,

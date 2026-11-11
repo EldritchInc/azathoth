@@ -23,6 +23,7 @@ from azathoth.cli.reporting import (
 )
 from azathoth.cli.step_output import JsonLinesOutputWriter
 from azathoth.cli.tracing import run_traced
+from azathoth.context import context_sensitivity
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.telemetry import Telemetry
 from azathoth.telemetry.invocations import traced_invocation
@@ -162,6 +163,7 @@ async def resume_configured_workflow(
         tool_resolver=runtime.tool_resolver,
         tool_implementation_resolver=runtime.tool_implementation_resolver,
         revision=started.workflow_revision,
+        sensitivity=context_sensitivity(started.initial_context),
     )
 
     run = await runner.resume(candidate, run_id=run_id)
@@ -292,6 +294,7 @@ def _resume_invocation(
                     current_state=runtime.production_state(invocation.workflow_id),
                     catalog=runtime.models,
                     registry=runtime.language_models,
+                    portfolio=runtime.portfolio,
                     runner=tracing_runner(
                         telemetry,
                         observer=step_observer(output, writer),
@@ -319,6 +322,7 @@ def _resume_invocation(
         result,
         output=output,
         writer=writer,
+        sensitivity=context_sensitivity(invocation.initial_context),
     )
 
 

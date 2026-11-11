@@ -27,3 +27,9 @@ class PromptOutputFormatError(PromptingError):
 
 class ModelBindingMismatchError(PromptingError):
     """Raised when a model response conflicts with its configured binding."""
+
+
+class RestrictedInputRefusedError(PromptingError):
+    """Raised when a step of a restricted run would send its prompt to a model that may not
+    receive restricted input (ADR 0123). Nothing is sent.
+    """

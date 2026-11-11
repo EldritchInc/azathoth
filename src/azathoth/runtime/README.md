@@ -855,6 +855,22 @@ Judge model <MODEL_IDENTIFIER> is not currently available.
 Commands request semantic judging only when a benchmark actually has semantic
 cases.
 
+A judge is sent what each semantic case's run returned, so
+`outcome_evaluator(semantic=True, sensitivity=...)` also requires every judge
+to be allowed to receive that label (ADR 0123). Benchmark, comparison and
+optimization commands pass the most sensitive label of the benchmark's
+semantic cases, `judged_sensitivity(dataset)`; for a restricted one, a judge
+whose portfolio entry is not declared private is refused before any case
+runs:
+
+```text
+Judge model <MODEL_IDENTIFIER> cannot receive restricted input: its portfolio entry does not say whether its provider retains data, and does not say whether it trains on data. If its provider neither retains nor trains on data, declare that with `azathoth model policy <MODEL_IDENTIFIER> --no-retention --no-training`; otherwise choose a model that may receive restricted input.
+```
+
+`generate_workflow_candidate(workflow_id, sensitivity=...)` generates for
+runs so labelled: a context prompt step of a restricted run runs on the
+first model it may use that may receive restricted input, if it has one.
+
 ## Runtime Errors
 
 Runtime-specific failures derive from `AzathothRuntimeError`.

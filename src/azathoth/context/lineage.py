@@ -18,9 +18,24 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    model_serializer,
+)
 
 from azathoth.context.models import Context, ContextEvent
+from azathoth.context.sensitivity import input_sensitivities
+from azathoth.sensitivity import (
+    Sensitivity,
+    effective_sensitivity,
+    most_sensitive,
+    stored_sensitivity,
+)
 
 LINEAGE_EVENT_TYPE = "workflow.lineage.received"
 """The event type of a child run's lineage in its initial context."""
@@ -59,8 +74,36 @@ class LineageStep(LineageRun):
     attempt: int = Field(ge=1)
 
 
-class WorkflowLineage(BaseModel):
-    """The lineage a child run records: its depth, its parent step and its root run."""
+class _LabelledLineage(BaseModel):
+    """Lineage that may carry the label of the run it came from (ADR 0123).
+
+    An internal run's lineage carries none, and dumps exactly as it did
+    before lineage carried labels.
+    """
+
+    sensitivity: Sensitivity | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_internal_sensitivity(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, JsonValue]:
+        """Leave out a label the lineage does not carry."""
+
+        data: dict[str, JsonValue] = handler(self)
+
+        if self.sensitivity is None:
+            data.pop("sensitivity", None)
+
+        return data
+
+
+class WorkflowLineage(_LabelledLineage):
+    """The lineage a child run records: its depth, its parent step and its root run.
+
+    It carries its parent run's label when that run is not internal, so a
+    child is never less sensitive than the run that started it (ADR 0123).
+    """
 
     model_config = ConfigDict(
         frozen=True,
@@ -72,12 +115,13 @@ class WorkflowLineage(BaseModel):
     root: LineageRun
 
 
-class StepLineage(BaseModel):
+class StepLineage(_LabelledLineage):
     """What a running step tells a child about itself.
 
     `step` is the step's attempt, `depth` the depth of the run it belongs to,
     and `root` that run's root. A child run records them as its lineage, one
-    level deeper.
+    level deeper. `sensitivity` is the label of the run the step belongs to,
+    when it is not internal (ADR 0123).
     """
 
     model_config = ConfigDict(
@@ -113,6 +157,7 @@ def child_lineage(
         depth=depth,
         parent=step.step,
         root=step.root,
+        sensitivity=step.sensitivity,
     )
 
 
@@ -158,7 +203,10 @@ def lineage_of(
 
 
 class RunLineage(BaseModel):
-    """One run's place in its lineage: the run, its depth and its root."""
+    """One run's place in its lineage: the run, its depth, its root, and its label.
+
+    `sensitivity` is the run's label, or None for an internal run (ADR 0123).
+    """
 
     model_config = ConfigDict(
         frozen=True,
@@ -168,6 +216,7 @@ class RunLineage(BaseModel):
     run: LineageRun
     depth: int = Field(ge=0)
     root: LineageRun
+    sensitivity: Sensitivity | None = None
 
     def step(
         self,
@@ -186,7 +235,29 @@ class RunLineage(BaseModel):
             ),
             depth=self.depth,
             root=self.root,
+            sensitivity=self.sensitivity,
         )
+
+
+def context_sensitivity(
+    context: Context,
+) -> Sensitivity:
+    """Return the label of a run started with this initial context (ADR 0123).
+
+    It is the most sensitive of the labels its input was given and, for a
+    child, its parent's label, which lineage carries only when it is not
+    internal. A root run labelled by nothing is internal, and one whose
+    input was labelled public is public.
+
+    Raises:
+        LineageError: The context's lineage is not valid lineage.
+        ValueError: A sensitivity event holds no label Azathoth knows.
+    """
+
+    lineage = lineage_of(context)
+    parent = () if lineage is None else (effective_sensitivity(lineage.sensitivity),)
+
+    return most_sensitive((*input_sensitivities(context), *parent))
 
 
 def run_lineage(
@@ -198,9 +269,12 @@ def run_lineage(
     """Return the lineage of one run started with this initial context.
 
     A root run, whose context records no lineage, is its own root at depth 0.
+    The run's label is `context_sensitivity`'s, kept only when the run is not
+    internal (ADR 0123).
 
     Raises:
         LineageError: The context's lineage is not valid lineage.
+        ValueError: A sensitivity event holds no label Azathoth knows.
     """
 
     run = LineageRun(
@@ -209,11 +283,18 @@ def run_lineage(
     )
 
     lineage = lineage_of(context)
+    label = context_sensitivity(context)
+    sensitivity = stored_sensitivity(label)
 
     if lineage is None:
-        return RunLineage(run=run, depth=0, root=run)
+        return RunLineage(run=run, depth=0, root=run, sensitivity=sensitivity)
 
-    return RunLineage(run=run, depth=lineage.depth, root=lineage.root)
+    return RunLineage(
+        run=run,
+        depth=lineage.depth,
+        root=lineage.root,
+        sensitivity=sensitivity,
+    )
 
 
 def encode_step_lineage(
@@ -294,6 +375,7 @@ __all__ = [
     "WorkflowLineage",
     "active_step_lineage",
     "child_lineage",
+    "context_sensitivity",
     "create_lineage_event",
     "decode_step_lineage",
     "encode_step_lineage",

@@ -33,6 +33,7 @@ from azathoth.prompting.exceptions import (
     PromptBindingInputNotFoundError,
     PromptingError,
     PromptOutputFormatError,
+    RestrictedInputRefusedError,
 )
 from azathoth.prompting.model_selection import (
     FixedModelSelection,
@@ -77,6 +78,7 @@ __all__ = [
     "PromptInputBinding",
     "PromptOutputFormat",
     "PromptOutputFormatError",
+    "RestrictedInputRefusedError",
     "PromptSpecification",
     "PromptStrategy",
     "PromptStrategySpec",

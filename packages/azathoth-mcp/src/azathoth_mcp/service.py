@@ -17,8 +17,12 @@ the same key resumes.
 
 Every refusal raises an error whose message is written for the model that
 made the call: an unknown tool, a missing scope, arguments that are not
-valid, a workflow that is no longer active, or an invocation that cannot be
-read.
+valid, a workflow that is no longer active, an invocation that cannot be
+read, or a restricted invocation of a tool not exposed for restricted data.
+
+A tool's calls carry the label its exposure gives it (ADR 0123). Restricted
+data reaches a client only through a tool the operator exposed as
+restricted.
 """
 
 import asyncio
@@ -68,6 +72,15 @@ class InvocationNotFoundError(LookupError):
     An invocation that does not exist, one of a workflow that is not exposed,
     and one another caller made are refused alike, so a caller learns nothing
     about invocations it may not read.
+    """
+
+
+class RestrictedInvocationError(PermissionError):
+    """Raised when `get_invocation` names a restricted invocation of a tool not exposed for it.
+
+    The operator declares that a tool's client may hold restricted data by
+    exposing it with `"sensitivity": "restricted"` (ADR 0123); until then the
+    server returns no restricted invocation through it.
     """
 
 
@@ -182,6 +195,7 @@ class ToolService:
             self._instance.runs.invoke,
             exposed.workflow_id,
             input=payload,
+            sensitivity=exposed.sensitivity,
             idempotency_key=key,
             caller_metadata=caller.caller_metadata(tool),
             on_event=progress.observe if progress is not None else None,
@@ -216,6 +230,8 @@ class ToolService:
             ToolAccessError: The caller's token lacks `azathoth:read`.
             ToolArgumentsError: The arguments do not name an invocation ID.
             InvocationNotFoundError: The caller may not read the invocation.
+            RestrictedInvocationError: The invocation is restricted, and its
+                tool is not exposed for restricted data.
         """
 
         if not caller.reads_every_invocation:
@@ -234,7 +250,18 @@ class ToolService:
         ):
             raise missing
 
-        return invocation_evidence(detail, tool=self._tool_name(detail.workflow_id))
+        tool = self._tool_name(detail.workflow_id)
+
+        if detail.sensitivity is api.Sensitivity.RESTRICTED and (
+            self._catalog.exposed(tool).sensitivity is not api.Sensitivity.RESTRICTED
+        ):
+            raise RestrictedInvocationError(
+                f"Invocation {invocation_id} is restricted, and the tool {tool!r} is not exposed "
+                "for restricted data, so its result is not returned. If this client may hold "
+                'restricted data, the operator exposes the tool with "sensitivity": "restricted".'
+            )
+
+        return invocation_evidence(detail, tool=tool)
 
     def _arguments(
         self,
@@ -347,6 +374,7 @@ __all__ = [
     "GENERATED_KEY_PREFIX",
     "INLINE_ONLY_POLICY",
     "InvocationNotFoundError",
+    "RestrictedInvocationError",
     "ToolArgumentsError",
     "ToolOutcome",
     "ToolService",

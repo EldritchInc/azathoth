@@ -37,6 +37,9 @@ RUN_EXECUTED_STEPS: Final = "azathoth.run.steps.executed"
 RUN_FAILED_STEPS: Final = "azathoth.run.steps.failed"
 RUN_SKIPPED_STEPS: Final = "azathoth.run.steps.skipped"
 
+SENSITIVITY: Final = "azathoth.sensitivity"
+"""The label of a run's input: public, internal or restricted (ADR 0123)."""
+
 STEP_ID: Final = "azathoth.step.id"
 STEP_STATUS: Final = "azathoth.step.status"
 STEP_ATTEMPTS: Final = "azathoth.step.attempts"
@@ -69,6 +72,7 @@ ATTRIBUTE_KEYS: Final = frozenset(
         RUN_EXECUTED_STEPS,
         RUN_FAILED_STEPS,
         RUN_SKIPPED_STEPS,
+        SENSITIVITY,
         STEP_ID,
         STEP_STATUS,
         STEP_ATTEMPTS,

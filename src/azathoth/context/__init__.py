@@ -13,6 +13,7 @@ from azathoth.context.lineage import (
     WorkflowLineage,
     active_step_lineage,
     child_lineage,
+    context_sensitivity,
     create_lineage_event,
     decode_step_lineage,
     encode_step_lineage,
@@ -21,11 +22,19 @@ from azathoth.context.lineage import (
     running_step,
 )
 from azathoth.context.models import Context, ContextEvent
+from azathoth.context.sensitivity import (
+    INPUT_SENSITIVITY_EVENT_TYPE,
+    SENSITIVITY_PAYLOAD_KEY,
+    create_input_sensitivity_event,
+    input_sensitivities,
+)
 
 __all__ = [
+    "INPUT_SENSITIVITY_EVENT_TYPE",
     "LINEAGE_EVENT_TYPE",
     "LINEAGE_PRODUCER",
     "MAX_WORKFLOW_DEPTH",
+    "SENSITIVITY_PAYLOAD_KEY",
     "Context",
     "ContextEvent",
     "LineageError",
@@ -37,9 +46,12 @@ __all__ = [
     "WorkflowLineage",
     "active_step_lineage",
     "child_lineage",
+    "context_sensitivity",
+    "create_input_sensitivity_event",
     "create_lineage_event",
     "decode_step_lineage",
     "encode_step_lineage",
+    "input_sensitivities",
     "lineage_of",
     "run_lineage",
     "running_step",

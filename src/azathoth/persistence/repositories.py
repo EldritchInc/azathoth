@@ -32,6 +32,7 @@ from azathoth.persistence.location import (
 from azathoth.persistence.postgres import PostgresDatabase
 from azathoth.persistence.sqlite import SQLiteDatabase
 from azathoth.providers import (
+    MODEL_PORTFOLIO_POLICY_TABLES,
     MODEL_PORTFOLIO_PROVENANCE_TABLES,
     MODEL_PORTFOLIO_TABLES,
     MODEL_TABLES,
@@ -128,6 +129,7 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *RUN_PROGRESS_TABLES,
     *REVISION_LINEAGE_TABLES,
     *MODEL_PORTFOLIO_PROVENANCE_TABLES,
+    *MODEL_PORTFOLIO_POLICY_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 
