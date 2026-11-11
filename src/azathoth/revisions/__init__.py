@@ -11,6 +11,7 @@ from azathoth.revisions.author import (
 from azathoth.revisions.digest import (
     CONTENT_DIGEST_PATTERN,
     content_digest,
+    json_digest,
 )
 from azathoth.revisions.lineage import (
     REVISION_DIGEST_FORMAT,
@@ -67,6 +68,7 @@ __all__ = [
     "base_record",
     "child_record",
     "content_digest",
+    "json_digest",
     "lineage_record",
     "lineage_records",
     "record_lineage",

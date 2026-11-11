@@ -3,9 +3,32 @@
 import hashlib
 import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 CONTENT_DIGEST_PATTERN = r"^[0-9a-f]{64}$"
+
+
+def json_digest(
+    value: JsonValue,
+) -> str:
+    """Return the sha256 hex digest of one JSON value's canonical form.
+
+    The canonical form has sorted keys and no insignificant whitespace, and
+    is encoded as UTF-8. A document's content digest is the JSON digest of
+    its dump, so a document received as JSON is checked against its content
+    digest without the model that made it (ADR 0124).
+    """
+
+    canonical = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+    return hashlib.sha256(
+        canonical.encode("utf-8"),
+    ).hexdigest()
 
 
 def content_digest(
@@ -24,15 +47,8 @@ def content_digest(
     recomputed and checked.
     """
 
-    canonical = json.dumps(
+    return json_digest(
         document.model_dump(
             mode="json",
         ),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
     )
-
-    return hashlib.sha256(
-        canonical.encode("utf-8"),
-    ).hexdigest()

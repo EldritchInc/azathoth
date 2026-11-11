@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from azathoth.revisions import (
     CONTENT_DIGEST_PATTERN,
     content_digest,
+    json_digest,
 )
 
 
@@ -92,3 +93,13 @@ def test_digest_matches_the_published_pattern() -> None:
             )
         ),
     )
+
+
+def test_a_json_values_digest_is_its_documents_content_digest() -> None:
+    document = Document(
+        name="alpha",
+        settings={"b": 2, "a": 1},
+    )
+
+    assert json_digest({"settings": {"a": 1, "b": 2}, "name": "alpha"}) == PINNED_DIGEST
+    assert json_digest(document.model_dump(mode="json")) == content_digest(document)
