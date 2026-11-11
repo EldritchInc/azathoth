@@ -100,6 +100,18 @@ from azathoth.cli.parsing.models import (
     MODEL_USAGE_ACTION,
     add_model_parser,
 )
+from azathoth.cli.parsing.remote import (
+    REMOTE_ACTION_ATTRIBUTE,
+    REMOTE_COMMAND,
+    REMOTE_TOKEN_ACTION,
+    REMOTE_TOKEN_ACTION_ATTRIBUTE,
+    REMOTE_TOKEN_ALL_ATTRIBUTE,
+    REMOTE_TOKEN_CREATE_ACTION,
+    REMOTE_TOKEN_LIST_ACTION,
+    REMOTE_TOKEN_NAME_ATTRIBUTE,
+    REMOTE_TOKEN_REVOKE_ACTION,
+    add_remote_parser,
+)
 from azathoth.cli.parsing.runs import (
     RUN_ACTION_ATTRIBUTE,
     RUN_ANNOTATIONS_ACTION,
@@ -234,6 +246,8 @@ def build_parser() -> ArgumentParser:
 
     add_judge_parser(commands)
 
+    add_remote_parser(commands)
+
     add_tool_parser(commands)
 
     add_benchmark_parser(commands)
@@ -321,6 +335,15 @@ __all__ = [
     "MODEL_SHOW_ACTION",
     "MODEL_TRAINS_ON_DATA_ATTRIBUTE",
     "MODEL_USAGE_ACTION",
+    "REMOTE_ACTION_ATTRIBUTE",
+    "REMOTE_COMMAND",
+    "REMOTE_TOKEN_ACTION",
+    "REMOTE_TOKEN_ACTION_ATTRIBUTE",
+    "REMOTE_TOKEN_ALL_ATTRIBUTE",
+    "REMOTE_TOKEN_CREATE_ACTION",
+    "REMOTE_TOKEN_LIST_ACTION",
+    "REMOTE_TOKEN_NAME_ATTRIBUTE",
+    "REMOTE_TOKEN_REVOKE_ACTION",
     "RUN_ACTION_ATTRIBUTE",
     "RUN_ANNOTATIONS_ACTION",
     "RUN_CHILDREN_ACTION",
@@ -402,6 +425,7 @@ __all__ = [
     "add_init_parser",
     "add_invocation_parser",
     "add_judge_parser",
+    "add_remote_parser",
     "build_parser",
     "WORKER_ACTION_ATTRIBUTE",
     "WORKER_ALLOW_INPUT_BUCKET_ATTRIBUTE",

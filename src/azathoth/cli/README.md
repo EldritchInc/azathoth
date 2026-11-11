@@ -150,6 +150,13 @@ azathoth
 │   ├── list
 │   └── remove <MODEL_IDENTIFIER>
 │
+├── remote
+│   └── token
+│       ├── create <NAME>
+│       ├── list
+│       │   └── --all
+│       └── revoke <NAME>
+│
 ├── tool
 │   ├── import <FILE>
 │   ├── install-standard
@@ -410,14 +417,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 5; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 5)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -3569,6 +3576,59 @@ command B
 
 Durable portfolio authorization and durable workflow intent remain separate
 from that changing provider state.
+
+# Remote Tokens
+
+A remote is reached with a bearer token its owner issues (ADR 0124).
+`remote token create` issues one under a name, records who created it and
+when, and shows it once:
+
+```bash
+azathoth remote token create <NAME>
+```
+
+```text
+Created remote token <NAME>.
+Token: azr_<SECRET>
+Keep the token now: this remote keeps only its digest, and cannot show it again.
+```
+
+The database keeps only the token's sha256 digest, so a database that leaks
+holds no token that works, and a token that is lost is revoked and created
+again. A name is 1 to 64 letters, digits, `.`, `_` or `-`, and names one
+active token:
+
+```text
+A remote token named '<NAME>' already exists; revoke it first, or choose another name.
+Remote token name '<NAME>' is not one: use 1 to 64 letters, digits, '.', '_' or '-'.
+```
+
+`remote token list` lists the active tokens, oldest first, one per line:
+each one's name, when it was created, and who created it. `--all` lists
+revoked tokens too, each with when it was revoked:
+
+```text
+<NAME>  <CREATED_AT>  by <AUTHOR>
+<NAME>  <CREATED_AT>  by <AUTHOR>  revoked <REVOKED_AT>
+```
+
+`remote token revoke` revokes the active token of a name, so it no longer
+reaches the remote. The revoked token stays listed under `--all`, and its
+name may be given to a new token:
+
+```bash
+azathoth remote token revoke <NAME>
+```
+
+```text
+Revoked remote token <NAME>.
+No remote token is named '<NAME>'.
+```
+
+Tokens are durable state of the database a remote serves, so these
+commands never load the runtime and need no provider credentials. With the
+core's policy, every token is its owner's: whoever holds one may do
+anything on the remote the owner may.
 
 # Tool Commands
 

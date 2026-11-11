@@ -119,3 +119,17 @@ Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one o
 Remote plugin <PLUGIN> names the seam '<NAME>'; a remote's seams are auth, policy and audit.
 Remote plugin <PLUGIN> gave the <SEAM> seam an instance of <TYPE>, which is not <KIND>.
 ```
+
+## Tokens
+
+The core's `TokenAuthenticator` reads the tokens a remote's owner issues
+with `azathoth remote token create`. A token is `azr_` and 256 random bits,
+shown once; the remote keeps only its `token_digest`, in `remote_tokens`
+(schema version 5), so a database that leaks holds no token that works.
+A request carries one as `Authorization: Bearer <TOKEN>`, and an active
+token names its owner, as the token's name. A revoked token is kept, with
+when it was revoked, and names no one.
+
+`SqlRemoteTokenRepository` keeps tokens in either database, and
+`SQLiteRemoteTokenRepository` in an SQLite file; `Repositories.remote_tokens`
+opens the one a database needs.
