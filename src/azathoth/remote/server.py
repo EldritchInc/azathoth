@@ -39,6 +39,7 @@ from azathoth.remote.closure import lineage_records
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
     MAX_PUSH_BYTES,
+    SENSITIVITY_HEADER,
     ProtocolMismatchError,
     require_protocol,
 )
@@ -56,9 +57,6 @@ from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
 from azathoth.tools import ToolRepository
 from azathoth.workflows import WorkflowRepository
-
-SENSITIVITY_HEADER: Final = "X-Azathoth-Sensitivity"
-"""The header a content upload names its label in; internal when absent."""
 
 CONTENT_MEDIA_TYPE: Final = "application/octet-stream"
 """The media type content is served as; its handle names its own."""
@@ -555,7 +553,6 @@ def _sensitivity(
 __all__ = [
     "CONTENT_MEDIA_TYPE",
     "DIGEST_PATTERN",
-    "SENSITIVITY_HEADER",
     "UNKNOWN_TOKEN_MESSAGE",
     "RemoteServer",
     "error_response",

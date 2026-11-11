@@ -6,7 +6,10 @@ no runtime is loaded, and no provider credentials are needed.
 """
 
 import sys
+from collections.abc import Sequence
+from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.service import current_author
@@ -149,6 +152,123 @@ def serve_remote(
     return 0
 
 
+def tool_versions(
+    named: Sequence[str],
+) -> tuple[tuple[UUID, str], ...]:
+    """Return the tool versions named as `TOOL_ID@VERSION`.
+
+    Raises:
+        ValueError: One is not a tool ID and a version.
+    """
+
+    versions: list[tuple[UUID, str]] = []
+
+    for value in named:
+        tool_id, separator, version = value.partition("@")
+
+        try:
+            parsed = UUID(tool_id)
+        except ValueError:
+            parsed = None
+
+        if parsed is None or not separator or not version:
+            raise ValueError(f"Tool {value!r} is not <TOOL_ID>@<VERSION>.")
+
+        versions.append((parsed, version))
+
+    return tuple(versions)
+
+
+def _remote(
+    url: str,
+) -> api.Remote:
+    """Return the remote at a URL, over the configured database's repositories.
+
+    Raises:
+        InvalidArgumentError: The URL is not one, or no token is set.
+    """
+
+    held = repositories(CliRuntimeConfiguration.from_environment())
+
+    return api.Remote(url, lambda: held)
+
+
+def push_to_remote(
+    *,
+    url: str,
+    workflows: Sequence[UUID] = (),
+    tools: Sequence[str] = (),
+    benchmarks: Sequence[UUID] = (),
+) -> int:
+    """Push the documents named, with what they need, to the remote at a URL."""
+
+    try:
+        report = _remote(url).push(
+            workflows=workflows,
+            tools=tool_versions(tools),
+            benchmarks=benchmarks,
+        )
+    except (api.ApiError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(
+        f"Pushed to {report.remote}. Revisions received: {len(report.received)}. Revisions "
+        f"already held: {report.already_held}. Content sent: {report.content_sent}."
+    )
+
+    for saved in report.received:
+        print(f"Received {saved.lineage} as revision {saved.number}.")
+
+    for unresolved in report.unresolved:
+        print(f"Not gathered: {unresolved}")
+
+    return 0
+
+
+def pull_from_remote(
+    *,
+    url: str,
+    workflows: Sequence[UUID] = (),
+    tools: Sequence[str] = (),
+    benchmarks: Sequence[UUID] = (),
+    include_restricted: bool = False,
+) -> int:
+    """Pull the documents named, with what they need, from the remote at a URL."""
+
+    try:
+        report = _remote(url).pull(
+            workflows=workflows,
+            tools=tool_versions(tools),
+            benchmarks=benchmarks,
+            include_restricted=include_restricted,
+        )
+    except (api.ApiError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(
+        f"Pulled from {report.remote}. Revisions saved: {len(report.received)}. Revisions "
+        f"already held: {report.already_held}. Content fetched: {report.content_fetched}."
+    )
+
+    for saved in report.received:
+        print(f"Saved {saved.lineage} as revision {saved.number}.")
+
+    for lineage in report.forked:
+        print(f"Forked {lineage}: its pulled revisions build on an earlier revision here.")
+
+    for lineage in report.withheld:
+        print(f"Withheld {lineage}: it is restricted; pull it with --include-restricted.")
+
+    for unresolved in report.unresolved:
+        print(f"Not gathered at the remote: {unresolved}")
+
+    return 0
+
+
 def token_line(
     token: RemoteToken,
 ) -> str:
@@ -164,8 +284,11 @@ __all__ = [
     "TOKEN_SHOWN_ONCE_NOTE",
     "create_remote_token",
     "list_remote_tokens",
+    "pull_from_remote",
+    "push_to_remote",
     "revoke_remote_token",
     "serve_remote",
     "serving_line",
     "token_line",
+    "tool_versions",
 ]

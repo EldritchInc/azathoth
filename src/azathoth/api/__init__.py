@@ -33,6 +33,10 @@ from azathoth.api.errors import (
     NotFoundError,
     ProviderConfigurationError,
     ProviderUnavailableError,
+    RemoteDivergedError,
+    RemoteProtocolError,
+    RemoteRefusedError,
+    RemoteUnreachableError,
     RevisionNotFoundError,
     RunCancelledError,
     RunNotStartedError,
@@ -101,6 +105,7 @@ from azathoth.api.providers import (
     OPENROUTER_API_KEY_VARIABLE,
     ProviderSettings,
 )
+from azathoth.api.remote import Remote
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
     MAX_INPUT_FILE_BYTES,
@@ -109,6 +114,7 @@ from azathoth.api.running import (
     EventCallback,
     Runs,
 )
+from azathoth.remote import Capabilities, PullReport, PushReport
 from azathoth.sensitivity import DataPolicy, PolicyAnswer, Sensitivity
 
 __all__ = [
@@ -133,9 +139,10 @@ __all__ = [
     "BenchmarkSummary",
     "Benchmarks",
     "CancellationToken",
-    "DataPolicy",
+    "Capabilities",
     "ConflictError",
     "ContextChanged",
+    "DataPolicy",
     "Document",
     "DocumentProblem",
     "EventCallback",
@@ -158,8 +165,8 @@ __all__ = [
     "ModelSummary",
     "Models",
     "NotFoundError",
-    "Portfolio",
     "PolicyAnswer",
+    "Portfolio",
     "PortfolioEntry",
     "PortfolioRemoval",
     "ProductionDependent",
@@ -167,6 +174,13 @@ __all__ = [
     "ProviderConfigurationError",
     "ProviderSettings",
     "ProviderUnavailableError",
+    "PullReport",
+    "PushReport",
+    "Remote",
+    "RemoteDivergedError",
+    "RemoteProtocolError",
+    "RemoteRefusedError",
+    "RemoteUnreachableError",
     "Revision",
     "RevisionNotFoundError",
     "RunCancelledError",

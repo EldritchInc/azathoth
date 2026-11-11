@@ -93,14 +93,12 @@ def received_by(
     accepts_restricted: bool = False,
     fork: bool = False,
 ) -> ReceiveReport:
-    content = getattr(target, "content", InMemoryContentStore())
-
     return receive(
         sent,
         workflows=target.workflows,
         tools=target.tools,
         benchmarks=target.benchmarks,
-        content=content,
+        content=target.content,
         accepts_restricted=accepts_restricted,
         fork=fork,
     )

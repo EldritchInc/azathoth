@@ -17,14 +17,18 @@ from azathoth.remote import (
     PushBundle,
     ReceiveRefusedError,
     RemotePluginError,
+    RemoteUnreachableError,
     RevisionRecord,
     receive_content,
     require_protocol,
+    require_remote_url,
 )
 from azathoth.remote.server import UNKNOWN_TOKEN_MESSAGE
 from azathoth.revisions import Lineage, RevisionKind, content_digest, json_digest, revision_digest
 from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import WorkflowSpecification
+from tests.remote.test_client import URL as CLIENT_URL
+from tests.remote.test_client import answering
 from tests.remote.test_closure import (
     BENCHMARK,
     BENCHMARK_ID,
@@ -311,3 +315,34 @@ def counting_child() -> RevisionRecord:
 
 def test_the_servers_refusal_of_unknown_tokens_is_documented() -> None:
     documented(UNKNOWN_TOKEN_MESSAGE)
+
+
+def test_the_client_refusals_are_documented() -> None:
+    unreachable = answering(502, b"<html>Bad gateway</html>")
+    other = answering(200, b'{"status": "ok"}')
+    url = CLIENT_URL
+    messages: list[str] = []
+
+    for asking in (unreachable.capabilities, other.capabilities):
+        with pytest.raises(RemoteUnreachableError) as caught:
+            asking()
+
+        messages.append(
+            str(caught.value)
+            .replace(url, "<URL>")
+            .replace("502", "<STATUS>")
+            .replace("Capabilities", "<MODEL>")
+        )
+
+    with pytest.raises(ValueError) as refused:
+        require_remote_url("ftp://example.com")
+
+    messages.append(str(refused.value).replace("ftp://example.com", "<URL>"))
+    messages.append(
+        f"The remote at {url} could not be reached: Connection refused".replace(
+            url, "<URL>"
+        ).replace("Connection refused", "<REASON>")
+    )
+
+    for message in messages:
+        documented(message)

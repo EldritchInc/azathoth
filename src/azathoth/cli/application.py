@@ -88,6 +88,8 @@ from azathoth.cli.production_inspection import (
 from azathoth.cli.remote import (
     create_remote_token,
     list_remote_tokens,
+    pull_from_remote,
+    push_to_remote,
     revoke_remote_token,
     serve_remote,
 )
@@ -368,6 +370,8 @@ def _dispatch(
             list_remote_tokens=list_remote_tokens,
             revoke_remote_token=revoke_remote_token,
             serve_remote=serve_remote,
+            push_to_remote=push_to_remote,
+            pull_from_remote=pull_from_remote,
         )
 
     if command == TOOL_COMMAND:

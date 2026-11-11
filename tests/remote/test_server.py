@@ -7,10 +7,10 @@ import pytest
 from starlette.testclient import TestClient
 
 from azathoth import __version__
-from azathoth.inputs import InMemoryContentStore
 from azathoth.persistence.database import SCHEMA_VERSION
 from azathoth.remote import (
     MAX_CONTENT_BYTES,
+    SENSITIVITY_HEADER,
     Action,
     AuditEvent,
     AuditEventKind,
@@ -27,11 +27,7 @@ from azathoth.remote import (
     TokenAuthenticator,
     restricted_refusal,
 )
-from azathoth.remote.server import (
-    SENSITIVITY_HEADER,
-    UNKNOWN_TOKEN_MESSAGE,
-    RemoteServer,
-)
+from azathoth.remote.server import UNKNOWN_TOKEN_MESSAGE, RemoteServer
 from azathoth.sensitivity import Sensitivity
 from tests.remote.test_closure import (
     BENCHMARK,
@@ -97,7 +93,7 @@ class Remote:
         tokens = SQLiteRemoteTokenRepository(tmp_path / "remote.db")
         self.token = tokens.create("laptop").secret
         self.held = held if held is not None else Bare()
-        self.content = getattr(self.held, "content", InMemoryContentStore())
+        self.content = self.held.content
         self.audit = ListAudit()
         server = RemoteServer(
             workflows=self.held.workflows,

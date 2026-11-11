@@ -1,6 +1,6 @@
 """Opening an Azathoth instance through the service API (ADR 0120)."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import TracebackType
 
@@ -17,6 +17,7 @@ from azathoth.api.errors import (
 from azathoth.api.invocations import Invocations
 from azathoth.api.models import API_STABILITY, InstanceDescription
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
+from azathoth.api.remote import Remote
 from azathoth.api.running import Runs
 from azathoth.inputs import S3ContentLocation, S3ContentStore
 from azathoth.persistence import (
@@ -34,6 +35,7 @@ from azathoth.persistence.repositories import (
     open_repositories,
 )
 from azathoth.providers import LanguageModelRegistry, ModelCatalog, ProviderModelDirectory
+from azathoth.remote import HttpClient
 from azathoth.telemetry import NO_TELEMETRY, Telemetry
 
 
@@ -45,7 +47,8 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models`, `portfolio`, `runs` and `invocations`.
+    `benchmarks`, `models`, `portfolio`, `runs` and `invocations`; `remote`
+    names a remote to push to and pull from.
     """
 
     def __init__(
@@ -172,6 +175,26 @@ class Azathoth:
         """Return the invocations of this instance's promoted workflows."""
 
         return self._invocations
+
+    def remote(
+        self,
+        url: str,
+        *,
+        token: str | None = None,
+        http: Callable[[], HttpClient] | None = None,
+    ) -> Remote:
+        """Return the remote at `url`, to push to and pull from (ADR 0124).
+
+        It is reached with `token`, or the token `AZATHOTH_REMOTE_TOKEN`
+        holds; `http`, when given, makes the HTTP client each call is sent
+        over, as tests do.
+
+        Raises:
+            InvalidArgumentError: The URL is not an http or https URL, or no
+                token is given or set.
+        """
+
+        return Remote(url, self._open_repositories, token=token, http=http)
 
     def describe(
         self,

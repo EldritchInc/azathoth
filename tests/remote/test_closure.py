@@ -13,7 +13,7 @@ from azathoth.evaluation import (
     InMemoryBenchmarkRepository,
     OutcomeComparison,
 )
-from azathoth.inputs import ContentRef
+from azathoth.inputs import ContentRef, ContentStore, InMemoryContentStore
 from azathoth.prompting import FixedModelSelection, PromptStrategySpec
 from azathoth.providers import Prompt
 from azathoth.remote import (
@@ -162,6 +162,7 @@ class Instance:
         self.workflows: WorkflowRepository = InMemoryWorkflowRepository()
         self.tools: ToolRepository = InMemoryToolRepository()
         self.benchmarks: BenchmarkRepository = InMemoryBenchmarkRepository()
+        self.content: ContentStore = InMemoryContentStore()
 
         for identifier, name, version in (
             (COUNT_ID, "word_count", "1.0.0"),

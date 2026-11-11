@@ -212,6 +212,33 @@ asks for, without the revisions the client holds. A benchmark with a
 restricted revision comes only to a pull with `include_restricted`;
 otherwise it is named in `withheld`, and the rest still comes.
 
+## The Client
+
+`RemoteClient(url, token)` speaks the protocol over httpx, and is a
+context manager. Each refusal is a `RemoteError` carrying the remote's own
+message and status: a `RemoteDivergedError` for 409, a
+`RemoteNotFoundError` for 404, and a `RemoteRefusedError` for any other.
+A remote not reached, or one that answers as no remote does, is a
+`RemoteUnreachableError`:
+
+```text
+The remote at <URL> could not be reached: <REASON>
+The remote at <URL> answered <STATUS> without saying why; it may not be an Azathoth remote.
+The remote at <URL> answered with something other than a <MODEL>; it may not be an Azathoth remote, or not of this protocol.
+Remote URL '<URL>' is not an http or https URL.
+```
+
+`push_to(client, roots, ...)` reads the remote's capabilities, and refuses
+another protocol before sending anything. It refuses restricted data a
+remote does not accept before sending any, offers the closure's digests,
+sends the content the remote lacks, then the revisions it lacks, and
+returns a `PushReport`. `pull_from(client, roots, include_restricted=...)`
+asks for the documents, naming the revisions held here, fetches the
+content the bundle holds that is not here, checked against its digest,
+and saves the rest with `receive(..., fork=True)`, returning a
+`PullReport`. The service API's `instance.remote(url)` and `azathoth remote
+push` and `pull` call them.
+
 ## Tokens
 
 The core's `TokenAuthenticator` reads the tokens a remote's owner issues

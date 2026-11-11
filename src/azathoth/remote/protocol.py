@@ -20,6 +20,9 @@ MAX_PUSH_BYTES: Final = 64 * 1024 * 1024
 MAX_CONTENT_BYTES: Final = 10 * 1024 * 1024
 """The largest content blob a push carries or a pull fetches, in bytes."""
 
+SENSITIVITY_HEADER: Final = "X-Azathoth-Sensitivity"
+"""The header a content upload names its label in; internal when absent."""
+
 DEFAULT_HOST: Final = "127.0.0.1"
 """Where `azathoth remote serve` listens unless told otherwise: this machine only."""
 
@@ -117,6 +120,7 @@ __all__ = [
     "MAX_PUSH_BYTES",
     "MISSING_REMOTE_EXTRA_MESSAGE",
     "PROTOCOL_VERSION",
+    "SENSITIVITY_HEADER",
     "Capabilities",
     "ProtocolMismatchError",
     "require_protocol",

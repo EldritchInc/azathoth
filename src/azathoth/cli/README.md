@@ -151,6 +151,15 @@ azathoth
 │   └── remove <MODEL_IDENTIFIER>
 │
 ├── remote
+│   ├── push <URL>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   └── --benchmark <BENCHMARK_ID>
+│   ├── pull <URL>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   ├── --benchmark <BENCHMARK_ID>
+│   │   └── --include-restricted
 │   ├── serve
 │   │   ├── --host <HOST>
 │   │   ├── --port <PORT>
@@ -3616,6 +3625,56 @@ served:
 ```text
 azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
 Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
+```
+
+# Pushing and Pulling
+
+`remote push` sends workflows, tool versions and benchmarks to a remote,
+and `remote pull` brings them back (ADR 0124). Each reads the remote's
+token from `AZATHOTH_REMOTE_TOKEN`, so no command line holds it, and names
+what to send with `--workflow`, `--tool` and `--benchmark`, each given
+again for more:
+
+```bash
+export AZATHOTH_REMOTE_TOKEN=<TOKEN>
+azathoth remote push https://azathoth.example.com --workflow <WORKFLOW_ID>
+azathoth remote pull https://azathoth.example.com --workflow <WORKFLOW_ID>
+```
+
+A push sends each document's latest revision, the revisions it was reached
+by, and what it needs at the remote: the tool versions its tool steps
+match, the child workflows its steps name, and the content its benchmark
+cases hold. It sends only what the remote lacks, and moves the remote only
+forward:
+
+```text
+Pushed to <URL>. Revisions received: <COUNT>. Revisions already held: <COUNT>. Content sent: <COUNT>.
+Received <LINEAGE> as revision <NUMBER>.
+Not gathered: <REASON>
+```
+
+A pull saves what is not held here. A lineage that diverged here is forked
+on the revision the pulled revisions build on, so nothing here is lost. A
+restricted benchmark comes only with `--include-restricted`:
+
+```text
+Pulled from <URL>. Revisions saved: <COUNT>. Revisions already held: <COUNT>. Content fetched: <COUNT>.
+Saved <LINEAGE> as revision <NUMBER>.
+Forked <LINEAGE>: its pulled revisions build on an earlier revision here.
+Withheld <LINEAGE>: it is restricted; pull it with --include-restricted.
+Not gathered at the remote: <REASON>
+```
+
+A push whose lineage diverged at the remote is refused, and is pulled
+first; restricted data is pushed only to a remote that accepts it.
+Production state and the portfolio never travel. Refusals are the
+remote's own, or:
+
+```text
+No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+Name a workflow, tool version or benchmark to send.
+Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.
+The remote at <URL> could not be reached: <REASON>
 ```
 
 # Remote Tokens
