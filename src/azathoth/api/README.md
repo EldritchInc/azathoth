@@ -114,7 +114,7 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
-| `models.matching(requirements, sensitivity=None)` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled. | Yes |
+| `models.matching(requirements, sensitivity=None, scope="portfolio")` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled; with `scope="catalog"`, every served model that meets them, each marked `authorized` or not. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
 | `portfolio.set_data_policy(identifier, data_policy)` | Declares what its provider does with data, as `azathoth model policy` does. | No |
@@ -325,6 +325,14 @@ No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remot
 Name a workflow, tool version or benchmark to send.
 Remote URL '<URL>' is not an http or https URL.
 ```
+
+A pulled workflow's steps may name requirements no model of this
+portfolio meets, since the portfolio never travels.
+`models.matching(step_requirements, scope="catalog")` names every model
+the configured providers serve that meets them, each marked `authorized`
+or not, so an operator can authorize one here; `MatchScope` names the two
+scopes. A model outside the portfolio has no declared data policy, so it
+never matches restricted input.
 
 ## Tracing and Content
 

@@ -14,6 +14,7 @@ from azathoth.api.browsing import (
     Workflows,
 )
 from azathoth.api.catalog import (
+    MatchScope,
     Models,
     Portfolio,
 )
@@ -161,6 +162,7 @@ __all__ = [
     "InvocationOutcome",
     "InvocationRun",
     "Invocations",
+    "MatchScope",
     "ModelInUseError",
     "ModelSummary",
     "Models",
