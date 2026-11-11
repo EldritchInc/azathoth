@@ -1,8 +1,8 @@
 """Remote commands for the Azathoth command-line application (ADR 0124).
 
-Tokens are durable state of the database a remote serves, so these
-commands read and write only that database: no runtime is loaded, and no
-provider credentials are needed.
+A remote serves durable documents, and tokens are durable state of the
+database it serves, so these commands read and write only that database:
+no runtime is loaded, and no provider credentials are needed.
 """
 
 import sys
@@ -10,7 +10,15 @@ import sys
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.service import current_author
-from azathoth.remote import RemoteToken, RemoteTokenError
+from azathoth.remote import (
+    MISSING_REMOTE_EXTRA_MESSAGE,
+    PROTOCOL_VERSION,
+    RemotePluginError,
+    RemoteToken,
+    RemoteTokenError,
+    TokenAuthenticator,
+    load_seams,
+)
 
 TOKEN_SHOWN_ONCE_NOTE = (
     "Keep the token now: this remote keeps only its digest, and cannot show it again."
@@ -79,6 +87,68 @@ def revoke_remote_token(
     return 0
 
 
+def serving_line(
+    url: str,
+    *,
+    accept_restricted: bool,
+) -> str:
+    """Return the line `remote serve` starts with: where, and whether it takes restricted data."""
+
+    restricted = "accepts restricted data" if accept_restricted else "refuses restricted data"
+
+    return f"Serving remote protocol {PROTOCOL_VERSION} at {url}; it {restricted}."
+
+
+def serve_remote(
+    *,
+    host: str,
+    port: int,
+    accept_restricted: bool = False,
+) -> int:
+    """Serve this instance as a remote with uvicorn, until stopped.
+
+    The `remote` extra must be installed, and the plugins installed for the
+    remote's seams must be ones it can use; otherwise nothing is served,
+    and the reason is printed.
+    """
+
+    try:
+        from uvicorn import run as run_uvicorn
+
+        from azathoth.remote.server import RemoteServer
+    except ImportError:
+        print(MISSING_REMOTE_EXTRA_MESSAGE, file=sys.stderr)
+
+        return 1
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    held = repositories(configuration)
+
+    try:
+        seams = load_seams(default_authenticator=TokenAuthenticator(held.remote_tokens))
+    except RemotePluginError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    server = RemoteServer(
+        workflows=held.workflows,
+        tools=held.tools,
+        benchmarks=held.benchmarks,
+        content=held.content,
+        seams=seams,
+        accepts_restricted=accept_restricted,
+    )
+
+    print(
+        serving_line(f"http://{host}:{port}", accept_restricted=accept_restricted),
+        file=sys.stderr,
+    )
+    run_uvicorn(server.app(), host=host, port=port, log_level="info")
+
+    return 0
+
+
 def token_line(
     token: RemoteToken,
 ) -> str:
@@ -95,5 +165,7 @@ __all__ = [
     "create_remote_token",
     "list_remote_tokens",
     "revoke_remote_token",
+    "serve_remote",
+    "serving_line",
     "token_line",
 ]

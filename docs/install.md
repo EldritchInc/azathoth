@@ -477,6 +477,29 @@ describe what it extracts, and
 [Reading Documents and Citing Them](documents.md) walks through dividing a
 PDF and answering from it, citing it.
 
+## Optional: Serving a Remote
+
+Azathoth can serve its workflows, tools and benchmarks to other instances,
+which push to it and pull from it, with `azathoth remote serve` (ADR 0124).
+The server is an optional extra. Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[remote]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[remote]"
+```
+
+Without it, `azathoth remote serve` serves nothing and says so:
+
+```text
+azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
+```
+
+The [CLI Reference](../src/azathoth/cli/README.md#serving-a-remote)
+describes serving, and the tokens that reach a remote.
+
 ## Optional: Calling MCP Tools
 
 A workflow step can call a tool another MCP server serves. Azathoth reaches

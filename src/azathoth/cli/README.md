@@ -151,6 +151,10 @@ azathoth
 │   └── remove <MODEL_IDENTIFIER>
 │
 ├── remote
+│   ├── serve
+│   │   ├── --host <HOST>
+│   │   ├── --port <PORT>
+│   │   └── --accept-restricted
 │   └── token
 │       ├── create <NAME>
 │       ├── list
@@ -3576,6 +3580,43 @@ command B
 
 Durable portfolio authorization and durable workflow intent remain separate
 from that changing provider state.
+
+# Serving a Remote
+
+`remote serve` serves this instance's workflows, tools and benchmarks, so
+other instances push to it and pull from it (ADR 0124). It needs the
+`remote` extra:
+
+```bash
+python -m pip install "azathoth-ai[remote]"
+azathoth remote serve
+```
+
+```text
+Serving remote protocol 1 at http://127.0.0.1:8470; it refuses restricted data.
+```
+
+It listens on `127.0.0.1`, this machine only, and port 8470, until stopped
+with Ctrl-C. `--host` and `--port` choose others; in a container, `--host
+0.0.0.0` listens on every interface, behind a load balancer that ends TLS.
+A remote speaks plain HTTP, so it is never reached from another machine
+except through TLS.
+
+A remote refuses restricted data unless it is started with
+`--accept-restricted`, which declares that it may hold it (ADR 0123):
+
+```text
+Serving remote protocol 1 at http://127.0.0.1:8470; it accepts restricted data.
+```
+
+Every request but `/health` needs a token created with `remote token
+create`. Without the extra, or with plugins it cannot use, nothing is
+served:
+
+```text
+azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
+Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
+```
 
 # Remote Tokens
 

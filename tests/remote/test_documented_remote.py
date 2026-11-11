@@ -21,6 +21,7 @@ from azathoth.remote import (
     receive_content,
     require_protocol,
 )
+from azathoth.remote.server import UNKNOWN_TOKEN_MESSAGE
 from azathoth.revisions import Lineage, RevisionKind, content_digest, json_digest, revision_digest
 from azathoth.sensitivity import Sensitivity
 from azathoth.workflows import WorkflowSpecification
@@ -306,3 +307,7 @@ def counting_child() -> RevisionRecord:
     del document["steps"][0]["inputs"]
 
     return first_record(document)
+
+
+def test_the_servers_refusal_of_unknown_tokens_is_documented() -> None:
+    documented(UNKNOWN_TOKEN_MESSAGE)

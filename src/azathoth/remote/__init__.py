@@ -1,4 +1,8 @@
-"""Pushing and pulling durable documents between instances (ADR 0124)."""
+"""Pushing and pulling durable documents between instances (ADR 0124).
+
+The HTTP server is `azathoth.remote.server`, which needs the `remote` extra,
+so this package never imports it.
+"""
 
 from azathoth.remote.closure import (
     CHILD_WORKFLOW_INPUTS,
@@ -12,13 +16,17 @@ from azathoth.remote.closure import (
 )
 from azathoth.remote.protocol import (
     DEFAULT_EDITION,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
     MAX_CONTENT_BYTES,
     MAX_PUSH_BYTES,
+    MISSING_REMOTE_EXTRA_MESSAGE,
     PROTOCOL_VERSION,
     Capabilities,
     ProtocolMismatchError,
     require_protocol,
 )
+from azathoth.remote.pulling import pull
 from azathoth.remote.receiving import (
     ACCEPT_RESTRICTED_HINT,
     READERS,
@@ -35,6 +43,8 @@ from azathoth.remote.records import (
     ContentRecord,
     MissingRequest,
     MissingResponse,
+    PullRequest,
+    PullResponse,
     PushBundle,
     RevisionRecord,
     document_sensitivity,
@@ -84,8 +94,11 @@ __all__ = [
     "BEARER_SCHEME",
     "CHILD_WORKFLOW_INPUTS",
     "DEFAULT_EDITION",
+    "DEFAULT_HOST",
+    "DEFAULT_PORT",
     "MAX_CONTENT_BYTES",
     "MAX_PUSH_BYTES",
+    "MISSING_REMOTE_EXTRA_MESSAGE",
     "POLICY_SEAM",
     "PROTOCOL_VERSION",
     "READERS",
@@ -108,6 +121,8 @@ __all__ = [
     "IssuedToken",
     "MissingRequest",
     "MissingResponse",
+    "PullRequest",
+    "PullResponse",
     "NoAuditSink",
     "OwnerOnlyPolicy",
     "PluginEntryPoint",
@@ -135,6 +150,7 @@ __all__ = [
     "document_sensitivity",
     "lineage_records",
     "load_seams",
+    "pull",
     "new_token_secret",
     "receive",
     "receive_content",

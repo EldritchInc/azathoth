@@ -164,6 +164,54 @@ Remote plugin <PLUGIN> names the seam '<NAME>'; a remote's seams are auth, polic
 Remote plugin <PLUGIN> gave the <SEAM> seam an instance of <TYPE>, which is not <KIND>.
 ```
 
+## The Server
+
+`azathoth.remote.server` serves the protocol over HTTP with Starlette,
+the `remote` extra, so nothing else in Azathoth imports it.
+`RemoteServer(...).app()` is the application `azathoth remote serve` runs
+with uvicorn:
+
+| Route | Action | Answers |
+| --- | --- | --- |
+| `GET /health` | | `{"status": "ok"}`, with no token |
+| `GET /v1/capabilities` | read capabilities | `Capabilities` |
+| `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
+| `PUT /v1/content/{digest}` | push | the digest kept |
+| `GET /v1/content/{digest}` | read content | the content's bytes |
+| `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
+| `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
+
+A content upload names its label in `X-Azathoth-Sensitivity`, internal
+when absent. Every route but `/health` asks the authenticator who the
+caller is, and the policy whether they may do the route's action; a push
+asks again for each lineage it carries, a pull for each it asks for, and a
+content route for its digest. A refusal is JSON, `{"error": "<MESSAGE>"}`:
+
+| Status | Refusal |
+| --- | --- |
+| 400 | A malformed request, another protocol, or a path naming no digest |
+| 401 | No token the remote knows |
+| 403 | The policy refuses it, or restricted data the remote does not accept |
+| 404 | Content the remote does not hold |
+| 409 | A push whose lineage has diverged |
+| 413 | A body larger than the remote accepts |
+| 422 | A push or content the receiving checks refuse |
+
+```text
+This remote does not know the token given. Send one its owner created with `azathoth remote token create`, as `Authorization: Bearer <TOKEN>`.
+```
+
+Each request is audited as it is answered: a capabilities read, a push, a
+pull or a content read once it is served, and a refusal for want of a
+token or permission as `request_denied`. Repositories are read and
+written off the event loop, one request at a time, since a PostgreSQL
+database's repositories share one connection.
+
+`pull(request, ...)` gathers a pull at the remote: the closure of what it
+asks for, without the revisions the client holds. A benchmark with a
+restricted revision comes only to a pull with `include_restricted`;
+otherwise it is named in `withheld`, and the rest still comes.
+
 ## Tokens
 
 The core's `TokenAuthenticator` reads the tokens a remote's owner issues

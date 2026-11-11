@@ -20,6 +20,18 @@ MAX_PUSH_BYTES: Final = 64 * 1024 * 1024
 MAX_CONTENT_BYTES: Final = 10 * 1024 * 1024
 """The largest content blob a push carries or a pull fetches, in bytes."""
 
+DEFAULT_HOST: Final = "127.0.0.1"
+"""Where `azathoth remote serve` listens unless told otherwise: this machine only."""
+
+DEFAULT_PORT: Final = 8470
+"""The port `azathoth remote serve` listens on unless told otherwise."""
+
+MISSING_REMOTE_EXTRA_MESSAGE: Final = (
+    "azathoth remote serve needs starlette and uvicorn, which are not installed; install "
+    "azathoth-ai[remote]."
+)
+"""What `azathoth remote serve` without the `remote` extra reports."""
+
 
 class ProtocolMismatchError(ValueError):
     """The other side of a remote exchange speaks another protocol version."""
@@ -99,8 +111,11 @@ class Capabilities(BaseModel):
 
 __all__ = [
     "DEFAULT_EDITION",
+    "DEFAULT_HOST",
+    "DEFAULT_PORT",
     "MAX_CONTENT_BYTES",
     "MAX_PUSH_BYTES",
+    "MISSING_REMOTE_EXTRA_MESSAGE",
     "PROTOCOL_VERSION",
     "Capabilities",
     "ProtocolMismatchError",

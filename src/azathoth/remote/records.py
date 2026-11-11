@@ -320,13 +320,16 @@ class MissingRequest(BaseModel):
     """The revision and content digests a client offers, before it sends anything.
 
     The remote answers with those it does not hold, so a push carries only
-    what is missing.
+    what is missing. It looks for the revisions only in `lineages`, those
+    the push would send.
     """
 
     model_config = ConfigDict(
         frozen=True,
         extra="forbid",
     )
+
+    lineages: tuple[Lineage, ...] = ()
 
     revisions: tuple[Digest, ...] = ()
 
@@ -346,10 +349,57 @@ class MissingRequest(BaseModel):
         )
 
 
+class PullRequest(BaseModel):
+    """The documents a client asks a remote for, and the revisions it already holds.
+
+    A remote leaves out the revisions named in `held`. A restricted
+    benchmark comes only with `include_restricted` (ADR 0123).
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    protocol: int = Field(
+        default=PROTOCOL_VERSION,
+        ge=1,
+    )
+
+    roots: tuple[Lineage, ...] = Field(
+        min_length=1,
+    )
+
+    held: tuple[Digest, ...] = ()
+
+    include_restricted: bool = False
+
+
+class PullResponse(BaseModel):
+    """What a remote sends for a pull: a bundle, and what it withheld or could not gather.
+
+    `withheld` names the restricted benchmarks left out of a pull that did
+    not ask for restricted data; `unresolved` is the closure's.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    bundle: PushBundle
+
+    withheld: tuple[Lineage, ...] = ()
+
+    unresolved: tuple[str, ...] = ()
+
+
 __all__ = [
     "ContentRecord",
     "MissingRequest",
     "MissingResponse",
+    "PullRequest",
+    "PullResponse",
     "PushBundle",
     "RevisionRecord",
     "document_sensitivity",

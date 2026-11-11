@@ -4,9 +4,19 @@ from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
 
+from azathoth.remote import DEFAULT_HOST, DEFAULT_PORT
+
 REMOTE_COMMAND = "remote"
 
 REMOTE_ACTION_ATTRIBUTE = "remote_action"
+
+REMOTE_SERVE_ACTION = "serve"
+
+REMOTE_HOST_ATTRIBUTE = "remote_host"
+
+REMOTE_PORT_ATTRIBUTE = "remote_port"
+
+REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE = "remote_accept_restricted"
 
 REMOTE_TOKEN_ACTION = "token"
 
@@ -33,6 +43,33 @@ def add_remote_parser(
 
     remote_actions = remote_parser.add_subparsers(
         dest=REMOTE_ACTION_ATTRIBUTE,
+    )
+
+    serve_parser = remote_actions.add_parser(
+        REMOTE_SERVE_ACTION,
+        help="Serve this instance's workflows, tools and benchmarks to push to and pull from.",
+    )
+
+    serve_parser.add_argument(
+        "--host",
+        dest=REMOTE_HOST_ATTRIBUTE,
+        default=DEFAULT_HOST,
+        help=f"The address to listen on; {DEFAULT_HOST}, this machine only, by default.",
+    )
+
+    serve_parser.add_argument(
+        "--port",
+        dest=REMOTE_PORT_ATTRIBUTE,
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"The port to listen on; {DEFAULT_PORT} by default.",
+    )
+
+    serve_parser.add_argument(
+        "--accept-restricted",
+        dest=REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE,
+        action="store_true",
+        help="Receive restricted data; declare it only for a remote that may hold it.",
     )
 
     token_parser = remote_actions.add_parser(

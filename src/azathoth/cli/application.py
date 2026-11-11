@@ -89,6 +89,7 @@ from azathoth.cli.remote import (
     create_remote_token,
     list_remote_tokens,
     revoke_remote_token,
+    serve_remote,
 )
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.runs import (
@@ -366,6 +367,7 @@ def _dispatch(
             create_remote_token=create_remote_token,
             list_remote_tokens=list_remote_tokens,
             revoke_remote_token=revoke_remote_token,
+            serve_remote=serve_remote,
         )
 
     if command == TOOL_COMMAND:
