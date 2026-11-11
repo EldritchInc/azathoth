@@ -138,6 +138,26 @@ def child_workflow_id(
     return RUNTIME
 
 
+def lineage_records(
+    lineage: Lineage,
+    *,
+    workflows: WorkflowRepository,
+    tools: ToolRepository,
+    benchmarks: BenchmarkRepository,
+) -> tuple[LineageRecord, ...]:
+    """Return every lineage record of one lineage, from the repository of its kind, oldest first."""
+
+    if lineage.kind is RevisionKind.WORKFLOW:
+        return workflows.lineage(lineage.id)
+
+    if lineage.kind is RevisionKind.TOOL:
+        assert lineage.version is not None
+
+        return tools.document_lineage(lineage.id, lineage.version)
+
+    return benchmarks.lineage(lineage.id)
+
+
 @dataclass
 class _Gathering:
     """The state of one closure as it is gathered."""
@@ -215,15 +235,12 @@ class _Gathering:
     ) -> tuple[LineageRecord, ...]:
         """Return every lineage record of one lineage."""
 
-        if lineage.kind is RevisionKind.WORKFLOW:
-            return self.workflows.lineage(lineage.id)
-
-        if lineage.kind is RevisionKind.TOOL:
-            assert lineage.version is not None
-
-            return self.tools.document_lineage(lineage.id, lineage.version)
-
-        return self.benchmarks.lineage(lineage.id)
+        return lineage_records(
+            lineage,
+            workflows=self.workflows,
+            tools=self.tools,
+            benchmarks=self.benchmarks,
+        )
 
     def _revision(
         self,
@@ -358,4 +375,5 @@ __all__ = [
     "child_workflow_id",
     "closure",
     "content_refs",
+    "lineage_records",
 ]

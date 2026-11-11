@@ -88,6 +88,50 @@ every version held. A revision that no longer serializes to its digest was
 imported by an older Azathoth whose model dumped it differently; it stays
 here, and is not pushed.
 
+## Receiving
+
+`receive(bundle, workflows=..., tools=..., benchmarks=..., content=...,
+accepts_restricted=...)` saves the revisions of a bundle that are not held.
+It checks every one first, and refuses the bundle, saving none of it, when
+one fails:
+
+- this Azathoth must read each document as the content its digest names;
+- the content each benchmark case holds must be held already, since content
+  is sent before the revisions that hold it;
+- each lineage's first new revision must build on the latest one held.
+
+A remote moves only forward, so a push whose lineage has diverged is
+refused, and its author pulls first. A pull, `fork=True`, saves a diverged
+lineage's revisions on the revision they build on, forking it, and its
+`ReceiveReport` names each lineage it forked. A revision already held is
+skipped, so a bundle sent again changes nothing, and each revision is
+numbered by the instance that saves it.
+
+```text
+Workflow <WORKFLOW_ID> has diverged: its latest revision here, <LATEST>, is not the one revision <DIGEST> builds on. Pull first, then push again.
+Revision <DIGEST> of workflow <WORKFLOW_ID> builds on <PARENT>, which is not held here; send the revisions before it too.
+Revision <DIGEST> of workflow <WORKFLOW_ID> begins its history, but another history of it is held here.
+Revision <DIGEST> of workflow <WORKFLOW_ID> is not a workflow document Azathoth <VERSION> reads: <ERROR>.
+Azathoth <VERSION> reads revision <DIGEST> of workflow <WORKFLOW_ID> as content <READ>, not <CONTENT_DIGEST>; send it from an Azathoth that reads it as its digest names.
+Content <CONTENT_DIGEST>, which revision <DIGEST> of benchmark <BENCHMARK_ID> holds, is not held here; send it first.
+```
+
+`receive_content` keeps one blob, labelled as its most sensitive case,
+after checking its size and that its bytes are its digest:
+
+```text
+Content <CONTENT_DIGEST> is <SIZE> bytes; a remote accepts content of at most 10485760 bytes.
+Content sent as <CONTENT_DIGEST> is <HELD>.
+```
+
+A remote not started to accept restricted data refuses a bundle or content
+that holds any (ADR 0123):
+
+```text
+This push carries restricted data, and this remote does not accept restricted data. Its operator accepts it by starting the remote with `azathoth remote serve --accept-restricted`.
+Content <CONTENT_DIGEST> is restricted, and this remote does not accept restricted data. Its operator accepts it by starting the remote with `azathoth remote serve --accept-restricted`.
+```
+
 ## Seams
 
 A remote asks three seams about every request: its `Authenticator` who the

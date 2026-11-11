@@ -8,6 +8,7 @@ from pydantic import JsonValue
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
+    BenchmarkRepository,
     ExpectedOutcome,
     InMemoryBenchmarkRepository,
     OutcomeComparison,
@@ -28,7 +29,7 @@ from azathoth.remote import (
 from azathoth.revisions import Author, Lineage, RevisionKind
 from azathoth.sensitivity import Sensitivity
 from azathoth.strategies import StrategyMetadata
-from azathoth.tools import InMemoryToolRepository, ToolDocument, ToolRequirement
+from azathoth.tools import InMemoryToolRepository, ToolDocument, ToolRepository, ToolRequirement
 from azathoth.workflows import (
     InMemoryWorkflowRepository,
     ToolStepSpecification,
@@ -36,6 +37,7 @@ from azathoth.workflows import (
     WorkflowContextReference,
     WorkflowInputBinding,
     WorkflowMetadata,
+    WorkflowRepository,
     WorkflowSpecification,
     WorkflowSpecificationRevision,
     WorkflowStepSpecification,
@@ -157,9 +159,9 @@ class Instance:
     """The repositories of one instance, holding the documents the tests push."""
 
     def __init__(self) -> None:
-        self.workflows = InMemoryWorkflowRepository()
-        self.tools = InMemoryToolRepository()
-        self.benchmarks = InMemoryBenchmarkRepository()
+        self.workflows: WorkflowRepository = InMemoryWorkflowRepository()
+        self.tools: ToolRepository = InMemoryToolRepository()
+        self.benchmarks: BenchmarkRepository = InMemoryBenchmarkRepository()
 
         for identifier, name, version in (
             (COUNT_ID, "word_count", "1.0.0"),
