@@ -5,4 +5,4 @@ version and requires the same minor release, so it may use Azathoth's Python
 API as it stands in that release.
 """
 
-__version__ = "1.4.0a4"
+__version__ = "1.4.0a5"

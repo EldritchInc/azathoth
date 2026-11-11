@@ -100,6 +100,39 @@ release dates are on the
   restricted data, and the `azathoth.sensitivity` span attribute. Tools are
   not gated by labels in 1.4
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
+- A remote: `azathoth remote serve` serves an instance's workflows, tools
+  and benchmarks over HTTP, for other instances to push to and pull from,
+  with the new `remote` extra. `azathoth remote push` and `pull`, and the
+  service API's `instance.remote(url)`, send each document's latest
+  revision, the revisions it was reached by, and the tool versions, child
+  workflows and benchmark content it needs, sending only what the other
+  side lacks. Production state, the portfolio and runs never travel
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- Revision digests are a revision's identity everywhere; each instance
+  numbers what it saves. A remote moves only forward: a push whose lineage
+  diverged there is refused, and a pull forks a lineage that diverged here
+  on the revision its pulled revisions build on, so nothing is lost
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- A remote's owner issues bearer tokens with `azathoth remote token create`,
+  shown once and kept only as digests; `list` and `revoke` manage them, and
+  a client reads its token from `AZATHOTH_REMOTE_TOKEN`. The database schema
+  is now version 5; run `azathoth init` once to upgrade a PostgreSQL
+  database
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- A remote refuses restricted data unless it is served with
+  `--accept-restricted`, and a pull brings restricted benchmarks only with
+  `--include-restricted`
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- A remote's authentication, policy and audit are seams a plugin fills,
+  through the `azathoth.remote` entry-point group; the core's let only the
+  owner in and audit nothing. A remote's capabilities name its protocol,
+  versions, edition and plugins, and a client refuses another protocol
+  before sending anything
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- `azathoth.api`'s `models.matching(..., scope="catalog")` matches every
+  model the providers serve, marked authorized or not, for a pulled
+  workflow's steps. The container image includes the `remote` extra
+  ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
 
 ## 1.3.0
 

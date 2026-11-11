@@ -116,6 +116,7 @@ still passes, follow
 | [Serving Workflows Over MCP](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp.md) | Promoted workflows as tools for Claude Desktop, IDEs and agents, over stdio or HTTP behind your identity provider |
 | [Reading Documents and Citing Them](https://github.com/EldritchInc/azathoth/blob/main/docs/documents.md) | A PDF divided into segments, answered from with a citation behind each answer, every citation checked and exported as Web Annotations |
 | [Calling MCP Tools](https://github.com/EldritchInc/azathoth/blob/main/docs/mcp-tools.md) | A step calling a tool another MCP server serves, pinned to its schemas, over stdio or HTTP |
+| [Sharing Workflows Through a Remote](https://github.com/EldritchInc/azathoth/blob/main/docs/remote.md) | A remote other instances push workflows, tools and benchmarks to and pull from, with tokens, restricted data, the container and Fargate |
 | [Connecting OpenRouter](https://github.com/EldritchInc/azathoth/blob/main/docs/openrouter.md) | An API key, finding and authorizing models, adding judges |
 | [Connecting Amazon Bedrock](https://github.com/EldritchInc/azathoth/blob/main/docs/bedrock.md) | AWS credentials, the IAM policy, pricing Bedrock models and authorizing them |
 | [Getting Started](https://github.com/EldritchInc/azathoth/blob/main/docs/getting-started.md) | One workflow from import to production |

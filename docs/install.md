@@ -497,8 +497,10 @@ Without it, `azathoth remote serve` serves nothing and says so:
 azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
 ```
 
-The [CLI Reference](../src/azathoth/cli/README.md#serving-a-remote)
-describes serving, and the tokens that reach a remote.
+[Sharing Workflows Through a Remote](remote.md) walks through serving a
+remote, its tokens, and pushing and pulling, and the
+[CLI Reference](../src/azathoth/cli/README.md#serving-a-remote) describes
+each command.
 
 ## Optional: Calling MCP Tools
 
