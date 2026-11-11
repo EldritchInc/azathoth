@@ -150,6 +150,26 @@ azathoth
 │   ├── list
 │   └── remove <MODEL_IDENTIFIER>
 │
+├── remote
+│   ├── push <URL>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   └── --benchmark <BENCHMARK_ID>
+│   ├── pull <URL>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   ├── --benchmark <BENCHMARK_ID>
+│   │   └── --include-restricted
+│   ├── serve
+│   │   ├── --host <HOST>
+│   │   ├── --port <PORT>
+│   │   └── --accept-restricted
+│   └── token
+│       ├── create <NAME>
+│       ├── list
+│       │   └── --all
+│       └── revoke <NAME>
+│
 ├── tool
 │   ├── import <FILE>
 │   ├── install-standard
@@ -410,14 +430,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 5; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 5)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -3569,6 +3589,146 @@ command B
 
 Durable portfolio authorization and durable workflow intent remain separate
 from that changing provider state.
+
+# Serving a Remote
+
+`remote serve` serves this instance's workflows, tools and benchmarks, so
+other instances push to it and pull from it (ADR 0124). It needs the
+`remote` extra:
+
+```bash
+python -m pip install "azathoth-ai[remote]"
+azathoth remote serve
+```
+
+```text
+Serving remote protocol 1 at http://127.0.0.1:8470; it refuses restricted data.
+```
+
+It listens on `127.0.0.1`, this machine only, and port 8470, until stopped
+with Ctrl-C. `--host` and `--port` choose others; in a container, `--host
+0.0.0.0` listens on every interface, behind a load balancer that ends TLS.
+A remote speaks plain HTTP, so it is never reached from another machine
+except through TLS.
+
+A remote refuses restricted data unless it is started with
+`--accept-restricted`, which declares that it may hold it (ADR 0123):
+
+```text
+Serving remote protocol 1 at http://127.0.0.1:8470; it accepts restricted data.
+```
+
+Every request but `/health` needs a token created with `remote token
+create`. Without the extra, or with plugins it cannot use, nothing is
+served:
+
+```text
+azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
+Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
+```
+
+# Pushing and Pulling
+
+`remote push` sends workflows, tool versions and benchmarks to a remote,
+and `remote pull` brings them back (ADR 0124). Each reads the remote's
+token from `AZATHOTH_REMOTE_TOKEN`, so no command line holds it, and names
+what to send with `--workflow`, `--tool` and `--benchmark`, each given
+again for more:
+
+```bash
+export AZATHOTH_REMOTE_TOKEN=<TOKEN>
+azathoth remote push https://azathoth.example.com --workflow <WORKFLOW_ID>
+azathoth remote pull https://azathoth.example.com --workflow <WORKFLOW_ID>
+```
+
+A push sends each document's latest revision, the revisions it was reached
+by, and what it needs at the remote: the tool versions its tool steps
+match, the child workflows its steps name, and the content its benchmark
+cases hold. It sends only what the remote lacks, and moves the remote only
+forward:
+
+```text
+Pushed to <URL>. Revisions received: <COUNT>. Revisions already held: <COUNT>. Content sent: <COUNT>.
+Received <LINEAGE> as revision <NUMBER>.
+Not gathered: <REASON>
+```
+
+A pull saves what is not held here. A lineage that diverged here is forked
+on the revision the pulled revisions build on, so nothing here is lost. A
+restricted benchmark comes only with `--include-restricted`:
+
+```text
+Pulled from <URL>. Revisions saved: <COUNT>. Revisions already held: <COUNT>. Content fetched: <COUNT>.
+Saved <LINEAGE> as revision <NUMBER>.
+Forked <LINEAGE>: its pulled revisions build on an earlier revision here.
+Withheld <LINEAGE>: it is restricted; pull it with --include-restricted.
+Not gathered at the remote: <REASON>
+```
+
+A push whose lineage diverged at the remote is refused, and is pulled
+first; restricted data is pushed only to a remote that accepts it.
+Production state and the portfolio never travel. Refusals are the
+remote's own, or:
+
+```text
+No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+Name a workflow, tool version or benchmark to send.
+Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.
+The remote at <URL> could not be reached: <REASON>
+```
+
+# Remote Tokens
+
+A remote is reached with a bearer token its owner issues (ADR 0124).
+`remote token create` issues one under a name, records who created it and
+when, and shows it once:
+
+```bash
+azathoth remote token create <NAME>
+```
+
+```text
+Created remote token <NAME>.
+Token: azr_<SECRET>
+Keep the token now: this remote keeps only its digest, and cannot show it again.
+```
+
+The database keeps only the token's sha256 digest, so a database that leaks
+holds no token that works, and a token that is lost is revoked and created
+again. A name is 1 to 64 letters, digits, `.`, `_` or `-`, and names one
+active token:
+
+```text
+A remote token named '<NAME>' already exists; revoke it first, or choose another name.
+Remote token name '<NAME>' is not one: use 1 to 64 letters, digits, '.', '_' or '-'.
+```
+
+`remote token list` lists the active tokens, oldest first, one per line:
+each one's name, when it was created, and who created it. `--all` lists
+revoked tokens too, each with when it was revoked:
+
+```text
+<NAME>  <CREATED_AT>  by <AUTHOR>
+<NAME>  <CREATED_AT>  by <AUTHOR>  revoked <REVOKED_AT>
+```
+
+`remote token revoke` revokes the active token of a name, so it no longer
+reaches the remote. The revoked token stays listed under `--all`, and its
+name may be given to a new token:
+
+```bash
+azathoth remote token revoke <NAME>
+```
+
+```text
+Revoked remote token <NAME>.
+No remote token is named '<NAME>'.
+```
+
+Tokens are durable state of the database a remote serves, so these
+commands never load the runtime and need no provider credentials. With the
+core's policy, every token is its owner's: whoever holds one may do
+anything on the remote the owner may.
 
 # Tool Commands
 

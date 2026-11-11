@@ -30,6 +30,7 @@ USER_GUIDES = (
     "docs/mcp.md",
     "docs/mcp-tools.md",
     "docs/documents.md",
+    "docs/remote.md",
 )
 
 FENCE = re.compile(r"^\s*```(?P<language>\S*)\s*$")

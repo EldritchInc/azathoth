@@ -26,10 +26,10 @@ RUN python -m build --wheel --outdir /dist \
     && python -m build --wheel --outdir /dist packages/azathoth-mcp
 
 #
-# Install Azathoth, with the otel, postgres, bedrock and worker extras
-# (ADR 0100, ADR 0102, ADR 0103, ADR 0107), and its MCP server (ADR 0111),
-# into a venv that is first on PATH, so the standard tools' child workflows
-# run Azathoth's own Python.
+# Install Azathoth, with the otel, postgres, bedrock, worker, documents and
+# remote extras (ADR 0100, ADR 0102, ADR 0103, ADR 0107, ADR 0124), and its
+# MCP server (ADR 0111), into a venv that is first on PATH, so the standard
+# tools' child workflows run Azathoth's own Python.
 #
 FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
 
@@ -61,7 +61,7 @@ COPY --from=builder /dist/ /tmp/dist/
 RUN python -m venv /opt/azathoth/venv \
     && set -- /tmp/dist/azathoth_ai-*.whl /tmp/dist/azathoth_mcp-*.whl \
     && /opt/azathoth/venv/bin/python -m pip install --no-cache-dir --root-user-action=ignore \
-        "$1[otel,postgres,bedrock,worker,documents]" "$2" \
+        "$1[otel,postgres,bedrock,worker,documents,remote]" "$2" \
     && rm -rf /tmp/dist
 
 WORKDIR /var/lib/azathoth

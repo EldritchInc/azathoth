@@ -173,12 +173,12 @@ def test_init_upgrades_a_version_1_schema_that_other_commands_refuse(
     assert cli(capsys, "workflow", "list") == (
         1,
         "",
-        f"Database {shown} has schema version 1, but this Azathoth uses version 4; "
+        f"Database {shown} has schema version 1, but this Azathoth uses version 5; "
         "run azathoth init.\n",
     )
     assert cli(capsys, "init") == (
         0,
-        f"Database: {shown} (upgraded to schema version 4)\n{INSTALLED}",
+        f"Database: {shown} (upgraded to schema version 5)\n{INSTALLED}",
         "",
     )
     assert cli(capsys, "init") == (0, f"Database: {shown} (existing)\n{ALREADY_INSTALLED}", "")

@@ -28,6 +28,7 @@ from azathoth.providers import (
     ProviderModel,
 )
 from azathoth.revisions import AUTHOR_VARIABLE, Author, content_digest
+from azathoth.sensitivity import PRIVATE_DATA_POLICY
 from azathoth.strategies import StrategyMetadata
 from azathoth.workflows import (
     WorkflowMetadata,
@@ -538,6 +539,60 @@ def test_requirements_that_are_not_valid_are_refused(
         modelled.models.matching(requirements)
 
     assert str(raised.value).startswith(message)
+
+
+def test_the_catalog_scope_matches_every_served_model_marked_by_authorization(
+    modelled: api.Azathoth,
+) -> None:
+    modelled.portfolio.add(BETA.identifier)
+
+    matched = modelled.models.matching({}, scope="catalog")
+
+    assert [(model.identifier, model.authorized) for model in matched] == [
+        (ALPHA.identifier, False),
+        (BETA.identifier, True),
+    ]
+    assert matched[0] == modelled.models.get(ALPHA.identifier)
+    assert modelled.models.matching({}, scope=api.MatchScope.CATALOG) == matched
+    assert [model.identifier for model in modelled.models.matching({})] == [BETA.identifier]
+    assert modelled.models.matching({}, scope="portfolio") == modelled.models.matching({})
+
+
+def test_the_catalog_scope_matches_only_what_meets_the_requirements(
+    modelled: api.Azathoth,
+) -> None:
+    matched = modelled.models.matching({"required_capabilities": ["vision"]}, scope="catalog")
+
+    assert [(model.identifier, model.authorized) for model in matched] == [
+        (ALPHA.identifier, False)
+    ]
+    assert modelled.models.matching({"required_capabilities": ["vision"]}) == ()
+
+
+def test_a_model_outside_the_portfolio_never_matches_restricted_input(
+    modelled: api.Azathoth,
+) -> None:
+    modelled.portfolio.add(BETA.identifier, data_policy=PRIVATE_DATA_POLICY)
+
+    restricted = modelled.models.matching(
+        {},
+        scope="catalog",
+        sensitivity=api.Sensitivity.RESTRICTED,
+    )
+    internal = modelled.models.matching({}, scope="catalog", sensitivity=api.Sensitivity.INTERNAL)
+
+    assert [model.identifier for model in restricted] == [BETA.identifier]
+    assert [model.identifier for model in internal] == [ALPHA.identifier, BETA.identifier]
+
+
+def test_a_scope_that_is_not_one_is_refused(
+    modelled: api.Azathoth,
+) -> None:
+    with pytest.raises(api.InvalidArgumentError) as raised:
+        modelled.models.matching({}, scope="everywhere")
+
+    assert str(raised.value) == "Match scope 'everywhere' is not 'portfolio' or 'catalog'."
+    assert [scope.value for scope in api.MatchScope] == ["portfolio", "catalog"]
 
 
 def test_a_closed_instance_refuses_models_and_the_portfolio(

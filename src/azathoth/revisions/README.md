@@ -12,6 +12,7 @@ from azathoth.revisions import (
     Lineage,
     RevisionKind,
     content_digest,
+    json_digest,
     resolve_author,
     revision_digest,
 )
@@ -21,6 +22,8 @@ from azathoth.revisions import (
 canonical JSON: its JSON-mode dump with sorted keys and no insignificant
 whitespace. Two documents with the same digest describe the same content,
 whatever the key order or formatting of the files they were imported from.
+`json_digest(value)` is the same digest of a JSON value, so a document
+received as JSON is checked against its content digest without its model.
 
 Workflow specifications, tool documents, and benchmark datasets are imported
 as numbered revisions under a stable lineage ID. Each revision records its

@@ -396,7 +396,7 @@ When you upgrade Azathoth to a release with a newer schema, every command
 stops until the database is upgraded too:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 4; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 5; run azathoth init.
 ```
 
 Upgrade Azathoth on every machine, then run `init` once, from any one of
@@ -412,7 +412,7 @@ azathoth init
 ```
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 4)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 5)
 ```
 
 An SQLite file needs no such step: Azathoth adds the tables it lacks the
@@ -476,6 +476,31 @@ The [standard tools](../src/azathoth/standard/README.md#segment_pdf)
 describe what it extracts, and
 [Reading Documents and Citing Them](documents.md) walks through dividing a
 PDF and answering from it, citing it.
+
+## Optional: Serving a Remote
+
+Azathoth can serve its workflows, tools and benchmarks to other instances,
+which push to it and pull from it, with `azathoth remote serve` (ADR 0124).
+The server is an optional extra. Install it into the same venv:
+
+```bash
+python -m pip install "azathoth-ai[remote]"
+```
+
+```powershell
+python -m pip install "azathoth-ai[remote]"
+```
+
+Without it, `azathoth remote serve` serves nothing and says so:
+
+```text
+azathoth remote serve needs starlette and uvicorn, which are not installed; install azathoth-ai[remote].
+```
+
+[Sharing Workflows Through a Remote](remote.md) walks through serving a
+remote, its tokens, and pushing and pulling, and the
+[CLI Reference](../src/azathoth/cli/README.md#serving-a-remote) describes
+each command.
 
 ## Optional: Calling MCP Tools
 

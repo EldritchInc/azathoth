@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "azathoth-ai"
-version = "1.4.0a4"
+version = "1.4.0a5"
 description = "An empirical optimization engine for context-aware AI workflows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -74,6 +74,10 @@ documents = [
 mcp = [
     "mcp>=2.3,<3",
 ]
+remote = [
+    "starlette>=0.40,<2",
+    "uvicorn>=0.30,<1",
+]
 dev = [
     "boto3>=1.39,<2",
     "build",
@@ -89,7 +93,9 @@ dev = [
     "PyYAML>=6,<7",
     "ruff",
     "setuptools>=68",
+    "starlette>=0.40,<2",
     "types-jsonschema",
+    "uvicorn>=0.30,<1",
     "wheel",
 ]
 

@@ -114,7 +114,7 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
-| `models.matching(requirements, sensitivity=None)` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled. | Yes |
+| `models.matching(requirements, sensitivity=None, scope="portfolio")` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled; with `scope="catalog"`, every served model that meets them, each marked `authorized` or not. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
 | `portfolio.set_data_policy(identifier, data_policy)` | Declares what its provider does with data, as `azathoth model policy` does. | No |
@@ -281,6 +281,59 @@ that has not finished names only its ID and how often it was resumed. Who
 may read which invocation is the caller's to decide: azathoth-mcp, for
 one, shows a caller only invocations it made.
 
+## Remotes
+
+`instance.remote(url)` names a remote, served with `azathoth remote serve`,
+to push to and pull from (ADR 0124). It is reached with `token=`, or the
+token `AZATHOTH_REMOTE_TOKEN` holds, created on the remote with
+`azathoth remote token create`:
+
+```python
+from uuid import UUID
+
+from azathoth import api
+
+workflow_id = UUID("11111111-1111-1111-1111-111111111111")
+
+with api.open("azathoth.db") as instance:
+    remote = instance.remote("https://azathoth.example.com")
+    capabilities = remote.capabilities()
+    pushed = remote.push(workflows=[workflow_id])
+    pulled = remote.pull(workflows=[workflow_id])
+```
+
+| Call | Returns |
+| --- | --- |
+| `remote.capabilities()` | The remote's `Capabilities`: its protocol, versions, edition, plugins, and whether it accepts restricted data. |
+| `remote.push(workflows=, tools=, benchmarks=)` | A `PushReport`: the revisions the remote received, numbered there, and how many it held. |
+| `remote.pull(workflows=, tools=, benchmarks=, include_restricted=False)` | A `PullReport`: the revisions saved here, the lineages forked, and the restricted benchmarks withheld. |
+
+Tools are named as `(tool_id, version)`. A push sends each document's
+latest revision, the revisions it was reached by, and what it needs there:
+the tool versions its tool steps match, the child workflows its steps name,
+and the content its benchmark cases hold, sending only what the remote
+lacks. It moves the remote only forward; a lineage that diverged there is
+refused, and is pulled first. A pull brings the same back, and forks a
+lineage that diverged here on the revision it builds on. Restricted data is
+pushed only to a remote that accepts it, and pulled only with
+`include_restricted` (ADR 0123). What could not be gathered is named in
+each report's `unresolved`. Production state and the portfolio never
+travel.
+
+```text
+No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+Name a workflow, tool version or benchmark to send.
+Remote URL '<URL>' is not an http or https URL.
+```
+
+A pulled workflow's steps may name requirements no model of this
+portfolio meets, since the portfolio never travels.
+`models.matching(step_requirements, scope="catalog")` names every model
+the configured providers serve that meets them, each marked `authorized`
+or not, so an operator can authorize one here; `MatchScope` names the two
+scopes. A model outside the portfolio has no declared data policy, so it
+never matches restricted input.
+
 ## Tracing and Content
 
 `api.open(database, telemetry=..., content=...)` takes the telemetry that
@@ -309,6 +362,10 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `InvalidDocumentError` | `invalid_document` | A document to import is refused; an `InvalidArgumentError` too. |
 | `RunNotStartedError` | `run_not_started` | No executable candidate could be made, such as for a missing tool. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
+| `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
+| `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |
+| `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |
+| `RemoteDivergedError` | `remote_diverged` | A pushed lineage diverged at the remote; a `ConflictError` too. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.

@@ -8,6 +8,7 @@ instance authorizes for selection, is read from the database alone.
 import asyncio
 import shlex
 from collections.abc import Callable, Mapping
+from enum import StrEnum
 
 from pydantic import JsonValue, ValidationError
 
@@ -189,6 +190,30 @@ def _unavailable(
     return NotFoundError(f"Model {identifier!r} is not currently available.")
 
 
+class MatchScope(StrEnum):
+    """Which models `models.matching` matches: the portfolio's, or every one served (ADR 0124)."""
+
+    PORTFOLIO = "portfolio"
+    CATALOG = "catalog"
+
+
+def _scope(
+    scope: MatchScope | str,
+) -> MatchScope:
+    """Return a match scope, or refuse one that is not.
+
+    Raises:
+        InvalidArgumentError: The scope is neither the portfolio nor the catalog.
+    """
+
+    try:
+        return MatchScope(scope)
+    except ValueError:
+        raise InvalidArgumentError(
+            f"Match scope {str(scope)!r} is not 'portfolio' or 'catalog'."
+        ) from None
+
+
 class Models:
     """The models an instance's providers serve now."""
 
@@ -248,37 +273,49 @@ class Models:
         requirements: Mapping[str, JsonValue],
         *,
         sensitivity: Sensitivity | None = None,
+        scope: MatchScope | str = MatchScope.PORTFOLIO,
     ) -> tuple[ModelSummary, ...]:
-        """Return the portfolio's models that meet a step's model requirements (ADR 0121).
+        """Return the models that meet a step's model requirements (ADR 0121).
+
+        By default, only the portfolio's models match, in the order a run
+        tries them; a served model outside the portfolio never matches. With
+        `scope="catalog"`, every model the configured providers serve
+        matches, provider by provider, each marked `authorized` or not: the
+        models a pulled workflow's steps could run on once authorized here
+        (ADR 0124).
 
         With `sensitivity`, only the models that may receive input so
         labelled match: for restricted input, those declared to neither
-        retain nor train on data (ADR 0123).
+        retain nor train on data (ADR 0123). A model outside the portfolio
+        has no declared policy, so it never matches restricted input.
 
         The requirements are a step's `requirements`, as its document holds
         them; one left out is its default, so a step reads and writes text
         unless it says otherwise. A model matches as a run matches it, by
-        `ModelQuery.matches`, and the models are in the order a run tries
-        them. A served model outside the portfolio never matches.
+        `ModelQuery.matches`.
 
         Raises:
             InstanceClosedError: The instance was closed.
-            InvalidArgumentError: A requirement is unknown, or not valid.
+            InvalidArgumentError: A requirement is unknown, or not valid, or
+                the scope is neither `portfolio` nor `catalog`.
             ProviderConfigurationError: A provider is configured in a way
                 that cannot be used.
             ProviderUnavailableError: A provider could not be asked.
         """
 
         parsed = _requirements(requirements)
+        chosen = _scope(scope)
         repositories = self._repositories()
         portfolio = ModelPortfolioLoader(repositories.portfolio).load_portfolio()
-        catalog = model_catalog_for_portfolio(
-            catalog=discover(repositories, self._directories()),
-            portfolio=portfolio,
+        served = discover(repositories, self._directories())
+        catalog = (
+            served
+            if chosen is MatchScope.CATALOG
+            else model_catalog_for_portfolio(catalog=served, portfolio=portfolio)
         )
 
         return tuple(
-            _summary(model, authorized=True)
+            _summary(model, authorized=portfolio.get(model.identifier) is not None)
             for model in catalog.find(ModelQuery.from_requirements(parsed))
             if _receives(portfolio.get(model.identifier), sensitivity)
         )
@@ -476,6 +513,7 @@ class Portfolio:
 
 __all__ = [
     "DirectoriesAccess",
+    "MatchScope",
     "Models",
     "Portfolio",
     "discover",

@@ -31,6 +31,7 @@ from azathoth.cli.dispatching import (
     dispatch_job_command,
     dispatch_judge_command,
     dispatch_model_command,
+    dispatch_remote_command,
     dispatch_run_command,
     dispatch_tool_command,
     dispatch_worker_command,
@@ -71,6 +72,7 @@ from azathoth.cli.parsing import (
     JOB_COMMAND,
     JUDGE_COMMAND,
     MODEL_COMMAND,
+    REMOTE_COMMAND,
     RUN_COMMAND,
     TOOL_COMMAND,
     WORKER_COMMAND,
@@ -82,6 +84,14 @@ from azathoth.cli.production_inspection import (
     list_workflow_revisions,
     show_invocation,
     show_workflow_production,
+)
+from azathoth.cli.remote import (
+    create_remote_token,
+    list_remote_tokens,
+    pull_from_remote,
+    push_to_remote,
+    revoke_remote_token,
+    serve_remote,
 )
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.runs import (
@@ -351,6 +361,17 @@ def _dispatch(
             add_judge=add_judge,
             list_judges=list_judges,
             remove_judge=remove_judge,
+        )
+
+    if command == REMOTE_COMMAND:
+        return dispatch_remote_command(
+            arguments,
+            create_remote_token=create_remote_token,
+            list_remote_tokens=list_remote_tokens,
+            revoke_remote_token=revoke_remote_token,
+            serve_remote=serve_remote,
+            push_to_remote=push_to_remote,
+            pull_from_remote=pull_from_remote,
         )
 
     if command == TOOL_COMMAND:

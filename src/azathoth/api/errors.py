@@ -130,6 +130,30 @@ class RunCancelledError(ApiError):
         super().__init__(CANCELLED_MESSAGE)
 
 
+class RemoteUnreachableError(ApiError):
+    """A remote could not be reached, or answered as no Azathoth remote does (ADR 0124)."""
+
+    code: ClassVar[str] = "remote_unreachable"
+
+
+class RemoteProtocolError(ApiError):
+    """A remote speaks another protocol version; nothing was sent to it."""
+
+    code: ClassVar[str] = "remote_protocol"
+
+
+class RemoteRefusedError(ApiError):
+    """A remote refused a push or pull, or what it sent cannot be kept here, as the message says."""
+
+    code: ClassVar[str] = "remote_refused"
+
+
+class RemoteDivergedError(ConflictError):
+    """A remote refused a push whose lineage has diverged there; pull first, then push again."""
+
+    code: ClassVar[str] = "remote_diverged"
+
+
 class InstanceClosedError(ApiError):
     """A call was made on an instance that was already closed."""
 
@@ -157,6 +181,10 @@ __all__ = [
     "NotFoundError",
     "ProviderConfigurationError",
     "ProviderUnavailableError",
+    "RemoteDivergedError",
+    "RemoteProtocolError",
+    "RemoteRefusedError",
+    "RemoteUnreachableError",
     "RevisionNotFoundError",
     "RunCancelledError",
     "RunNotStartedError",
