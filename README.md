@@ -218,9 +218,12 @@ The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
 lists what each release added.
 
 Within 1.x, these stay compatible: workflow, tool and job documents, the
-CLI's commands and the output it documents, and the database schema, which
-`azathoth init` migrates forward. The Python API is typed and documented,
-but may change in a minor release.
+CLI's commands and the output it documents, the database schema, which
+`azathoth init` migrates forward, the service API, `azathoth.api`, and the
+remote protocol, so instances and remotes of different 1.x releases keep
+sharing. Each grows only by additions; anything removed waits for 2.0,
+after a minor release that warns of it. The rest of the Python API is typed
+and documented, but may change in a minor release.
 
 ## Commercial Support and Pilots
 

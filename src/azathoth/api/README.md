@@ -2,7 +2,9 @@
 
 `azathoth.api` is Azathoth's public service layer (ADR 0120): the one
 surface the command line, azathoth-mcp and the local editor call. It is
-provisional until 1.4.0, and may change between 1.4 pre-releases.
+stable from 1.4.0, under Azathoth's 1.x compatibility promise: within 1.x it
+grows only by additions, and anything removed waits for 2.0, after a minor
+release that warns of it.
 
 ```python
 from azathoth import api
