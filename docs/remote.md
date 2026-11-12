@@ -1,9 +1,15 @@
 # Sharing Workflows Through a Remote
 
 A remote is an Azathoth instance other instances push workflows, tools and
-benchmarks to, and pull them back from, with their lineage (ADR 0124). A
-team keeps one remote; each person works on their own instance, pushes what
-they made, and pulls what the others did.
+benchmarks to, and pull them back from, with their lineage (ADR 0124). Each
+instance pushes what it made, and pulls what the others did.
+
+A remote is shared by everyone who holds one of its tokens, and with the
+core's policy each holder may do anything its owner may. Use it between your
+own machines, or with a few people you'd trust with everything it holds. A
+team that needs to say who may do what, sign in through its own identity
+provider, and audit what was done needs a policy plugin, such as the team
+tier's.
 
 A push sends each document's latest revision, the revisions it was reached
 by, and what it needs there: the tool versions its tool steps use, the
@@ -336,8 +342,11 @@ azathoth remote token revoke laptop
 A revoked token no longer reaches the remote, and `remote token list --all`
 still shows it, with when it was revoked. With the core's policy, every
 token is its owner's: whoever holds one may do anything the owner may, so
-give one to each machine, and revoke it when the machine goes. A policy
-plugin, such as the team tier's, can decide more finely.
+give one to each machine, or to each person you'd trust with everything the
+remote holds, named for them, so that revoking one shuts out only them. A
+token's name is not proof of who used it, and the author each revision
+records is whatever its sender's `AZATHOTH_AUTHOR` said. A policy plugin,
+such as the team tier's, can decide more finely.
 
 ## In the Container
 

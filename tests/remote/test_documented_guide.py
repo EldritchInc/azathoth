@@ -194,3 +194,33 @@ def test_the_guide_quotes_naming_and_a_status_as_they_are_printed() -> None:
         ),
     ):
         quoted(GUIDE, message)
+
+
+def test_the_guide_says_who_a_core_remote_trusts_before_anything_else() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    opening = " ".join(guide[: guide.index("## What You Need")].split())
+
+    assert "A team keeps one remote" not in opening
+    assert (
+        "A remote is shared by everyone who holds one of its tokens, and with the core's "
+        "policy each holder may do anything its owner may. Use it between your own machines, "
+        "or with a few people you'd trust with everything it holds."
+    ) in opening
+    assert (
+        "A team that needs to say who may do what, sign in through its own identity provider, "
+        "and audit what was done needs a policy plugin, such as the team tier's."
+    ) in opening
+
+
+def test_the_guide_says_a_tokens_name_proves_no_one() -> None:
+    tokens = GUIDE.read_text(encoding="utf-8").split("## Tokens\n", 1)[1].split("\n## ", 1)[0]
+    section = " ".join(tokens.split())
+
+    assert (
+        "give one to each machine, or to each person you'd trust with everything the remote "
+        "holds, named for them, so that revoking one shuts out only them."
+    ) in section
+    assert (
+        "A token's name is not proof of who used it, and the author each revision records is "
+        "whatever its sender's `AZATHOTH_AUTHOR` said."
+    ) in section
