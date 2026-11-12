@@ -115,7 +115,15 @@ from azathoth.api.running import (
     EventCallback,
     Runs,
 )
-from azathoth.remote import Capabilities, PullReport, PushReport
+from azathoth.remote import (
+    Capabilities,
+    ComponentStatus,
+    ModelStatus,
+    PullReport,
+    PushReport,
+    Relation,
+    RemoteStatus,
+)
 from azathoth.sensitivity import DataPolicy, PolicyAnswer, Sensitivity
 
 __all__ = [
@@ -141,6 +149,7 @@ __all__ = [
     "Benchmarks",
     "CancellationToken",
     "Capabilities",
+    "ComponentStatus",
     "ConflictError",
     "ContextChanged",
     "DataPolicy",
@@ -164,6 +173,7 @@ __all__ = [
     "Invocations",
     "MatchScope",
     "ModelInUseError",
+    "ModelStatus",
     "ModelSummary",
     "Models",
     "NotFoundError",
@@ -178,10 +188,12 @@ __all__ = [
     "ProviderUnavailableError",
     "PullReport",
     "PushReport",
+    "Relation",
     "Remote",
     "RemoteDivergedError",
     "RemoteProtocolError",
     "RemoteRefusedError",
+    "RemoteStatus",
     "RemoteUnreachableError",
     "Revision",
     "RevisionNotFoundError",

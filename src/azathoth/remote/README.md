@@ -294,8 +294,14 @@ returns a `PushReport`. `pull_from(client, roots, include_restricted=...)`
 asks for the documents, naming the revisions held here, fetches the
 content the bundle holds that is not here, checked against its digest,
 and saves the rest with `receive(..., fork=True)`, returning a
-`PullReport`. The service API's `instance.remote(url)` and `azathoth remote
-push` and `pull` call them.
+`PullReport`. `status_of(client, roots, ...)` compares the two sides: the
+heads of the lineages named, or of every one either side holds, here and
+at the remote, each related, and each model authorized on either side or
+fixed by a reported workflow's step. It refreshes the remote's portfolio
+snapshot, and when the remote cannot be reached, it reports each relation
+as None and reads the remote's models from the last snapshot. The service
+API's `instance.remote(url)` and `azathoth remote push` and `pull` call
+them.
 
 ## Tokens
 

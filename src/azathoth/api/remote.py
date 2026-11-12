@@ -4,7 +4,7 @@
 the token given, or the one in `AZATHOTH_REMOTE_TOKEN`. A push sends the
 latest revision of each document named, the revisions it was reached by,
 and what it needs at the remote; a pull brings the same back, forking a
-lineage that diverged here.
+lineage that diverged here; a status compares the two sides (ADR 0125).
 """
 
 import os
@@ -29,9 +29,11 @@ from azathoth.remote import (
     PushReport,
     ReceiveRefusedError,
     RemoteClient,
+    RemoteStatus,
     pull_from,
     push_to,
     require_remote_url,
+    status_of,
 )
 from azathoth.remote import RemoteDivergedError as ClientDivergedError
 from azathoth.remote import RemoteRefusedError as ClientRefusedError
@@ -50,11 +52,12 @@ def lineages(
     workflows: Sequence[UUID],
     tools: Sequence[tuple[UUID, str]],
     benchmarks: Sequence[UUID],
+    required: bool = True,
 ) -> tuple[Lineage, ...]:
     """Return the lineages of the workflows, tool versions and benchmarks named, in that order.
 
     Raises:
-        InvalidArgumentError: Nothing is named.
+        InvalidArgumentError: Nothing is named, and something is `required`.
     """
 
     named = (
@@ -66,7 +69,7 @@ def lineages(
         *(Lineage(kind=RevisionKind.BENCHMARK, id=benchmark_id) for benchmark_id in benchmarks),
     )
 
-    if not named:
+    if required and not named:
         raise InvalidArgumentError("Name a workflow, tool version or benchmark to send.")
 
     return named
@@ -196,6 +199,50 @@ class Remote:
                 tools=held.tools,
                 benchmarks=held.benchmarks,
                 content=held.content,
+            )
+
+    def status(
+        self,
+        *,
+        workflows: Sequence[UUID] = (),
+        tools: Sequence[tuple[UUID, str]] = (),
+        benchmarks: Sequence[UUID] = (),
+    ) -> RemoteStatus:
+        """Return how the documents named, or every one either side holds, relate (ADR 0125).
+
+        Each component says how this instance's latest revision relates to
+        the remote's: in sync, ahead, behind, diverged, or held by one side
+        only; a workflow says which revision is in production at the remote.
+        Each model says whether it is authorized here and at the remote.
+        Reaching the remote refreshes the snapshot of its portfolio. A remote
+        that cannot be reached is no error: its side is unknown, each
+        relation is None, and its models are read from the last snapshot,
+        as of `portfolio_synced_at`.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            RemoteProtocolError: The remote speaks another protocol.
+            RemoteRefusedError: The remote refused the token or a request.
+        """
+
+        roots = lineages(
+            workflows=workflows,
+            tools=tools,
+            benchmarks=benchmarks,
+            required=False,
+        )
+        held = self._repositories()
+
+        with self._client() as client:
+            return status_of(
+                client,
+                roots,
+                workflows=held.workflows,
+                tools=held.tools,
+                benchmarks=held.benchmarks,
+                production_states=held.production_states,
+                portfolio=held.portfolio,
+                snapshots=held.remote_portfolio_snapshots,
             )
 
     @contextmanager

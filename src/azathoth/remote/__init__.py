@@ -118,7 +118,7 @@ from azathoth.remote.status import (
     relation,
     unapproved_model_warnings,
 )
-from azathoth.remote.syncing import PullReport, PushReport, pull_from, push_to
+from azathoth.remote.syncing import PullReport, PushReport, pull_from, push_to, status_of
 from azathoth.remote.tokens import (
     BEARER_SCHEME,
     REMOTE_TOKEN_TABLES,
@@ -249,6 +249,7 @@ __all__ = [
     "require_remote_url",
     "require_token_name",
     "restricted_refusal",
+    "status_of",
     "token_digest",
     "unapproved_model_warnings",
 ]

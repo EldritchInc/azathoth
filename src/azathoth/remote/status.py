@@ -73,6 +73,8 @@ class ComponentStatus(BaseModel):
     A side's digest and number are its latest revision's, or None where it
     holds none. A workflow's `remote_production_digest` is the revision in
     production at the remote, or None where it is not in production there.
+    `relation` is None when the remote was not reached, since only one side
+    is known.
     """
 
     model_config = ConfigDict(
@@ -82,7 +84,7 @@ class ComponentStatus(BaseModel):
 
     lineage: Lineage
 
-    relation: Relation
+    relation: Relation | None
 
     local_digest: str | None = None
 
@@ -116,10 +118,10 @@ class ModelStatus(BaseModel):
 class RemoteStatus(BaseModel):
     """What this instance and a remote hold, and how each component relates.
 
-    When the remote is not reached, its side of each component is unknown,
-    each component is related as this instance alone holds it, and models
-    are read from the last snapshot of its portfolio, taken at
-    `portfolio_synced_at`.
+    When the remote is not reached, its side of each component, and so each
+    relation, is unknown, and whether a model is authorized there is read
+    from the last snapshot of its portfolio, taken at `portfolio_synced_at`;
+    with no snapshot, it is unknown too.
     """
 
     model_config = ConfigDict(

@@ -1,4 +1,4 @@
-"""Pushing to and pulling from a remote, for a local instance (ADR 0124).
+"""Pushing to, pulling from and comparing with a remote, for a local instance (ADR 0124).
 
 A push asks the remote what it lacks, sends that content, then the missing
 revisions, parents first. A pull asks for documents, fetches the content
@@ -7,14 +7,16 @@ held, forking a lineage that diverged here. Both read the remote's
 capabilities first, and refuse another protocol before sending anything.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict
 
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
-from azathoth.remote.client import RemoteClient, RemoteRefusedError
+from azathoth.providers import ModelPortfolioRepository
+from azathoth.remote.client import RemoteClient, RemoteRefusedError, RemoteUnreachableError
 from azathoth.remote.closure import closure, lineage_records
+from azathoth.remote.inspection import heads
 from azathoth.remote.receiving import (
     ReceivedRevision,
     ReceiveRefusedError,
@@ -22,11 +24,19 @@ from azathoth.remote.receiving import (
     receive_content,
     restricted_refusal,
 )
-from azathoth.remote.records import MissingRequest, PullRequest, PushBundle
-from azathoth.revisions import Lineage
+from azathoth.remote.records import Head, HeadsRequest, MissingRequest, PullRequest, PushBundle
+from azathoth.remote.snapshots import PortfolioSnapshot, RemotePortfolioSnapshotRepository
+from azathoth.remote.status import (
+    ComponentStatus,
+    ModelStatus,
+    RemoteStatus,
+    fixed_models,
+    relation,
+)
+from azathoth.revisions import Lineage, RevisionKind
 from azathoth.sensitivity import Sensitivity
 from azathoth.tools import ToolRepository
-from azathoth.workflows import WorkflowRepository
+from azathoth.workflows import WorkflowProductionStateRepository, WorkflowRepository
 
 
 class PushReport(BaseModel):
@@ -202,9 +212,140 @@ def pull_from(
     )
 
 
+def _order(
+    asked: Sequence[Lineage],
+    local: Mapping[Lineage, Head],
+    remote: Mapping[Lineage, Head],
+) -> tuple[Lineage, ...]:
+    """Return the lineages a status reports: those asked about, or every one either side holds."""
+
+    if asked:
+        return tuple(lineage for lineage in asked if lineage in local or lineage in remote)
+
+    return tuple(dict.fromkeys((*local, *remote)))
+
+
+def _component(
+    lineage: Lineage,
+    local: Head | None,
+    remote: Head | None,
+    *,
+    reachable: bool,
+) -> ComponentStatus:
+    """Return one component's status from each side's head."""
+
+    return ComponentStatus(
+        lineage=lineage,
+        relation=(
+            relation(
+                () if local is None else local.chain,
+                () if remote is None else remote.chain,
+            )
+            if reachable
+            else None
+        ),
+        local_digest=None if local is None else local.chain[-1],
+        local_number=None if local is None else local.number,
+        remote_digest=None if remote is None else remote.chain[-1],
+        remote_number=None if remote is None else remote.number,
+        remote_production_digest=None if remote is None else remote.production_digest,
+    )
+
+
+def status_of(
+    client: RemoteClient,
+    roots: Iterable[Lineage] = (),
+    *,
+    workflows: WorkflowRepository,
+    tools: ToolRepository,
+    benchmarks: BenchmarkRepository,
+    production_states: WorkflowProductionStateRepository,
+    portfolio: ModelPortfolioRepository,
+    snapshots: RemotePortfolioSnapshotRepository,
+) -> RemoteStatus:
+    """Return how what this instance holds relates to what a remote holds (ADR 0125).
+
+    With no roots, every lineage either side holds is reported, this
+    instance's first. Models are this portfolio's, then the remote's, then
+    those the reported workflows' steps fix, each marked authorized or not
+    on each side. Reaching the remote refreshes the snapshot of its
+    portfolio; when it cannot be reached, its side is unknown, and its
+    models are read from the last snapshot.
+
+    Raises:
+        ProtocolMismatchError: The remote speaks another protocol.
+        RemoteRefusedError: The remote refused the token or a request.
+    """
+
+    asked = tuple(dict.fromkeys(roots))
+    request = HeadsRequest(lineages=asked)
+    remote_heads: dict[Lineage, Head] = {}
+
+    try:
+        client.capabilities().require_protocol()
+        remote_heads = {head.lineage: head for head in client.heads(request).heads}
+        snapshot: PortfolioSnapshot | None = snapshots.save(client.url, client.portfolio())
+        reachable = True
+    except RemoteUnreachableError:
+        snapshot = snapshots.get(client.url)
+        reachable = False
+
+    local_heads = {
+        head.lineage: head
+        for head in heads(
+            request,
+            workflows=workflows,
+            tools=tools,
+            benchmarks=benchmarks,
+            production_states=production_states,
+        ).heads
+    }
+    reported = _order(asked, local_heads, remote_heads)
+    authorized_here = [entry.identifier for entry in portfolio.entries()]
+    authorized_there = (
+        None if snapshot is None else [entry.identifier for entry in snapshot.portfolio.entries]
+    )
+    fixed: list[str] = []
+
+    for lineage in reported:
+        if lineage.kind is RevisionKind.WORKFLOW:
+            latest = workflows.get(lineage.id)
+
+            if latest is not None:
+                fixed.extend(identifier for _, identifier in fixed_models(latest))
+
+    identifiers = dict.fromkeys((*authorized_here, *(authorized_there or ()), *fixed))
+
+    return RemoteStatus(
+        remote=client.url,
+        reachable=reachable,
+        components=tuple(
+            _component(
+                lineage,
+                local_heads.get(lineage),
+                remote_heads.get(lineage),
+                reachable=reachable,
+            )
+            for lineage in reported
+        ),
+        models=tuple(
+            ModelStatus(
+                identifier=identifier,
+                authorized_locally=identifier in authorized_here,
+                authorized_remotely=(
+                    None if authorized_there is None else identifier in authorized_there
+                ),
+            )
+            for identifier in identifiers
+        ),
+        portfolio_synced_at=None if snapshot is None else snapshot.synced_at,
+    )
+
+
 __all__ = [
     "PullReport",
     "PushReport",
     "pull_from",
     "push_to",
+    "status_of",
 ]
