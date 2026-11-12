@@ -118,7 +118,14 @@ from azathoth.remote.status import (
     relation,
     unapproved_model_warnings,
 )
-from azathoth.remote.syncing import PullReport, PushReport, pull_from, push_to, status_of
+from azathoth.remote.syncing import (
+    PullReport,
+    PushReport,
+    pull_from,
+    push_to,
+    push_warnings,
+    status_of,
+)
 from azathoth.remote.tokens import (
     BEARER_SCHEME,
     REMOTE_TOKEN_TABLES,
@@ -242,6 +249,7 @@ __all__ = [
     "pull",
     "pull_from",
     "push_to",
+    "push_warnings",
     "receive",
     "receive_content",
     "relation",

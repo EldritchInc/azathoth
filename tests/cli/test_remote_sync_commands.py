@@ -20,6 +20,7 @@ from tests.cli.test_workflow_run import configure_database
 from tests.remote.test_closure import (
     BENCHMARK,
     BENCHMARK_ID,
+    CALL_STEP,
     CHILD,
     COUNT_ID,
     PARENT,
@@ -164,7 +165,8 @@ def test_a_push_reports_what_the_remote_received(
     status, out, err = run(capsys, "remote", "push", URL, "--workflow", str(PARENT_ID))
     lines = out.splitlines()
 
-    assert (status, err) == (0, "")
+    assert status == 0
+    assert err.startswith("Warning: ")
     assert lines[0] == (
         f"Pushed to {URL}. Revisions received: 3. Revisions already held: 0. Content sent: 0."
     )
@@ -355,3 +357,40 @@ def test_the_guide_quotes_the_report_lines_and_refusals() -> None:
         "Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.",
     ):
         assert f"\n{line}\n" in readme
+
+
+def test_a_pushs_warnings_follow_its_report_on_standard_error(
+    database: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reach(monkeypatch, Remote(tmp_path))
+
+    status, out, err = run(capsys, "remote", "push", URL, "--workflow", str(PARENT_ID))
+
+    assert status == 0
+    assert out.startswith(f"Pushed to {URL}. ")
+    assert err == (
+        f"Warning: Step {CALL_STEP} of workflow {PARENT_ID} runs workflow {CHILD.id}, which is "
+        "not in production at the remote; it cannot run there until the child is promoted.\n"
+    )
+
+
+def test_the_guide_quotes_the_push_warnings_with_their_prefix() -> None:
+    readme = (Path(__file__).parents[2] / "src" / "azathoth" / "cli" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    remote_readme = (
+        Path(__file__).parents[2] / "src" / "azathoth" / "remote" / "README.md"
+    ).read_text(encoding="utf-8")
+    documented = [
+        line.removeprefix("Warning: ")
+        for line in readme.splitlines()
+        if line.startswith("Warning: ")
+    ]
+
+    assert len(documented) == 3
+
+    for warning in documented:
+        assert f"\n{warning}\n" in remote_readme

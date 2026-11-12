@@ -3653,6 +3653,18 @@ Received <LINEAGE> as revision <NUMBER>.
 Not gathered: <REASON>
 ```
 
+After its report, a push warns on standard error of what would stop its
+documents from running at the remote (ADR 0125): a credential its tools
+need that the remote does not set, a child workflow the remote runs at
+another revision or not at all, and a model its steps fix that the remote
+has not authorized. A warning never refuses the push:
+
+```text
+Warning: Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is not in production at the remote; it cannot run there until the child is promoted.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the remote has not authorized; it cannot run there until the remote's portfolio holds it.
+```
+
 A pull saves what is not held here. A lineage that diverged here is forked
 on the revision the pulled revisions build on, so nothing here is lost. A
 restricted benchmark comes only with `--include-restricted`:

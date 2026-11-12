@@ -305,7 +305,7 @@ with api.open("azathoth.db") as instance:
 | Call | Returns |
 | --- | --- |
 | `remote.capabilities()` | The remote's `Capabilities`: its protocol, versions, edition, plugins, and whether it accepts restricted data. |
-| `remote.push(workflows=, tools=, benchmarks=)` | A `PushReport`: the revisions the remote received, numbered there, and how many it held. |
+| `remote.push(workflows=, tools=, benchmarks=)` | A `PushReport`: the revisions the remote received, numbered there, how many it held, and `warnings` of what would stop them from running there. |
 | `remote.pull(workflows=, tools=, benchmarks=, include_restricted=False)` | A `PullReport`: the revisions saved here, the lineages forked, and the restricted benchmarks withheld. |
 | `remote.status(workflows=, tools=, benchmarks=)` | A `RemoteStatus`: for each component named, or every one either side holds, its `Relation` (`in_sync`, `ahead`, `behind`, `diverged`, `local_only`, `remote_only`) and each side's latest revision; for each model, whether it is authorized here and at the remote. |
 

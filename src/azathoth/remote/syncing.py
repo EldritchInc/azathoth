@@ -8,6 +8,7 @@ capabilities first, and refuse another protocol before sending anything.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,7 +16,7 @@ from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.providers import ModelPortfolioRepository
 from azathoth.remote.client import RemoteClient, RemoteRefusedError, RemoteUnreachableError
-from azathoth.remote.closure import closure, lineage_records
+from azathoth.remote.closure import child_workflow_id, closure, lineage_records
 from azathoth.remote.inspection import heads
 from azathoth.remote.receiving import (
     ReceivedRevision,
@@ -24,23 +25,42 @@ from azathoth.remote.receiving import (
     receive_content,
     restricted_refusal,
 )
-from azathoth.remote.records import Head, HeadsRequest, MissingRequest, PullRequest, PushBundle
+from azathoth.remote.records import (
+    CredentialsRequest,
+    Head,
+    HeadsRequest,
+    MissingRequest,
+    PullRequest,
+    PushBundle,
+)
 from azathoth.remote.snapshots import PortfolioSnapshot, RemotePortfolioSnapshotRepository
 from azathoth.remote.status import (
     ComponentStatus,
     ModelStatus,
     RemoteStatus,
+    child_drift_warnings,
+    credential_names,
     fixed_models,
+    missing_credential_warning,
     relation,
+    unapproved_model_warnings,
 )
 from azathoth.revisions import Lineage, RevisionKind
 from azathoth.sensitivity import Sensitivity
 from azathoth.tools import ToolRepository
-from azathoth.workflows import WorkflowProductionStateRepository, WorkflowRepository
+from azathoth.workflows import (
+    WorkflowProductionStateRepository,
+    WorkflowRepository,
+    WorkflowSpecification,
+)
 
 
 class PushReport(BaseModel):
-    """What a push sent, what the remote received, and what could not be sent."""
+    """What a push sent, what the remote received, what could not be sent, and what to fix there.
+
+    `warnings` name what would stop the pushed documents from running at the
+    remote (ADR 0125); a warning never refuses a push.
+    """
 
     model_config = ConfigDict(
         frozen=True,
@@ -56,6 +76,8 @@ class PushReport(BaseModel):
     content_sent: int = 0
 
     unresolved: tuple[str, ...] = ()
+
+    warnings: tuple[str, ...] = ()
 
 
 class PullReport(BaseModel):
@@ -141,7 +163,91 @@ def push_to(
         + (0 if received is None else received.already_held),
         content_sent=len(lacking.content),
         unresolved=gathered.unresolved,
+        warnings=push_warnings(client, bundle, workflows=workflows, tools=tools),
     )
+
+
+def push_warnings(
+    client: RemoteClient,
+    bundle: PushBundle,
+    *,
+    workflows: WorkflowRepository,
+    tools: ToolRepository,
+) -> tuple[str, ...]:
+    """Return what would stop a push's documents from running at the remote, once pushed.
+
+    Credentials the pushed tools need that the remote does not set come
+    first, then child workflows the remote runs at another revision or not
+    at all, then models the pushed workflows' steps fix that the remote has
+    not authorized. Only names are sent to ask; no credential's value is.
+    """
+
+    pushed = tuple(dict.fromkeys(record.lineage for record in bundle.revisions))
+    needs: dict[str, list[Lineage]] = {}
+
+    for lineage in pushed:
+        if lineage.kind is not RevisionKind.TOOL or lineage.version is None:
+            continue
+
+        revision = tools.latest_document_revision(lineage.id, lineage.version)
+
+        for name in () if revision is None else credential_names(revision.document):
+            needs.setdefault(name, []).append(lineage)
+
+    warnings: list[str] = []
+
+    if needs:
+        unset = client.missing_credentials(CredentialsRequest(names=tuple(needs))).missing
+        warnings.extend(
+            missing_credential_warning(lineage, name) for name in unset for lineage in needs[name]
+        )
+
+    specifications: list[WorkflowSpecification] = []
+
+    for lineage in pushed:
+        specification = workflows.get(lineage.id) if lineage.kind is RevisionKind.WORKFLOW else None
+
+        if specification is not None:
+            specifications.append(specification)
+
+    children: dict[Lineage, None] = {}
+
+    for specification in specifications:
+        for step in specification.steps:
+            child = child_workflow_id(step)
+
+            if isinstance(child, UUID):
+                children[Lineage(kind=RevisionKind.WORKFLOW, id=child)] = None
+
+    if children:
+        running = {
+            head.lineage.id: head.production_digest
+            for head in client.heads(HeadsRequest(lineages=tuple(children))).heads
+        }
+        latest: dict[UUID, str] = {}
+
+        for child_lineage in children:
+            records = workflows.lineage(child_lineage.id)
+
+            if records:
+                latest[child_lineage.id] = records[-1].revision_digest
+
+        for specification in specifications:
+            warnings.extend(
+                child_drift_warnings(
+                    specification,
+                    local_latest=latest,
+                    remote_production=running,
+                )
+            )
+
+    if any(tuple(fixed_models(specification)) for specification in specifications):
+        authorized = {entry.identifier for entry in client.portfolio().entries}
+
+        for specification in specifications:
+            warnings.extend(unapproved_model_warnings(specification, authorized=authorized))
+
+    return tuple(warnings)
 
 
 def pull_from(
@@ -346,6 +452,7 @@ __all__ = [
     "PullReport",
     "PushReport",
     "pull_from",
+    "push_warnings",
     "push_to",
     "status_of",
 ]

@@ -233,7 +233,8 @@ first (ADR 0125):
 A `RemoteStatus` holds a `ComponentStatus` for each lineage, and a
 `ModelStatus` for each model, saying whether it is authorized here and at
 the remote. A push warns, and never refuses, of what would stop its
-documents from running at the remote:
+documents from running at the remote, in its report's `warnings`, which
+`push_warnings(client, bundle, ...)` gathers once it is pushed:
 
 ```text
 Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
