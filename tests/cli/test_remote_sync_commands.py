@@ -90,7 +90,7 @@ def test_documents_are_named_by_kind_and_given_again_for_more() -> None:
         )
     )
 
-    assert parsed.remote_url == URL
+    assert parsed.remote_target == URL
     assert parsed.remote_workflows == [PARENT_ID, CHILD.id]
     assert parsed.remote_tools == [f"{COUNT_ID}@1.0.0"]
     assert parsed.remote_benchmarks == [PARENT_ID]
@@ -126,11 +126,11 @@ def test_the_cli_dispatches_push_and_pull(
     assert main(("remote", "push", URL, "--workflow", str(PARENT_ID))) == 0
     assert main(("remote", "pull", URL, "--tool", "x@1")) == 0
     assert calls == [
-        ("push", {"url": URL, "workflows": [PARENT_ID], "tools": [], "benchmarks": []}),
+        ("push", {"remote": URL, "workflows": [PARENT_ID], "tools": [], "benchmarks": []}),
         (
             "pull",
             {
-                "url": URL,
+                "remote": URL,
                 "workflows": [],
                 "tools": ["x@1"],
                 "benchmarks": [],

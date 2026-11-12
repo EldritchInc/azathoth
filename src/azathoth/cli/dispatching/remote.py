@@ -1,4 +1,4 @@
-"""Remote command dispatch for the Azathoth CLI (ADR 0124)."""
+"""Remote command dispatch for the Azathoth CLI (ADR 0124, ADR 0126)."""
 
 from argparse import Namespace
 from collections.abc import Callable
@@ -8,13 +8,18 @@ from uuid import UUID
 from azathoth.cli.parsing import (
     REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE,
     REMOTE_ACTION_ATTRIBUTE,
+    REMOTE_ADD_ACTION,
     REMOTE_BENCHMARKS_ATTRIBUTE,
     REMOTE_HOST_ATTRIBUTE,
     REMOTE_INCLUDE_RESTRICTED_ATTRIBUTE,
+    REMOTE_LIST_ACTION,
+    REMOTE_NAME_ATTRIBUTE,
     REMOTE_PORT_ATTRIBUTE,
     REMOTE_PULL_ACTION,
     REMOTE_PUSH_ACTION,
+    REMOTE_REMOVE_ACTION,
     REMOTE_SERVE_ACTION,
+    REMOTE_TARGET_ATTRIBUTE,
     REMOTE_TOKEN_ACTION,
     REMOTE_TOKEN_ACTION_ATTRIBUTE,
     REMOTE_TOKEN_ALL_ATTRIBUTE,
@@ -22,6 +27,7 @@ from azathoth.cli.parsing import (
     REMOTE_TOKEN_LIST_ACTION,
     REMOTE_TOKEN_NAME_ATTRIBUTE,
     REMOTE_TOKEN_REVOKE_ACTION,
+    REMOTE_TOKEN_VARIABLE_ATTRIBUTE,
     REMOTE_TOOLS_ATTRIBUTE,
     REMOTE_URL_ATTRIBUTE,
     REMOTE_WORKFLOWS_ATTRIBUTE,
@@ -31,6 +37,9 @@ RemoteTokenNameHandler = Callable[[str], int]
 RemoteTokenListHandler = Callable[..., int]
 RemoteServeHandler = Callable[..., int]
 RemoteSyncHandler = Callable[..., int]
+RemoteAddHandler = Callable[..., int]
+RemoteListHandler = Callable[[], int]
+RemoteNameHandler = Callable[[str], int]
 
 
 def dispatch_remote_command(
@@ -42,6 +51,9 @@ def dispatch_remote_command(
     serve_remote: RemoteServeHandler,
     push_to_remote: RemoteSyncHandler,
     pull_from_remote: RemoteSyncHandler,
+    add_remote: RemoteAddHandler,
+    list_remotes: RemoteListHandler,
+    remove_remote: RemoteNameHandler,
 ) -> int | None:
     """Dispatch one parsed remote command, or return None for one not given in full."""
 
@@ -56,7 +68,7 @@ def dispatch_remote_command(
 
     if action in (REMOTE_PUSH_ACTION, REMOTE_PULL_ACTION):
         named = {
-            "url": cast(str, getattr(arguments, REMOTE_URL_ATTRIBUTE)),
+            "remote": cast(str, getattr(arguments, REMOTE_TARGET_ATTRIBUTE)),
             "workflows": cast(list[UUID], getattr(arguments, REMOTE_WORKFLOWS_ATTRIBUTE)),
             "tools": cast(list[str], getattr(arguments, REMOTE_TOOLS_ATTRIBUTE)),
             "benchmarks": cast(list[UUID], getattr(arguments, REMOTE_BENCHMARKS_ATTRIBUTE)),
@@ -69,6 +81,19 @@ def dispatch_remote_command(
             **named,
             include_restricted=cast(bool, getattr(arguments, REMOTE_INCLUDE_RESTRICTED_ATTRIBUTE)),
         )
+
+    if action == REMOTE_ADD_ACTION:
+        return add_remote(
+            name=cast(str, getattr(arguments, REMOTE_NAME_ATTRIBUTE)),
+            url=cast(str, getattr(arguments, REMOTE_URL_ATTRIBUTE)),
+            token_variable=cast(str, getattr(arguments, REMOTE_TOKEN_VARIABLE_ATTRIBUTE)),
+        )
+
+    if action == REMOTE_LIST_ACTION:
+        return list_remotes()
+
+    if action == REMOTE_REMOVE_ACTION:
+        return remove_remote(cast(str, getattr(arguments, REMOTE_NAME_ATTRIBUTE)))
 
     if action != REMOTE_TOKEN_ACTION:
         return None

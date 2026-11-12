@@ -86,10 +86,13 @@ from azathoth.cli.production_inspection import (
     show_workflow_production,
 )
 from azathoth.cli.remote import (
+    add_remote,
     create_remote_token,
     list_remote_tokens,
+    list_remotes,
     pull_from_remote,
     push_to_remote,
+    remove_remote,
     revoke_remote_token,
     serve_remote,
 )
@@ -372,6 +375,9 @@ def _dispatch(
             serve_remote=serve_remote,
             push_to_remote=push_to_remote,
             pull_from_remote=pull_from_remote,
+            add_remote=add_remote,
+            list_remotes=list_remotes,
+            remove_remote=remove_remote,
         )
 
     if command == TOOL_COMMAND:

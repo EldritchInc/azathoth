@@ -151,11 +151,15 @@ azathoth
 │   └── remove <MODEL_IDENTIFIER>
 │
 ├── remote
-│   ├── push <URL>
+│   ├── add <NAME> <URL>
+│   │   └── --token-variable <VARIABLE>
+│   ├── list
+│   ├── remove <NAME>
+│   ├── push <REMOTE>
 │   │   ├── --workflow <WORKFLOW_ID>
 │   │   ├── --tool <TOOL_ID>@<VERSION>
 │   │   └── --benchmark <BENCHMARK_ID>
-│   ├── pull <URL>
+│   ├── pull <REMOTE>
 │   │   ├── --workflow <WORKFLOW_ID>
 │   │   ├── --tool <TOOL_ID>@<VERSION>
 │   │   ├── --benchmark <BENCHMARK_ID>
@@ -3627,17 +3631,56 @@ azathoth remote serve needs starlette and uvicorn, which are not installed; inst
 Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
 ```
 
+# Naming Remotes
+
+`remote add` gives a remote a name, so commands name it instead of its URL
+(ADR 0126). A name is 1 to 64 letters, digits, `_` and `-`. Each keeps the
+environment variable its remote's token is read from,
+`AZATHOTH_REMOTE_TOKEN` unless `--token-variable` names another, so two
+remotes are reached with two tokens; only the variable's name is kept,
+never a token:
+
+```bash
+azathoth remote add origin https://azathoth.example.com
+azathoth remote add staging https://staging.example.com --token-variable AZATHOTH_STAGING_TOKEN
+```
+
+```text
+Named remote origin for https://azathoth.example.com; its token is read from AZATHOTH_REMOTE_TOKEN.
+```
+
+`remote list` lists the names, in order, one per line, with each one's URL
+and token variable. `remote remove` forgets a name, and the last portfolio
+read from its URL unless another name is kept for it; nothing at the remote
+changes:
+
+```text
+origin  https://azathoth.example.com  AZATHOTH_REMOTE_TOKEN
+Removed remote origin, for https://azathoth.example.com; nothing at the remote changed.
+```
+
+Names are durable state of this instance's database, as git remotes are of
+a repository, so two instances may give one remote different names. A name
+already given, or one never given, is refused:
+
+```text
+Remote <NAME> is already named, for <URL>; remove it first, or choose another name.
+No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
+```
+
 # Pushing and Pulling
 
 `remote push` sends workflows, tool versions and benchmarks to a remote,
-and `remote pull` brings them back (ADR 0124). Each reads the remote's
-token from `AZATHOTH_REMOTE_TOKEN`, so no command line holds it, and names
-what to send with `--workflow`, `--tool` and `--benchmark`, each given
-again for more:
+and `remote pull` brings them back (ADR 0124). Each names the remote by a
+name `remote add` gave it, its token read from that name's variable, or by
+its URL, its token read from `AZATHOTH_REMOTE_TOKEN`, so no command line
+holds it. A name holds no `:`, `/` or `.`, so anything that does is read as
+a URL. Each names what to send with `--workflow`, `--tool` and
+`--benchmark`, each given again for more:
 
 ```bash
 export AZATHOTH_REMOTE_TOKEN=<TOKEN>
-azathoth remote push https://azathoth.example.com --workflow <WORKFLOW_ID>
+azathoth remote push origin --workflow <WORKFLOW_ID>
 azathoth remote pull https://azathoth.example.com --workflow <WORKFLOW_ID>
 ```
 
@@ -3683,7 +3726,7 @@ Production state and the portfolio never travel. Refusals are the
 remote's own, or:
 
 ```text
-No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+No remote token was given; set <VARIABLE> to one created on the remote with `azathoth remote token create`.
 Name a workflow, tool version or benchmark to send.
 Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.
 The remote at <URL> could not be reached: <REASON>

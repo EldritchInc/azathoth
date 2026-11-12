@@ -1,8 +1,9 @@
-"""Remote commands for the Azathoth command-line application (ADR 0124).
+"""Remote commands for the Azathoth command-line application (ADR 0124, ADR 0126).
 
 A remote serves durable documents, and tokens are durable state of the
-database it serves, so these commands read and write only that database:
-no runtime is loaded, and no provider credentials are needed.
+database it serves, as the names an instance gives remotes are of its own,
+so these commands read and write only that database: no runtime is loaded,
+and no provider credentials are needed.
 """
 
 import sys
@@ -10,12 +11,15 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from azathoth import api
+from azathoth.api.remote import reach
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.service import current_author
 from azathoth.remote import (
     MISSING_REMOTE_EXTRA_MESSAGE,
     PROTOCOL_VERSION,
+    REMOTE_TOKEN_VARIABLE,
+    NamedRemote,
     RemotePluginError,
     RemoteToken,
     RemoteTokenError,
@@ -182,34 +186,99 @@ def tool_versions(
 
 
 def _remote(
-    url: str,
+    target: str,
 ) -> api.Remote:
-    """Return the remote at a URL, over the configured database's repositories.
+    """Return the remote a name or URL names, over the configured database's repositories.
 
     Raises:
         InvalidArgumentError: The URL is not one, or no token is set.
+        NotFoundError: No remote has the name.
     """
 
     held = repositories(CliRuntimeConfiguration.from_environment())
 
-    return api.Remote(url, lambda: held)
+    return reach(target, lambda: held)
+
+
+def _remotes() -> api.Remotes:
+    """Return the remotes the configured database names."""
+
+    held = repositories(CliRuntimeConfiguration.from_environment())
+
+    return api.Remotes(lambda: held)
+
+
+def named_line(
+    remote: NamedRemote,
+) -> str:
+    """Return one named remote's line: its name, its URL and its token's variable."""
+
+    return f"{remote.name}  {remote.url}  {remote.token_variable}"
+
+
+def add_remote(
+    *,
+    name: str,
+    url: str,
+    token_variable: str = REMOTE_TOKEN_VARIABLE,
+) -> int:
+    """Name the remote at a URL, its token read from a variable, so commands can name it."""
+
+    try:
+        added = _remotes().add(name, url, token_variable=token_variable)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(
+        f"Named remote {added.name} for {added.url}; its token is read from {added.token_variable}."
+    )
+
+    return 0
+
+
+def list_remotes() -> int:
+    """List the remotes this instance names, by name, one per line."""
+
+    for remote in _remotes().list():
+        print(named_line(remote))
+
+    return 0
+
+
+def remove_remote(
+    name: str,
+) -> int:
+    """Forget a remote's name, and the last portfolio read from it; nothing there changes."""
+
+    try:
+        removed = _remotes().remove(name)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(f"Removed remote {removed.name}, for {removed.url}; nothing at the remote changed.")
+
+    return 0
 
 
 def push_to_remote(
     *,
-    url: str,
+    remote: str,
     workflows: Sequence[UUID] = (),
     tools: Sequence[str] = (),
     benchmarks: Sequence[UUID] = (),
 ) -> int:
-    """Push the documents named, with what they need, to the remote at a URL.
+    """Push the documents named, with what they need, to the remote a name or URL names.
 
     What would stop them from running there is warned of on standard error,
     after the report; a warning never refuses the push (ADR 0125).
     """
 
     try:
-        report = _remote(url).push(
+        report = _remote(remote).push(
             workflows=workflows,
             tools=tool_versions(tools),
             benchmarks=benchmarks,
@@ -238,16 +307,16 @@ def push_to_remote(
 
 def pull_from_remote(
     *,
-    url: str,
+    remote: str,
     workflows: Sequence[UUID] = (),
     tools: Sequence[str] = (),
     benchmarks: Sequence[UUID] = (),
     include_restricted: bool = False,
 ) -> int:
-    """Pull the documents named, with what they need, from the remote at a URL."""
+    """Pull the documents named, with what they need, from the remote a name or URL names."""
 
     try:
-        report = _remote(url).pull(
+        report = _remote(remote).pull(
             workflows=workflows,
             tools=tool_versions(tools),
             benchmarks=benchmarks,
@@ -291,10 +360,14 @@ def token_line(
 
 __all__ = [
     "TOKEN_SHOWN_ONCE_NOTE",
+    "add_remote",
     "create_remote_token",
     "list_remote_tokens",
+    "list_remotes",
+    "named_line",
     "pull_from_remote",
     "push_to_remote",
+    "remove_remote",
     "revoke_remote_token",
     "serve_remote",
     "serving_line",
