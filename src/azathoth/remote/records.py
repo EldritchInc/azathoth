@@ -31,9 +31,12 @@ from azathoth.revisions import (
 )
 from azathoth.sensitivity import (
     DEFAULT_SENSITIVITY,
+    UNKNOWN_DATA_POLICY,
+    DataPolicy,
     Sensitivity,
     most_sensitive,
 )
+from azathoth.tools import ENVIRONMENT_GRANT_PATTERN
 
 Digest = Annotated[str, Field(pattern=CONTENT_DIGEST_PATTERN)]
 """A lowercase sha256 hex digest."""
@@ -394,10 +397,123 @@ class PullResponse(BaseModel):
     unresolved: tuple[str, ...] = ()
 
 
+class Head(BaseModel):
+    """One lineage as an instance holds it: its latest revision's chain, and what is in production.
+
+    `chain` is the latest revision's digest and the digests it was reached
+    by, oldest first; `number` is the latest revision's number there. A
+    workflow's `production_digest` is the revision in production there, or
+    None where it is not in production.
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    lineage: Lineage
+
+    chain: tuple[Digest, ...] = Field(
+        min_length=1,
+    )
+
+    number: int = Field(
+        ge=1,
+    )
+
+    production_digest: Digest | None = None
+
+
+class HeadsRequest(BaseModel):
+    """The lineages a client asks a remote about; none asks about every one it holds."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    protocol: int = Field(
+        default=PROTOCOL_VERSION,
+        ge=1,
+    )
+
+    lineages: tuple[Lineage, ...] = ()
+
+
+class HeadsResponse(BaseModel):
+    """The head of each lineage asked about that the remote holds; one it does not is left out."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    heads: tuple[Head, ...] = ()
+
+
+class PortfolioRecord(BaseModel):
+    """One model a remote's portfolio authorizes, and the data policy declared for it."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    identifier: str = Field(
+        min_length=1,
+    )
+
+    data_policy: DataPolicy = UNKNOWN_DATA_POLICY
+
+
+class PortfolioResponse(BaseModel):
+    """The models a remote's portfolio authorizes, in its order."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    entries: tuple[PortfolioRecord, ...] = ()
+
+
+CredentialName = Annotated[str, Field(pattern=ENVIRONMENT_GRANT_PATTERN)]
+"""An environment variable's name, or a grant ending in `*` covering every one it begins."""
+
+
+class CredentialsRequest(BaseModel):
+    """The environment variables a push's tools need, by name; no value ever travels."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    names: tuple[CredentialName, ...] = ()
+
+
+class CredentialsResponse(BaseModel):
+    """Which of the names asked about the remote's environment does not set, in the order asked."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    missing: tuple[CredentialName, ...] = ()
+
+
 __all__ = [
     "ContentRecord",
+    "CredentialsRequest",
+    "CredentialsResponse",
+    "Head",
+    "HeadsRequest",
+    "HeadsResponse",
     "MissingRequest",
     "MissingResponse",
+    "PortfolioRecord",
+    "PortfolioResponse",
     "PullRequest",
     "PullResponse",
     "PushBundle",

@@ -73,6 +73,7 @@ class Action(StrEnum):
     PULL = "pull"
     READ_CONTENT = "read_content"
     MANAGE_TOKENS = "manage_tokens"
+    READ_PORTFOLIO = "read_portfolio"
 
     @property
     def description(
@@ -123,6 +124,7 @@ class AuditEventKind(StrEnum):
     TOKEN_REVOKED = "token_revoked"
     REQUEST_DENIED = "request_denied"
     CAPABILITIES_READ = "capabilities_read"
+    PORTFOLIO_READ = "portfolio_read"
 
 
 class AuditEvent(BaseModel):

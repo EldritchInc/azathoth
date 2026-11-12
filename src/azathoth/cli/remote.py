@@ -139,6 +139,8 @@ def serve_remote(
         tools=held.tools,
         benchmarks=held.benchmarks,
         content=held.content,
+        production_states=held.production_states,
+        portfolio=held.portfolio,
         seams=seams,
         accepts_restricted=accept_restricted,
     )

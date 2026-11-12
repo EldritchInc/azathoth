@@ -9,6 +9,7 @@ from azathoth import __version__
 from azathoth.evaluation import BenchmarkDataset, BenchmarkRepository, InMemoryBenchmarkRepository
 from azathoth.inputs import ContentRef, InMemoryContentStore, content_bytes_digest
 from azathoth.persistence.repositories import open_repositories
+from azathoth.providers import InMemoryModelPortfolioRepository
 from azathoth.remote import (
     ACCEPT_RESTRICTED_HINT,
     MAX_CONTENT_BYTES,
@@ -32,6 +33,7 @@ from azathoth.tools import (
     ToolRepository,
 )
 from azathoth.workflows import (
+    InMemoryWorkflowProductionStateRepository,
     InMemoryWorkflowRepository,
     WorkflowRepository,
     WorkflowSpecification,
@@ -75,6 +77,8 @@ class Bare(Instance):
         self.tools: ToolRepository = InMemoryToolRepository()
         self.benchmarks: BenchmarkRepository = InMemoryBenchmarkRepository()
         self.content = InMemoryContentStore()
+        self.production_states = InMemoryWorkflowProductionStateRepository()
+        self.portfolio = InMemoryModelPortfolioRepository()
 
 
 def bundle(

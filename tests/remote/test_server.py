@@ -8,16 +8,22 @@ from starlette.testclient import TestClient
 
 from azathoth import __version__
 from azathoth.persistence.database import SCHEMA_VERSION
+from azathoth.providers import ModelPortfolioEntry
 from azathoth.remote import (
     MAX_CONTENT_BYTES,
     SENSITIVITY_HEADER,
     Action,
     AuditEvent,
     AuditEventKind,
+    CredentialsRequest,
     Decision,
+    HeadsRequest,
+    HeadsResponse,
     MissingRequest,
     NoAuditSink,
     OwnerOnlyPolicy,
+    PortfolioRecord,
+    PortfolioResponse,
     Principal,
     PullRequest,
     PushBundle,
@@ -28,7 +34,7 @@ from azathoth.remote import (
     restricted_refusal,
 )
 from azathoth.remote.server import UNKNOWN_TOKEN_MESSAGE, RemoteServer
-from azathoth.sensitivity import Sensitivity
+from azathoth.sensitivity import PRIVATE_DATA_POLICY, Sensitivity
 from tests.remote.test_closure import (
     BENCHMARK,
     CHILD,
@@ -89,6 +95,7 @@ class Remote:
         held: Instance | None = None,
         accepts_restricted: bool = False,
         guest: bool = False,
+        environ: dict[str, str] | None = None,
     ) -> None:
         tokens = SQLiteRemoteTokenRepository(tmp_path / "remote.db")
         self.token = tokens.create("laptop").secret
@@ -100,6 +107,8 @@ class Remote:
             tools=self.held.tools,
             benchmarks=self.held.benchmarks,
             content=self.content,
+            production_states=self.held.production_states,
+            portfolio=self.held.portfolio,
             seams=Seams(
                 authenticator=GuestAuthenticator() if guest else TokenAuthenticator(tokens),
                 policy=OwnerOnlyPolicy(),
@@ -107,6 +116,7 @@ class Remote:
             ),
             accepts_restricted=accepts_restricted,
             clock=lambda: NOW,
+            environ={} if environ is None else environ,
         )
         self.client = TestClient(server.app())
 
@@ -515,7 +525,7 @@ def test_a_pull_of_another_protocol_is_refused(
 
 
 class ChildOnlyPolicy:
-    """A plugin policy that lets its owner push and pull only the child workflow."""
+    """A plugin policy that lets its owner push, pull and ask about only the child workflow."""
 
     edition = "test"
 
@@ -540,6 +550,8 @@ def test_a_policy_decides_each_lineage_pushed_and_pulled(
         tools=remote.held.tools,
         benchmarks=remote.held.benchmarks,
         content=remote.content,
+        production_states=remote.held.production_states,
+        portfolio=remote.held.portfolio,
         seams=Seams(
             authenticator=TokenAuthenticator(SQLiteRemoteTokenRepository(tmp_path / "remote.db")),
             policy=ChildOnlyPolicy(),
@@ -580,3 +592,129 @@ def test_a_policy_decides_each_lineage_pushed_and_pulled(
 
     assert pulled.status_code == 200
     assert withheld.status_code == 403
+
+    asked = client.post(
+        "/v1/heads",
+        headers=remote.headers(),
+        content=HeadsRequest(lineages=(CHILD, PARENT)).model_dump_json(),
+    )
+
+    assert (asked.status_code, asked.json()) == (403, {"error": f"Only {CHILD} may travel here."})
+
+
+# Status
+
+
+def test_heads_name_each_lineage_asked_about_and_are_decided_per_lineage(
+    tmp_path: Path,
+) -> None:
+    held = local_with_history()
+    remote = Remote(tmp_path, held=held)
+
+    answer = remote.client.post(
+        "/v1/heads",
+        headers=remote.headers(),
+        content=HeadsRequest(lineages=(PARENT, BENCHMARK)).model_dump_json(),
+    )
+    (head,) = HeadsResponse.model_validate(answer.json()).heads
+
+    assert answer.status_code == 200
+    assert head.lineage == PARENT
+    assert head.chain == tuple(
+        record.revision_digest for record in held.workflows.lineage(PARENT_ID)
+    )
+    assert remote.audit.events == []
+
+    everything = remote.client.post(
+        "/v1/heads",
+        headers=remote.headers(),
+        content=HeadsRequest().model_dump_json(),
+    )
+
+    assert len(everything.json()["heads"]) == 5
+
+
+def test_heads_of_another_protocol_are_refused(
+    remote: Remote,
+) -> None:
+    answer = remote.client.post(
+        "/v1/heads",
+        headers=remote.headers(),
+        content=HeadsRequest(protocol=2).model_dump_json(),
+    )
+
+    assert answer.status_code == 400
+    assert answer.json()["error"].startswith("The client speaks remote protocol 2,")
+
+
+def test_the_portfolio_is_read_and_audited(
+    tmp_path: Path,
+) -> None:
+    held = Instance()
+    held.portfolio.save(
+        ModelPortfolioEntry(
+            provider="bedrock",
+            model="example/private",
+            data_policy=PRIVATE_DATA_POLICY,
+        )
+    )
+    remote = Remote(tmp_path, held=held)
+
+    answer = remote.client.get("/v1/portfolio", headers=remote.headers())
+
+    assert answer.status_code == 200
+    assert PortfolioResponse.model_validate(answer.json()) == PortfolioResponse(
+        entries=(
+            PortfolioRecord(identifier="bedrock/example/private", data_policy=PRIVATE_DATA_POLICY),
+        )
+    )
+    assert remote.audit.events == [
+        AuditEvent(kind=AuditEventKind.PORTFOLIO_READ, occurred_at=NOW, principal="laptop")
+    ]
+
+
+def test_the_credentials_the_remote_does_not_set_are_named_and_no_values(
+    tmp_path: Path,
+) -> None:
+    remote = Remote(tmp_path, environ={"SEARCH_TOKEN": "s3cret", "AWS_REGION": "us-east-1"})
+
+    answer = remote.client.post(
+        "/v1/credentials",
+        headers=remote.headers(),
+        content=CredentialsRequest(names=("SEARCH_TOKEN", "AWS_*", "OPENAI_KEY")).model_dump_json(),
+    )
+
+    assert (answer.status_code, answer.json()) == (200, {"missing": ["OPENAI_KEY"]})
+    assert "s3cret" not in answer.text
+
+
+def test_a_credential_name_that_is_no_variable_is_refused(
+    remote: Remote,
+) -> None:
+    answer = remote.client.post(
+        "/v1/credentials",
+        headers=remote.headers(),
+        content='{"names": ["NOT A NAME"]}',
+    )
+
+    assert answer.status_code == 400
+    assert answer.json()["error"].startswith("This request is not a CredentialsRequest at names.0")
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("POST", "/v1/heads", "{}"),
+        ("GET", "/v1/portfolio", None),
+        ("POST", "/v1/credentials", "{}"),
+    ],
+)
+def test_the_status_routes_need_a_token(
+    remote: Remote,
+    method: str,
+    path: str,
+    body: str | None,
+) -> None:
+    answer = remote.client.request(method, path, content=body)
+
+    assert (answer.status_code, answer.json()) == (401, {"error": UNKNOWN_TOKEN_MESSAGE})

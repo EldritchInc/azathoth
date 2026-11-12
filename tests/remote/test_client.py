@@ -9,7 +9,11 @@ from azathoth.remote import (
     DEFAULT_TIMEOUT_SECONDS,
     REMOTE_TOKEN_VARIABLE,
     Capabilities,
+    CredentialsRequest,
+    CredentialsResponse,
+    HeadsRequest,
     MissingRequest,
+    PortfolioResponse,
     PullRequest,
     PushBundle,
     RemoteClient,
@@ -249,3 +253,19 @@ def test_content_is_sent_with_its_label(
         )
 
     assert caught.value.status == 403
+
+
+def test_the_status_routes_are_spoken(
+    tmp_path: Path,
+) -> None:
+    held = local_with_history()
+    remote = Remote(tmp_path, held=held, environ={"SEARCH_TOKEN": "s3cret"})
+    client = client_of(remote)
+
+    assert [head.lineage for head in client.heads(HeadsRequest(lineages=(PARENT,))).heads] == [
+        PARENT
+    ]
+    assert client.portfolio() == PortfolioResponse()
+    assert client.missing_credentials(
+        CredentialsRequest(names=("SEARCH_TOKEN", "OPENAI_KEY"))
+    ) == CredentialsResponse(missing=("OPENAI_KEY",))

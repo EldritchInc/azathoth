@@ -15,8 +15,13 @@ from pydantic import BaseModel, ValidationError
 from azathoth.remote.protocol import SENSITIVITY_HEADER, Capabilities
 from azathoth.remote.receiving import ReceiveReport
 from azathoth.remote.records import (
+    CredentialsRequest,
+    CredentialsResponse,
+    HeadsRequest,
+    HeadsResponse,
     MissingRequest,
     MissingResponse,
+    PortfolioResponse,
     PullRequest,
     PullResponse,
     PushBundle,
@@ -248,6 +253,35 @@ class RemoteClient:
         return self._model(
             PullResponse,
             self._request("POST", "/v1/pull", content=request.model_dump_json()),
+        )
+
+    def heads(
+        self,
+        request: HeadsRequest,
+    ) -> HeadsResponse:
+        """Return the head of each lineage asked about that the remote holds, or of every one."""
+
+        return self._model(
+            HeadsResponse,
+            self._request("POST", "/v1/heads", content=request.model_dump_json()),
+        )
+
+    def portfolio(
+        self,
+    ) -> PortfolioResponse:
+        """Return the models the remote's portfolio authorizes, with their data policies."""
+
+        return self._model(PortfolioResponse, self._request("GET", "/v1/portfolio"))
+
+    def missing_credentials(
+        self,
+        request: CredentialsRequest,
+    ) -> CredentialsResponse:
+        """Return which of the credential names asked about the remote does not set."""
+
+        return self._model(
+            CredentialsResponse,
+            self._request("POST", "/v1/credentials", content=request.model_dump_json()),
         )
 
     def _request(

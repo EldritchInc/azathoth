@@ -180,6 +180,9 @@ with uvicorn:
 | `GET /v1/content/{digest}` | read content | the content's bytes |
 | `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
 | `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
+| `POST /v1/heads` | pull | the `HeadsResponse` to a `HeadsRequest` |
+| `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
+| `POST /v1/credentials` | push | the `CredentialsResponse` to a `CredentialsRequest` |
 
 A content upload names its label in `X-Azathoth-Sensitivity`, internal
 when absent. Every route but `/health` asks the authenticator who the
@@ -202,7 +205,7 @@ This remote does not know the token given. Send one its owner created with `azat
 ```
 
 Each request is audited as it is answered: a capabilities read, a push, a
-pull or a content read once it is served, and a refusal for want of a
+pull, a content read or a portfolio read once it is served, and a refusal for want of a
 token or permission as `request_denied`. Repositories are read and
 written off the event loop, one request at a time, since a PostgreSQL
 database's repositories share one connection.
@@ -247,6 +250,18 @@ is invoked, so it runs at its production revision; a child named only when
 its step runs cannot be checked. A step that chooses its model by
 requirements is not checked either, since the remote's portfolio decides
 which model it runs on.
+
+## Inspection
+
+A client's status asks the remote three things, each read-only
+(ADR 0125). `heads(request, ...)` answers with the `Head` of each lineage
+asked about, or of every one held when none is: its latest revision's
+chain of digests, oldest first, its number there, and, for a workflow, the
+digest of the revision in production there. `portfolio_records(portfolio)`
+names each model the portfolio authorizes and its declared data policy.
+`missing_credentials(request, environ)` says which of the credential names
+asked about the environment does not set, a grant ending in `*` set when
+any variable it begins is; it never reads or returns a value.
 
 ## The Client
 
