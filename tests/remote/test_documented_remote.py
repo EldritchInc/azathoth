@@ -19,9 +19,12 @@ from azathoth.remote import (
     RemotePluginError,
     RemoteUnreachableError,
     RevisionRecord,
+    child_drift_warnings,
+    missing_credential_warning,
     receive_content,
     require_protocol,
     require_remote_url,
+    unapproved_model_warnings,
 )
 from azathoth.remote.server import UNKNOWN_TOKEN_MESSAGE
 from azathoth.revisions import Lineage, RevisionKind, content_digest, json_digest, revision_digest
@@ -35,6 +38,7 @@ from tests.remote.test_closure import (
     CALL_STEP,
     CHILD,
     CHILD_ID,
+    COUNT_ID,
     PARENT,
     PARENT_ID,
     SUMMARIZE_STEP,
@@ -59,6 +63,14 @@ from tests.remote.test_receiving import (
 from tests.remote.test_records import WORKFLOW_ID, record, tampered
 from tests.remote.test_records import specification as counting
 from tests.remote.test_seams import Installed, TeamPolicy, default
+from tests.remote.test_status import (
+    PROMPT_STEP,
+    TOOL,
+    A,
+    B,
+    prompting,
+    running_child,
+)
 
 README = Path(__file__).parents[2] / "src" / "azathoth" / "remote" / "README.md"
 
@@ -345,4 +357,37 @@ def test_the_client_refusals_are_documented() -> None:
     )
 
     for message in messages:
+        documented(message)
+
+
+def test_the_push_warnings_are_documented() -> None:
+    messages = [
+        missing_credential_warning(TOOL, "SEARCH_TOKEN")
+        .replace(str(COUNT_ID), "<TOOL_ID>")
+        .replace("1.0.0", "<VERSION>")
+        .replace("SEARCH_TOKEN", "<NAME>"),
+        *child_drift_warnings(
+            running_child(),
+            local_latest={CHILD_ID: B},
+            remote_production={CHILD_ID: A},
+        ),
+        *child_drift_warnings(running_child(), local_latest={}, remote_production={}),
+        *unapproved_model_warnings(prompting(), authorized={"bedrock/example/private"}),
+    ]
+    names = {
+        str(CALL_STEP): "<STEP_ID>",
+        str(PROMPT_STEP): "<STEP_ID>",
+        f"workflow {CHILD_ID}": "workflow <CHILD_ID>",
+        str(PARENT_ID): "<WORKFLOW_ID>",
+        A: "<RUNNING>",
+        B: "<LATEST>",
+        "openrouter/example/frontier": "<MODEL>",
+    }
+
+    assert len(messages) == 4
+
+    for message in messages:
+        for value, placeholder in names.items():
+            message = message.replace(value, placeholder)
+
         documented(message)

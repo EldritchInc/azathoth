@@ -212,6 +212,42 @@ asks for, without the revisions the client holds. A benchmark with a
 restricted revision comes only to a pull with `include_restricted`;
 otherwise it is named in `withheld`, and the rest still comes.
 
+## Status
+
+`relation(local, remote)` says how a lineage here relates to the same
+lineage at a remote, from each side's chain of revision digests, oldest
+first (ADR 0125):
+
+| Relation | When |
+| --- | --- |
+| `in_sync` | Both sides' latest revision is the same |
+| `ahead` | The remote's latest is one this instance's latest was reached by; a push moves it forward |
+| `behind` | This instance's latest is one the remote's was reached by; a pull moves it forward |
+| `diverged` | Neither; a push is refused, and a pull forks it here |
+| `local_only` | Only this instance holds it |
+| `remote_only` | Only the remote holds it |
+
+A `RemoteStatus` holds a `ComponentStatus` for each lineage, and a
+`ModelStatus` for each model, saying whether it is authorized here and at
+the remote. A push warns, and never refuses, of what would stop its
+documents from running at the remote:
+
+```text
+Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
+Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is in production at the remote as revision <RUNNING>, not <LATEST>, the latest here.
+Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is not in production at the remote; it cannot run there until the child is promoted.
+Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the remote has not authorized; it cannot run there until the remote's portfolio holds it.
+```
+
+A tool's credentials are the environment variables its implementations
+need, `credential_names(document)`: a process implementation's grants, a
+grant ending in `*` covering every variable it begins, and an MCP
+implementation's `authorization` variable. Only names are read. A child
+is invoked, so it runs at its production revision; a child named only when
+its step runs cannot be checked. A step that chooses its model by
+requirements is not checked either, since the remote's portfolio decides
+which model it runs on.
+
 ## The Client
 
 `RemoteClient(url, token)` speaks the protocol over httpx, and is a
