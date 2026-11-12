@@ -100,8 +100,8 @@ remote nothing more.
 
 ## Future Work
 
-- `azathoth status` and `azathoth remote add|list|remove` on the command
-  line, with remotes named, come with the CLI work that follows.
+- Status on the command line, as `azathoth remote status`, and remotes
+  named with `azathoth remote add|list|remove`, came with ADR 0126.
 - Approving a model into the remote's portfolio, and promoting a workflow
   there, from a client: a `manage_portfolio` and a `promote` action, which
   the core's policy grants only the owner, and a team's policy grants

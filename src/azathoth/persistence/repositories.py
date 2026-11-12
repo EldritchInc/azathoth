@@ -49,12 +49,16 @@ from azathoth.providers import (
 )
 from azathoth.remote import (
     REMOTE_PORTFOLIO_SNAPSHOT_TABLES,
+    REMOTE_TABLES,
     REMOTE_TOKEN_TABLES,
     RemotePortfolioSnapshotRepository,
+    RemoteRepository,
     RemoteTokenRepository,
     SQLiteRemotePortfolioSnapshotRepository,
+    SQLiteRemoteRepository,
     SQLiteRemoteTokenRepository,
     SqlRemotePortfolioSnapshotRepository,
+    SqlRemoteRepository,
     SqlRemoteTokenRepository,
 )
 from azathoth.revisions import REVISION_LINEAGE_TABLES
@@ -142,6 +146,7 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *MODEL_PORTFOLIO_POLICY_TABLES,
     *REMOTE_TOKEN_TABLES,
     *REMOTE_PORTFOLIO_SNAPSHOT_TABLES,
+    *REMOTE_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 
@@ -433,6 +438,18 @@ class Repositories:
             SQLiteRemotePortfolioSnapshotRepository(path)
             if path is not None
             else SqlRemotePortfolioSnapshotRepository(self._database)
+        )
+
+    @cached_property
+    def remotes(
+        self,
+    ) -> RemoteRepository:
+        path = self._sqlite_path
+
+        return (
+            SQLiteRemoteRepository(path)
+            if path is not None
+            else SqlRemoteRepository(self._database)
         )
 
     @cached_property

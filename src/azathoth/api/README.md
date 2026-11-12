@@ -326,8 +326,42 @@ keeps it; a remote that cannot be reached is no error, but a status whose
 remote side is unknown, each relation `None`, its models read from the last
 portfolio kept, as of `portfolio_synced_at` (ADR 0125).
 
+`instance.remotes` gives remotes names, so `instance.remote("origin")`
+reaches the remote it names (ADR 0126). A name is 1 to 64 letters, digits,
+`_` and `-`; it holds no `:`, `/` or `.`, so `instance.remote` reads
+anything that does as a URL. Each name keeps the variable its token is read
+from, `AZATHOTH_REMOTE_TOKEN` unless another is given, and never a token:
+
+```python
+with api.open("azathoth.db") as instance:
+    instance.remotes.add("origin", "https://azathoth.example.com")
+    instance.remotes.add(
+        "staging",
+        "https://staging.example.com",
+        token_variable="AZATHOTH_STAGING_TOKEN",
+    )
+    pushed = instance.remote("staging").push(workflows=[workflow_id])
+```
+
+| Call | Returns |
+| --- | --- |
+| `remotes.list()` | Every `NamedRemote`, ordered by name: its `name`, `url`, `token_variable` and `added_at`. |
+| `remotes.get(name)` | The `NamedRemote` of a name. |
+| `remotes.add(name, url, token_variable="AZATHOTH_REMOTE_TOKEN")` | The `NamedRemote` it named, its URL without a trailing `/`. |
+| `remotes.remove(name)` | The `NamedRemote` it forgot. The last portfolio read from its URL is forgotten too, unless another name is kept for it; nothing at the remote changes. |
+
+A name already given is a `ConflictError`, and one never given a
+`NotFoundError`:
+
 ```text
-No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+Remote <NAME> is already named, for <URL>; remove it first, or choose another name.
+No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
+Remote name '<NAME>' is not one: use 1 to 64 letters, digits, '_' or '-'.
+Token variable '<VARIABLE>' is not an environment variable's name: use letters, digits and '_', not beginning with a digit.
+```
+
+```text
+No remote token was given; set <VARIABLE> to one created on the remote with `azathoth remote token create`.
 Name a workflow, tool version or benchmark to send.
 Remote URL '<URL>' is not an http or https URL.
 ```
@@ -358,7 +392,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `InstanceUnavailableError` | `instance_unavailable` | PostgreSQL is named without the `postgres` extra. |
 | `InstanceSchemaError` | `instance_schema` | The PostgreSQL database does not hold this Azathoth's schema. |
 | `InstanceClosedError` | `instance_closed` | A call is made on a closed instance. |
-| `NotFoundError` | `not_found` | No workflow, tool version or benchmark has the ID named. |
+| `NotFoundError` | `not_found` | No workflow, tool version or benchmark has the ID named, or no remote the name. |
 | `RevisionNotFoundError` | `revision_not_found` | It has no revision with the number named; a `NotFoundError` too. |
 | `InvalidArgumentError` | `invalid_argument` | A history limit is below 1; a `ValueError` too. |
 | `ConflictError` | `conflict` | A model is already authorized, or is a semantic judge. |

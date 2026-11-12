@@ -1,11 +1,12 @@
-"""Remote command-line parser construction (ADR 0124)."""
+"""Remote command-line parser construction (ADR 0124, ADR 0126)."""
 
 from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
 from uuid import UUID
 
-from azathoth.remote import DEFAULT_HOST, DEFAULT_PORT
+from azathoth.cli.output_format import StatusOutputFormat
+from azathoth.remote import DEFAULT_HOST, DEFAULT_PORT, REMOTE_TOKEN_VARIABLE
 
 REMOTE_COMMAND = "remote"
 
@@ -23,7 +24,21 @@ REMOTE_PUSH_ACTION = "push"
 
 REMOTE_PULL_ACTION = "pull"
 
+REMOTE_STATUS_ACTION = "status"
+
+REMOTE_OUTPUT_ATTRIBUTE = "remote_output"
+
+REMOTE_TARGET_ATTRIBUTE = "remote_target"
+
+REMOTE_ADD_ACTION = "add"
+REMOTE_LIST_ACTION = "list"
+REMOTE_REMOVE_ACTION = "remove"
+
+REMOTE_NAME_ATTRIBUTE = "remote_name"
+
 REMOTE_URL_ATTRIBUTE = "remote_url"
+
+REMOTE_TOKEN_VARIABLE_ATTRIBUTE = "remote_token_variable"
 
 REMOTE_WORKFLOWS_ATTRIBUTE = "remote_workflows"
 
@@ -53,7 +68,10 @@ def add_remote_parser(
 
     remote_parser = commands.add_parser(
         REMOTE_COMMAND,
-        help="Serve this instance as a remote, and issue the tokens that reach it.",
+        help=(
+            "Name the remotes this instance reaches, push to and pull from them, or serve "
+            "this instance as one."
+        ),
     )
 
     remote_actions = remote_parser.add_subparsers(
@@ -90,13 +108,26 @@ def add_remote_parser(
     for action, verb, help_text in (
         (REMOTE_PUSH_ACTION, "push", "Push documents, with what they need, to a remote."),
         (REMOTE_PULL_ACTION, "pull", "Pull documents, with what they need, from a remote."),
+        (
+            REMOTE_STATUS_ACTION,
+            "report",
+            "Say how documents here relate to a remote's, and where each model is authorized.",
+        ),
     ):
         sync_parser = remote_actions.add_parser(action, help=help_text)
+        everything = (
+            " Name none to report everything either side holds."
+            if action == REMOTE_STATUS_ACTION
+            else ""
+        )
 
         sync_parser.add_argument(
-            REMOTE_URL_ATTRIBUTE,
-            metavar="URL",
-            help="The remote's URL; its token is read from AZATHOTH_REMOTE_TOKEN.",
+            REMOTE_TARGET_ATTRIBUTE,
+            metavar="REMOTE",
+            help=(
+                "A remote's name, its token read from the variable it was named with, or its "
+                f"URL, its token read from {REMOTE_TOKEN_VARIABLE}."
+            ),
         )
 
         sync_parser.add_argument(
@@ -106,7 +137,7 @@ def add_remote_parser(
             type=UUID,
             action="append",
             default=[],
-            help=f"A workflow to {verb}; give it again for more.",
+            help=f"A workflow to {verb}; give it again for more.{everything}",
         )
 
         sync_parser.add_argument(
@@ -115,7 +146,7 @@ def add_remote_parser(
             metavar="TOOL_ID@VERSION",
             action="append",
             default=[],
-            help=f"A tool version to {verb}; give it again for more.",
+            help=f"A tool version to {verb}; give it again for more.{everything}",
         )
 
         sync_parser.add_argument(
@@ -125,7 +156,7 @@ def add_remote_parser(
             type=UUID,
             action="append",
             default=[],
-            help=f"A benchmark to {verb}; give it again for more.",
+            help=f"A benchmark to {verb}; give it again for more.{everything}",
         )
 
         if action == REMOTE_PULL_ACTION:
@@ -135,6 +166,62 @@ def add_remote_parser(
                 action="store_true",
                 help="Pull restricted benchmarks too, which are otherwise withheld.",
             )
+
+        if action == REMOTE_STATUS_ACTION:
+            sync_parser.add_argument(
+                "--output",
+                dest=REMOTE_OUTPUT_ATTRIBUTE,
+                choices=[output.value for output in StatusOutputFormat],
+                default=StatusOutputFormat.TEXT.value,
+                help=(
+                    "Output format: text writes a line per component and per model; json "
+                    "writes the service API's RemoteStatus."
+                ),
+            )
+
+    add_parser = remote_actions.add_parser(
+        REMOTE_ADD_ACTION,
+        help="Name a remote, so commands can name it instead of its URL.",
+    )
+
+    add_parser.add_argument(
+        REMOTE_NAME_ATTRIBUTE,
+        metavar="NAME",
+        help="A name for the remote: letters, digits, '_' or '-'.",
+    )
+
+    add_parser.add_argument(
+        REMOTE_URL_ATTRIBUTE,
+        metavar="URL",
+        help="The remote's http or https URL.",
+    )
+
+    add_parser.add_argument(
+        "--token-variable",
+        dest=REMOTE_TOKEN_VARIABLE_ATTRIBUTE,
+        metavar="VARIABLE",
+        default=REMOTE_TOKEN_VARIABLE,
+        help=(
+            f"The environment variable its token is read from; {REMOTE_TOKEN_VARIABLE} by "
+            "default. Only the variable's name is kept, never a token."
+        ),
+    )
+
+    remote_actions.add_parser(
+        REMOTE_LIST_ACTION,
+        help="List the remotes this instance names, by name.",
+    )
+
+    remove_parser = remote_actions.add_parser(
+        REMOTE_REMOVE_ACTION,
+        help="Forget a remote's name; nothing at the remote changes.",
+    )
+
+    remove_parser.add_argument(
+        REMOTE_NAME_ATTRIBUTE,
+        metavar="NAME",
+        help="The name to forget.",
+    )
 
     token_parser = remote_actions.add_parser(
         REMOTE_TOKEN_ACTION,

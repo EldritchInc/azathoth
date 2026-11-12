@@ -151,15 +151,24 @@ azathoth
 │   └── remove <MODEL_IDENTIFIER>
 │
 ├── remote
-│   ├── push <URL>
+│   ├── add <NAME> <URL>
+│   │   └── --token-variable <VARIABLE>
+│   ├── list
+│   ├── remove <NAME>
+│   ├── push <REMOTE>
 │   │   ├── --workflow <WORKFLOW_ID>
 │   │   ├── --tool <TOOL_ID>@<VERSION>
 │   │   └── --benchmark <BENCHMARK_ID>
-│   ├── pull <URL>
+│   ├── pull <REMOTE>
 │   │   ├── --workflow <WORKFLOW_ID>
 │   │   ├── --tool <TOOL_ID>@<VERSION>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   └── --include-restricted
+│   ├── status <REMOTE>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   ├── --benchmark <BENCHMARK_ID>
+│   │   └── --output text|json
 │   ├── serve
 │   │   ├── --host <HOST>
 │   │   ├── --port <PORT>
@@ -430,14 +439,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 6; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 7; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 6)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 7)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -3627,17 +3636,56 @@ azathoth remote serve needs starlette and uvicorn, which are not installed; inst
 Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
 ```
 
+# Naming Remotes
+
+`remote add` gives a remote a name, so commands name it instead of its URL
+(ADR 0126). A name is 1 to 64 letters, digits, `_` and `-`. Each keeps the
+environment variable its remote's token is read from,
+`AZATHOTH_REMOTE_TOKEN` unless `--token-variable` names another, so two
+remotes are reached with two tokens; only the variable's name is kept,
+never a token:
+
+```bash
+azathoth remote add origin https://azathoth.example.com
+azathoth remote add staging https://staging.example.com --token-variable AZATHOTH_STAGING_TOKEN
+```
+
+```text
+Named remote origin for https://azathoth.example.com; its token is read from AZATHOTH_REMOTE_TOKEN.
+```
+
+`remote list` lists the names, in order, one per line, with each one's URL
+and token variable. `remote remove` forgets a name, and the last portfolio
+read from its URL unless another name is kept for it; nothing at the remote
+changes:
+
+```text
+origin  https://azathoth.example.com  AZATHOTH_REMOTE_TOKEN
+Removed remote origin, for https://azathoth.example.com; nothing at the remote changed.
+```
+
+Names are durable state of this instance's database, as git remotes are of
+a repository, so two instances may give one remote different names. A name
+already given, or one never given, is refused:
+
+```text
+Remote <NAME> is already named, for <URL>; remove it first, or choose another name.
+No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
+```
+
 # Pushing and Pulling
 
 `remote push` sends workflows, tool versions and benchmarks to a remote,
-and `remote pull` brings them back (ADR 0124). Each reads the remote's
-token from `AZATHOTH_REMOTE_TOKEN`, so no command line holds it, and names
-what to send with `--workflow`, `--tool` and `--benchmark`, each given
-again for more:
+and `remote pull` brings them back (ADR 0124). Each names the remote by a
+name `remote add` gave it, its token read from that name's variable, or by
+its URL, its token read from `AZATHOTH_REMOTE_TOKEN`, so no command line
+holds it. A name holds no `:`, `/` or `.`, so anything that does is read as
+a URL. Each names what to send with `--workflow`, `--tool` and
+`--benchmark`, each given again for more:
 
 ```bash
 export AZATHOTH_REMOTE_TOKEN=<TOKEN>
-azathoth remote push https://azathoth.example.com --workflow <WORKFLOW_ID>
+azathoth remote push origin --workflow <WORKFLOW_ID>
 azathoth remote pull https://azathoth.example.com --workflow <WORKFLOW_ID>
 ```
 
@@ -3683,11 +3731,51 @@ Production state and the portfolio never travel. Refusals are the
 remote's own, or:
 
 ```text
-No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+No remote token was given; set <VARIABLE> to one created on the remote with `azathoth remote token create`.
 Name a workflow, tool version or benchmark to send.
 Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.
 The remote at <URL> could not be reached: <REASON>
 ```
+
+# Remote Status
+
+`remote status` says how this instance's workflows, tool versions and
+benchmarks relate to a remote's, and where each model they need is
+authorized (ADR 0125). It names the remote as `remote push` does, and what
+to report with `--workflow`, `--tool` and `--benchmark`; naming none
+reports everything either side holds. Nothing moves:
+
+```bash
+azathoth remote status origin
+```
+
+```text
+Status of <REMOTE>: reached.
+<LINEAGE>  <RELATION>  here <NUMBER> <DIGEST>  there <NUMBER> <DIGEST>
+model <MODEL>  authorized here yes  there unknown
+```
+
+Each component's relation is `in_sync`, `ahead` (a push moves the remote
+forward), `behind` (a pull moves this instance forward), `diverged`,
+`local_only` or `remote_only`, and each side names its latest revision's
+number there and the first 12 characters of its digest, or `none`. A
+workflow also says which revision is `in production there`, or `not in
+production there`. Each model says whether it is authorized here, and at the
+remote: `yes`, `no` or `unknown`.
+
+A remote that cannot be reached is no failure. Its side, each relation and
+what is in production there are `unknown`, and its models are read from the
+portfolio it last returned, which `remote status` and `remote push` keep:
+
+```text
+Status of <REMOTE>: not reached; its side is unknown.
+Its portfolio is as last read, at <TIME>.
+Its portfolio was never read here.
+```
+
+`--output json` writes the service API's `RemoteStatus` instead, with each
+digest in full. A refused token, or a remote of another protocol, is still
+refused.
 
 # Remote Tokens
 

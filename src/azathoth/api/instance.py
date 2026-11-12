@@ -17,7 +17,7 @@ from azathoth.api.errors import (
 from azathoth.api.invocations import Invocations
 from azathoth.api.models import API_STABILITY, InstanceDescription
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
-from azathoth.api.remote import Remote
+from azathoth.api.remote import Remote, Remotes, reach
 from azathoth.api.running import Runs
 from azathoth.inputs import S3ContentLocation, S3ContentStore
 from azathoth.persistence import (
@@ -48,7 +48,8 @@ class Azathoth:
 
     Operations are grouped by what they act on: `workflows`, `tools`,
     `benchmarks`, `models`, `portfolio`, `runs` and `invocations`; `remote`
-    names a remote to push to and pull from.
+    names a remote to push to and pull from, and `remotes` the names this
+    instance gives remotes.
     """
 
     def __init__(
@@ -98,6 +99,7 @@ class Azathoth:
             telemetry,
         )
         self._invocations = Invocations(self._open_repositories)
+        self._remotes = Remotes(self._open_repositories)
 
     def __enter__(
         self,
@@ -176,25 +178,36 @@ class Azathoth:
 
         return self._invocations
 
+    @property
+    def remotes(
+        self,
+    ) -> Remotes:
+        """Return the remotes this instance names (ADR 0126)."""
+
+        return self._remotes
+
     def remote(
         self,
-        url: str,
+        target: str,
         *,
         token: str | None = None,
         http: Callable[[], HttpClient] | None = None,
     ) -> Remote:
-        """Return the remote at `url`, to push to and pull from (ADR 0124).
+        """Return the remote a URL, or a name `remotes` gave it, names (ADR 0124, ADR 0126).
 
-        It is reached with `token`, or the token `AZATHOTH_REMOTE_TOKEN`
-        holds; `http`, when given, makes the HTTP client each call is sent
-        over, as tests do.
+        It is reached with `token`, or the token its variable holds:
+        `AZATHOTH_REMOTE_TOKEN` for a URL, or the one its name was given.
+        `http`, when given, makes the HTTP client each call is sent over, as
+        tests do.
 
         Raises:
+            InstanceClosedError: The instance was closed.
             InvalidArgumentError: The URL is not an http or https URL, or no
                 token is given or set.
+            NotFoundError: No remote has the name.
         """
 
-        return Remote(url, self._open_repositories, token=token, http=http)
+        return reach(target, self._open_repositories, token=token, http=http)
 
     def describe(
         self,

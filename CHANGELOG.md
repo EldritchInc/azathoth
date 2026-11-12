@@ -149,10 +149,28 @@ release dates are on the
   another revision or not at all, and a model its steps fix that the remote
   has not authorized; a warning never refuses the push
   ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
-- The database schema is now version 6, keeping the last portfolio read
-  from each remote; run `azathoth init` once to upgrade a PostgreSQL
-  database
+- Database schema version 6 keeps the last portfolio read from each remote
   ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
+- `azathoth remote add <NAME> <URL>` names a remote, with the environment
+  variable its token is read from, `AZATHOTH_REMOTE_TOKEN` unless
+  `--token-variable` names another; the token itself is never kept.
+  `remote list` lists the names and `remote remove` forgets one, with the
+  last portfolio read from it. `azathoth.api`'s `instance.remotes` does the
+  same
+  ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
+- `azathoth remote push`, `pull` and `status`, and `instance.remote`, take a
+  remote's name or its URL; anything holding `:`, `/` or `.` is read as a
+  URL, so a host given without its scheme is refused as one
+  ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
+- `azathoth remote status <REMOTE>` reports how each workflow, tool version
+  and benchmark relates to the remote's, which revision is in production
+  there, and where each model is authorized; a remote that cannot be
+  reached is no failure, its models read from the last portfolio kept.
+  `--output json` writes the service API's `RemoteStatus`
+  ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
+- The database schema is now version 7, keeping the remotes an instance
+  names; run `azathoth init` once to upgrade a PostgreSQL database
+  ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
 
 ## 1.3.0
 

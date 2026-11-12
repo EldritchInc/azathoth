@@ -88,6 +88,7 @@ imported before it existed: its backfill writes them, as part of the same
 | `4` | `model_portfolio_policy_declarations`, which records who declared each portfolio entry's data policy, and when (ADR 0123). |
 | `5` | `remote_tokens`, which keeps the digests of the bearer tokens a remote issues (ADR 0124). |
 | `6` | `remote_portfolio_snapshots`, which keeps the last portfolio read from each remote, and when (ADR 0125). |
+| `7` | `remotes`, which keeps the remotes an instance names, each with its URL and the variable its token is read from (ADR 0126). |
 
 An SQLite file needs no `init` to be used: each repository creates its
 tables when it opens the file, so a file of an earlier version gains the
@@ -133,6 +134,7 @@ upgraded in place, as it always has been. `init` still installs the standard too
 | `model_portfolio_policy_declarations` | `azathoth.providers` |
 | `remote_tokens` | `azathoth.remote` |
 | `remote_portfolio_snapshots` | `azathoth.remote` |
+| `remotes` | `azathoth.remote` |
 
 Documents and evidence stay JSON text, never `JSONB`, so what Azathoth reads
 back is byte for byte what it wrote, and digests over it hold in either
