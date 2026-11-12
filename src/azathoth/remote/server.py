@@ -14,14 +14,18 @@ audited.
 | `GET /v1/content/{digest}` | read content | the content's bytes |
 | `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
 | `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
+| `POST /v1/heads` | pull | the `HeadsResponse` to a `HeadsRequest` |
+| `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
+| `POST /v1/credentials` | push | the `CredentialsResponse` to a `CredentialsRequest` |
 
 Repositories are read and written off the event loop, one request at a
 time, since a PostgreSQL database's repositories share one connection.
 """
 
 import asyncio
+import os
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Final, TypeVar
@@ -35,7 +39,9 @@ from starlette.routing import Route
 
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
+from azathoth.providers import ModelPortfolioRepository
 from azathoth.remote.closure import lineage_records
+from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
     MAX_PUSH_BYTES,
@@ -51,12 +57,18 @@ from azathoth.remote.receiving import (
     receive,
     receive_content,
 )
-from azathoth.remote.records import MissingRequest, PullRequest, PushBundle
+from azathoth.remote.records import (
+    CredentialsRequest,
+    HeadsRequest,
+    MissingRequest,
+    PullRequest,
+    PushBundle,
+)
 from azathoth.remote.seams import Action, AuditEvent, AuditEventKind, Principal, Seams
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
 from azathoth.tools import ToolRepository
-from azathoth.workflows import WorkflowRepository
+from azathoth.workflows import WorkflowProductionStateRepository, WorkflowRepository
 
 CONTENT_MEDIA_TYPE: Final = "application/octet-stream"
 """The media type content is served as; its handle names its own."""
@@ -113,14 +125,22 @@ class RemoteServer:
         tools: ToolRepository,
         benchmarks: BenchmarkRepository,
         content: ContentStore,
+        production_states: WorkflowProductionStateRepository,
+        portfolio: ModelPortfolioRepository,
         seams: Seams,
         accepts_restricted: bool,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        environ: Mapping[str, str] | None = None,
     ) -> None:
+        """Serve the given repositories; `environ` defaults to the process's own environment."""
+
         self.workflows = workflows
         self.tools = tools
         self.benchmarks = benchmarks
         self.content = content
+        self.production_states = production_states
+        self.portfolio = portfolio
+        self.environ: Mapping[str, str] = os.environ if environ is None else environ
         self.seams = seams
         self.accepts_restricted = accepts_restricted
         self._clock = clock
@@ -152,6 +172,9 @@ class RemoteServer:
                 ),
                 Route("/v1/push", self.push, methods=["POST"]),
                 Route("/v1/pull", self.pull, methods=["POST"]),
+                Route("/v1/heads", self.heads, methods=["POST"]),
+                Route("/v1/portfolio", self.portfolio_route, methods=["GET"]),
+                Route("/v1/credentials", self.credentials, methods=["POST"]),
             ],
         )
 
@@ -222,6 +245,35 @@ class RemoteServer:
         """Send the bundle a pull asks for."""
 
         return await self._serve(request, Action.PULL, AuditEventKind.PULL, self._pull)
+
+    async def heads(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the head of each lineage asked about, or of every one held."""
+
+        return await self._serve(request, Action.PULL, None, self._heads)
+
+    async def portfolio_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the models this remote's portfolio authorizes."""
+
+        return await self._serve(
+            request,
+            Action.READ_PORTFOLIO,
+            AuditEventKind.PORTFOLIO_READ,
+            self._portfolio,
+        )
+
+    async def credentials(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer which of the credential names asked about this remote does not set."""
+
+        return await self._serve(request, Action.PUSH, None, self._credentials)
 
     # Handlers, each answering for an allowed principal
 
@@ -354,6 +406,48 @@ class RemoteServer:
             ", ".join(str(root) for root in asked.roots),
             f"Sent {len(answer.bundle.revisions)} revisions; withheld {len(answer.withheld)}.",
         )
+
+    async def _heads(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        asked = _parse(HeadsRequest, await _body(request, MAX_PUSH_BYTES))
+        _require_protocol(asked.protocol)
+
+        for lineage in asked.lineages:
+            self._decide(principal, Action.PULL, str(lineage))
+
+        answer = await self._blocking(
+            lambda: heads(
+                asked,
+                workflows=self.workflows,
+                tools=self.tools,
+                benchmarks=self.benchmarks,
+                production_states=self.production_states,
+            )
+        )
+
+        return JSONResponse(answer.model_dump(mode="json")), None, None
+
+    async def _portfolio(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        answer = await self._blocking(lambda: portfolio_records(self.portfolio))
+
+        return JSONResponse(answer.model_dump(mode="json")), None, None
+
+    async def _credentials(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        asked = _parse(CredentialsRequest, await _body(request, MAX_PUSH_BYTES))
+        answer = missing_credentials(asked, self.environ, case_insensitive=os.name == "nt")
+
+        return JSONResponse(answer.model_dump(mode="json")), None, None
 
     # Authenticating, deciding and auditing
 

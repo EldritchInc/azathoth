@@ -139,6 +139,7 @@ def test_actions_are_named_as_messages_name_them() -> None:
         "pull",
         "read content",
         "manage tokens",
+        "read portfolio",
     ]
 
 
@@ -156,7 +157,7 @@ def test_the_core_audits_nothing() -> None:
     )
 
 
-def test_audit_events_are_the_seven_a_remote_records() -> None:
+def test_audit_events_are_the_eight_a_remote_records() -> None:
     assert [kind.value for kind in AuditEventKind] == [
         "push",
         "pull",
@@ -165,6 +166,7 @@ def test_audit_events_are_the_seven_a_remote_records() -> None:
         "token_revoked",
         "request_denied",
         "capabilities_read",
+        "portfolio_read",
     ]
 
     with pytest.raises(ValidationError):

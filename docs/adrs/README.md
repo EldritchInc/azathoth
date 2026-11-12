@@ -147,3 +147,4 @@ requests that made it:
 - [ADR 0122: Lineage and Digests](0122-lineage-and-digests.md)
 - [ADR 0123: Sensitivity Labels](0123-sensitivity-labels.md)
 - [ADR 0124: Remote Push and Pull](0124-remote.md)
+- [ADR 0125: Remote Status](0125-remote-status.md)

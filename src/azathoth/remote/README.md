@@ -180,6 +180,9 @@ with uvicorn:
 | `GET /v1/content/{digest}` | read content | the content's bytes |
 | `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
 | `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
+| `POST /v1/heads` | pull | the `HeadsResponse` to a `HeadsRequest` |
+| `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
+| `POST /v1/credentials` | push | the `CredentialsResponse` to a `CredentialsRequest` |
 
 A content upload names its label in `X-Azathoth-Sensitivity`, internal
 when absent. Every route but `/health` asks the authenticator who the
@@ -202,7 +205,7 @@ This remote does not know the token given. Send one its owner created with `azat
 ```
 
 Each request is audited as it is answered: a capabilities read, a push, a
-pull or a content read once it is served, and a refusal for want of a
+pull, a content read or a portfolio read once it is served, and a refusal for want of a
 token or permission as `request_denied`. Repositories are read and
 written off the event loop, one request at a time, since a PostgreSQL
 database's repositories share one connection.
@@ -211,6 +214,62 @@ database's repositories share one connection.
 asks for, without the revisions the client holds. A benchmark with a
 restricted revision comes only to a pull with `include_restricted`;
 otherwise it is named in `withheld`, and the rest still comes.
+
+## Status
+
+`relation(local, remote)` says how a lineage here relates to the same
+lineage at a remote, from each side's chain of revision digests, oldest
+first (ADR 0125):
+
+| Relation | When |
+| --- | --- |
+| `in_sync` | Both sides' latest revision is the same |
+| `ahead` | The remote's latest is one this instance's latest was reached by; a push moves it forward |
+| `behind` | This instance's latest is one the remote's was reached by; a pull moves it forward |
+| `diverged` | Neither; a push is refused, and a pull forks it here |
+| `local_only` | Only this instance holds it |
+| `remote_only` | Only the remote holds it |
+
+A `RemoteStatus` holds a `ComponentStatus` for each lineage, and a
+`ModelStatus` for each model, saying whether it is authorized here and at
+the remote. A push warns, and never refuses, of what would stop its
+documents from running at the remote, in its report's `warnings`, which
+`push_warnings(client, bundle, ...)` gathers once it is pushed:
+
+```text
+Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
+Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is in production at the remote as revision <RUNNING>, not <LATEST>, the latest here.
+Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is not in production at the remote; it cannot run there until the child is promoted.
+Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the remote has not authorized; it cannot run there until the remote's portfolio holds it.
+```
+
+A tool's credentials are the environment variables its implementations
+need, `credential_names(document)`: a process implementation's grants, a
+grant ending in `*` covering every variable it begins, and an MCP
+implementation's `authorization` variable. Only names are read. A child
+is invoked, so it runs at its production revision; a child named only when
+its step runs cannot be checked. A step that chooses its model by
+requirements is not checked either, since the remote's portfolio decides
+which model it runs on.
+
+## Inspection
+
+A client's status asks the remote three things, each read-only
+(ADR 0125). `heads(request, ...)` answers with the `Head` of each lineage
+asked about, or of every one held when none is: its latest revision's
+chain of digests, oldest first, its number there, and, for a workflow, the
+digest of the revision in production there. `portfolio_records(portfolio)`
+names each model the portfolio authorizes and its declared data policy.
+`missing_credentials(request, environ)` says which of the credential names
+asked about the environment does not set, a grant ending in `*` set when
+any variable it begins is; it never reads or returns a value.
+
+A client keeps the last portfolio it read from each remote, and when, as a
+`PortfolioSnapshot` in `remote_portfolio_snapshots` (schema version 6),
+one per remote URL, each read replacing the last. When the remote cannot
+be reached, status reads its models from the snapshot, as of its time.
+`Repositories.remote_portfolio_snapshots` opens the repository a database
+needs.
 
 ## The Client
 
@@ -236,8 +295,14 @@ returns a `PushReport`. `pull_from(client, roots, include_restricted=...)`
 asks for the documents, naming the revisions held here, fetches the
 content the bundle holds that is not here, checked against its digest,
 and saves the rest with `receive(..., fork=True)`, returning a
-`PullReport`. The service API's `instance.remote(url)` and `azathoth remote
-push` and `pull` call them.
+`PullReport`. `status_of(client, roots, ...)` compares the two sides: the
+heads of the lineages named, or of every one either side holds, here and
+at the remote, each related, and each model authorized on either side or
+fixed by a reported workflow's step. It refreshes the remote's portfolio
+snapshot, and when the remote cannot be reached, it reports each relation
+as None and reads the remote's models from the last snapshot. The service
+API's `instance.remote(url)` and `azathoth remote push` and `pull` call
+them.
 
 ## Tokens
 

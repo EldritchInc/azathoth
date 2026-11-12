@@ -430,14 +430,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 5; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 6; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 5)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 6)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
@@ -3651,6 +3651,18 @@ forward:
 Pushed to <URL>. Revisions received: <COUNT>. Revisions already held: <COUNT>. Content sent: <COUNT>.
 Received <LINEAGE> as revision <NUMBER>.
 Not gathered: <REASON>
+```
+
+After its report, a push warns on standard error of what would stop its
+documents from running at the remote (ADR 0125): a credential its tools
+need that the remote does not set, a child workflow the remote runs at
+another revision or not at all, and a model its steps fix that the remote
+has not authorized. A warning never refuses the push:
+
+```text
+Warning: Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is not in production at the remote; it cannot run there until the child is promoted.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the remote has not authorized; it cannot run there until the remote's portfolio holds it.
 ```
 
 A pull saves what is not held here. A lineage that diverged here is forked

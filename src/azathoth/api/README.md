@@ -305,8 +305,9 @@ with api.open("azathoth.db") as instance:
 | Call | Returns |
 | --- | --- |
 | `remote.capabilities()` | The remote's `Capabilities`: its protocol, versions, edition, plugins, and whether it accepts restricted data. |
-| `remote.push(workflows=, tools=, benchmarks=)` | A `PushReport`: the revisions the remote received, numbered there, and how many it held. |
+| `remote.push(workflows=, tools=, benchmarks=)` | A `PushReport`: the revisions the remote received, numbered there, how many it held, and `warnings` of what would stop them from running there. |
 | `remote.pull(workflows=, tools=, benchmarks=, include_restricted=False)` | A `PullReport`: the revisions saved here, the lineages forked, and the restricted benchmarks withheld. |
+| `remote.status(workflows=, tools=, benchmarks=)` | A `RemoteStatus`: for each component named, or every one either side holds, its `Relation` (`in_sync`, `ahead`, `behind`, `diverged`, `local_only`, `remote_only`) and each side's latest revision; for each model, whether it is authorized here and at the remote. |
 
 Tools are named as `(tool_id, version)`. A push sends each document's
 latest revision, the revisions it was reached by, and what it needs there:
@@ -319,6 +320,11 @@ pushed only to a remote that accepts it, and pulled only with
 `include_restricted` (ADR 0123). What could not be gathered is named in
 each report's `unresolved`. Production state and the portfolio never
 travel.
+
+A status reads the remote's portfolio whenever it reaches the remote, and
+keeps it; a remote that cannot be reached is no error, but a status whose
+remote side is unknown, each relation `None`, its models read from the last
+portfolio kept, as of `portfolio_synced_at` (ADR 0125).
 
 ```text
 No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.

@@ -89,3 +89,25 @@ def test_the_guide_quotes_the_messages_exactly() -> None:
         "Withheld <LINEAGE>: it is restricted; pull it with --include-restricted.",
     ):
         quoted(GUIDE, message)
+
+
+STATUS_ADR = ROOT / "docs" / "adrs" / "0125-remote-status.md"
+
+
+def test_the_status_adr_and_guide_quote_the_push_warnings_exactly() -> None:
+    remote_readme = (ROOT / "src" / "azathoth" / "remote" / "README.md").read_text(encoding="utf-8")
+    guide = GUIDE.read_text(encoding="utf-8")
+    adr = STATUS_ADR.read_text(encoding="utf-8")
+    warnings = [
+        line
+        for line in remote_readme.splitlines()
+        if line.startswith(("Tool <TOOL_ID>", "Step <STEP_ID>")) and "remote" in line
+    ]
+
+    assert len(warnings) == 4
+
+    for warning in warnings:
+        assert f"\n{warning}\n" in adr
+
+    for warning in (warnings[0], warnings[2], warnings[3]):
+        assert f"\nWarning: {warning}\n" in guide

@@ -9,6 +9,7 @@ import pytest
 from azathoth import api
 from azathoth.api.remote import NO_TOKEN_MESSAGE, lineages
 from azathoth.persistence.repositories import open_repositories
+from azathoth.providers import ModelPortfolioEntry
 from azathoth.remote import REMOTE_TOKEN_VARIABLE, HttpClient
 from azathoth.revisions import Lineage, RevisionKind
 from azathoth.sensitivity import Sensitivity
@@ -248,3 +249,70 @@ def test_a_closed_instance_reaches_no_remote(
 
     with pytest.raises(api.InstanceClosedError):
         reached.push(workflows=[PARENT_ID])
+
+
+# Status
+
+
+def test_a_status_compares_the_two_sides_and_keeps_the_remotes_portfolio(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    theirs = Instance()
+    theirs.workflows.save(child())
+    theirs.workflows.save(parent())
+    theirs.portfolio.save(ModelPortfolioEntry(provider="bedrock", model="example/private"))
+    remote = Remote(tmp_path, held=theirs)
+    reached = instance.remote(URL, token=remote.token, http=lambda: served(remote))
+
+    reported = reached.status(workflows=[PARENT_ID])
+
+    assert isinstance(reported, api.RemoteStatus)
+    assert [(component.lineage, component.relation) for component in reported.components] == [
+        (PARENT, api.Relation.AHEAD)
+    ]
+    assert reported.models == (
+        api.ModelStatus(
+            identifier="bedrock/example/private",
+            authorized_locally=False,
+            authorized_remotely=True,
+        ),
+    )
+    assert reported.portfolio_synced_at is not None
+    assert len(reached.status().components) == 5
+
+
+def test_a_status_of_a_remote_not_reached_is_no_error(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    theirs = Instance()
+    theirs.portfolio.save(ModelPortfolioEntry(provider="bedrock", model="example/private"))
+    remote = Remote(tmp_path, held=theirs)
+    instance.remote(URL, token=remote.token, http=lambda: served(remote)).status()
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused", request=request)
+
+    offline = instance.remote(
+        URL,
+        token="azr_token",
+        http=lambda: httpx.Client(base_url=URL, transport=httpx.MockTransport(refuse)),
+    ).status(workflows=[PARENT_ID])
+
+    assert not offline.reachable
+    assert [(component.lineage, component.relation) for component in offline.components] == [
+        (PARENT, None)
+    ]
+    assert offline.models[0].authorized_remotely is True
+    assert offline.portfolio_synced_at is not None
+
+
+def test_a_status_with_a_refused_token_is_refused(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    remote = Remote(tmp_path)
+
+    with pytest.raises(api.RemoteRefusedError):
+        instance.remote(URL, token="azr_unknown", http=lambda: served(remote)).status()

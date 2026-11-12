@@ -139,6 +139,8 @@ def serve_remote(
         tools=held.tools,
         benchmarks=held.benchmarks,
         content=held.content,
+        production_states=held.production_states,
+        portfolio=held.portfolio,
         seams=seams,
         accepts_restricted=accept_restricted,
     )
@@ -200,7 +202,11 @@ def push_to_remote(
     tools: Sequence[str] = (),
     benchmarks: Sequence[UUID] = (),
 ) -> int:
-    """Push the documents named, with what they need, to the remote at a URL."""
+    """Push the documents named, with what they need, to the remote at a URL.
+
+    What would stop them from running there is warned of on standard error,
+    after the report; a warning never refuses the push (ADR 0125).
+    """
 
     try:
         report = _remote(url).push(
@@ -223,6 +229,9 @@ def push_to_remote(
 
     for unresolved in report.unresolved:
         print(f"Not gathered: {unresolved}")
+
+    for warning in report.warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
 
     return 0
 

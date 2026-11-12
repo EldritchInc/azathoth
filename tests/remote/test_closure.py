@@ -15,7 +15,7 @@ from azathoth.evaluation import (
 )
 from azathoth.inputs import ContentRef, ContentStore, InMemoryContentStore
 from azathoth.prompting import FixedModelSelection, PromptStrategySpec
-from azathoth.providers import Prompt
+from azathoth.providers import InMemoryModelPortfolioRepository, ModelPortfolioRepository, Prompt
 from azathoth.remote import (
     CHILD_WORKFLOW_INPUTS,
     RUNTIME,
@@ -31,12 +31,14 @@ from azathoth.sensitivity import Sensitivity
 from azathoth.strategies import StrategyMetadata
 from azathoth.tools import InMemoryToolRepository, ToolDocument, ToolRepository, ToolRequirement
 from azathoth.workflows import (
+    InMemoryWorkflowProductionStateRepository,
     InMemoryWorkflowRepository,
     ToolStepSpecification,
     WorkflowConstantValue,
     WorkflowContextReference,
     WorkflowInputBinding,
     WorkflowMetadata,
+    WorkflowProductionStateRepository,
     WorkflowRepository,
     WorkflowSpecification,
     WorkflowSpecificationRevision,
@@ -163,6 +165,10 @@ class Instance:
         self.tools: ToolRepository = InMemoryToolRepository()
         self.benchmarks: BenchmarkRepository = InMemoryBenchmarkRepository()
         self.content: ContentStore = InMemoryContentStore()
+        self.production_states: WorkflowProductionStateRepository = (
+            InMemoryWorkflowProductionStateRepository()
+        )
+        self.portfolio: ModelPortfolioRepository = InMemoryModelPortfolioRepository()
 
         for identifier, name, version in (
             (COUNT_ID, "word_count", "1.0.0"),
