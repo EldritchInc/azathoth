@@ -4,7 +4,7 @@ Azathoth is also published as a container image (ADR 0101), at the same
 version as the PyPI package:
 
 ```text
-ghcr.io/eldritchinc/azathoth:1.3.0
+ghcr.io/eldritchinc/azathoth:1.4.0
 ```
 
 The image holds Azathoth, its standard tools, OpenTelemetry tracing and the
@@ -34,22 +34,22 @@ Python instead, see [Installing Azathoth](install.md).
 Name the image once, so the commands below stay short:
 
 ```bash
-IMAGE=ghcr.io/eldritchinc/azathoth:1.3.0
+IMAGE=ghcr.io/eldritchinc/azathoth:1.4.0
 docker pull $IMAGE
 docker run --rm $IMAGE --version
 ```
 
 ```powershell
-$IMAGE = "ghcr.io/eldritchinc/azathoth:1.3.0"
+$IMAGE = "ghcr.io/eldritchinc/azathoth:1.4.0"
 docker pull $IMAGE
 docker run --rm $IMAGE --version
 ```
 
-`--version` prints `azathoth 1.3.0`. Everything after the image name is an
+`--version` prints `azathoth 1.4.0`. Everything after the image name is an
 `azathoth` command, so `docker run --rm $IMAGE --help` lists them all, and
 running the image with no command does the same.
 
-Pin an exact version such as `1.3.0`. The tag `1.3` moves to each 1.3 patch
+Pin an exact version such as `1.4.0`. The tag `1.4` moves to each 1.4 patch
 release, and `latest` to each release.
 
 ## 2. Give It a Database
@@ -386,22 +386,22 @@ check that an image is the one Azathoth's release workflow built for its
 tag:
 
 ```bash
-cosign verify ghcr.io/eldritchinc/azathoth:1.3.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.3.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
+cosign verify ghcr.io/eldritchinc/azathoth:1.4.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.4.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 ```powershell
-cosign verify ghcr.io/eldritchinc/azathoth:1.3.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.3.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
+cosign verify ghcr.io/eldritchinc/azathoth:1.4.0 --certificate-identity https://github.com/EldritchInc/azathoth/.github/workflows/release.yml@refs/tags/v1.4.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 For another version, change the version in both places. Docker shows the
 SBOM, the list of every package in the image:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.3.0 --format "{{ json .SBOM }}"
+docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.4.0 --format "{{ json .SBOM }}"
 ```
 
 ```powershell
-docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.3.0 --format "{{ json .SBOM }}"
+docker buildx imagetools inspect ghcr.io/eldritchinc/azathoth:1.4.0 --format "{{ json .SBOM }}"
 ```
 
 ## Upgrading and Cleaning Up

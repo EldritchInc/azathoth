@@ -25,6 +25,7 @@ UNRELEASED = "Unreleased"
 """The entry for what is on `main` but not yet released, renamed when it is."""
 
 RELEASE_DECISIONS = {
+    "1.4.0": range(120, 127),
     "1.3.0": range(112, 120),
     "1.2.0": range(111, 112),
     "1.1.0": range(91, 111),
@@ -122,7 +123,7 @@ def fenced(
 def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     releases = RELEASE_HEADING.findall(text())
 
-    assert releases == ["1.3.0", "1.2.0", "1.1.0", "1.0.0"]
+    assert releases == ["1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]
     assert releases[: len(RELEASE_DECISIONS)] == list(RELEASE_DECISIONS)
 
     if is_final(__version__):
@@ -200,8 +201,37 @@ def test_this_releases_upgrade_runs_the_install_guides_upgrade_commands() -> Non
     upgrade = entry(latest_release())
 
     for language in ("bash", "powershell"):
-        assert fenced(upgrade, language, "### Upgrading From 1.2") == fenced(
+        assert fenced(upgrade, language, "### Upgrading From 1.3") == fenced(
             install, language, "## Upgrading, Leaving and Uninstalling"
+        )
+
+
+def test_1_4_says_what_an_existing_installation_will_notice() -> None:
+    upgrade = " ".join(entry("1.4.0").split())
+
+    assert "The database schema moves from version 2 to version 7." in upgrade
+    assert "upgrade Azathoth on every machine first" in upgrade
+    assert "revisions imported before 1.4 name nobody as their author" in upgrade
+    assert "prints `Workflow <WORKFLOW_ID> is unchanged at revision <NUMBER>.`" in upgrade
+    assert "a malformed `AZATHOTH_AUTHOR` stops them" in upgrade
+    assert "`azathoth-mcp` asks the providers what they serve on every call" in upgrade
+    assert "Unlabelled data is internal and runs as it did" in upgrade
+    assert "`azathoth-ai[remote]`" in upgrade
+
+
+def test_1_4_says_its_service_api_is_stable() -> None:
+    release = " ".join(entry("1.4.0").split())
+
+    assert "It is stable from this release, under the 1.x promise" in release
+    assert "provisional" not in release
+
+
+def test_1_3s_upgrade_from_1_2_still_shows_its_commands() -> None:
+    upgrade = entry("1.3.0")
+
+    for language in ("bash", "powershell"):
+        assert fenced(upgrade, language, "### Upgrading From 1.2") == (
+            "python -m pip install --upgrade azathoth-ai\nazathoth init\n"
         )
 
 
@@ -297,6 +327,15 @@ def test_every_link_is_absolute_so_it_works_in_the_release_notes() -> None:
 
     assert targets
     assert all(target.startswith("https://") for target in targets), targets
+
+
+def test_1_4_says_it_was_not_deployed_to_aws_because_no_sandbox_was_available() -> None:
+    release = " ".join(entry("1.4.0").split())
+
+    assert "no sandbox was available, so this release was not deployed" in release
+    assert "migrates its database from schema version 2 to version 7" in release
+    assert "is unproven for 1.4.0, as what 1.3.0 left unproven still is" in release
+    assert f"]({REPOSITORY}/docs/release-validation.md#9-the-aws-deployment)" in release
 
 
 def test_1_3_says_it_was_not_deployed_to_aws_because_no_sandbox_was_available() -> None:

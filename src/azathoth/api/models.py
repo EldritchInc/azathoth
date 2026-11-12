@@ -17,8 +17,8 @@ from azathoth.sensitivity import DataPolicy, Sensitivity
 ApiStability = Literal["provisional", "stable"]
 """Whether the API is still provisional, or covered by the 1.x promise."""
 
-API_STABILITY: Final[ApiStability] = "provisional"
-"""The API's stability in this Azathoth: provisional until 1.4.0 final."""
+API_STABILITY: Final[ApiStability] = "stable"
+"""The API's stability in this Azathoth: stable, under the 1.x promise from 1.4.0."""
 
 Backend = Literal["sqlite", "postgres"]
 """The kind of database an instance keeps its state in."""

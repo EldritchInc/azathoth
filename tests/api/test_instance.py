@@ -17,6 +17,9 @@ from azathoth.persistence import (
 )
 from azathoth.persistence.postgres import PostgresDriver
 
+API_GUIDE = Path(__file__).parents[2] / "src" / "azathoth" / "api" / "README.md"
+"""The service API's own guide, which says how stable it is."""
+
 
 def test_an_instance_describes_itself(
     instance: api.Azathoth,
@@ -48,8 +51,19 @@ def test_a_postgresql_instance_is_described_without_its_password(
     assert ":azathoth@" not in database
 
 
-def test_the_api_is_provisional_until_it_is_declared_stable() -> None:
-    assert api.API_STABILITY == "provisional"
+def test_the_api_is_stable_from_1_4_0() -> None:
+    assert api.API_STABILITY == "stable"
+
+
+def test_the_api_guide_says_what_stable_promises() -> None:
+    guide = " ".join(API_GUIDE.read_text(encoding="utf-8").split())
+
+    assert "provisional until" not in guide
+    assert (
+        "It is stable from 1.4.0, under Azathoth's 1.x compatibility promise: within 1.x it "
+        "grows only by additions, and anything removed waits for 2.0, after a minor release "
+        "that warns of it."
+    ) in guide
 
 
 def test_a_description_is_its_own_json(

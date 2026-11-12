@@ -38,7 +38,7 @@ Parameters:
 
   ImageUri:
     Type: String
-    Default: ghcr.io/eldritchinc/azathoth:1.3.0
+    Default: ghcr.io/eldritchinc/azathoth:1.4.0
     Description: >-
       The Azathoth image, best pinned by digest, as
       ghcr.io/eldritchinc/azathoth:<VERSION>@sha256:<DIGEST>, or a copy of it

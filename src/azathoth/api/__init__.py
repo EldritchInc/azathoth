@@ -1,4 +1,4 @@
-"""Azathoth's public service API, provisional until 1.4.0 (ADR 0120).
+"""Azathoth's public service API, stable within 1.x from 1.4.0 (ADR 0120).
 
 The command line, azathoth-mcp and the local UI all call Azathoth through
 this one in-process, synchronous layer. Open an instance with `open`, and
