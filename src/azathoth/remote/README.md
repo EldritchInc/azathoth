@@ -263,6 +263,13 @@ names each model the portfolio authorizes and its declared data policy.
 asked about the environment does not set, a grant ending in `*` set when
 any variable it begins is; it never reads or returns a value.
 
+A client keeps the last portfolio it read from each remote, and when, as a
+`PortfolioSnapshot` in `remote_portfolio_snapshots` (schema version 6),
+one per remote URL, each read replacing the last. When the remote cannot
+be reached, status reads its models from the snapshot, as of its time.
+`Repositories.remote_portfolio_snapshots` opens the repository a database
+needs.
+
 ## The Client
 
 `RemoteClient(url, token)` speaks the protocol over httpx, and is a
