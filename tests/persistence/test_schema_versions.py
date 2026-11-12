@@ -6,8 +6,9 @@ adds the tables that record revision lineage and portfolio provenance
 (ADR 0122); version 4 adds the table that records who declared each
 portfolio entry's data policy (ADR 0123); version 5 adds the table of a
 remote's tokens (ADR 0124); version 6 adds the table of each remote's last
-portfolio (ADR 0125). A table added without a new version, or a version
-that drops a table, fails here.
+portfolio (ADR 0125); version 7 adds the table of the remotes an instance
+names (ADR 0126). A table added without a new version, or a version that
+drops a table, fails here.
 """
 
 from datetime import UTC, datetime
@@ -31,7 +32,7 @@ from azathoth.persistence import (
 )
 from azathoth.persistence.repositories import SCHEMA_TABLES
 from azathoth.providers import MODEL_PORTFOLIO_POLICY_TABLES, MODEL_PORTFOLIO_PROVENANCE_TABLES
-from azathoth.remote import REMOTE_PORTFOLIO_SNAPSHOT_TABLES, REMOTE_TOKEN_TABLES
+from azathoth.remote import REMOTE_PORTFOLIO_SNAPSHOT_TABLES, REMOTE_TABLES, REMOTE_TOKEN_TABLES
 from azathoth.revisions import (
     REVISION_LINEAGE_TABLES,
     Lineage,
@@ -91,6 +92,8 @@ VERSION_5_TABLE_NAMES = ("remote_tokens",)
 
 VERSION_6_TABLE_NAMES = ("remote_portfolio_snapshots",)
 
+VERSION_7_TABLE_NAMES = ("remotes",)
+
 VERSION_3_TABLES = (*REVISION_LINEAGE_TABLES, *MODEL_PORTFOLIO_PROVENANCE_TABLES)
 
 VERSION_4_TABLES = MODEL_PORTFOLIO_POLICY_TABLES
@@ -99,7 +102,11 @@ VERSION_5_TABLES = REMOTE_TOKEN_TABLES
 
 VERSION_6_TABLES = REMOTE_PORTFOLIO_SNAPSHOT_TABLES
 
-VERSION_5_SCHEMA = tuple(table for table in SCHEMA_TABLES if table not in VERSION_6_TABLES)
+VERSION_7_TABLES = REMOTE_TABLES
+
+VERSION_6_SCHEMA = tuple(table for table in SCHEMA_TABLES if table not in VERSION_7_TABLES)
+
+VERSION_5_SCHEMA = tuple(table for table in VERSION_6_SCHEMA if table not in VERSION_6_TABLES)
 
 VERSION_4_SCHEMA = tuple(table for table in VERSION_5_SCHEMA if table not in VERSION_5_TABLES)
 
@@ -193,6 +200,15 @@ def initialize_version_3(
     record_version(database, 3)
 
 
+def initialize_version_6(
+    database: PostgresDatabase,
+) -> None:
+    """Initialize a PostgreSQL database as an Azathoth of schema version 6 did."""
+
+    database.initialize(VERSION_6_SCHEMA)
+    record_version(database, 6)
+
+
 def initialize_version_5(
     database: PostgresDatabase,
 ) -> None:
@@ -225,8 +241,8 @@ def execute(
 # What each version holds
 
 
-def test_this_azathoth_uses_schema_version_6() -> None:
-    assert SCHEMA_VERSION == 6
+def test_this_azathoth_uses_schema_version_7() -> None:
+    assert SCHEMA_VERSION == 7
 
 
 def test_version_1_holds_the_tables_of_1_1() -> None:
@@ -268,7 +284,7 @@ def test_version_5_adds_remote_tokens_after_every_earlier_table() -> None:
 
 
 def test_version_6_adds_remote_portfolio_snapshots_after_every_earlier_table() -> None:
-    assert names(SCHEMA_TABLES) == (
+    assert names(VERSION_6_SCHEMA) == (
         VERSION_1_TABLE_NAMES
         + VERSION_2_TABLE_NAMES
         + VERSION_3_TABLE_NAMES
@@ -277,6 +293,19 @@ def test_version_6_adds_remote_portfolio_snapshots_after_every_earlier_table() -
         + VERSION_6_TABLE_NAMES
     )
     assert names(VERSION_6_TABLES) == VERSION_6_TABLE_NAMES
+
+
+def test_version_7_adds_remotes_after_every_earlier_table() -> None:
+    assert names(SCHEMA_TABLES) == (
+        VERSION_1_TABLE_NAMES
+        + VERSION_2_TABLE_NAMES
+        + VERSION_3_TABLE_NAMES
+        + VERSION_4_TABLE_NAMES
+        + VERSION_5_TABLE_NAMES
+        + VERSION_6_TABLE_NAMES
+        + VERSION_7_TABLE_NAMES
+    )
+    assert names(VERSION_7_TABLES) == VERSION_7_TABLE_NAMES
 
 
 def test_only_the_version_3_tables_backfill() -> None:
@@ -292,6 +321,7 @@ def test_every_table_is_created_only_if_it_does_not_exist() -> None:
         *VERSION_4_TABLES,
         *VERSION_5_TABLES,
         *VERSION_6_TABLES,
+        *VERSION_7_TABLES,
     ):
         for statement in table.statements:
             assert "IF NOT EXISTS" in statement, table.name
@@ -390,11 +420,11 @@ def test_an_sqlite_file_of_version_1_gains_the_new_tables_when_they_are_prepared
 # Upgrading a PostgreSQL database
 
 
-def test_a_fresh_postgresql_database_is_created_at_version_6(
+def test_a_fresh_postgresql_database_is_created_at_version_7(
     postgres_database: PostgresDatabase,
 ) -> None:
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.CREATED
-    assert recorded_version(postgres_database) == 6
+    assert recorded_version(postgres_database) == 7
     assert all(
         has_table(postgres_database, name)
         for name in (
@@ -403,6 +433,7 @@ def test_a_fresh_postgresql_database_is_created_at_version_6(
             + VERSION_4_TABLE_NAMES
             + VERSION_5_TABLE_NAMES
             + VERSION_6_TABLE_NAMES
+            + VERSION_7_TABLE_NAMES
         )
     )
 
@@ -419,7 +450,7 @@ def test_a_version_1_database_is_refused_until_initialized(
         with pytest.raises(DatabaseSchemaOutdatedError) as error:
             reader.prepare(SCHEMA_TABLES)
 
-        assert "has schema version 1, but this Azathoth uses version 6; run azathoth init" in str(
+        assert "has schema version 1, but this Azathoth uses version 7; run azathoth init" in str(
             error.value
         )
         assert not has_table(writer, "run_journal")
@@ -443,12 +474,13 @@ def test_initializing_a_version_1_database_upgrades_it_and_keeps_its_rows(
         )
 
         assert writer.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-        assert recorded_version(writer) == 6
+        assert recorded_version(writer) == 7
         assert all(has_table(writer, name) for name in VERSION_2_TABLE_NAMES)
         assert all(has_table(writer, name) for name in VERSION_3_TABLE_NAMES)
         assert all(has_table(writer, name) for name in VERSION_4_TABLE_NAMES)
         assert all(has_table(writer, name) for name in VERSION_5_TABLE_NAMES)
         assert all(has_table(writer, name) for name in VERSION_6_TABLE_NAMES)
+        assert all(has_table(writer, name) for name in VERSION_7_TABLE_NAMES)
 
         reader.prepare(SCHEMA_TABLES)
 
@@ -509,7 +541,7 @@ def test_initializing_a_version_2_database_records_the_lineage_it_already_holds(
     )
 
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-    assert recorded_version(postgres_database) == 6
+    assert recorded_version(postgres_database) == 7
 
     lineage = Lineage(kind=RevisionKind.WORKFLOW, id=UUID(WORKFLOW_ID))
 
@@ -534,7 +566,7 @@ def test_initializing_a_version_3_database_adds_the_policy_declarations(
 
     assert not has_table(postgres_database, "model_portfolio_policy_declarations")
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-    assert recorded_version(postgres_database) == 6
+    assert recorded_version(postgres_database) == 7
     assert has_table(postgres_database, "model_portfolio_policy_declarations")
 
 
@@ -545,7 +577,7 @@ def test_initializing_a_version_4_database_adds_the_remote_tokens(
 
     assert not has_table(postgres_database, "remote_tokens")
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-    assert recorded_version(postgres_database) == 6
+    assert recorded_version(postgres_database) == 7
     assert has_table(postgres_database, "remote_tokens")
 
 
@@ -556,5 +588,16 @@ def test_initializing_a_version_5_database_adds_the_portfolio_snapshots(
 
     assert not has_table(postgres_database, "remote_portfolio_snapshots")
     assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
-    assert recorded_version(postgres_database) == 6
+    assert recorded_version(postgres_database) == 7
     assert has_table(postgres_database, "remote_portfolio_snapshots")
+
+
+def test_initializing_a_version_6_database_adds_the_remotes(
+    postgres_database: PostgresDatabase,
+) -> None:
+    initialize_version_6(postgres_database)
+
+    assert not has_table(postgres_database, "remotes")
+    assert postgres_database.initialize(SCHEMA_TABLES) is InitializationOutcome.UPGRADED
+    assert recorded_version(postgres_database) == 7
+    assert has_table(postgres_database, "remotes")

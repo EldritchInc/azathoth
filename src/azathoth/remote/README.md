@@ -271,6 +271,14 @@ be reached, status reads its models from the snapshot, as of its time.
 `Repositories.remote_portfolio_snapshots` opens the repository a database
 needs.
 
+An instance names the remotes it reaches as `NamedRemote`s in `remotes`
+(schema version 7), each a name of letters, digits, `.`, `_` and `-` for a
+URL and the variable its token is read from, `AZATHOTH_REMOTE_TOKEN`
+unless another is given; the token itself is never kept (ADR 0126).
+`RemoteRepository` adds, gets, lists by name and removes them, refusing a
+name already given or one never given as a `RemoteNameError`, and
+`Repositories.remotes` opens the repository a database needs.
+
 ## The Client
 
 `RemoteClient(url, token)` speaks the protocol over httpx, and is a
