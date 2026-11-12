@@ -106,7 +106,7 @@ from azathoth.api.providers import (
     OPENROUTER_API_KEY_VARIABLE,
     ProviderSettings,
 )
-from azathoth.api.remote import Remote
+from azathoth.api.remote import Remote, Remotes
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
     MAX_INPUT_FILE_BYTES,
@@ -119,6 +119,7 @@ from azathoth.remote import (
     Capabilities,
     ComponentStatus,
     ModelStatus,
+    NamedRemote,
     PullReport,
     PushReport,
     Relation,
@@ -176,6 +177,7 @@ __all__ = [
     "ModelStatus",
     "ModelSummary",
     "Models",
+    "NamedRemote",
     "NotFoundError",
     "PolicyAnswer",
     "Portfolio",
@@ -190,6 +192,7 @@ __all__ = [
     "PushReport",
     "Relation",
     "Remote",
+    "Remotes",
     "RemoteDivergedError",
     "RemoteProtocolError",
     "RemoteRefusedError",

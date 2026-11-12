@@ -62,7 +62,7 @@ class InvalidAuthorError(InvalidArgumentError):
 
 
 class NotFoundError(ApiError):
-    """The workflow, tool or benchmark a call names is not configured."""
+    """The workflow, tool, benchmark or named remote a call names is not configured."""
 
     code: ClassVar[str] = "not_found"
 

@@ -18,10 +18,10 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict
 from azathoth.persistence import Database, Row, SQLiteDatabase, Table, require_text
 from azathoth.remote.client import REMOTE_TOKEN_VARIABLE, require_remote_url
 
-REMOTE_NAME_PATTERN: Final = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-"""What a remote's name is made of: letters, digits, `.`, `_` and `-`.
+REMOTE_NAME_PATTERN: Final = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+"""What a remote's name is made of: letters, digits, `_` and `-`.
 
-No name holds `:` or `/`, so none is mistaken for a URL.
+No name holds `:`, `/` or `.`, so none is mistaken for a URL or a host.
 """
 
 TOKEN_VARIABLE_PATTERN: Final = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -53,6 +53,14 @@ class RemoteNameError(ValueError):
     """A remote cannot be named, or a name removed, as asked."""
 
 
+class RemoteAlreadyNamedError(RemoteNameError):
+    """A remote already has the name another was to be given."""
+
+
+class RemoteNotNamedError(RemoteNameError):
+    """No remote has the name a removal gives."""
+
+
 class NamedRemote(BaseModel):
     """One remote this instance names: its URL, and where its token is read from."""
 
@@ -81,7 +89,7 @@ def require_remote_name(
 
     if REMOTE_NAME_PATTERN.fullmatch(name) is None:
         raise RemoteNameError(
-            f"Remote name {name!r} is not one: use 1 to 64 letters, digits, '.', '_' or '-'."
+            f"Remote name {name!r} is not one: use 1 to 64 letters, digits, '_' or '-'."
         )
 
     return name
@@ -133,10 +141,10 @@ def _named(
 
 def _already_named(
     held: NamedRemote,
-) -> RemoteNameError:
+) -> RemoteAlreadyNamedError:
     """Return the refusal to give a name a remote already has."""
 
-    return RemoteNameError(
+    return RemoteAlreadyNamedError(
         f"Remote {held.name} is already named, for {held.url}; remove it first, or choose "
         "another name."
     )
@@ -144,10 +152,10 @@ def _already_named(
 
 def _not_named(
     name: str,
-) -> RemoteNameError:
+) -> RemoteNotNamedError:
     """Return the refusal to remove a name no remote has."""
 
-    return RemoteNameError(f"No remote is named {name!r}.")
+    return RemoteNotNamedError(f"No remote is named {name!r}.")
 
 
 class RemoteRepository(Protocol):
@@ -211,8 +219,8 @@ class SqlRemoteRepository:
         """Name a remote, and return it as named, its URL without a trailing `/`.
 
         Raises:
-            RemoteNameError: The name, URL or variable is not one, or a remote
-                already has the name.
+            RemoteNameError: The name, URL or variable is not one.
+            RemoteAlreadyNamedError: A remote already has the name.
         """
 
         remote = _named(name, url, token_variable, self._clock())
@@ -291,7 +299,7 @@ class SqlRemoteRepository:
         """Forget a name, and return the remote it named.
 
         Raises:
-            RemoteNameError: No remote has the name.
+            RemoteNotNamedError: No remote has the name.
         """
 
         with self._database.transaction() as session:
@@ -351,8 +359,8 @@ class InMemoryRemoteRepository:
         """Name a remote, and return it as named, its URL without a trailing `/`.
 
         Raises:
-            RemoteNameError: The name, URL or variable is not one, or a remote
-                already has the name.
+            RemoteNameError: The name, URL or variable is not one.
+            RemoteAlreadyNamedError: A remote already has the name.
         """
 
         remote = _named(name, url, token_variable, self._clock())
@@ -387,7 +395,7 @@ class InMemoryRemoteRepository:
         """Forget a name, and return the remote it named.
 
         Raises:
-            RemoteNameError: No remote has the name.
+            RemoteNotNamedError: No remote has the name.
         """
 
         removed = self._remotes.pop(name, None)
@@ -423,7 +431,9 @@ __all__ = [
     "TOKEN_VARIABLE_PATTERN",
     "InMemoryRemoteRepository",
     "NamedRemote",
+    "RemoteAlreadyNamedError",
     "RemoteNameError",
+    "RemoteNotNamedError",
     "RemoteRepository",
     "SQLiteRemoteRepository",
     "SqlRemoteRepository",

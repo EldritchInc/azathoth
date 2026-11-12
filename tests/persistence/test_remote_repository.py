@@ -14,7 +14,9 @@ from azathoth.remote import (
     REMOTE_TOKEN_VARIABLE,
     InMemoryRemoteRepository,
     NamedRemote,
+    RemoteAlreadyNamedError,
     RemoteNameError,
+    RemoteNotNamedError,
     RemoteRepository,
     SqlRemoteRepository,
     require_remote_name,
@@ -103,7 +105,7 @@ def test_a_name_already_given_is_refused_and_keeps_its_remote(
 ) -> None:
     origin = remotes.add("origin", TEAM)
 
-    with pytest.raises(RemoteNameError) as caught:
+    with pytest.raises(RemoteAlreadyNamedError) as caught:
         remotes.add("origin", STAGING)
 
     assert str(caught.value) == (
@@ -130,7 +132,7 @@ def test_a_removed_name_is_forgotten_and_others_kept(
 def test_removing_a_name_never_given_is_refused(
     remotes: RemoteRepository,
 ) -> None:
-    with pytest.raises(RemoteNameError) as caught:
+    with pytest.raises(RemoteNotNamedError) as caught:
         remotes.remove("origin")
 
     assert str(caught.value) == "No remote is named 'origin'."
@@ -138,8 +140,16 @@ def test_removing_a_name_never_given_is_refused(
 
 @pytest.mark.parametrize(
     "name",
-    ["", "a" * 65, "https://azathoth.example.com", "team remote", "team/remote", "origin:1"],
-    ids=["empty", "too-long", "url", "space", "slash", "colon"],
+    [
+        "",
+        "a" * 65,
+        "https://azathoth.example.com",
+        "team remote",
+        "team/remote",
+        "origin:1",
+        "azathoth.example.com",
+    ],
+    ids=["empty", "too-long", "url", "space", "slash", "colon", "host"],
 )
 def test_a_name_that_is_not_one_is_refused(
     remotes: RemoteRepository,
@@ -149,13 +159,13 @@ def test_a_name_that_is_not_one_is_refused(
         remotes.add(name, TEAM)
 
     assert str(caught.value) == (
-        f"Remote name {name!r} is not one: use 1 to 64 letters, digits, '.', '_' or '-'."
+        f"Remote name {name!r} is not one: use 1 to 64 letters, digits, '_' or '-'."
     )
     assert remotes.remotes() == ()
 
 
-def test_the_names_allowed_are_letters_digits_dots_underscores_and_dashes() -> None:
-    for name in ("origin", "a" * 64, "team.prod_2-east", "0"):
+def test_the_names_allowed_are_letters_digits_underscores_and_dashes() -> None:
+    for name in ("origin", "a" * 64, "prod_2-east", "0"):
         assert require_remote_name(name) == name
 
 

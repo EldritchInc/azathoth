@@ -1,7 +1,9 @@
 """Pushing to and pulling from a remote through the service API (ADR 0124).
 
-`instance.remote(url)` names a remote; each call reaches it afresh, with
-the token given, or the one in `AZATHOTH_REMOTE_TOKEN`. A push sends the
+`instance.remote(url)` names a remote, by its URL or by a name
+`instance.remotes` gave it (ADR 0126); each call reaches it afresh, with
+the token given, or the one in its token variable, `AZATHOTH_REMOTE_TOKEN`
+unless the name says another. A push sends the
 latest revision of each document named, the revisions it was reached by,
 and what it needs at the remote; a pull brings the same back, forking a
 lineage that diverged here; a status compares the two sides (ADR 0125).
@@ -14,7 +16,9 @@ from uuid import UUID
 
 from azathoth.api.browsing import RepositoriesAccess
 from azathoth.api.errors import (
+    ConflictError,
     InvalidArgumentError,
+    NotFoundError,
     RemoteDivergedError,
     RemoteProtocolError,
     RemoteRefusedError,
@@ -24,11 +28,15 @@ from azathoth.remote import (
     REMOTE_TOKEN_VARIABLE,
     Capabilities,
     HttpClient,
+    NamedRemote,
     ProtocolMismatchError,
     PullReport,
     PushReport,
     ReceiveRefusedError,
+    RemoteAlreadyNamedError,
     RemoteClient,
+    RemoteNameError,
+    RemoteNotNamedError,
     RemoteStatus,
     pull_from,
     push_to,
@@ -40,11 +48,41 @@ from azathoth.remote import RemoteRefusedError as ClientRefusedError
 from azathoth.remote import RemoteUnreachableError as ClientUnreachableError
 from azathoth.revisions import Lineage, RevisionKind
 
-NO_TOKEN_MESSAGE = (
-    f"No remote token was given; set {REMOTE_TOKEN_VARIABLE} to one created on the remote with "
-    "`azathoth remote token create`."
-)
-"""What naming a remote without a token says."""
+
+def no_token_message(
+    variable: str,
+) -> str:
+    """Return what reaching a remote says when no token is given and its variable is not set."""
+
+    return (
+        f"No remote token was given; set {variable} to one created on the remote with "
+        "`azathoth remote token create`."
+    )
+
+
+NO_TOKEN_MESSAGE = no_token_message(REMOTE_TOKEN_VARIABLE)
+"""What naming a remote by its URL without a token says."""
+
+
+def is_remote_url(
+    target: str,
+) -> bool:
+    """Return whether a remote is named by its URL, not by a name given it.
+
+    A name holds no `:`, `/` or `.`, so anything that does is read as a URL,
+    and refused if it is not an http or https one; a bare host is refused so
+    too, rather than looked up as a name.
+    """
+
+    return any(character in target for character in ":/.")
+
+
+def not_named_message(
+    name: str,
+) -> str:
+    """Return what reaching, or removing, a name no remote has says."""
+
+    return f"No remote is named {name!r}; name one with `azathoth remote add <NAME> <URL>`."
 
 
 def lineages(
@@ -84,10 +122,13 @@ class Remote:
         repositories: RepositoriesAccess,
         *,
         token: str | None = None,
+        token_variable: str = REMOTE_TOKEN_VARIABLE,
+        name: str | None = None,
         http: Callable[[], HttpClient] | None = None,
     ) -> None:
-        """Name the remote at `url`, reached with `token`, or `AZATHOTH_REMOTE_TOKEN`'s.
+        """Name the remote at `url`, reached with `token`, or the one `token_variable` holds.
 
+        `name` is the name this instance gave it, if it was reached by one.
         `http`, when given, makes the HTTP client each call is sent over, as
         tests do.
 
@@ -101,12 +142,13 @@ class Remote:
         except ValueError as exc:
             raise InvalidArgumentError(str(exc)) from None
 
-        given = token if token is not None else os.environ.get(REMOTE_TOKEN_VARIABLE)
+        given = token if token is not None else os.environ.get(token_variable)
 
         if not given:
-            raise InvalidArgumentError(NO_TOKEN_MESSAGE)
+            raise InvalidArgumentError(no_token_message(token_variable))
 
         self._token = given
+        self._name = name
         self._repositories = repositories
         self._http = http
 
@@ -117,6 +159,14 @@ class Remote:
         """Return the remote's URL."""
 
         return self._url
+
+    @property
+    def name(
+        self,
+    ) -> str | None:
+        """Return the name this instance gave the remote, or None when it was reached by URL."""
+
+        return self._name
 
     def capabilities(
         self,
@@ -268,8 +318,138 @@ class Remote:
             raise RemoteProtocolError(str(exc)) from exc
 
 
+class Remotes:
+    """The remotes this instance names, so a call can say `origin` for its URL (ADR 0126)."""
+
+    def __init__(
+        self,
+        repositories: RepositoriesAccess,
+    ) -> None:
+        """Keep the remotes the repositories `repositories` returns name."""
+
+        self._repositories = repositories
+
+    def list(
+        self,
+    ) -> tuple[NamedRemote, ...]:
+        """Return every remote named, ordered by name.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+        """
+
+        return self._repositories().remotes.remotes()
+
+    def get(
+        self,
+        name: str,
+    ) -> NamedRemote:
+        """Return the remote of a name.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No remote has the name.
+        """
+
+        named = self._repositories().remotes.get(name)
+
+        if named is None:
+            raise NotFoundError(not_named_message(name))
+
+        return named
+
+    def add(
+        self,
+        name: str,
+        url: str,
+        *,
+        token_variable: str = REMOTE_TOKEN_VARIABLE,
+    ) -> NamedRemote:
+        """Name the remote at `url`, its token read from `token_variable`, and return it.
+
+        Only the variable's name is kept, never a token.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The name, URL or variable is not one.
+            ConflictError: A remote already has the name.
+        """
+
+        try:
+            return self._repositories().remotes.add(name, url, token_variable=token_variable)
+        except RemoteAlreadyNamedError as exc:
+            raise ConflictError(str(exc)) from None
+        except RemoteNameError as exc:
+            raise InvalidArgumentError(str(exc)) from None
+
+    def remove(
+        self,
+        name: str,
+    ) -> NamedRemote:
+        """Forget a name, and return the remote it named.
+
+        The last portfolio read from the remote is forgotten too, unless
+        another name is kept for its URL. Nothing at the remote changes.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No remote has the name.
+        """
+
+        held = self._repositories()
+
+        try:
+            removed = held.remotes.remove(name)
+        except RemoteNotNamedError:
+            raise NotFoundError(not_named_message(name)) from None
+
+        if all(other.url != removed.url for other in held.remotes.remotes()):
+            held.remote_portfolio_snapshots.delete(removed.url)
+
+        return removed
+
+
+def reach(
+    target: str,
+    repositories: RepositoriesAccess,
+    *,
+    token: str | None = None,
+    http: Callable[[], HttpClient] | None = None,
+) -> Remote:
+    """Return the remote a URL, or a name this instance gave it, names.
+
+    A named remote's token is read from its own variable, unless `token` is
+    given.
+
+    Raises:
+        InstanceClosedError: The instance was closed.
+        InvalidArgumentError: The URL is not an http or https URL, or no
+            token is given or set.
+        NotFoundError: No remote has the name.
+    """
+
+    if is_remote_url(target):
+        return Remote(target, repositories, token=token, http=http)
+
+    named = Remotes(repositories).get(target)
+
+    return Remote(
+        named.url,
+        repositories,
+        token=token,
+        token_variable=named.token_variable,
+        name=named.name,
+        http=http,
+    )
+
+
 __all__ = [
     "NO_TOKEN_MESSAGE",
     "Remote",
+    "Remotes",
+    "is_remote_url",
     "lineages",
+    "no_token_message",
+    "not_named_message",
+    "reach",
 ]
