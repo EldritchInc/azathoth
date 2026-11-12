@@ -129,14 +129,42 @@ azathoth workflow import examples/workflows/word-count-messages.json
 $env:AZATHOTH_REMOTE_TOKEN = "<TOKEN>"
 ```
 
-Push the workflow:
+Name the remote, so commands can say `origin` instead of its URL:
 
 ```bash
-azathoth remote push http://127.0.0.1:8470 --workflow a1000000-0000-4000-8000-000000000002
+azathoth remote add origin http://127.0.0.1:8470
 ```
 
 ```powershell
-azathoth remote push http://127.0.0.1:8470 --workflow a1000000-0000-4000-8000-000000000002
+azathoth remote add origin http://127.0.0.1:8470
+```
+
+```text
+Named remote origin for http://127.0.0.1:8470; its token is read from AZATHOTH_REMOTE_TOKEN.
+```
+
+The name belongs to this instance, kept in its database, as a git remote
+belongs to its repository; `remote list` lists the names, and `remote
+remove` forgets one. Only the name of the token's variable is kept, never
+the token. A name for a second remote can read its token from another
+variable, so each is reached with its own:
+
+```bash
+azathoth remote add staging https://staging.example.com --token-variable AZATHOTH_STAGING_TOKEN
+```
+
+```powershell
+azathoth remote add staging https://staging.example.com --token-variable AZATHOTH_STAGING_TOKEN
+```
+
+Push the workflow:
+
+```bash
+azathoth remote push origin --workflow a1000000-0000-4000-8000-000000000002
+```
+
+```powershell
+azathoth remote push origin --workflow a1000000-0000-4000-8000-000000000002
 ```
 
 ```text
@@ -160,7 +188,8 @@ everywhere.
 
 ## 5. Pull It Elsewhere
 
-Make a third, empty instance and pull the workflow into it:
+Make a third, empty instance and pull the workflow into it. It has named
+no remote, and a URL works wherever a name does:
 
 ```bash
 export AZATHOTH_DATABASE=desktop.db
@@ -252,28 +281,42 @@ Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the 
 ```
 
 A credential is checked by name only; the remote never says what any
-variable holds. To see where everything stands before pushing, ask the
-service API for a status, with `AZATHOTH_REMOTE_TOKEN` set as above:
+variable holds. To see where everything stands, push or not, go back to the
+laptop instance and ask for its status:
 
-```python
-from azathoth import api
-
-with api.open("laptop.db") as instance:
-    status = instance.remote("http://127.0.0.1:8470").status()
-
-    for component in status.components:
-        print(component.lineage, component.relation)
-
-    for model in status.models:
-        print(model.identifier, model.authorized_locally, model.authorized_remotely)
+```bash
+export AZATHOTH_DATABASE=laptop.db
+azathoth remote status origin --workflow a1000000-0000-4000-8000-000000000002
 ```
 
-Each component is `in_sync`, `ahead`, `behind`, `diverged`, `local_only`
-or `remote_only`, and each model says whether it is authorized here and at
-the remote. A status keeps the remote's portfolio each time it reaches it,
-so when the remote cannot be reached, the status says so, its relations
-are unknown, and its models are read from the portfolio last kept, as of
-`portfolio_synced_at` (ADR 0125).
+```powershell
+$env:AZATHOTH_DATABASE = "laptop.db"
+azathoth remote status origin --workflow a1000000-0000-4000-8000-000000000002
+```
+
+```text
+Status of origin (http://127.0.0.1:8470): reached.
+workflow a1000000-0000-4000-8000-000000000002  in_sync  here 1 <DIGEST>  there 1 <DIGEST>  not in production there
+```
+
+Each component is `in_sync`, `ahead` (a push moves the remote forward),
+`behind` (a pull moves this instance forward), `diverged`, `local_only` or
+`remote_only`. Each side names its latest revision's number there and the
+start of its digest, and a workflow says which revision, if any, is in
+production at the remote. Each model a workflow needs says whether it is
+authorized here and there. Naming nothing reports everything either side
+holds, and `--output json` writes the service API's `RemoteStatus`.
+
+A status keeps the remote's portfolio each time it reaches it. Stop the
+remote with Ctrl-C and ask again: the status says so, and is no failure,
+its side unknown and its models read from the portfolio last kept
+(ADR 0125):
+
+```text
+Status of origin (http://127.0.0.1:8470): not reached; its side is unknown.
+Its portfolio is as last read, at <TIME>.
+workflow a1000000-0000-4000-8000-000000000002  unknown  here 1 <DIGEST>  there unknown
+```
 
 ## Tokens
 
@@ -348,6 +391,12 @@ The remote has no token of that value; create one on the remote and set
 
 ```text
 This remote does not know the token given. Send one its owner created with `azathoth remote token create`, as `Authorization: Bearer <TOKEN>`.
+```
+
+No remote has that name here; name it with `remote add`, or give its URL:
+
+```text
+No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
 ```
 
 No token is set in this terminal:

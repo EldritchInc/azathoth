@@ -1,3 +1,3 @@
 """Azathoth: empirical optimization for context-aware AI workflows."""
 
-__version__ = "1.4.0a6"
+__version__ = "1.4.0b1"
