@@ -6,171 +6,240 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
-## Unreleased
+## 1.4.0
 
-- `azathoth.api`, a public service API that the command line, azathoth-mcp
-  and the coming local editor all call. It browses and imports workflows,
-  tools and benchmarks, lists the models providers serve, keeps the model
-  portfolio, initializes databases, and runs and invokes workflows,
-  reporting each step and context change to a callback as it happens and
-  stopping when cancelled. It returns its own
-  frozen models, each with its equivalent `azathoth` command, raises errors
-  with stable codes, and is provisional until 1.4.0
+Azathoth 1.4 is built to be shared. Its public service API, `azathoth.api`,
+is what the command line, `azathoth-mcp` and the new local editor,
+[azathoth-ui](https://github.com/EldritchInc/azathoth-ui), all call, and it
+is stable from this release: within 1.x it grows only by additions. Every
+revision records its lineage and who made it. Data can be labelled, and
+restricted data reaches only the models declared to neither retain nor
+train on it. And a remote lets a team push workflows, tools and benchmarks
+from one instance and pull them into another, with their history, and see
+where each instance stands against it. Upgrading moves the database schema
+from version 2 to version 7, which `azathoth init` does, as Upgrading From
+1.3 below says.
+
+This release changes what the image runs on AWS: the stack's one-off
+`init` task migrates its database from schema version 2 to version 7, and a
+job's input can carry a sensitivity label that decides which models it
+reaches. Release validation requires such a release to be deployed to an
+AWS sandbox before it ships, and no sandbox was available, so this release
+was not deployed. The template was read, the worker run against botocore's
+`Stubber` and the S3 tools against a stand-in for S3, and the schema
+migrated on SQLite and PostgreSQL, as for every release; what only a real
+deployment proves, that the stack's `init` task migrates a real database to
+version 7 and its workers run labelled jobs on real SQS and S3, is unproven
+for 1.4.0, as what 1.3.0 left unproven still is
+([Release Validation](https://github.com/EldritchInc/azathoth/blob/main/docs/release-validation.md#9-the-aws-deployment)).
+
+### The Service API
+
+- **`azathoth.api` is Azathoth's public service API.** The command line,
+  `azathoth-mcp` and the local editor all call it. It browses and imports
+  workflows, tools and benchmarks, lists the models providers serve, keeps
+  the model portfolio, initializes databases, and runs and invokes
+  workflows, reporting each step and context change to a callback as it
+  happens and stopping when cancelled. It returns its own frozen models,
+  each with its equivalent `azathoth` command, and raises errors with
+  stable codes. It is stable from this release, under the 1.x promise:
+  within 1.x it grows only by additions, and anything removed waits for
+  2.0, after a minor release that warns of it
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
-- azathoth-mcp runs each tool call through the service API. A call now asks
-  the providers what they serve, as `azathoth job run` does, rather than
-  once while production stays the same, so a model authorized or a tool
-  imported reaches a running server at once; a call the client cancels
-  cancels its invocation, which the same call under its key resumes
+- **`azathoth-mcp` runs each tool call through the service API.** A call
+  now asks the providers what they serve, as `azathoth job run` does,
+  rather than once while production stays the same, so a model authorized
+  or a tool imported reaches a running server at once. A call the client
+  cancels cancels its invocation, which the same call under its key resumes
   ([ADR 0120](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0120-public-service-api.md)).
-- `azathoth.api` runs and invokes a workflow on a file: `RunFile` holds a
+- **The API runs and invokes a workflow on a file.** `RunFile` holds a
   document or an image, JSON or text, checked and kept as `--input-file`
   keeps one, and refused before anything runs when it is not its media type
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
-- `azathoth.api` checks a workflow document without saving it, naming every
+- **The API checks a workflow document without saving it.** It names every
   problem with where it is and its step; says, step by step, whether a
   document could run here now and on which models; and lists the
   portfolio's models that meet a step's requirements, by the rules a run
   uses
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
-- `azathoth.api` reads back the runs an instance kept: a workflow's runs
+- **The API reads back the runs an instance kept:** a workflow's runs
   newest first, and one run with its input, its result, and each step's
   output, values, measurements and failed attempts
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
-- `azathoth.api` tries one step of a workflow document alone, on the inputs
+- **The API tries one step of a workflow document alone,** on the inputs
   given, a file among them, reporting its events as a run does and keeping
   no run
   ([ADR 0121](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0121-service-api-second-round.md)).
-- Every workflow, tool and benchmark revision records its lineage: a
-  revision digest that covers its content and every revision before it, the
-  revision it was built on, and who imported it. Every portfolio entry
-  records its digest, who authorized it and when. The database schema is now
-  version 3; run `azathoth init` once to upgrade a PostgreSQL database, which
-  records the lineage it already holds. An SQLite file is upgraded when it is
-  opened
+
+### Lineage and Authorship
+
+- **Every revision records its lineage.** Each workflow, tool and benchmark
+  revision holds a revision digest that covers its content and every
+  revision before it, the revision it was built on, and who imported it.
+  Every portfolio entry records its digest, who authorized it and when.
+  Upgrading records the lineage a database already holds
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
-- Importing a document identical to the latest revision appends nothing and
-  says so: `Workflow <WORKFLOW_ID> is unchanged at revision <NUMBER>.`, and
-  likewise for tools and benchmarks. Before, it appended a duplicate
-  revision. Importing an earlier revision's document still appends a revert
+- **Importing a document identical to the latest revision appends
+  nothing,** and says so: `Workflow <WORKFLOW_ID> is unchanged at revision
+  <NUMBER>.`, and likewise for tools and benchmarks. Before, it appended a
+  duplicate revision. Importing an earlier revision's document still
+  appends a revert
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
-- Who imports is `AZATHOTH_AUTHOR`, as `Name <email>` or `Name`, or else the
-  operating system's username; a malformed `AZATHOTH_AUTHOR` stops the
-  import, authorizing a model, and adding a benchmark case. The standard
-  tools are recorded as Azathoth's
+- **Who imports is `AZATHOTH_AUTHOR`,** as `Name <email>` or `Name`, or
+  else the operating system's username. A malformed `AZATHOTH_AUTHOR` stops
+  the import, authorizing a model, and adding a benchmark case. The
+  standard tools are recorded as Azathoth's
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
-- `workflow show` and `benchmark show` name each revision's digest, parent
-  and author, and history lines end with who imported each revision when
-  that is known
+- **`workflow show` and `benchmark show` name each revision's digest,
+  parent and author,** and history lines end with who imported each
+  revision when that is known
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
-- `azathoth.api` reports each revision's revision digest, parent and author,
-  and each portfolio entry's digest, author and time. Imports take
-  `based_on`, building on an earlier revision to fork, and return
-  `WorkflowImport`, `ToolImport` and `BenchmarkImport`, which say whether a
-  revision was created; `api.open` takes the `author` to record
+- **The API reports each revision's digest, parent and author,** and each
+  portfolio entry's digest, author and time. Imports take `based_on`,
+  building on an earlier revision to fork, and return `WorkflowImport`,
+  `ToolImport` and `BenchmarkImport`, which say whether a revision was
+  created; `api.open` takes the `author` to record
   ([ADR 0122](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0122-lineage-and-digests.md)).
-- Sensitivity labels: a run's input, a job's input and a benchmark case may
-  be labelled `public`, `internal` or `restricted`, with `--sensitivity`,
-  an input source's `sensitivity` or the service API's `sensitivity=`.
-  Unlabelled data is internal and unchanged. A child workflow and a case
-  made from a run are never less sensitive than their source, and a
-  benchmark is as sensitive as its most sensitive case
+
+### Sensitivity Labels
+
+- **A run's input, a job's input and a benchmark case may be labelled**
+  `public`, `internal` or `restricted`, with `--sensitivity`, an input
+  source's `sensitivity` or the service API's `sensitivity=`. Unlabelled
+  data is internal and unchanged. A child workflow and a case made from a
+  run are never less sensitive than their source, and a benchmark is as
+  sensitive as its most sensitive case
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
-- Each portfolio model declares what its provider does with data:
+- **Each portfolio model declares what its provider does with data:**
   `model authorize --no-retention --no-training`, or `model policy` at any
-  time, which also shows who declared it and when. The database schema is
-  now version 4; run `azathoth init` once to upgrade a PostgreSQL database
+  time, which also shows who declared it and when
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
-- Restricted input reaches only models declared to neither retain nor train
-  on data. A context prompt step that would send it anywhere else sends
-  nothing and says which model and what to declare, and a production
+- **Restricted input reaches only models declared to neither retain nor
+  train on data.** A context prompt step that would send it anywhere else
+  sends nothing and says which model and what to declare, and a production
   invocation's caller is told the same. Steps that choose a model, and
   production with approved substitutes, choose a private one first;
   semantic judges and the optimizer's substitutes of restricted cases must
   be private; readiness and model matching take a label
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
-- azathoth-mcp: an exposure document's tool may take `"sensitivity":
-  "restricted"`, the operator's declaration that its client may hold
+- **`azathoth-mcp`: an exposure document's tool may take `"sensitivity":
+  "restricted"`,** the operator's declaration that its client may hold
   restricted data. Its calls are restricted, and `get_invocation` returns no
   restricted invocation through a tool not so exposed
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
-- Labels are shown wherever data is: the API's run, invocation and
+- **Labels are shown wherever data is:** the API's run, invocation and
   benchmark views, a `Sensitivity:` line in show commands for data that is
   not internal, a warning on standard error from every command that prints
   restricted data, and the `azathoth.sensitivity` span attribute. Tools are
   not gated by labels in 1.4
   ([ADR 0123](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0123-sensitivity-labels.md)).
-- A remote: `azathoth remote serve` serves an instance's workflows, tools
-  and benchmarks over HTTP, for other instances to push to and pull from,
-  with the new `remote` extra. `azathoth remote push` and `pull`, and the
-  service API's `instance.remote(url)`, send each document's latest
-  revision, the revisions it was reached by, and the tool versions, child
-  workflows and benchmark content it needs, sending only what the other
-  side lacks. Production state, the portfolio and runs never travel
+
+### Remotes
+
+- **`azathoth remote serve` serves an instance's workflows, tools and
+  benchmarks over HTTP,** for other instances to push to and pull from,
+  with the new `remote` extra, which the container image includes.
+  `azathoth remote push` and `pull`, and the service API's
+  `instance.remote(...)`, send each document's latest revision, the
+  revisions it was reached by, and the tool versions, child workflows and
+  benchmark content it needs, sending only what the other side lacks.
+  Production state, the portfolio and runs never travel
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- Revision digests are a revision's identity everywhere; each instance
+- **Revision digests are a revision's identity everywhere;** each instance
   numbers what it saves. A remote moves only forward: a push whose lineage
   diverged there is refused, and a pull forks a lineage that diverged here
   on the revision its pulled revisions build on, so nothing is lost
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- A remote's owner issues bearer tokens with `azathoth remote token create`,
-  shown once and kept only as digests; `list` and `revoke` manage them, and
-  a client reads its token from `AZATHOTH_REMOTE_TOKEN`. The database schema
-  is now version 5; run `azathoth init` once to upgrade a PostgreSQL
-  database
+- **A remote's owner issues bearer tokens** with `azathoth remote token
+  create`, shown once and kept only as digests; `list` and `revoke` manage
+  them
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- A remote refuses restricted data unless it is served with
-  `--accept-restricted`, and a pull brings restricted benchmarks only with
+- **A remote refuses restricted data unless it is served with
+  `--accept-restricted`,** and a pull brings restricted benchmarks only with
   `--include-restricted`
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- A remote's authentication, policy and audit are seams a plugin fills,
-  through the `azathoth.remote` entry-point group; the core's let only the
-  owner in and audit nothing. A remote's capabilities name its protocol,
-  versions, edition and plugins, and a client refuses another protocol
-  before sending anything
+- **A remote's authentication, policy and audit are seams a plugin
+  fills,** through the `azathoth.remote` entry-point group; the core's let
+  only the owner in and audit nothing. A remote's capabilities name its
+  protocol, versions, edition and plugins, and a client refuses another
+  protocol before sending anything
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- `azathoth.api`'s `models.matching(..., scope="catalog")` matches every
-  model the providers serve, marked authorized or not, for a pulled
-  workflow's steps. The container image includes the `remote` extra
+- **`models.matching(..., scope="catalog")` matches every model the
+  providers serve,** marked authorized or not, for a pulled workflow's steps
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
-- `azathoth.api`'s `remote.status()` compares this instance with a remote:
+- **The API's `remote.status()` compares this instance with a remote:**
   each workflow, tool version and benchmark is in sync, ahead, behind,
   diverged, or held by one side only, a workflow names the revision in
   production at the remote, and each model says whether it is authorized
   here and there. A remote that cannot be reached is no error: its side is
-  unknown, and its models are read from the portfolio last read from it
+  unknown, and its models are read from the portfolio last read from it,
+  which each instance keeps
   ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
-- A remote answers `/v1/heads`, `/v1/portfolio` and `/v1/credentials`,
+- **A remote answers `/v1/heads`, `/v1/portfolio` and `/v1/credentials`,**
   read-only, under a new `read_portfolio` action and `portfolio_read` audit
   event. The credential check is asked by name, and never returns a value
   ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
-- `azathoth remote push` warns, after its report, of a credential its tools
-  need that the remote does not set, a child workflow the remote runs at
-  another revision or not at all, and a model its steps fix that the remote
-  has not authorized; a warning never refuses the push
+- **`azathoth remote push` warns, after its report,** of a credential its
+  tools need that the remote does not set, a child workflow the remote runs
+  at another revision or not at all, and a model its steps fix that the
+  remote has not authorized; a warning never refuses the push
   ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
-- Database schema version 6 keeps the last portfolio read from each remote
-  ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
-- `azathoth remote add <NAME> <URL>` names a remote, with the environment
-  variable its token is read from, `AZATHOTH_REMOTE_TOKEN` unless
-  `--token-variable` names another; the token itself is never kept.
+- **`azathoth remote add <NAME> <URL>` names a remote,** with the
+  environment variable its token is read from, `AZATHOTH_REMOTE_TOKEN`
+  unless `--token-variable` names another; the token itself is never kept.
   `remote list` lists the names and `remote remove` forgets one, with the
-  last portfolio read from it. `azathoth.api`'s `instance.remotes` does the
-  same
+  last portfolio read from it. The API's `instance.remotes` does the same
   ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
-- `azathoth remote push`, `pull` and `status`, and `instance.remote`, take a
-  remote's name or its URL; anything holding `:`, `/` or `.` is read as a
-  URL, so a host given without its scheme is refused as one
+- **`azathoth remote push`, `pull` and `status`, and `instance.remote`,
+  take a remote's name or its URL;** anything holding `:`, `/` or `.` is
+  read as a URL, so a host given without its scheme is refused as one
   ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
-- `azathoth remote status <REMOTE>` reports how each workflow, tool version
-  and benchmark relates to the remote's, which revision is in production
-  there, and where each model is authorized; a remote that cannot be
-  reached is no failure, its models read from the last portfolio kept.
-  `--output json` writes the service API's `RemoteStatus`
+- **`azathoth remote status <REMOTE>` reports how each workflow, tool
+  version and benchmark relates to the remote's,** which revision is in
+  production there, and where each model is authorized; a remote that
+  cannot be reached is no failure, its models read from the last portfolio
+  kept. `--output json` writes the service API's `RemoteStatus`
   ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
-- The database schema is now version 7, keeping the remotes an instance
-  names; run `azathoth init` once to upgrade a PostgreSQL database
-  ([ADR 0126](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0126-named-remotes.md)).
+
+### Upgrading From 1.3
+
+Upgrade, and run `azathoth init` as after every upgrade:
+
+```bash
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+If you serve workflows with `azathoth-mcp`, upgrade it in the same command,
+as [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#upgrading-leaving-and-uninstalling) shows: 1.4 of it requires 1.4 of
+`azathoth-ai`.
+
+The database schema moves from version 2 to version 7. An SQLite file is
+upgraded the first time it is used. A PostgreSQL database refuses every
+command until `azathoth init` has run once, from any one machine, and 1.3
+refuses it after that, so upgrade Azathoth on every machine first. `init`
+keeps everything the database holds and records the lineage of the
+revisions in it; revisions imported before 1.4 name nobody as their author.
+
+Three things an existing installation will notice:
+
+- importing a document identical to the latest revision appends nothing,
+  and prints `Workflow <WORKFLOW_ID> is unchanged at revision <NUMBER>.`
+  rather than appending a duplicate;
+- imports, authorizations and new benchmark cases record
+  `AZATHOTH_AUTHOR`, or else your username, and a malformed
+  `AZATHOTH_AUTHOR` stops them; history lines end with who imported each
+  revision;
+- `azathoth-mcp` asks the providers what they serve on every call.
+
+Unlabelled data is internal and runs as it did, so nothing changes until
+you label something. Serving a remote needs an extra, installed only by
+those who serve one: `azathoth-ai[remote]`.
 
 ## 1.3.0
 

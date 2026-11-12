@@ -201,7 +201,7 @@ azathoth --help
 ```
 
 `azathoth --version` prints the installed version, for example
-`azathoth 1.3.0`.
+`azathoth 1.4.0`.
 
 Then confirm that the `python` on your `PATH` is the venv's, and that it can
 import Azathoth. Azathoth's child-process tools depend on this:

@@ -202,7 +202,7 @@ def test_the_readme_asks_for_no_funding_itself() -> None:
 def test_the_project_status_is_this_release_and_its_promise() -> None:
     status = section("Project Status")
 
-    assert "Azathoth 1.3 " in status
+    assert "Azathoth 1.4 " in status
     assert "1.0" not in status.replace("1.0.0", "")
 
     for promised in ("workflow, tool and job documents", "database schema", "Python API"):
@@ -219,6 +219,18 @@ def test_the_promise_covers_the_service_api_and_the_remote_protocol() -> None:
         "that warns of it."
     ) in status
     assert "The rest of the Python API is typed and documented" in status
+
+
+def test_the_project_status_names_what_1_4_added() -> None:
+    status = " ".join(section("Project Status").split())
+
+    for added in (
+        "records who made every revision",
+        "keeps restricted data to the models declared private",
+        "between instances through a remote",
+        "[azathoth-ui](https://github.com/EldritchInc/azathoth-ui)",
+    ):
+        assert added in status, added
 
 
 def test_the_readme_lists_every_standard_tool() -> None:
