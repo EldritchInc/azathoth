@@ -92,6 +92,7 @@ from azathoth.cli.remote import (
     list_remotes,
     pull_from_remote,
     push_to_remote,
+    remote_status,
     remove_remote,
     revoke_remote_token,
     serve_remote,
@@ -378,6 +379,7 @@ def _dispatch(
             add_remote=add_remote,
             list_remotes=list_remotes,
             remove_remote=remove_remote,
+            remote_status=remote_status,
         )
 
     if command == TOOL_COMMAND:

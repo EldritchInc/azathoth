@@ -164,6 +164,11 @@ azathoth
 │   │   ├── --tool <TOOL_ID>@<VERSION>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   └── --include-restricted
+│   ├── status <REMOTE>
+│   │   ├── --workflow <WORKFLOW_ID>
+│   │   ├── --tool <TOOL_ID>@<VERSION>
+│   │   ├── --benchmark <BENCHMARK_ID>
+│   │   └── --output text|json
 │   ├── serve
 │   │   ├── --host <HOST>
 │   │   ├── --port <PORT>
@@ -3731,6 +3736,46 @@ Name a workflow, tool version or benchmark to send.
 Tool '<VALUE>' is not <TOOL_ID>@<VERSION>.
 The remote at <URL> could not be reached: <REASON>
 ```
+
+# Remote Status
+
+`remote status` says how this instance's workflows, tool versions and
+benchmarks relate to a remote's, and where each model they need is
+authorized (ADR 0125). It names the remote as `remote push` does, and what
+to report with `--workflow`, `--tool` and `--benchmark`; naming none
+reports everything either side holds. Nothing moves:
+
+```bash
+azathoth remote status origin
+```
+
+```text
+Status of <REMOTE>: reached.
+<LINEAGE>  <RELATION>  here <NUMBER> <DIGEST>  there <NUMBER> <DIGEST>
+model <MODEL>  authorized here yes  there unknown
+```
+
+Each component's relation is `in_sync`, `ahead` (a push moves the remote
+forward), `behind` (a pull moves this instance forward), `diverged`,
+`local_only` or `remote_only`, and each side names its latest revision's
+number there and the first 12 characters of its digest, or `none`. A
+workflow also says which revision is `in production there`, or `not in
+production there`. Each model says whether it is authorized here, and at the
+remote: `yes`, `no` or `unknown`.
+
+A remote that cannot be reached is no failure. Its side, each relation and
+what is in production there are `unknown`, and its models are read from the
+portfolio it last returned, which `remote status` and `remote push` keep:
+
+```text
+Status of <REMOTE>: not reached; its side is unknown.
+Its portfolio is as last read, at <TIME>.
+Its portfolio was never read here.
+```
+
+`--output json` writes the service API's `RemoteStatus` instead, with each
+digest in full. A refused token, or a remote of another protocol, is still
+refused.
 
 # Remote Tokens
 

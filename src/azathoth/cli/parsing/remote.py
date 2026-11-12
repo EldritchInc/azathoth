@@ -5,6 +5,7 @@ from __future__ import annotations
 from argparse import ArgumentParser, _SubParsersAction
 from uuid import UUID
 
+from azathoth.cli.output_format import StatusOutputFormat
 from azathoth.remote import DEFAULT_HOST, DEFAULT_PORT, REMOTE_TOKEN_VARIABLE
 
 REMOTE_COMMAND = "remote"
@@ -22,6 +23,10 @@ REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE = "remote_accept_restricted"
 REMOTE_PUSH_ACTION = "push"
 
 REMOTE_PULL_ACTION = "pull"
+
+REMOTE_STATUS_ACTION = "status"
+
+REMOTE_OUTPUT_ATTRIBUTE = "remote_output"
 
 REMOTE_TARGET_ATTRIBUTE = "remote_target"
 
@@ -103,8 +108,18 @@ def add_remote_parser(
     for action, verb, help_text in (
         (REMOTE_PUSH_ACTION, "push", "Push documents, with what they need, to a remote."),
         (REMOTE_PULL_ACTION, "pull", "Pull documents, with what they need, from a remote."),
+        (
+            REMOTE_STATUS_ACTION,
+            "report",
+            "Say how documents here relate to a remote's, and where each model is authorized.",
+        ),
     ):
         sync_parser = remote_actions.add_parser(action, help=help_text)
+        everything = (
+            " Name none to report everything either side holds."
+            if action == REMOTE_STATUS_ACTION
+            else ""
+        )
 
         sync_parser.add_argument(
             REMOTE_TARGET_ATTRIBUTE,
@@ -122,7 +137,7 @@ def add_remote_parser(
             type=UUID,
             action="append",
             default=[],
-            help=f"A workflow to {verb}; give it again for more.",
+            help=f"A workflow to {verb}; give it again for more.{everything}",
         )
 
         sync_parser.add_argument(
@@ -131,7 +146,7 @@ def add_remote_parser(
             metavar="TOOL_ID@VERSION",
             action="append",
             default=[],
-            help=f"A tool version to {verb}; give it again for more.",
+            help=f"A tool version to {verb}; give it again for more.{everything}",
         )
 
         sync_parser.add_argument(
@@ -141,7 +156,7 @@ def add_remote_parser(
             type=UUID,
             action="append",
             default=[],
-            help=f"A benchmark to {verb}; give it again for more.",
+            help=f"A benchmark to {verb}; give it again for more.{everything}",
         )
 
         if action == REMOTE_PULL_ACTION:
@@ -150,6 +165,18 @@ def add_remote_parser(
                 dest=REMOTE_INCLUDE_RESTRICTED_ATTRIBUTE,
                 action="store_true",
                 help="Pull restricted benchmarks too, which are otherwise withheld.",
+            )
+
+        if action == REMOTE_STATUS_ACTION:
+            sync_parser.add_argument(
+                "--output",
+                dest=REMOTE_OUTPUT_ATTRIBUTE,
+                choices=[output.value for output in StatusOutputFormat],
+                default=StatusOutputFormat.TEXT.value,
+                help=(
+                    "Output format: text writes a line per component and per model; json "
+                    "writes the service API's RemoteStatus."
+                ),
             )
 
     add_parser = remote_actions.add_parser(

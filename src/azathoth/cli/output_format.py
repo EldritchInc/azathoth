@@ -1,4 +1,4 @@
-"""Output formats of workflow execution commands."""
+"""Output formats of workflow execution commands, and of `remote status`."""
 
 from enum import StrEnum
 
@@ -19,3 +19,14 @@ class WorkflowOutputFormat(StrEnum):
 
 DEFAULT_WORKFLOW_OUTPUT_FORMAT = WorkflowOutputFormat.JSONL
 """The output format used when none is requested."""
+
+
+class StatusOutputFormat(StrEnum):
+    """How `remote status` writes its status (ADR 0126).
+
+    `text` writes one line per component and per model. `json` writes the
+    service API's `RemoteStatus`, digests in full.
+    """
+
+    TEXT = "text"
+    JSON = "json"

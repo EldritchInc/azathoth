@@ -13,19 +13,24 @@ from uuid import UUID
 from azathoth import api
 from azathoth.api.remote import reach
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.output_format import StatusOutputFormat
 from azathoth.cli.persistence import repositories
 from azathoth.cli.service import current_author
 from azathoth.remote import (
     MISSING_REMOTE_EXTRA_MESSAGE,
     PROTOCOL_VERSION,
     REMOTE_TOKEN_VARIABLE,
+    ComponentStatus,
+    ModelStatus,
     NamedRemote,
     RemotePluginError,
+    RemoteStatus,
     RemoteToken,
     RemoteTokenError,
     TokenAuthenticator,
     load_seams,
 )
+from azathoth.revisions import RevisionKind
 
 TOKEN_SHOWN_ONCE_NOTE = (
     "Keep the token now: this remote keeps only its digest, and cannot show it again."
@@ -347,6 +352,161 @@ def pull_from_remote(
     return 0
 
 
+SHORT_DIGEST_LENGTH = 12
+"""How many characters of a revision digest `remote status` shows; `--output json` shows all."""
+
+
+def _short(
+    digest: str,
+) -> str:
+    """Return the start of a revision digest, as `remote status` shows it."""
+
+    return digest[:SHORT_DIGEST_LENGTH]
+
+
+def _side(
+    where: str,
+    number: int | None,
+    digest: str | None,
+    *,
+    known: bool = True,
+) -> str:
+    """Return one side of a component: its latest revision, none, or unknown."""
+
+    if not known:
+        return f"{where} unknown"
+
+    if number is None or digest is None:
+        return f"{where} none"
+
+    return f"{where} {number} {_short(digest)}"
+
+
+def component_line(
+    component: ComponentStatus,
+    *,
+    reachable: bool,
+) -> str:
+    """Return one component's line: how it relates, each side's latest revision, and production.
+
+    A workflow at a reached remote also says which revision is in production
+    there; nothing about the remote is known when it was not reached.
+    """
+
+    relation = "unknown" if component.relation is None else component.relation.value
+    parts = [
+        str(component.lineage),
+        relation,
+        _side("here", component.local_number, component.local_digest),
+        _side(
+            "there",
+            component.remote_number,
+            component.remote_digest,
+            known=reachable,
+        ),
+    ]
+
+    if reachable and component.lineage.kind is RevisionKind.WORKFLOW:
+        production = component.remote_production_digest
+        parts.append(
+            "not in production there"
+            if production is None
+            else f"in production there {_short(production)}"
+        )
+
+    return "  ".join(parts)
+
+
+def _authorized(
+    value: bool | None,
+) -> str:
+    """Return whether a model is authorized, or unknown, as `remote status` says it."""
+
+    if value is None:
+        return "unknown"
+
+    return "yes" if value else "no"
+
+
+def model_line(
+    model: ModelStatus,
+) -> str:
+    """Return one model's line: whether it is authorized here, and at the remote."""
+
+    return (
+        f"model {model.identifier}  authorized here {_authorized(model.authorized_locally)}  "
+        f"there {_authorized(model.authorized_remotely)}"
+    )
+
+
+def status_lines(
+    status: RemoteStatus,
+    *,
+    name: str | None = None,
+) -> tuple[str, ...]:
+    """Return what `remote status` says: whether the remote was reached, then each line.
+
+    A remote not reached says when its portfolio was last read, which is what
+    each model's `there` says, or that it never was.
+    """
+
+    remote = status.remote if name is None else f"{name} ({status.remote})"
+    reached = "reached" if status.reachable else "not reached; its side is unknown"
+    lines = [f"Status of {remote}: {reached}."]
+
+    if not status.reachable:
+        synced = status.portfolio_synced_at
+        lines.append(
+            "Its portfolio was never read here."
+            if synced is None
+            else f"Its portfolio is as last read, at {synced.isoformat()}."
+        )
+
+    lines.extend(
+        component_line(component, reachable=status.reachable) for component in status.components
+    )
+    lines.extend(model_line(model) for model in status.models)
+
+    return tuple(lines)
+
+
+def remote_status(
+    *,
+    remote: str,
+    workflows: Sequence[UUID] = (),
+    tools: Sequence[str] = (),
+    benchmarks: Sequence[UUID] = (),
+    output: StatusOutputFormat = StatusOutputFormat.TEXT,
+) -> int:
+    """Say how the documents named, or every one either side holds, relate to a remote's.
+
+    A remote that cannot be reached is no failure: its side is unknown, and
+    its models are read from the last portfolio read from it (ADR 0125).
+    """
+
+    try:
+        reached = _remote(remote)
+        status = reached.status(
+            workflows=workflows,
+            tools=tool_versions(tools),
+            benchmarks=benchmarks,
+        )
+    except (api.ApiError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    if output is StatusOutputFormat.JSON:
+        print(status.model_dump_json(indent=2))
+
+        return 0
+
+    for line in status_lines(status, name=reached.name):
+        print(line)
+
+    return 0
+
+
 def token_line(
     token: RemoteToken,
 ) -> str:
@@ -359,18 +519,23 @@ def token_line(
 
 
 __all__ = [
+    "SHORT_DIGEST_LENGTH",
     "TOKEN_SHOWN_ONCE_NOTE",
     "add_remote",
+    "component_line",
     "create_remote_token",
     "list_remote_tokens",
     "list_remotes",
+    "model_line",
     "named_line",
     "pull_from_remote",
     "push_to_remote",
+    "remote_status",
     "remove_remote",
     "revoke_remote_token",
     "serve_remote",
     "serving_line",
+    "status_lines",
     "token_line",
     "tool_versions",
 ]
