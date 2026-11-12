@@ -239,6 +239,42 @@ A pull leaves out restricted benchmarks unless it asks for them with
 Withheld <LINEAGE>: it is restricted; pull it with --include-restricted.
 ```
 
+## 8. Before Shipping
+
+A push warns, after its report and on standard error, of what would stop
+its documents from running at the remote. A warning never refuses a push;
+it says what to fix there:
+
+```text
+Warning: Tool <TOOL_ID>@<VERSION> needs <NAME>, which is not set at the remote; its steps fail there until it is.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> runs workflow <CHILD_ID>, which is not in production at the remote; it cannot run there until the child is promoted.
+Warning: Step <STEP_ID> of workflow <WORKFLOW_ID> uses model <MODEL>, which the remote has not authorized; it cannot run there until the remote's portfolio holds it.
+```
+
+A credential is checked by name only; the remote never says what any
+variable holds. To see where everything stands before pushing, ask the
+service API for a status, with `AZATHOTH_REMOTE_TOKEN` set as above:
+
+```python
+from azathoth import api
+
+with api.open("laptop.db") as instance:
+    status = instance.remote("http://127.0.0.1:8470").status()
+
+    for component in status.components:
+        print(component.lineage, component.relation)
+
+    for model in status.models:
+        print(model.identifier, model.authorized_locally, model.authorized_remotely)
+```
+
+Each component is `in_sync`, `ahead`, `behind`, `diverged`, `local_only`
+or `remote_only`, and each model says whether it is authorized here and at
+the remote. A status keeps the remote's portfolio each time it reaches it,
+so when the remote cannot be reached, the status says so, its relations
+are unknown, and its models are read from the portfolio last kept, as of
+`portfolio_synced_at` (ADR 0125).
+
 ## Tokens
 
 List a remote's tokens, and revoke one that is lost or no longer needed, on

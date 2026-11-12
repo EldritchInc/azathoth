@@ -133,6 +133,26 @@ release dates are on the
   model the providers serve, marked authorized or not, for a pulled
   workflow's steps. The container image includes the `remote` extra
   ([ADR 0124](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0124-remote.md)).
+- `azathoth.api`'s `remote.status()` compares this instance with a remote:
+  each workflow, tool version and benchmark is in sync, ahead, behind,
+  diverged, or held by one side only, a workflow names the revision in
+  production at the remote, and each model says whether it is authorized
+  here and there. A remote that cannot be reached is no error: its side is
+  unknown, and its models are read from the portfolio last read from it
+  ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
+- A remote answers `/v1/heads`, `/v1/portfolio` and `/v1/credentials`,
+  read-only, under a new `read_portfolio` action and `portfolio_read` audit
+  event. The credential check is asked by name, and never returns a value
+  ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
+- `azathoth remote push` warns, after its report, of a credential its tools
+  need that the remote does not set, a child workflow the remote runs at
+  another revision or not at all, and a model its steps fix that the remote
+  has not authorized; a warning never refuses the push
+  ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
+- The database schema is now version 6, keeping the last portfolio read
+  from each remote; run `azathoth init` once to upgrade a PostgreSQL
+  database
+  ([ADR 0125](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0125-remote-status.md)).
 
 ## 1.3.0
 
