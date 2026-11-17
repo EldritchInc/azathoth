@@ -12,7 +12,7 @@
 # tested with. Dependabot proposes each new digest of the tag as a pull
 # request, in both lines (ADR 0109).
 #
-FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 AS builder
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 WORKDIR /src
 
@@ -31,7 +31,7 @@ RUN python -m build --wheel --outdir /dist \
 # MCP server (ADR 0111), into a venv that is first on PATH, so the standard
 # tools' child workflows run Azathoth's own Python.
 #
-FROM python:3.13-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 LABEL org.opencontainers.image.title="Azathoth" \
       org.opencontainers.image.description="An empirical optimization engine for context-aware AI workflows." \
