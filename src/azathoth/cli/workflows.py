@@ -49,6 +49,7 @@ from azathoth.cli.reporting import (
     report_invocation_result,
     step_observer,
 )
+from azathoth.cli.service import current_author
 from azathoth.cli.step_output import (
     JsonLinesOutputWriter,
 )
@@ -256,8 +257,14 @@ def promote_workflow(
     """Promote one configured workflow to active production.
 
     With an experiment ID, the experiment's winner is promoted instead of the
-    configured candidate (ADR 0092).
+    configured candidate (ADR 0092). Who promotes is told as for an import,
+    before the runtime is loaded, and recorded with the revision (ADR 0128).
     """
+
+    author = current_author()
+
+    if author is None:
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -271,6 +278,7 @@ def promote_workflow(
             revision_repository=repositories(configuration).production_revisions,
             experiment_id=experiment_id,
             experiment_repository=repositories(configuration).experiments,
+            author=author,
         )
     except (
         WorkflowNotConfiguredError,

@@ -14,6 +14,7 @@ from azathoth.prompting import (
     PROMPT_SPECIFICATIONS,
     FixedModelSelection,
 )
+from azathoth.revisions import Author
 from azathoth.workflows.models import WorkflowSpecification
 from azathoth.workflows.references import declaring_step_ids
 from azathoth.workflows.value import (
@@ -176,13 +177,20 @@ class WorkflowProductionState(BaseModel):
 
 
 class WorkflowProductionRevision(BaseModel):
-    """Identify one immutable historical workflow production deployment."""
+    """Identify one immutable historical workflow production deployment.
+
+    `author` is who promoted or rolled back, and `restores` the earlier
+    revision a rollback brought back (ADR 0128). A revision saved before 1.5
+    records neither.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     id: UUID = Field(default_factory=uuid4)
     state: WorkflowProductionState
     created_at: datetime = Field(default_factory=utc_now)
+    author: Author | None = None
+    restores: UUID | None = None
 
     @property
     def workflow_id(

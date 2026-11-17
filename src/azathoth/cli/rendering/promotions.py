@@ -20,6 +20,7 @@ def render_workflow_promotion(
         f"Workflow ID: {workflow.id}",
         f"Revision ID: {revision.id}",
         "Status: promoted",
+        f"Author: {revision.author}" if revision.author is not None else "Author: unknown",
         f"Created At: {revision.created_at.isoformat()}",
     ]
 

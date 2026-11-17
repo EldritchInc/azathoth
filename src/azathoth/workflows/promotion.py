@@ -9,6 +9,7 @@ from azathoth.prompting import (
     PromptStrategy,
     PromptStrategySpec,
 )
+from azathoth.revisions import Author
 from azathoth.strategies import Strategy
 from azathoth.workflows.candidate import WorkflowCandidate
 from azathoth.workflows.models import WorkflowSpecification
@@ -166,12 +167,14 @@ def promote_workflow_candidate(
     repository: WorkflowProductionStateRepository,
     revision_repository: WorkflowProductionRevisionRepository,
     model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = (),
+    author: Author | None = None,
 ) -> WorkflowProductionRevision:
     """Promote one explicitly selected workflow candidate to production.
 
     Production emits exactly the workflow's declared result, under the name
     `result`, so callers receive the same value evaluation judged. A workflow
-    without a declared result cannot be promoted.
+    without a declared result cannot be promoted. The revision records
+    `author` as who promoted (ADR 0128).
 
     Raises:
         WorkflowResultError: The workflow does not declare a result.
@@ -201,6 +204,7 @@ def promote_workflow_candidate(
 
     revision = WorkflowProductionRevision(
         state=state,
+        author=author,
     )
 
     revision_repository.save(
