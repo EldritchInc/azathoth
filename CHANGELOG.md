@@ -14,6 +14,12 @@ service API over HTTP, `api.connect` and `--remote` to reach it, and a
 catalog of named actions for a remote's policy to decide. Nothing in this
 release implements it yet; the editor's 1.5 pages are built to it.
 
+[ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)
+brings production to the service API, `instance.production` and two new
+`invocations` calls, and adds `azathoth workflow rollback`, which restores
+an earlier production revision as a new one. Production revisions record
+who made them, and what a rollback restored.
+
 ## 1.4.0
 
 Azathoth 1.4 is built to be shared. Its public service API, `azathoth.api`,
