@@ -149,3 +149,4 @@ requests that made it:
 - [ADR 0124: Remote Push and Pull](0124-remote.md)
 - [ADR 0125: Remote Status](0125-remote-status.md)
 - [ADR 0126: Named Remotes](0126-named-remotes.md)
+- [ADR 0127: The Remote Serves the Service API](0127-the-remote-serves-the-service-api.md)
