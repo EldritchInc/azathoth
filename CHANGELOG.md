@@ -6,6 +6,14 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+[ADR 0127](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0127-the-remote-serves-the-service-api.md)
+records the design Azathoth 1.6 builds: a remote that serves the whole
+service API over HTTP, `api.connect` and `--remote` to reach it, and a
+catalog of named actions for a remote's policy to decide. Nothing in this
+release implements it yet; the editor's 1.5 pages are built to it.
+
 ## 1.4.0
 
 Azathoth 1.4 is built to be shared. Its public service API, `azathoth.api`,
