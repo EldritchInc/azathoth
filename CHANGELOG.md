@@ -37,6 +37,12 @@ release dates are on the
   ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
 - Dependabot proposes new digests of the container image's base, and no
   longer new Python versions, which wait until CI tests them.
+- The design for judges and a run's evidence in the service API:
+  `instance.judges`, `runs.record_feedback` and `runs.feedback`,
+  `runs.annotations` and `invocations.annotations`, `runs.children`,
+  `runs.interrupted` and `runs.resume`, with `azathoth run interrupted` to
+  find a run that stopped
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
 
 ## 1.4.0
 
