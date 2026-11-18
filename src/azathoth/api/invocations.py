@@ -14,9 +14,11 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth.api.annotations import invocation_annotations
 from azathoth.api.browsing import LIMIT_MESSAGE, RepositoriesAccess
 from azathoth.api.errors import ConflictError, InvalidArgumentError, NotFoundError
 from azathoth.api.models import (
+    Annotations,
     InvocationDetail,
     InvocationError,
     InvocationFinished,
@@ -203,6 +205,22 @@ class Invocations:
         observer.emit(InvocationFinished(invocation_id=invocation.id, status=outcome.status))
 
         return outcome.model_copy(update={"warnings": tuple(observer.warnings)})
+
+    def annotations(
+        self,
+        invocation_id: UUID,
+    ) -> Annotations:
+        """Return the W3C Web Annotations of every citation an invocation's run verified.
+
+        They are its run's, as `runs.annotations` returns them (ADR 0129).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The invocation is unknown, or has no run yet.
+            ContentUnavailableError: A record of its run's citations cannot be read.
+        """
+
+        return invocation_annotations(self._repositories(), invocation_id)
 
     def get(
         self,

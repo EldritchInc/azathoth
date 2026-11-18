@@ -41,7 +41,8 @@ release dates are on the
   `instance.judges`, `runs.record_feedback` and `runs.feedback`,
   `runs.annotations` and `invocations.annotations`, `runs.children`,
   `runs.interrupted` and `runs.resume`, with `azathoth run interrupted` to
-  find a run that stopped
+  find a run that stopped. Two new errors carry codes of their own:
+  `content_unavailable` and `run_not_resumable`
   ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
 
 ## 1.4.0

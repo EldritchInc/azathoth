@@ -746,6 +746,30 @@ class InvocationRun(ApiModel):
     steps: tuple[RunStep, ...] = ()
 
 
+class Annotations(ApiModel):
+    """A run's verified citations, as a W3C Web Annotation collection (ADRs 0117 and 0129)."""
+
+    subject_id: UUID = Field(
+        description="The run or invocation asked about.",
+    )
+
+    run_id: UUID = Field(
+        description="The run whose cited steps kept the citations: an invocation's run.",
+    )
+
+    collection: dict[str, JsonValue] = Field(
+        description="The annotation collection, exactly as `azathoth run annotations` prints it.",
+    )
+
+    items: tuple[dict[str, JsonValue], ...] = Field(
+        description="The collection's annotations, in the order the run's steps checked them.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that prints the collection.",
+    )
+
+
 FeedbackDisposition = Literal["good", "bad"]
 """How a person judged a run (ADR 0068)."""
 

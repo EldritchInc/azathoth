@@ -1,23 +1,17 @@
-"""Export the citations a run checked as W3C Web Annotations (ADR 0117)."""
+"""Export the citations a run checked as W3C Web Annotations (ADRs 0117 and 0129).
+
+Each command prints the collection the service API returns, so the JSON is
+the same whichever way it is asked for.
+"""
 
 import json
 import sys
 from uuid import UUID
 
-from azathoth import __version__
-from azathoth.citations import CitationRecord, citation_annotations
+from azathoth import api
+from azathoth.api.annotations import GENERATOR
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
-from azathoth.persistence.repositories import Repositories
-from azathoth.prompting import CitationCheckError, stored_citation_checks
-from azathoth.workflows import journaled_citations
-
-GENERATOR: str = f"Azathoth {__version__}"
-"""The software an exported annotation names as its generator."""
-
-
-class AnnotationExportError(ValueError):
-    """Raised when a run's citations cannot be exported."""
+from azathoth.cli.service import service_instance
 
 
 def export_run_annotations(
@@ -30,14 +24,16 @@ def export_run_annotations(
     state is read.
     """
 
-    stored = repositories(CliRuntimeConfiguration.from_environment())
+    configuration = CliRuntimeConfiguration.from_environment()
 
-    if stored.runs.get(run_id) is None and not stored.run_journal.entries(run_id):
-        print(f"Run {run_id} was not found.", file=sys.stderr)
+    try:
+        annotations = service_instance(configuration).runs.annotations(run_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    return _print_annotations(stored, run_id)
+    return _print(annotations)
 
 
 def export_invocation_annotations(
@@ -45,85 +41,30 @@ def export_invocation_annotations(
 ) -> int:
     """Print every verified check one invocation's run kept, as Web Annotations."""
 
-    stored = repositories(CliRuntimeConfiguration.from_environment())
-
-    if stored.invocations.get(invocation_id) is None:
-        print(f"Invocation {invocation_id} was not found.", file=sys.stderr)
-
-        return 1
-
-    association = stored.invocation_runs.get(invocation_id)
-    run_id = (
-        association.run_id
-        if association is not None
-        else stored.run_journal.invocation_run_id(invocation_id)
-    )
-
-    if run_id is None:
-        print(f"Invocation {invocation_id} has no run.", file=sys.stderr)
-
-        return 1
-
-    return _print_annotations(stored, run_id)
-
-
-def run_citation_records(
-    stored: Repositories,
-    run_id: UUID,
-) -> list[CitationRecord]:
-    """Return every citations record one run's committed steps kept, with its checks.
-
-    Raises:
-        AnnotationExportError: The content store no longer holds a record,
-            or what it holds under a record's digest is not one.
-    """
-
-    records: list[CitationRecord] = []
-
-    for step_id, digest in journaled_citations(stored.run_journal, run_id):
-        try:
-            checks = stored_citation_checks(stored.content, digest)
-        except CitationCheckError as exc:
-            raise AnnotationExportError(str(exc)) from exc
-
-        if checks is None:
-            raise AnnotationExportError(
-                f"Citation record {digest} of step {step_id} is not in the content store."
-            )
-
-        records.append(CitationRecord(step_id=step_id, record=digest, checks=checks))
-
-    return records
-
-
-def _print_annotations(
-    stored: Repositories,
-    run_id: UUID,
-) -> int:
-    """Print one run's annotation collection, or report why it cannot be made."""
+    configuration = CliRuntimeConfiguration.from_environment()
 
     try:
-        records = run_citation_records(stored, run_id)
-    except AnnotationExportError as exc:
+        annotations = service_instance(configuration).invocations.annotations(invocation_id)
+    except api.ApiError as exc:
         print(str(exc), file=sys.stderr)
 
         return 1
 
-    print(
-        json.dumps(
-            citation_annotations(run_id, records, generator=GENERATOR),
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    return _print(annotations)
+
+
+def _print(
+    annotations: api.Annotations,
+) -> int:
+    """Print one annotation collection as JSON."""
+
+    print(json.dumps(annotations.collection, ensure_ascii=False, indent=2))
 
     return 0
 
 
 __all__ = [
     "GENERATOR",
-    "AnnotationExportError",
     "export_invocation_annotations",
     "export_run_annotations",
-    "run_citation_records",
 ]

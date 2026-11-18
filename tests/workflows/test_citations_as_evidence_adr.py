@@ -8,6 +8,8 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue, ValidationError
 
+from azathoth import api
+from azathoth.api.annotations import run_citation_records
 from azathoth.citations import (
     LINK_EXPIRY_VARIABLE,
     CitationRecord,
@@ -16,11 +18,7 @@ from azathoth.citations import (
     citation_annotations,
     link_expiry_seconds,
 )
-from azathoth.cli.annotations import (
-    AnnotationExportError,
-    export_invocation_annotations,
-    run_citation_records,
-)
+from azathoth.cli.annotations import export_invocation_annotations
 from azathoth.cli.benchmark_cases import SuppliedExpectedValue, add_benchmark_case
 from azathoth.evaluation import (
     BenchmarkCase,
@@ -212,7 +210,7 @@ def gone_record_refusal(
     stored = open_repositories(tmp_path / "azathoth.db")
     run, _store = kept_run([[check("p1.s2")]], journal=stored.run_journal)
 
-    with pytest.raises(AnnotationExportError) as raised:
+    with pytest.raises(api.ContentUnavailableError) as raised:
         run_citation_records(stored, run.id)
 
     return (

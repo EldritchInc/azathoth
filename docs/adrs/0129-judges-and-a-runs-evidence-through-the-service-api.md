@@ -71,11 +71,18 @@ or `None` when it was never judged, as `run list` shows it.
 ### Annotations
 
 `runs.annotations(run_id)` and `invocations.annotations(invocation_id)`
-return an `Annotations`: the run's or invocation's ID, the W3C Web
-Annotation objects its cited steps kept, in the order the steps ran, and
-the command that prints them. They are `read_runs`. The export moves from
-the command line into the API; `run annotations` and `invocation
-annotations` print what it returns, so the JSON is the same either way.
+return an `Annotations`: the run's or invocation's ID, the run whose cited
+steps kept the citations, the W3C Web Annotation collection exactly as the
+command line prints it, its annotations in the order the steps checked
+them, and the command that prints it. They are `read_runs`. The export
+moves from the command line into the API; `run annotations` and
+`invocation annotations` print what it returns, so the JSON is the same
+either way.
+
+A run that was neither kept nor journaled, an unknown invocation and one
+with no run yet are `not_found`. A record of checks the content store no
+longer holds, or holds something else under, raises a second new error,
+`ContentUnavailableError`, code `content_unavailable`.
 
 ### Child runs
 
@@ -104,7 +111,7 @@ that executes an invocation is resumed as its invocation, by
 `invocations.resume` (ADR 0128), so production records its outcome;
 `runs.resume` refuses it, naming the call that resumes it.
 
-One new error, `RunNotResumableError`, code `run_not_resumable`, refuses a
+The other new error, `RunNotResumableError`, code `run_not_resumable`, refuses a
 run that has finished, one executing an invocation, and one whose journal
 cannot be resumed, with the messages `run resume` gives. A run that was
 never journaled is `not_found`.

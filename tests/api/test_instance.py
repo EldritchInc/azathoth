@@ -178,6 +178,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "CandidateRebuildError": "candidate_rebuild",
         "CandidateUnavailableError": "candidate_unavailable",
         "ConflictError": "conflict",
+        "ContentUnavailableError": "content_unavailable",
         "ExperimentNotFoundError": "experiment_not_found",
         "InstanceClosedError": "instance_closed",
         "InstanceNotFoundError": "instance_not_found",

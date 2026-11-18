@@ -10,9 +10,9 @@ import pytest
 
 import azathoth.cli.bootstrap as cli_bootstrap
 from azathoth import __version__
+from azathoth.api.annotations import GENERATOR
 from azathoth.citations import WEB_ANNOTATION_CONTEXT
 from azathoth.cli import main
-from azathoth.cli.annotations import GENERATOR
 from azathoth.context import Context
 from azathoth.inputs import InMemoryContentStore, file_uri
 from azathoth.persistence.repositories import open_repositories
@@ -224,7 +224,7 @@ def test_a_record_the_content_store_no_longer_holds_is_refused(
     ((_, digest),) = journaled_citations(open_repositories(database).run_journal, run_id)
 
     monkeypatch.setattr(
-        "azathoth.cli.annotations.stored_citation_checks",
+        "azathoth.api.annotations.stored_citation_checks",
         lambda store, digest: None,
     )
 
@@ -246,7 +246,7 @@ def test_a_record_holding_no_checks_is_refused(
     real = stored_citation_checks
 
     monkeypatch.setattr(
-        "azathoth.cli.annotations.stored_citation_checks",
+        "azathoth.api.annotations.stored_citation_checks",
         lambda store, digest: real(store, elsewhere),
     )
 
@@ -264,7 +264,7 @@ def test_a_run_with_no_cited_step_exports_an_empty_collection(
 ) -> None:
     _, run_id = invoked(database, capsys)
 
-    monkeypatch.setattr("azathoth.cli.annotations.journaled_citations", lambda journal, run: ())
+    monkeypatch.setattr("azathoth.api.annotations.journaled_citations", lambda journal, run: ())
 
     status, out, err = run("run", "annotations", str(run_id), capsys=capsys)
 

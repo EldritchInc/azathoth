@@ -24,6 +24,7 @@ from uuid import UUID, uuid4
 
 from pydantic import JsonValue
 
+from azathoth.api.annotations import run_annotations
 from azathoth.api.browsing import LIMIT_MESSAGE, Document, RepositoriesAccess
 from azathoth.api.catalog import DirectoriesAccess, discover
 from azathoth.api.errors import (
@@ -35,6 +36,7 @@ from azathoth.api.errors import (
 )
 from azathoth.api.feedback import latest_dispositions, record_feedback, run_feedback
 from azathoth.api.models import (
+    Annotations,
     ContextChanged,
     InvocationError,
     InvocationFinished,
@@ -642,6 +644,23 @@ class Runs:
             reason=reason,
             corrected_output=corrected_output,
         )
+
+    def annotations(
+        self,
+        run_id: UUID,
+    ) -> Annotations:
+        """Return the W3C Web Annotations of every citation a run's steps verified (ADR 0129).
+
+        A run still under way exports what its committed steps checked. Only
+        durable state is read.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The run was neither kept nor journaled.
+            ContentUnavailableError: A record of its citations cannot be read.
+        """
+
+        return run_annotations(self._repositories(), run_id)
 
     def feedback(
         self,

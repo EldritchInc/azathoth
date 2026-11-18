@@ -149,6 +149,16 @@ class ModelNotAuthorizedError(ConflictError):
     code: ClassVar[str] = "model_not_authorized"
 
 
+class ContentUnavailableError(ApiError):
+    """Content a call reads is not in the content store, or is not what it should be.
+
+    A run's record of citation checks the store no longer holds, or holds
+    something else under its digest, cannot be exported (ADR 0129).
+    """
+
+    code: ClassVar[str] = "content_unavailable"
+
+
 class RunNotStartedError(ApiError):
     """A run could not start: no executable candidate of the workflow could be made."""
 

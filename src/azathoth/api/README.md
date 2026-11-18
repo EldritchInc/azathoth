@@ -287,6 +287,15 @@ with bad; each refusal is an `InvalidArgumentError`, and nothing is saved.
 Every `RunSummary` and `RunDetail` holds the run's latest judgment as
 `feedback`, `None` when it was never judged (ADR 0129).
 
+`instance.runs.annotations(run_id)` and
+`instance.invocations.annotations(invocation_id)` return an `Annotations`:
+the W3C Web Annotation `collection` of every citation a run's steps
+verified, exactly as `azathoth run annotations` prints it, its `items`, and
+the run they are of. A run still under way exports what its committed
+steps checked; an invocation exports its run's, and one with no run yet is
+not found. A record the content store no longer holds raises
+`ContentUnavailableError` (ADR 0129).
+
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a
@@ -468,6 +477,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `CandidateUnavailableError` | `candidate_unavailable` | No candidate of a workflow to promote could be made with the models authorized now. |
 | `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the latest revision; a `CandidateUnavailableError` too. |
 | `NothingToRollBackToError` | `nothing_to_roll_back_to` | The workflow is not in production, has no earlier revision, or the one named is already active; a `ConflictError` too. |
+| `ContentUnavailableError` | `content_unavailable` | Content a call reads, such as a run's record of citation checks, is not in the content store, or is not what it should be. |
 | `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
