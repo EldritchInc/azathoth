@@ -12,6 +12,24 @@ def render_workflow_promotion(
 ) -> str:
     """Render one completed workflow production promotion."""
 
+    return _render_deployment(revision, status="promoted")
+
+
+def render_workflow_rollback(
+    revision: WorkflowProductionRevision,
+) -> str:
+    """Render one completed rollback: the new revision, and the one it restored (ADR 0128)."""
+
+    return _render_deployment(revision, status="rolled back")
+
+
+def _render_deployment(
+    revision: WorkflowProductionRevision,
+    *,
+    status: str,
+) -> str:
+    """Render one new production revision, its status, and its prompt steps' models."""
+
     state = revision.state
     workflow = state.specification.metadata
 
@@ -19,9 +37,18 @@ def render_workflow_promotion(
         f"Workflow: {workflow.name}",
         f"Workflow ID: {workflow.id}",
         f"Revision ID: {revision.id}",
-        "Status: promoted",
-        f"Created At: {revision.created_at.isoformat()}",
+        f"Status: {status}",
     ]
+
+    if revision.restores is not None:
+        lines.append(f"Restores: {revision.restores}")
+
+    lines.extend(
+        (
+            f"Author: {revision.author}" if revision.author is not None else "Author: unknown",
+            f"Created At: {revision.created_at.isoformat()}",
+        )
+    )
 
     for step in state.specification.steps:
         specification = step.specification

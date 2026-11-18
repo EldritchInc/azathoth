@@ -109,6 +109,42 @@ class ProviderUnavailableError(ApiError):
     code: ClassVar[str] = "provider_unavailable"
 
 
+class WorkflowResultMissingError(ApiError):
+    """A workflow declares no result, so it cannot be promoted (ADR 0128)."""
+
+    code: ClassVar[str] = "workflow_result_missing"
+
+
+class ExperimentNotFoundError(NotFoundError):
+    """No optimization experiment has the ID named (ADR 0128)."""
+
+    code: ClassVar[str] = "experiment_not_found"
+
+
+class CandidateUnavailableError(ApiError):
+    """No candidate of a workflow could be made with the models authorized now (ADR 0128)."""
+
+    code: ClassVar[str] = "candidate_unavailable"
+
+
+class CandidateRebuildError(CandidateUnavailableError):
+    """An experiment's winner cannot be rebuilt from the workflow's latest revision (ADR 0128)."""
+
+    code: ClassVar[str] = "candidate_rebuild"
+
+
+class NothingToRollBackToError(ConflictError):
+    """There is no earlier production revision, or the one named is already active (ADR 0128)."""
+
+    code: ClassVar[str] = "nothing_to_roll_back_to"
+
+
+class ModelNotAuthorizedError(ConflictError):
+    """A step of a production state to restore has no model the portfolio authorizes (ADR 0128)."""
+
+    code: ClassVar[str] = "model_not_authorized"
+
+
 class RunNotStartedError(ApiError):
     """A run could not start: no executable candidate of the workflow could be made."""
 
@@ -169,7 +205,10 @@ __all__ = [
     "CANCELLED_MESSAGE",
     "CLOSED_MESSAGE",
     "ApiError",
+    "CandidateRebuildError",
+    "CandidateUnavailableError",
     "ConflictError",
+    "ExperimentNotFoundError",
     "InstanceClosedError",
     "InstanceNotFoundError",
     "InstanceSchemaError",
@@ -178,7 +217,9 @@ __all__ = [
     "InvalidAuthorError",
     "InvalidDocumentError",
     "ModelInUseError",
+    "ModelNotAuthorizedError",
     "NotFoundError",
+    "NothingToRollBackToError",
     "ProviderConfigurationError",
     "ProviderUnavailableError",
     "RemoteDivergedError",
@@ -188,4 +229,5 @@ __all__ = [
     "RevisionNotFoundError",
     "RunCancelledError",
     "RunNotStartedError",
+    "WorkflowResultMissingError",
 ]

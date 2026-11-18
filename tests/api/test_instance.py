@@ -175,7 +175,10 @@ def test_every_error_carries_a_distinct_code() -> None:
 
     assert {error.__name__: error.code for error in errors} == {
         "ApiError": "error",
+        "CandidateRebuildError": "candidate_rebuild",
+        "CandidateUnavailableError": "candidate_unavailable",
         "ConflictError": "conflict",
+        "ExperimentNotFoundError": "experiment_not_found",
         "InstanceClosedError": "instance_closed",
         "InstanceNotFoundError": "instance_not_found",
         "InstanceSchemaError": "instance_schema",
@@ -184,7 +187,9 @@ def test_every_error_carries_a_distinct_code() -> None:
         "InvalidAuthorError": "invalid_author",
         "InvalidDocumentError": "invalid_document",
         "ModelInUseError": "model_in_use",
+        "ModelNotAuthorizedError": "model_not_authorized",
         "NotFoundError": "not_found",
+        "NothingToRollBackToError": "nothing_to_roll_back_to",
         "ProviderConfigurationError": "provider_configuration",
         "ProviderUnavailableError": "provider_unavailable",
         "RemoteDivergedError": "remote_diverged",
@@ -194,6 +199,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "RevisionNotFoundError": "revision_not_found",
         "RunCancelledError": "run_cancelled",
         "RunNotStartedError": "run_not_started",
+        "WorkflowResultMissingError": "workflow_result_missing",
     }
     assert len({error.code for error in errors}) == len(errors)
 

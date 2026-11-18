@@ -49,6 +49,7 @@ from azathoth.cli.rendering.production import (
 )
 from azathoth.cli.rendering.promotions import (
     render_workflow_promotion,
+    render_workflow_rollback,
 )
 from azathoth.cli.rendering.resumes import (
     CHILD_STATUS_UNFINISHED,
@@ -95,6 +96,7 @@ __all__ = [
     "render_workflow_optimization_session",
     "render_workflow_production",
     "render_workflow_promotion",
+    "render_workflow_rollback",
     "render_workflow_revision_summaries",
     "CHILD_STATUS_UNFINISHED",
     "render_child_count_lines",

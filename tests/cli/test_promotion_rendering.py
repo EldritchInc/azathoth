@@ -103,6 +103,7 @@ def test_render_workflow_promotion_identifies_deployment() -> None:
             f"Workflow ID: {WORKFLOW_ID}",
             f"Revision ID: {REVISION_ID}",
             "Status: promoted",
+            "Author: unknown",
             f"Created At: {CREATED_AT.isoformat()}",
             "",
             f"Prompt Step: {STEP_ID}",

@@ -567,6 +567,119 @@ class InvocationOutcome(ApiModel):
     )
 
 
+class InvocationSummary(ApiModel):
+    """One invocation of a promoted workflow, as `azathoth workflow invocations` lists it."""
+
+    invocation_id: UUID
+
+    workflow_id: UUID
+
+    created_at: datetime
+
+    status: Literal["succeeded", "failed", "incomplete"] = Field(
+        description="How it ended, or `incomplete` while it has no outcome.",
+    )
+
+    caller_metadata: dict[str, JsonValue] = Field(
+        description="What its caller recorded with it, such as who or what called.",
+    )
+
+    sensitivity: Sensitivity = Field(
+        description="The label its input was given, internal when none was (ADR 0123).",
+    )
+
+    run_id: UUID | None = Field(
+        description="The run that executed it, once it has one.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ProductionStepModels(ApiModel):
+    """The models production runs one prompt step on, in the order it tries them (ADR 0063)."""
+
+    step_id: UUID
+
+    primary: str = Field(
+        description="The provider-qualified model the step is pinned to.",
+    )
+
+    substitutes: tuple[str, ...] = Field(
+        description="The models production approved in its place, tried in order.",
+    )
+
+
+class ProductionRevisionSummary(ApiModel):
+    """One production revision of a workflow: a promotion, or a rollback (ADR 0128)."""
+
+    revision_id: UUID
+
+    workflow_id: UUID
+
+    workflow_revision: int | None = Field(
+        ge=1,
+        description=(
+            "The workflow revision that was promoted, or None for production promoted "
+            "before revisions were numbered."
+        ),
+    )
+
+    created_at: datetime
+
+    author: Author | None = Field(
+        description="Who promoted or rolled back, or None for revisions from before 1.5.",
+    )
+
+    restores: UUID | None = Field(
+        description="The earlier production revision a rollback restored, or None.",
+    )
+
+    active: bool = Field(
+        description="Whether its state is the one production runs now.",
+    )
+
+    steps: tuple[ProductionStepModels, ...] = Field(
+        description="Each prompt step's models, in the workflow's order.",
+    )
+
+
+class ProductionState(ApiModel):
+    """What a workflow's production runs now, as `azathoth workflow production` shows it."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    workflow_revision: int | None = Field(
+        ge=1,
+        description="The workflow revision in production, or None when it was never numbered.",
+    )
+
+    revision: ProductionRevisionSummary | None = Field(
+        description=(
+            "The production revision that made it active, or None when it was set without one."
+        ),
+    )
+
+    steps: tuple[ProductionStepModels, ...]
+
+    input_schema: JsonValue = Field(
+        default=None,
+        description="The JSON Schema every invocation's input is checked against, if any.",
+    )
+
+    output_schema: JsonValue = Field(
+        default=None,
+        description="The JSON Schema every invocation's result is checked against, if any.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
 class RunStep(ApiModel):
     """One step of a finished run, as an invocation's evidence shows it."""
 

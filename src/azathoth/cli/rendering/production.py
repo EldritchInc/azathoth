@@ -32,14 +32,23 @@ def render_workflow_production(
 
     workflow = state.specification.metadata
 
+    author = active_revision.author if active_revision is not None else None
+
     lines = [
         f"Workflow: {workflow.name}",
         f"Workflow ID: {workflow.id}",
         "Revision ID: "
         + (str(active_revision.id) if active_revision is not None else "unrecorded"),
-        "Deployed At: "
-        + (active_revision.created_at.isoformat() if active_revision is not None else "unknown"),
+        f"Author: {author}" if author is not None else "Author: unknown",
     ]
+
+    if active_revision is not None and active_revision.restores is not None:
+        lines.append(f"Restores: {active_revision.restores}")
+
+    lines.append(
+        "Deployed At: "
+        + (active_revision.created_at.isoformat() if active_revision is not None else "unknown")
+    )
 
     for label, schema in (
         ("Input Schema", state.specification.input_schema),
@@ -87,7 +96,8 @@ def render_workflow_revision_summaries(
     """Render one line per production revision in the order given.
 
     Each line contains the revision ID, creation time, an active marker, and
-    the primary model of every prompt step.
+    the primary model of every prompt step, then who made the revision and
+    what a rollback restored, when it records them (ADR 0128).
     """
 
     return "\n".join(
@@ -109,10 +119,18 @@ def _render_revision_summary(
     marker = ACTIVE_REVISION_MARKER if active else INACTIVE_REVISION_MARKER
     models = ", ".join(primary for _step_id, primary in _primary_models(revision.state))
 
-    return (
+    line = (
         f"{revision.id}  {revision.created_at.isoformat()}  {marker:<6}  "
         f"{models or 'no prompt steps'}"
     )
+
+    if revision.author is not None:
+        line += f"  by {revision.author}"
+
+    if revision.restores is not None:
+        line += f"  restores {revision.restores}"
+
+    return line
 
 
 def _primary_models(

@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from azathoth.revisions import Author
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowExperimentRepository,
@@ -27,12 +28,14 @@ def promote_configured_workflow(
     model_substitutions: tuple[WorkflowProductionModelSubstitution, ...] = (),
     experiment_id: UUID | None = None,
     experiment_repository: WorkflowExperimentRepository | None = None,
+    author: Author | None = None,
 ) -> WorkflowProductionRevision:
     """Promote one configured workflow's candidate to production.
 
     Without an experiment, the configured candidate is promoted. With one,
     the experiment's top-ranked candidate is rebuilt from the workflow's
-    current revision and promoted instead (ADR 0092).
+    current revision and promoted instead (ADR 0092). The revision records
+    `author` as who promoted (ADR 0128).
 
     Raises:
         WorkflowNotConfiguredError: The workflow is not configured.
@@ -80,4 +83,5 @@ def promote_configured_workflow(
         repository=production_repository,
         revision_repository=revision_repository,
         model_substitutions=model_substitutions,
+        author=author,
     )

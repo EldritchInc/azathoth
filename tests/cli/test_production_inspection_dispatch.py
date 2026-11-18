@@ -224,7 +224,7 @@ def test_cli_workflow_help_lists_production_inspection_actions(
     captured = capsys.readouterr()
 
     assert raised.value.code == 0
-    assert ",promote,production,revisions,invocations,experiments," in captured.out
+    assert ",promote,rollback,production,revisions,invocations,experiments," in captured.out
 
 
 def test_invocation_show_parser_records_identifier() -> None:

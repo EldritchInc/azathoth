@@ -33,6 +33,7 @@ WORKFLOW_OPTIMIZE_ACTION = "optimize"
 WORKFLOW_PRODUCTION_ACTION = "production"
 WORKFLOW_PROMOTE_ACTION = "promote"
 WORKFLOW_REVISIONS_ACTION = "revisions"
+WORKFLOW_ROLLBACK_ACTION = "rollback"
 WORKFLOW_RUN_ACTION = "run"
 WORKFLOW_RUNS_ACTION = "runs"
 WORKFLOW_SHOW_ACTION = "show"
@@ -52,6 +53,7 @@ WORKFLOW_OUTPUT_ATTRIBUTE = "workflow_output"
 WORKFLOW_IDEMPOTENCY_KEY_ATTRIBUTE = "workflow_idempotency_key"
 WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE = "workflow_input_sensitivity"
 WORKFLOW_REVISION_LIMIT_ATTRIBUTE = "workflow_revision_limit"
+WORKFLOW_ROLLBACK_TO_ATTRIBUTE = "workflow_rollback_to"
 WORKFLOW_RUN_LIMIT_ATTRIBUTE = "workflow_run_limit"
 WORKFLOW_SPECIFICATION_REVISION_ATTRIBUTE = "workflow_specification_revision"
 
@@ -289,6 +291,27 @@ def add_workflow_parser(
         default=None,
         metavar="EXPERIMENT_ID",
         help="Promote this optimization experiment's winner instead of the configured candidate.",
+    )
+
+    workflow_rollback_parser = workflow_actions.add_parser(
+        WORKFLOW_ROLLBACK_ACTION,
+        help="Restore an earlier production revision of one workflow, as a new revision.",
+    )
+
+    workflow_rollback_parser.add_argument(
+        WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose production to roll back.",
+    )
+
+    workflow_rollback_parser.add_argument(
+        "--to",
+        dest=WORKFLOW_ROLLBACK_TO_ATTRIBUTE,
+        type=UUID,
+        default=None,
+        metavar="PRODUCTION_REVISION_ID",
+        help="Production revision to restore; the one before the active revision by default.",
     )
 
     workflow_production_parser = workflow_actions.add_parser(
