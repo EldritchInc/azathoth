@@ -2270,6 +2270,52 @@ After importing a new revision, pin the winner's models in it deliberately,
 or optimize it again. Either way, the new revision can be promoted without
 `--experiment`. Deploying a workflow never requires optimizing it.
 
+# Roll Back Production
+
+Return a workflow's production to an earlier production revision with:
+
+```bash
+azathoth workflow rollback <WORKFLOW_ID>
+azathoth workflow rollback <WORKFLOW_ID> --to <PRODUCTION_REVISION_ID>
+```
+
+Without `--to`, the revision restored is the newest one made before the
+active revision whose state differs from it, so rolling back twice undoes
+the first rollback. `workflow revisions` lists the IDs `--to` takes.
+
+A rollback never edits history (ADR 0128). It saves a new production
+revision with the earlier revision's state exactly as it ran, models and
+substitutes included, and makes that state active:
+
+```text
+Status: rolled back
+Restores: <PRODUCTION_REVISION_ID>
+Author: <AUTHOR>
+```
+
+Who rolls back is told as for an import: `AZATHOTH_AUTHOR`, then the
+operating system's username. `workflow production` and `workflow
+revisions` show each revision's author, and what a rollback restored.
+
+Only durable state is read, so no provider credentials are needed. Nothing
+changes, and the command exits with status 1, when:
+
+```text
+Workflow <WORKFLOW_ID> is not in production.
+
+Workflow <WORKFLOW_ID> has no earlier production revision to roll back to.
+
+Workflow <WORKFLOW_ID> has no production revision <PRODUCTION_REVISION_ID>.
+
+Production revision <PRODUCTION_REVISION_ID> is already active for workflow <WORKFLOW_ID>.
+
+Step <STEP_ID> of production revision <PRODUCTION_REVISION_ID> uses <MODEL>, which the portfolio no longer authorizes; authorize it again before rolling back to it.
+```
+
+A step may also run on a substitute production approved for it, so the
+last refusal comes only when neither its fixed model nor any substitute is
+still authorized.
+
 # Promotion Is Explicit
 
 Nothing about:

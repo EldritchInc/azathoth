@@ -126,6 +126,7 @@ def dispatch(
         list_workflows=unused,
         optimize_workflow=unused,
         promote_workflow=unused,
+        rollback_workflow=unused,
         run_workflow=unused,
         show_workflow=show_workflow,
         show_workflow_production=unused,

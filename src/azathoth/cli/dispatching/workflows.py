@@ -42,6 +42,8 @@ from azathoth.cli.parsing import (
     WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE,
     WORKFLOW_REVISION_LIMIT_ATTRIBUTE,
     WORKFLOW_REVISIONS_ACTION,
+    WORKFLOW_ROLLBACK_ACTION,
+    WORKFLOW_ROLLBACK_TO_ATTRIBUTE,
     WORKFLOW_RUN_ACTION,
     WORKFLOW_RUN_LIMIT_ATTRIBUTE,
     WORKFLOW_RUNS_ACTION,
@@ -56,6 +58,7 @@ WorkflowListHandler = Callable[[], int]
 WorkflowInvokeHandler = Callable[..., int]
 WorkflowOptimizeHandler = Callable[..., int]
 WorkflowPromoteHandler = Callable[..., int]
+WorkflowRollbackHandler = Callable[..., int]
 WorkflowHistoryHandler = Callable[..., int]
 WorkflowRevisionHandler = Callable[..., int]
 WorkflowRunHandler = Callable[..., int]
@@ -75,6 +78,7 @@ def dispatch_workflow_command(
     list_workflows: WorkflowListHandler,
     optimize_workflow: WorkflowOptimizeHandler,
     promote_workflow: WorkflowPromoteHandler,
+    rollback_workflow: WorkflowRollbackHandler,
     run_workflow: WorkflowRunHandler,
     show_workflow: WorkflowRevisionHandler,
     show_workflow_production: WorkflowIdentifierHandler,
@@ -308,6 +312,25 @@ def dispatch_workflow_command(
                 getattr(
                     arguments,
                     WORKFLOW_PROMOTE_EXPERIMENT_ATTRIBUTE,
+                    None,
+                ),
+            ),
+        )
+
+    if action == WORKFLOW_ROLLBACK_ACTION:
+        return rollback_workflow(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    WORKFLOW_ID_ATTRIBUTE,
+                ),
+            ),
+            to=cast(
+                UUID | None,
+                getattr(
+                    arguments,
+                    WORKFLOW_ROLLBACK_TO_ATTRIBUTE,
                     None,
                 ),
             ),

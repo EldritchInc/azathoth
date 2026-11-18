@@ -140,6 +140,7 @@ from azathoth.cli.workflows import (
     list_workflows,
     optimize_workflow,
     promote_workflow,
+    rollback_workflow,
     run_workflow,
     show_workflow,
 )
@@ -305,6 +306,7 @@ def _dispatch(
             list_workflows=list_workflows,
             optimize_workflow=optimize_workflow,
             promote_workflow=promote_workflow,
+            rollback_workflow=rollback_workflow,
             run_workflow=run_workflow,
             show_workflow=show_workflow,
             show_workflow_production=show_workflow_production,

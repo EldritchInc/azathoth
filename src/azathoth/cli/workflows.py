@@ -42,6 +42,7 @@ from azathoth.cli.promotion import (
 from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
+    render_workflow_rollback,
 )
 from azathoth.cli.reporting import (
     invocation_sensitivity,
@@ -78,7 +79,9 @@ from azathoth.workflows import (
     WorkflowExperimentEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
+    WorkflowRollbackError,
     WorkflowScoringPolicy,
+    roll_back_workflow_production,
 )
 
 SENSITIVITY_WITHOUT_INPUT_MESSAGE: Final = (
@@ -295,6 +298,55 @@ def promote_workflow(
 
     print(
         render_workflow_promotion(
+            revision,
+        )
+    )
+
+    return 0
+
+
+def rollback_workflow(
+    workflow_id: UUID,
+    *,
+    to: UUID | None = None,
+) -> int:
+    """Restore an earlier production revision of one workflow, as a new revision (ADR 0128).
+
+    Without `to`, the revision before the active one is restored. Who rolls
+    back is told as for a promotion, and recorded with the new revision.
+    Only durable state is read, so the runtime is never loaded and no
+    provider credentials are needed; the portfolio decides whether the
+    restored state's models may still run.
+    """
+
+    author = current_author()
+
+    if author is None:
+        return 1
+
+    configuration = CliRuntimeConfiguration.from_environment()
+    stores = repositories(configuration)
+    portfolio = stores.portfolio
+
+    try:
+        revision = roll_back_workflow_production(
+            workflow_id=workflow_id,
+            repository=stores.production_states,
+            revision_repository=stores.production_revisions,
+            authorized=lambda identifier: portfolio.get(identifier) is not None,
+            to=to,
+            author=author,
+        )
+    except WorkflowRollbackError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(
+        render_workflow_rollback(
             revision,
         )
     )

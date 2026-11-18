@@ -266,6 +266,15 @@ from azathoth.workflows.revision import (
     WorkflowSpecificationRevision,
     earliest_identical_revision,
 )
+from azathoth.workflows.rollback import (
+    ModelAuthorization,
+    NothingToRollBackToError,
+    ProductionRevisionNotFoundError,
+    RollbackModelNotAuthorizedError,
+    WorkflowNotInProductionError,
+    WorkflowRollbackError,
+    roll_back_workflow_production,
+)
 from azathoth.workflows.run_children import (
     InMemoryRunChildRepository,
     RunChild,
@@ -641,6 +650,12 @@ __all__ = [
     "WorkflowProductionState",
     "WorkflowProductionStateRepository",
     "WorkflowRanker",
+    "ModelAuthorization",
+    "NothingToRollBackToError",
+    "ProductionRevisionNotFoundError",
+    "RollbackModelNotAuthorizedError",
+    "WorkflowNotInProductionError",
+    "WorkflowRollbackError",
     "WorkflowRanking",
     "WorkflowReliabilityMetrics",
     "WorkflowRepository",
@@ -714,6 +729,7 @@ __all__ = [
     "production_uses_tool",
     "promote_workflow_candidate",
     "rebuild_workflow_candidate",
+    "roll_back_workflow_production",
     "reference_producer_step_ids",
     "require_production_invocation_repository",
     "require_workflow_benchmark_execution_repository",
