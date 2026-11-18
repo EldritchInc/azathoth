@@ -33,6 +33,7 @@ from azathoth.api.errors import (
     RunCancelledError,
     RunNotStartedError,
 )
+from azathoth.api.feedback import latest_dispositions, record_feedback, run_feedback
 from azathoth.api.models import (
     ContextChanged,
     InvocationError,
@@ -41,6 +42,7 @@ from azathoth.api.models import (
     RunDetail,
     RunError,
     RunEvent,
+    RunFeedback,
     RunFile,
     RunFinished,
     RunInput,
@@ -566,9 +568,13 @@ class Runs:
 
         newest_first = sorted(runs, key=lambda run: run.started_at, reverse=True)[:limit]
         invocations = _invocations(repositories)
+        judgments = latest_dispositions(repositories.feedback.feedback())
 
         return tuple(
-            _summary(run, _judged(run, history), invocations.get(run.id)) for run in newest_first
+            _summary(run, _judged(run, history), invocations.get(run.id)).model_copy(
+                update={"feedback": judgments.get(run.id)}
+            )
+            for run in newest_first
         )
 
     def get(
@@ -596,9 +602,10 @@ class Runs:
         has_result, value, error = _judged(run, repositories.workflows.revisions(run.workflow.id))
         summary = _summary(run, (has_result, value, error), _invocations(repositories).get(run.id))
         has_input, given = _run_input(run)
+        judgments = latest_dispositions(repositories.feedback.feedback_for_run(run_id))
 
         return RunDetail(
-            **summary.model_dump(),
+            **summary.model_copy(update={"feedback": judgments.get(run_id)}).model_dump(),
             has_result=has_result,
             result=value,
             has_input=has_input,
@@ -606,6 +613,48 @@ class Runs:
             resumes=journal_resumes(entries),
             steps=tuple(_step_detail(step) for step in run.steps),
         )
+
+    def record_feedback(
+        self,
+        run_id: UUID,
+        disposition: str,
+        *,
+        reason: str | None = None,
+        corrected_output: JsonValue = None,
+    ) -> RunFeedback:
+        """Record one immutable `good` or `bad` judgment of a kept run (ADR 0129).
+
+        A bad judgment needs a reason; a blank one is none. A corrected
+        output, what the run should have produced, is accepted only with
+        bad. Nothing is saved when any check fails.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The disposition is neither good nor bad, a
+                bad judgment has no reason, or a good one has a corrected output.
+            NotFoundError: No kept run has this ID.
+        """
+
+        return record_feedback(
+            self._repositories(),
+            run_id,
+            disposition,
+            reason=reason,
+            corrected_output=corrected_output,
+        )
+
+    def feedback(
+        self,
+        run_id: UUID,
+    ) -> tuple[RunFeedback, ...]:
+        """Return every judgment of a kept run, newest first (ADR 0129).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No kept run has this ID.
+        """
+
+        return run_feedback(self._repositories(), run_id)
 
     def try_step(
         self,

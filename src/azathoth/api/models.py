@@ -746,6 +746,34 @@ class InvocationRun(ApiModel):
     steps: tuple[RunStep, ...] = ()
 
 
+FeedbackDisposition = Literal["good", "bad"]
+"""How a person judged a run (ADR 0068)."""
+
+
+class RunFeedback(ApiModel):
+    """One immutable judgment of a kept run (ADRs 0068 and 0129)."""
+
+    feedback_id: UUID
+
+    run_id: UUID
+
+    disposition: FeedbackDisposition
+
+    reason: str | None = Field(
+        description="Why the run was judged so; a bad judgment always has one.",
+    )
+
+    corrected_output: JsonValue = Field(
+        description="What the run should have produced, given only with a bad judgment.",
+    )
+
+    created_at: datetime
+
+    command: str = Field(
+        description="The `azathoth` command that shows the run judged.",
+    )
+
+
 class RunSummary(ApiModel):
     """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
 
@@ -784,6 +812,11 @@ class RunSummary(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows the run.",
+    )
+
+    feedback: FeedbackDisposition | None = Field(
+        default=None,
+        description="The run's latest judgment, or None when it was never judged (ADR 0129).",
     )
 
 

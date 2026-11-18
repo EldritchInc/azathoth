@@ -277,6 +277,16 @@ kept yet, so `get` raises `NotFoundError` saying how to resume it
 sensitive of its input's label and its parent run's, `INTERNAL` when
 neither is labelled (ADR 0123).
 
+`instance.runs.record_feedback(run_id, disposition, reason=None,
+corrected_output=None)` records one immutable `"good"` or `"bad"` judgment of
+a kept run, as `azathoth run feedback` does, and returns it as a
+`RunFeedback`; `instance.runs.feedback(run_id)` returns every judgment of a
+run, newest first. A bad judgment needs a reason, a blank reason is none,
+and a corrected output, what the run should have produced, is accepted only
+with bad; each refusal is an `InvalidArgumentError`, and nothing is saved.
+Every `RunSummary` and `RunDetail` holds the run's latest judgment as
+`feedback`, `None` when it was never judged (ADR 0129).
+
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a
