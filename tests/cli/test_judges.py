@@ -1,11 +1,12 @@
-"""Tests for semantic judge rotation commands in the Azathoth CLI."""
+"""Tests for semantic judge rotation commands in the Azathoth CLI (ADR 0129)."""
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
+import azathoth.cli.bootstrap as cli_bootstrap
 import azathoth.cli.judges as judge_commands
+from azathoth import api
 from azathoth.cli import (
     CliRuntimeConfiguration,
     add_judge,
@@ -16,20 +17,22 @@ from azathoth.evaluation import (
     JudgeEntry,
     SQLiteJudgeRotationRepository,
 )
+from azathoth.persistence.repositories import open_repositories
 from azathoth.providers import (
     ModelCatalog,
     ModelMetadata,
-    ModelPortfolio,
     ModelPortfolioEntry,
+    ProviderModel,
 )
+from tests.api.test_models import StaticDirectory
 
-ALPHA = ModelMetadata(
+ALPHA = ProviderModel(
     provider="openrouter",
     model="example/alpha",
     display_name="Alpha",
 )
 
-BETA = ModelMetadata(
+BETA = ProviderModel(
     provider="openrouter",
     model="example/beta",
     display_name="Beta",
@@ -42,10 +45,14 @@ def configure(
     *,
     monkeypatch: pytest.MonkeyPatch,
     database: Path,
-    models: tuple[ModelMetadata, ...] = (ALPHA, BETA),
-    authorized: tuple[ModelMetadata, ...] = (ALPHA, BETA),
+    models: tuple[ProviderModel, ...] = (ALPHA, BETA),
+    authorized: tuple[ProviderModel, ...] = (ALPHA, BETA),
 ) -> SQLiteJudgeRotationRepository:
-    """Point the CLI at an isolated database with deterministic runtime state."""
+    """Point the CLI at an isolated database whose providers serve `models`.
+
+    The portfolio authorizes `authorized`, and the service API the judge
+    commands call reaches providers that serve `models` and nothing else.
+    """
 
     configuration = CliRuntimeConfiguration(
         database=database,
@@ -57,22 +64,17 @@ def configure(
         lambda: configuration,
     )
 
+    stores = open_repositories(database)
+
+    for model in authorized:
+        stores.portfolio.save(ModelPortfolioEntry(provider=model.provider, model=model.model))
+
     monkeypatch.setattr(
         judge_commands,
-        "load_runtime",
-        lambda _configuration: SimpleNamespace(
-            models=ModelCatalog(
-                models=models,
-            ),
-            portfolio=ModelPortfolio(
-                entries=tuple(
-                    ModelPortfolioEntry(
-                        provider=model.provider,
-                        model=model.model,
-                    )
-                    for model in authorized
-                ),
-            ),
+        "provider_instance",
+        lambda _configuration: api.Azathoth(
+            open_repositories(database),
+            directories=(StaticDirectory("openrouter", models),),
         ),
     )
 
@@ -82,17 +84,17 @@ def configure(
 def forbid_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Fail the test if a command loads the runtime."""
+    """Fail the test if a command reaches the providers."""
 
-    def fail_bootstrap(
+    def fail(
         _configuration: CliRuntimeConfiguration,
-    ) -> object:
-        raise AssertionError("Runtime must not be loaded.")
+    ) -> api.Azathoth:
+        raise AssertionError("Providers must not be reached.")
 
     monkeypatch.setattr(
         judge_commands,
-        "load_runtime",
-        fail_bootstrap,
+        "provider_instance",
+        fail,
     )
 
 
@@ -123,6 +125,38 @@ def test_judge_add_appends_authorized_available_model(
             model="example/alpha",
         ),
     )
+
+
+def test_judge_add_sees_the_models_every_command_discovers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    configuration = CliRuntimeConfiguration(database=database)
+
+    monkeypatch.setattr(CliRuntimeConfiguration, "from_environment", lambda: configuration)
+    monkeypatch.setattr(
+        cli_bootstrap,
+        "_load_current_models",
+        lambda _configuration: ModelCatalog(
+            models=(ModelMetadata(provider="openrouter", model="example/alpha", display_name="A"),)
+        ),
+    )
+
+    stores = open_repositories(database)
+
+    for model in (ALPHA, BETA):
+        stores.portfolio.save(ModelPortfolioEntry(provider=model.provider, model=model.model))
+
+    assert add_judge(ALPHA.identifier) == 0
+    assert add_judge(BETA.identifier) == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.out == f"Added judge {ALPHA.identifier}.\n"
+    assert captured.err == f"Model {BETA.identifier!r} is not currently available.\n"
+    assert SQLiteJudgeRotationRepository(database).rotation().identifiers == (ALPHA.identifier,)
 
 
 def test_judge_add_rejects_model_not_currently_available(

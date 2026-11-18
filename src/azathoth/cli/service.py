@@ -9,8 +9,10 @@ import sys
 from collections.abc import Sequence
 
 from azathoth import api
+from azathoth.cli.bootstrap import current_models
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.providers import ModelCatalog, ProviderModel
 from azathoth.revisions import Author, AuthorError, LineageRecord, resolve_author
 
 
@@ -29,6 +31,85 @@ def service_instance(
     """
 
     return api.Azathoth(repositories(configuration))
+
+
+class CatalogDirectory:
+    """One provider's models, as the command line discovered them, for the service API to ask."""
+
+    def __init__(
+        self,
+        provider: str,
+        models: tuple[ProviderModel, ...],
+    ) -> None:
+        """Serve `models`, every one `provider`'s."""
+
+        self._provider = provider
+        self._models = models
+
+    @property
+    def provider(
+        self,
+    ) -> str:
+        """Return the provider these models are served by."""
+
+        return self._provider
+
+    async def models(
+        self,
+    ) -> tuple[ProviderModel, ...]:
+        """Return the provider's models, as discovered."""
+
+        return self._models
+
+    async def model(
+        self,
+        identifier: str,
+    ) -> ProviderModel | None:
+        """Return one of the provider's models, by its name at the provider."""
+
+        return next((model for model in self._models if model.model == identifier), None)
+
+
+def catalog_directories(
+    catalog: ModelCatalog,
+) -> tuple[CatalogDirectory, ...]:
+    """Return one directory for each provider of a catalog, serving its models in order."""
+
+    providers = dict.fromkeys(model.provider for model in catalog.models)
+
+    return tuple(
+        CatalogDirectory(
+            provider,
+            tuple(
+                ProviderModel.model_validate(model.model_dump())
+                for model in catalog.models
+                if model.provider == provider
+            ),
+        )
+        for provider in providers
+    )
+
+
+def provider_instance(
+    configuration: CliRuntimeConfiguration,
+) -> api.Azathoth:
+    """Return the service API over the configured database, serving what the providers serve.
+
+    A command that asks what the providers serve, such as adding a judge,
+    calls this one. The models are the ones every other command discovers,
+    asked once as the instance is made, so the API and the command line
+    never see different models.
+
+    Raises:
+        DatabaseUnavailableError: The database is PostgreSQL, and the
+            `postgres` extra is not installed.
+        ModelDiscoveryError: A provider that is on could not be discovered.
+    """
+
+    return api.Azathoth(
+        repositories(configuration),
+        directories=catalog_directories(current_models(configuration)),
+    )
 
 
 def history_line(
@@ -131,5 +212,8 @@ __all__ = [
     "lineage_lines",
     "identical_note",
     "import_note",
+    "CatalogDirectory",
+    "catalog_directories",
+    "provider_instance",
     "service_instance",
 ]

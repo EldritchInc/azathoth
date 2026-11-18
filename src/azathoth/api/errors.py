@@ -140,7 +140,11 @@ class NothingToRollBackToError(ConflictError):
 
 
 class ModelNotAuthorizedError(ConflictError):
-    """A step of a production state to restore has no model the portfolio authorizes (ADR 0128)."""
+    """A model a change needs is not one the portfolio authorizes.
+
+    A rollback's step has no model the portfolio still authorizes (ADR 0128),
+    or a judge to add is not authorized (ADR 0129).
+    """
 
     code: ClassVar[str] = "model_not_authorized"
 

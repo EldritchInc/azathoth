@@ -1,13 +1,16 @@
-"""Semantic judge rotation commands for the Azathoth command-line application."""
+"""Semantic judge rotation commands for the Azathoth command-line application.
+
+Each command calls the service API (ADR 0129). Adding a judge asks the
+providers whether they serve it, so it calls an instance that reaches them;
+listing and removing read and write durable state only, so they work
+without provider credentials.
+"""
 
 import sys
 
-from azathoth.cli.bootstrap import load_runtime
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
-from azathoth.evaluation import (
-    JudgeEntry,
-)
+from azathoth.cli.service import provider_instance, service_instance
 
 
 def add_judge(
@@ -20,34 +23,10 @@ def add_judge(
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
-    runtime = load_runtime(configuration)
-
-    model = runtime.models.get(identifier)
-
-    if model is None:
-        print(
-            f"Model {identifier!r} is not currently available.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    if runtime.portfolio.get(identifier) is None:
-        print(
-            f"Model {identifier!r} is not authorized.",
-            file=sys.stderr,
-        )
-
-        return 1
 
     try:
-        repositories(configuration).judges.add(
-            JudgeEntry(
-                provider=model.provider,
-                model=model.model,
-            )
-        )
-    except ValueError as exc:
+        judge = provider_instance(configuration).judges.add(identifier)
+    except api.ApiError as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -55,7 +34,7 @@ def add_judge(
 
         return 1
 
-    print(f"Added judge {identifier}.")
+    print(f"Added judge {judge.identifier}.")
 
     return 0
 
@@ -72,10 +51,8 @@ def remove_judge(
     configuration = CliRuntimeConfiguration.from_environment()
 
     try:
-        repositories(configuration).judges.remove(
-            identifier,
-        )
-    except ValueError as exc:
+        judge = service_instance(configuration).judges.remove(identifier)
+    except api.ApiError as exc:
         print(
             str(exc),
             file=sys.stderr,
@@ -83,7 +60,7 @@ def remove_judge(
 
         return 1
 
-    print(f"Removed judge {identifier}.")
+    print(f"Removed judge {judge.identifier}.")
 
     return 0
 
@@ -97,8 +74,8 @@ def list_judges() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    for identifier in repositories(configuration).judges.rotation().identifiers:
-        print(identifier)
+    for judge in service_instance(configuration).judges.list():
+        print(judge.identifier)
 
     return 0
 

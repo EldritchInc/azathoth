@@ -15,6 +15,7 @@ from azathoth.api.errors import (
     InstanceUnavailableError,
 )
 from azathoth.api.invocations import Invocations
+from azathoth.api.judges import Judges
 from azathoth.api.models import API_STABILITY, InstanceDescription
 from azathoth.api.production import Production
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
@@ -49,8 +50,8 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models`, `portfolio`, `runs`, `production` and
-    `invocations`; `remote`
+    `benchmarks`, `models`, `portfolio`, `judges`, `runs`, `production`
+    and `invocations`; `remote`
     names a remote to push to and pull from, and `remotes` the names this
     instance gives remotes.
     """
@@ -111,6 +112,7 @@ class Azathoth:
             self._configured_runtime,
             telemetry,
         )
+        self._judges = Judges(self._open_repositories, self._models)
         self._remotes = Remotes(self._open_repositories)
 
     def __enter__(
@@ -173,6 +175,14 @@ class Azathoth:
         """Return the models this instance authorizes for selection."""
 
         return self._portfolio
+
+    @property
+    def judges(
+        self,
+    ) -> Judges:
+        """Return the rotation of models that judge semantic cases (ADR 0129)."""
+
+        return self._judges
 
     @property
     def runs(

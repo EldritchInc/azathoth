@@ -54,6 +54,7 @@ from azathoth.api.instance import (
     open,
 )
 from azathoth.api.invocations import Invocations
+from azathoth.api.judges import Judges
 from azathoth.api.models import (
     API_STABILITY,
     ApiModel,
@@ -73,6 +74,7 @@ from azathoth.api.models import (
     InvocationOutcome,
     InvocationRun,
     InvocationSummary,
+    JudgeSummary,
     ModelSummary,
     PortfolioEntry,
     PortfolioRemoval,
@@ -187,6 +189,8 @@ __all__ = [
     "InvocationRun",
     "InvocationSummary",
     "Invocations",
+    "JudgeSummary",
+    "Judges",
     "MatchScope",
     "ModelInUseError",
     "ModelNotAuthorizedError",

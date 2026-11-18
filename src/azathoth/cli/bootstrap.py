@@ -71,6 +71,24 @@ def load_runtime(
     )
 
 
+def current_models(
+    configuration: CliRuntimeConfiguration,
+) -> ModelCatalog:
+    """Return the models the configured providers serve now, as every command discovers them.
+
+    The service API the command line calls asks this same discovery
+    (ADR 0129), so a command sees the same models whichever way it asks.
+
+    Raises:
+        ModelDiscoveryError: A provider that is on could not be discovered.
+        BedrockUnavailableError: Bedrock is on without the `bedrock` extra.
+        BedrockConfigurationError: Bedrock is on without a region, or with a
+            pricing document that cannot be used.
+    """
+
+    return _load_current_models(configuration)
+
+
 def _load_current_models(
     configuration: CliRuntimeConfiguration,
 ) -> ModelCatalog:

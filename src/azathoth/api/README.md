@@ -148,6 +148,22 @@ instance.portfolio.set_data_policy(
 `force=True` the model is removed and its `dependents` are returned. A
 semantic judge is always kept until it leaves the judge rotation.
 
+## Judges
+
+`instance.judges` keeps the rotation of models that judge semantic
+benchmark cases, in the order they are tried (ADR 0129).
+
+| Call | Returns |
+| --- | --- |
+| `judges.list()` | Every `JudgeSummary`, in rotation order: the model's identifier, provider and model, its `position` from 1, and whether the portfolio still `authorized` it. |
+| `judges.add(identifier)` | The `JudgeSummary` appended, as `azathoth judge add` does. |
+| `judges.remove(identifier)` | The `JudgeSummary` removed, as it was in the rotation. |
+
+Judges see benchmark data, so a judge must be a model the providers serve
+now (`NotFoundError` otherwise) and the portfolio authorizes
+(`ModelNotAuthorizedError`); one already in the rotation is a
+`ConflictError`. Listing and removing reach no provider.
+
 ## Runs
 
 `instance.runs.run(workflow_id, input=None, sensitivity=None, on_event=None,
@@ -442,7 +458,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `CandidateUnavailableError` | `candidate_unavailable` | No candidate of a workflow to promote could be made with the models authorized now. |
 | `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the latest revision; a `CandidateUnavailableError` too. |
 | `NothingToRollBackToError` | `nothing_to_roll_back_to` | The workflow is not in production, has no earlier revision, or the one named is already active; a `ConflictError` too. |
-| `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes; a `ConflictError` too. |
+| `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |

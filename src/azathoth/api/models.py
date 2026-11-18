@@ -567,6 +567,32 @@ class InvocationOutcome(ApiModel):
     )
 
 
+class JudgeSummary(ApiModel):
+    """One model of the rotation that judges semantic cases, in its place (ADR 0129)."""
+
+    identifier: str
+
+    provider: str
+
+    model: str
+
+    position: int = Field(
+        ge=1,
+        description="Its place in the rotation, from 1: the order judges are tried.",
+    )
+
+    authorized: bool = Field(
+        description=(
+            "Whether the portfolio still authorizes it; one that no longer does is kept "
+            "until it is removed, and is never asked to judge."
+        ),
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that lists the rotation.",
+    )
+
+
 class InvocationSummary(ApiModel):
     """One invocation of a promoted workflow, as `azathoth workflow invocations` lists it."""
 
