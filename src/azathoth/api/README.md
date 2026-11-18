@@ -303,6 +303,20 @@ that has not finished names only its ID and how often it was resumed. Who
 may read which invocation is the caller's to decide: azathoth-mcp, for
 one, shows a caller only invocations it made.
 
+| Call | Returns |
+| --- | --- |
+| `invocations.get(invocation_id)` | The `InvocationDetail`, as above. |
+| `invocations.list(workflow_id, limit=None)` | Its `InvocationSummary` items, newest first, as `azathoth workflow invocations` lists them: when each was made, its `status`, its caller metadata, its `sensitivity`, and its run's ID once it has one (ADR 0128). |
+| `invocations.resume(invocation_id, on_event=None, cancel=None)` | The `InvocationOutcome`, as `azathoth invocation resume` does: an incomplete invocation continues from the production state it started from, and its run from its journal, reporting events as `runs.invoke` does (ADR 0128). |
+
+A workflow neither configured nor invoked is a `NotFoundError` to `list`.
+`resume` refuses an invocation that has already completed, or that cannot
+be resumed, as a `ConflictError`:
+
+```text
+Invocation <INVOCATION_ID> has already completed.
+```
+
 ## Remotes
 
 `instance.remote(url)` names a remote, served with `azathoth remote serve`,

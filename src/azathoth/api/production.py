@@ -7,7 +7,6 @@ experiment's winner, and saves it as a new revision; rolling back saves an
 earlier revision's state as a new one. Either records who did it.
 """
 
-from collections.abc import Callable
 from uuid import UUID
 
 from azathoth.api.authorship import AuthorAccess, author_view
@@ -27,9 +26,9 @@ from azathoth.api.models import (
     ProductionState,
     ProductionStepModels,
 )
+from azathoth.api.running import RuntimeAccess
 from azathoth.persistence.repositories import Repositories
 from azathoth.prompting import PROMPT_SPECIFICATIONS, FixedModelSelection
-from azathoth.runtime import AzathothRuntime
 from azathoth.workflows import (
     NothingToRollBackToError as NothingEarlierError,
 )
@@ -46,9 +45,6 @@ from azathoth.workflows import (
     rebuild_workflow_candidate,
     roll_back_workflow_production,
 )
-
-RuntimeAccess = Callable[[Repositories], AzathothRuntime]
-"""Compose the runtime a promotion builds its candidate in, over an instance's repositories."""
 
 
 class Production:
@@ -310,5 +306,4 @@ def _steps(
 
 __all__ = [
     "Production",
-    "RuntimeAccess",
 ]

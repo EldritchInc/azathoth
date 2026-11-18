@@ -567,6 +567,36 @@ class InvocationOutcome(ApiModel):
     )
 
 
+class InvocationSummary(ApiModel):
+    """One invocation of a promoted workflow, as `azathoth workflow invocations` lists it."""
+
+    invocation_id: UUID
+
+    workflow_id: UUID
+
+    created_at: datetime
+
+    status: Literal["succeeded", "failed", "incomplete"] = Field(
+        description="How it ended, or `incomplete` while it has no outcome.",
+    )
+
+    caller_metadata: dict[str, JsonValue] = Field(
+        description="What its caller recorded with it, such as who or what called.",
+    )
+
+    sensitivity: Sensitivity = Field(
+        description="The label its input was given, internal when none was (ADR 0123).",
+    )
+
+    run_id: UUID | None = Field(
+        description="The run that executed it, once it has one.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
 class ProductionStepModels(ApiModel):
     """The models production runs one prompt step on, in the order it tries them (ADR 0063)."""
 

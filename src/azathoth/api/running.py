@@ -163,11 +163,14 @@ INPUT_FILE_NAME: Final = "The input file"
 EventCallback = Callable[[RunEvent], None]
 """Receive one run event, on the run's thread; it must return quickly."""
 
-RunT = TypeVar("RunT", WorkflowRun, JobResult)
-"""What a cancellable call finishes with: a run, or a job's result."""
+RunT = TypeVar("RunT")
+"""What a cancellable call finishes with: a run, a job's result, or a resumed invocation's."""
 
 LanguageModelsAccess = Callable[[ModelCatalog], LanguageModelRegistry]
 """Return the executable models an instance's providers serve, for the models discovered."""
+
+RuntimeAccess = Callable[[Repositories], AzathothRuntime]
+"""Compose the runtime that promotions and resumed invocations run in, over the repositories."""
 
 
 class CancellationToken:
@@ -1373,6 +1376,7 @@ __all__ = [
     "EventCallback",
     "LanguageModelsAccess",
     "Runs",
+    "RuntimeAccess",
     "configured_runtime",
     "file_input",
     "step_status",

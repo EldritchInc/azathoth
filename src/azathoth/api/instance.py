@@ -37,6 +37,7 @@ from azathoth.persistence.repositories import (
 )
 from azathoth.providers import LanguageModelRegistry, ModelCatalog, ProviderModelDirectory
 from azathoth.remote import HttpClient
+from azathoth.runtime import AzathothRuntime
 from azathoth.telemetry import NO_TELEMETRY, Telemetry
 
 
@@ -102,14 +103,14 @@ class Azathoth:
         )
         self._production = Production(
             self._open_repositories,
-            lambda repositories: configured_runtime(
-                repositories,
-                self._model_directories,
-                self._language_models,
-            ),
+            self._configured_runtime,
             self._author,
         )
-        self._invocations = Invocations(self._open_repositories)
+        self._invocations = Invocations(
+            self._open_repositories,
+            self._configured_runtime,
+            telemetry,
+        )
         self._remotes = Remotes(self._open_repositories)
 
     def __enter__(
@@ -271,6 +272,14 @@ class Azathoth:
             raise InstanceClosedError()
 
         return self._repositories
+
+    def _configured_runtime(
+        self,
+        repositories: Repositories,
+    ) -> AzathothRuntime:
+        """Compose the runtime promotions and resumed invocations run in, as a run's is."""
+
+        return configured_runtime(repositories, self._model_directories, self._language_models)
 
     def _model_directories(
         self,
