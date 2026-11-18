@@ -16,9 +16,10 @@ from azathoth.api.errors import (
 )
 from azathoth.api.invocations import Invocations
 from azathoth.api.models import API_STABILITY, InstanceDescription
+from azathoth.api.production import Production
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
 from azathoth.api.remote import Remote, Remotes, reach
-from azathoth.api.running import Runs
+from azathoth.api.running import Runs, configured_runtime
 from azathoth.inputs import S3ContentLocation, S3ContentStore
 from azathoth.persistence import (
     SCHEMA_VERSION,
@@ -47,7 +48,8 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models`, `portfolio`, `runs` and `invocations`; `remote`
+    `benchmarks`, `models`, `portfolio`, `runs`, `production` and
+    `invocations`; `remote`
     names a remote to push to and pull from, and `remotes` the names this
     instance gives remotes.
     """
@@ -97,6 +99,15 @@ class Azathoth:
             self._model_directories,
             self._language_models,
             telemetry,
+        )
+        self._production = Production(
+            self._open_repositories,
+            lambda repositories: configured_runtime(
+                repositories,
+                self._model_directories,
+                self._language_models,
+            ),
+            self._author,
         )
         self._invocations = Invocations(self._open_repositories)
         self._remotes = Remotes(self._open_repositories)
@@ -169,6 +180,14 @@ class Azathoth:
         """Return runs of this instance's configured workflows."""
 
         return self._runs
+
+    @property
+    def production(
+        self,
+    ) -> Production:
+        """Return the production of this instance's workflows (ADR 0128)."""
+
+        return self._production
 
     @property
     def invocations(

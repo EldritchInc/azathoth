@@ -271,6 +271,26 @@ conditions are not asked, it is retried as its policy says, its events
 reach `on_event` as a run's do, and the `StepTrial` holds the step as
 `runs.get` would show it (ADR 0121).
 
+## Production
+
+`instance.production` reads and changes what a workflow's production runs
+(ADR 0128). Reading needs no provider; promoting asks the providers which
+models they serve now, as a run does.
+
+| Call | Returns |
+| --- | --- |
+| `production.get(workflow_id)` | The `ProductionState`: the workflow revision in production, the production revision that made it active (`None` when it was set without one), each prompt step's pinned model and approved substitutes, its input and output schemas, and the command that shows it; `None` when the workflow is not in production. |
+| `production.revisions(workflow_id, limit=None)` | Its `ProductionRevisionSummary` items, newest first, with `active` marking the one production runs, each with its `author` and what it `restores`. |
+| `production.promote(workflow_id, experiment_id=None)` | The `ProductionRevisionSummary` saved, as `azathoth workflow promote` does; with `experiment_id`, the experiment's winner, rebuilt from the latest revision (ADR 0092). |
+| `production.roll_back(workflow_id, to=None)` | The `ProductionRevisionSummary` saved, as `azathoth workflow rollback` does: an earlier revision's state, the one before the active revision by default, restored as a new revision. |
+
+A promotion or a rollback records who made it, told as an import's author
+is. A workflow that is neither configured nor has production history raises
+`NotFoundError`. A rollback is refused, and nothing changes, when there is
+nothing earlier to restore (`NothingToRollBackToError`) or when a step of
+the state it would restore has neither its fixed model nor any approved
+substitute in the portfolio (`ModelNotAuthorizedError`).
+
 ## Invocations
 
 `instance.invocations.get(invocation_id)` reads one invocation back, as
@@ -403,6 +423,12 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `ProviderUnavailableError` | `provider_unavailable` | A provider could not be asked what it serves. |
 | `InvalidDocumentError` | `invalid_document` | A document to import is refused; an `InvalidArgumentError` too. |
 | `RunNotStartedError` | `run_not_started` | No executable candidate could be made, such as for a missing tool. |
+| `WorkflowResultMissingError` | `workflow_result_missing` | A workflow to promote declares no result. |
+| `ExperimentNotFoundError` | `experiment_not_found` | No experiment has the ID named; a `NotFoundError` too. |
+| `CandidateUnavailableError` | `candidate_unavailable` | No candidate of a workflow to promote could be made with the models authorized now. |
+| `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the latest revision; a `CandidateUnavailableError` too. |
+| `NothingToRollBackToError` | `nothing_to_roll_back_to` | The workflow is not in production, has no earlier revision, or the one named is already active; a `ConflictError` too. |
+| `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes; a `ConflictError` too. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |

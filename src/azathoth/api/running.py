@@ -741,19 +741,33 @@ class Runs:
     ) -> AzathothRuntime:
         """Compose the runtime a run needs, as the command line does."""
 
-        models = discover(repositories, self._directories())
-        tool_loader = ToolCatalogLoader(repositories.tools)
+        return configured_runtime(repositories, self._directories, self._language_models)
 
-        return AzathothRuntime(
-            workflows=WorkflowCatalogLoader(repositories.workflows).load_catalog(),
-            production_states=repositories.production_states.states(),
-            models=models,
-            portfolio=ModelPortfolioLoader(repositories.portfolio).load_portfolio(),
-            language_models=self._language_models(models),
-            tools=tool_loader.load_catalog(),
-            tool_implementations=tool_loader.load_implementation_catalog(),
-            judges=repositories.judges.rotation(),
-        )
+
+def configured_runtime(
+    repositories: Repositories,
+    directories: DirectoriesAccess,
+    language_models: LanguageModelsAccess,
+) -> AzathothRuntime:
+    """Compose the runtime that runs and promotions need, as the command line does.
+
+    The providers are asked which models they serve now, so a promotion
+    chooses among the models a run would.
+    """
+
+    models = discover(repositories, directories())
+    tool_loader = ToolCatalogLoader(repositories.tools)
+
+    return AzathothRuntime(
+        workflows=WorkflowCatalogLoader(repositories.workflows).load_catalog(),
+        production_states=repositories.production_states.states(),
+        models=models,
+        portfolio=ModelPortfolioLoader(repositories.portfolio).load_portfolio(),
+        language_models=language_models(models),
+        tools=tool_loader.load_catalog(),
+        tool_implementations=tool_loader.load_implementation_catalog(),
+        judges=repositories.judges.rotation(),
+    )
 
 
 def _decoded(
@@ -1357,7 +1371,9 @@ __all__ = [
     "SENSITIVITY_WITHOUT_INPUT_MESSAGE",
     "CancellationToken",
     "EventCallback",
+    "LanguageModelsAccess",
     "Runs",
+    "configured_runtime",
     "file_input",
     "step_status",
 ]

@@ -78,7 +78,7 @@ The service API gains a `production` collection:
 
 | Call | Returns |
 | --- | --- |
-| `production.get(workflow_id)` | The `ProductionState`: the active production revision, the workflow revision it was promoted from, its model substitutions, its author and when it was made; `None` when the workflow is not in production. |
+| `production.get(workflow_id)` | The `ProductionState`: the active production revision with its author and when it was made, the workflow revision it was promoted from, each prompt step's pinned model and substitutes, and its input and output schemas; `None` when the workflow is not in production. |
 | `production.revisions(workflow_id, limit=None)` | Its `ProductionRevisionSummary` items, newest first, the active one marked, each with its author and what it restores. |
 | `production.promote(workflow_id, experiment_id=None)` | The `ProductionRevisionSummary` it saved, as `workflow promote` does, with an experiment's winner when one is named (ADR 0092). |
 | `production.roll_back(workflow_id, to=None)` | The `ProductionRevisionSummary` it saved, as `workflow rollback` does. |
@@ -91,7 +91,8 @@ A workflow that is neither configured nor has production history raises
 | --- | --- | --- |
 | `WorkflowResultMissingError` | `workflow_result_missing` | The workflow declares no result, so it cannot be promoted. |
 | `ExperimentNotFoundError` | `experiment_not_found` | No experiment has the ID named; a `NotFoundError` too. |
-| `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the workflow's latest revision with the models authorized now. |
+| `CandidateUnavailableError` | `candidate_unavailable` | No candidate of the workflow can be made with the models authorized now, as a run would refuse to start. |
+| `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the workflow's latest revision with the models authorized now; a `CandidateUnavailableError` too. |
 | `NothingToRollBackToError` | `nothing_to_roll_back_to` | There is no earlier revision, or the one named is already active; a `ConflictError` too. |
 | `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state to restore has no model the portfolio authorizes; a `ConflictError` too. |
 
