@@ -6,7 +6,8 @@ See ADR 0105.
 from collections.abc import Sequence
 from uuid import UUID
 
-from azathoth.workflows import RunChild, RunJournalEntry, WorkflowRun
+from azathoth import api
+from azathoth.workflows import RunJournalEntry
 
 
 def render_resume_lines(
@@ -54,7 +55,7 @@ def render_child_count_lines(
 
 def render_run_children(
     run_id: UUID,
-    children: Sequence[tuple[RunChild, WorkflowRun | None]],
+    children: Sequence[api.RunChildSummary],
 ) -> str:
     """Render the runs a run's steps started, oldest first, with each one's status.
 
@@ -66,12 +67,7 @@ def render_run_children(
 
     blocks = []
 
-    for child, run in children:
-        if run is None:
-            status = CHILD_STATUS_UNFINISHED
-        else:
-            status = "succeeded" if run.succeeded else "failed"
-
+    for child in children:
         invocation = (
             "no invocation" if child.child_invocation_id is None else str(child.child_invocation_id)
         )
@@ -83,7 +79,7 @@ def render_run_children(
                     f"Workflow ID: {child.child_workflow_id}",
                     f"Invocation ID: {invocation}",
                     f"Parent Step ID: {child.parent_step_id} (attempt {child.parent_attempt})",
-                    f"Status: {status}",
+                    f"Status: {child.status}",
                 )
             )
         )

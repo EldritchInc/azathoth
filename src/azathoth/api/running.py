@@ -37,10 +37,12 @@ from azathoth.api.errors import (
 from azathoth.api.feedback import latest_dispositions, record_feedback, run_feedback
 from azathoth.api.models import (
     Annotations,
+    ChildStatus,
     ContextChanged,
     InvocationError,
     InvocationFinished,
     InvocationOutcome,
+    RunChildSummary,
     RunDetail,
     RunError,
     RunEvent,
@@ -115,6 +117,7 @@ from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
     InvocationIdempotency,
     ProductionInvocationResult,
+    RunChild,
     ToolStepSpecification,
     WorkflowCandidate,
     WorkflowCatalogLoader,
@@ -662,6 +665,32 @@ class Runs:
 
         return run_annotations(self._repositories(), run_id)
 
+    def children(
+        self,
+        run_id: UUID,
+    ) -> tuple[RunChildSummary, ...]:
+        """Return the runs a run's steps started, oldest first, each with how it ended (ADR 0129).
+
+        It works for a run that never finished, since a child is indexed as
+        it starts. Only durable state is read.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The run was neither kept nor journaled.
+        """
+
+        repositories = self._repositories()
+        children = repositories.run_children.children_of(run_id)
+
+        if (
+            not children
+            and repositories.runs.get(run_id) is None
+            and not repositories.run_journal.entries(run_id)
+        ):
+            raise NotFoundError(f"Run {run_id} was not found.")
+
+        return tuple(_child(repositories, child) for child in children)
+
     def feedback(
         self,
         run_id: UUID,
@@ -1011,6 +1040,33 @@ def _judged(
         return False, None, _halt(run)
 
     return _outcome(run, specification)
+
+
+def _child(
+    repositories: Repositories,
+    child: RunChild,
+) -> RunChildSummary:
+    """Return the API's view of one child run, judged by the revision it ran once it finished."""
+
+    run = repositories.runs.get(child.child_run_id)
+    status: ChildStatus = "unfinished"
+
+    if run is not None:
+        _, _, error = _judged(run, repositories.workflows.revisions(run.workflow.id))
+        status = "succeeded" if error is None else "failed"
+
+    return RunChildSummary(
+        child_run_id=child.child_run_id,
+        child_workflow_id=child.child_workflow_id,
+        child_invocation_id=child.child_invocation_id,
+        parent_run_id=child.parent_run_id,
+        parent_step_id=child.parent_step_id,
+        parent_attempt=child.parent_attempt,
+        depth=child.depth,
+        started_at=child.recorded_at,
+        status=status,
+        command=f"azathoth run show {child.child_run_id}" if run is not None else None,
+    )
 
 
 def _summary(

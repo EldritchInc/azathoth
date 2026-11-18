@@ -296,6 +296,16 @@ steps checked; an invocation exports its run's, and one with no run yet is
 not found. A record the content store no longer holds raises
 `ContentUnavailableError` (ADR 0129).
 
+`instance.runs.children(run_id)` returns the runs a run's steps started,
+oldest first, as `azathoth run children` lists them: each a
+`RunChildSummary` with the child run and its workflow, the invocation it
+executed when it was invoked, the parent's step and attempt that started
+it, and its `status`, `"succeeded"` or `"failed"` as `runs.get` judges it,
+or `"unfinished"` while no finished run is kept for it, when it has no
+`command` yet. It works for a parent that never finished, since a child is
+indexed as it starts; a run neither kept nor journaled raises
+`NotFoundError` (ADR 0129).
+
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a

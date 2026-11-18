@@ -139,29 +139,25 @@ def list_run_children(
 ) -> int:
     """List the runs a run's steps started, oldest first, with each one's status (ADR 0105).
 
+    The children are the service API's (ADR 0129).
+
     It works for a run that never finished too, because a child is indexed
     as it starts. A run neither recorded nor journaled is not found.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
-    stores = repositories(configuration)
 
-    children = stores.run_children.children_of(run_id)
-
-    if not children and stores.runs.get(run_id) is None and not stores.run_journal.entries(run_id):
+    try:
+        children = service_instance(configuration).runs.children(run_id)
+    except api.ApiError as exc:
         print(
-            f"Run {run_id} was not found.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    print(
-        render_run_children(
-            run_id,
-            [(child, stores.runs.get(child.child_run_id)) for child in children],
-        )
-    )
+    print(render_run_children(run_id, children))
 
     return 0
 

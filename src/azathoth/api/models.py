@@ -770,6 +770,53 @@ class Annotations(ApiModel):
     )
 
 
+ChildStatus = Literal["succeeded", "failed", "unfinished"]
+"""How a child run ended, or that no finished run is kept for it yet (ADR 0129)."""
+
+
+class RunChildSummary(ApiModel):
+    """One run a step of another run started, and how it ended (ADRs 0105 and 0129)."""
+
+    child_run_id: UUID
+
+    child_workflow_id: UUID
+
+    child_invocation_id: UUID | None = Field(
+        description="The invocation the child executed, when it was started by invoking one.",
+    )
+
+    parent_run_id: UUID
+
+    parent_step_id: UUID = Field(
+        description="The step of the parent run that started the child.",
+    )
+
+    parent_attempt: int = Field(
+        ge=1,
+        description="The attempt of that step that started it.",
+    )
+
+    depth: int = Field(
+        ge=1,
+        description="How far below the run that started the whole tree it is: 1 for a child.",
+    )
+
+    started_at: datetime = Field(
+        description="When the child was indexed, as it started.",
+    )
+
+    status: ChildStatus = Field(
+        description=(
+            "How it ended, judged as `runs.get` judges it, or `unfinished` while no finished "
+            "run is kept for it."
+        ),
+    )
+
+    command: str | None = Field(
+        description="The `azathoth` command that shows the child, once it finished.",
+    )
+
+
 FeedbackDisposition = Literal["good", "bad"]
 """How a person judged a run (ADR 0068)."""
 
