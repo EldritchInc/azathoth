@@ -8,17 +8,35 @@ release dates are on the
 
 ## Unreleased
 
-[ADR 0127](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0127-the-remote-serves-the-service-api.md)
-records the design Azathoth 1.6 builds: a remote that serves the whole
-service API over HTTP, `api.connect` and `--remote` to reach it, and a
-catalog of named actions for a remote's policy to decide. Nothing in this
-release implements it yet; the editor's 1.5 pages are built to it.
-
-[ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)
-brings production to the service API, `instance.production` and two new
-`invocations` calls, and adds `azathoth workflow rollback`, which restores
-an earlier production revision as a new one. Production revisions record
-who made them, and what a rollback restored.
+- The design Azathoth 1.6 builds: a remote that serves the whole service
+  API over HTTP, `api.connect` and `--remote` to reach it, and a catalog of
+  named actions for a remote's policy to decide. Nothing in this release
+  implements it yet; the editor's 1.5 pages are built to it
+  ([ADR 0127](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0127-the-remote-serves-the-service-api.md)).
+- `azathoth workflow rollback <WORKFLOW_ID>` returns a workflow's production
+  to an earlier production revision, the one before the active revision by
+  default, or the one `--to` names. It saves a new revision with the earlier
+  one's state, exactly as it ran, and refuses, changing nothing, when there
+  is nothing earlier, the revision is already active, or a step has neither
+  its fixed model nor an approved substitute still authorized
+  ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
+- Every production revision records who made it, told as an import's author
+  is, and what a rollback restored. `workflow promote`, `workflow
+  production` and `workflow revisions` show both; a malformed
+  `AZATHOTH_AUTHOR` stops a promotion before anything is written. Revisions
+  saved before 1.5 name nobody, and the database schema does not change
+  ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
+- `azathoth.api` reaches production: `instance.production` reads what a
+  workflow's production runs and its revisions, newest first, and promotes
+  and rolls back as the command line does. `invocations.list` lists a
+  workflow's invocations newest first, and `invocations.resume` continues an
+  incomplete one from its journal. Six new errors carry codes of their own:
+  `workflow_result_missing`, `experiment_not_found`,
+  `candidate_unavailable`, `candidate_rebuild`, `nothing_to_roll_back_to`
+  and `model_not_authorized`
+  ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
+- Dependabot proposes new digests of the container image's base, and no
+  longer new Python versions, which wait until CI tests them.
 
 ## 1.4.0
 
