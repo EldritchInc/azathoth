@@ -11,6 +11,7 @@ from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     WorkflowRunSource,
+    render_interrupted_runs,
     render_run_children,
     render_unfinished_run,
     render_workflow_run,
@@ -158,6 +159,32 @@ def list_run_children(
         return 1
 
     print(render_run_children(run_id, children))
+
+    return 0
+
+
+def list_interrupted_runs(
+    workflow_id: UUID,
+) -> int:
+    """List a workflow's runs that started and never finished, newest first (ADR 0129).
+
+    Each names the command that resumes it, the run's or its invocation's.
+    Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    try:
+        runs = service_instance(configuration).runs.interrupted(workflow_id)
+    except api.ApiError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(render_interrupted_runs(workflow_id, runs))
 
     return 0
 

@@ -32,6 +32,7 @@ from azathoth.api.errors import (
     InvalidDocumentError,
     NotFoundError,
     RunCancelledError,
+    RunNotResumableError,
     RunNotStartedError,
 )
 from azathoth.api.feedback import latest_dispositions, record_feedback, run_feedback
@@ -39,6 +40,7 @@ from azathoth.api.models import (
     Annotations,
     ChildStatus,
     ContextChanged,
+    InterruptedRun,
     InvocationError,
     InvocationFinished,
     InvocationOutcome,
@@ -63,6 +65,7 @@ from azathoth.api.models import (
     StepTrial,
     WorkflowReadiness,
 )
+from azathoth.api.resuming import ConfiguredRunResumeError, resume_configured_workflow
 from azathoth.context import Context, context_sensitivity, create_input_sensitivity_event
 from azathoth.inputs import (
     DEFAULT_MAX_INPUT_BYTES,
@@ -116,8 +119,12 @@ from azathoth.tools import ToolCatalogLoader, ToolStrategy
 from azathoth.workflows import (
     WORKFLOW_INPUT_EVENT_TYPE,
     InvocationIdempotency,
+    JournalRunStarted,
     ProductionInvocationResult,
     RunChild,
+    RunJournalEntry,
+    RunLeaseError,
+    RunResumeError,
     ToolStepSpecification,
     WorkflowCandidate,
     WorkflowCatalogLoader,
@@ -665,6 +672,133 @@ class Runs:
 
         return run_annotations(self._repositories(), run_id)
 
+    def interrupted(
+        self,
+        workflow_id: UUID,
+        *,
+        limit: int | None = None,
+    ) -> tuple[InterruptedRun, ...]:
+        """Return a workflow's runs that started and never finished, newest first (ADR 0129).
+
+        Each says how often it was resumed, and the command that resumes it:
+        `run resume`, or `invocation resume` for a run that executes an
+        invocation. Only durable state is read.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The limit is below 1.
+            NotFoundError: The workflow is neither configured nor journaled any run.
+        """
+
+        if limit is not None and limit < 1:
+            raise InvalidArgumentError(LIMIT_MESSAGE)
+
+        repositories = self._repositories()
+        journaled = repositories.run_journal.journaled_runs(workflow_id)
+
+        if not journaled and not repositories.workflows.revisions(workflow_id):
+            raise NotFoundError(f"Workflow {workflow_id} is not configured.")
+
+        interrupted = (
+            _interrupted(run_id, repositories.run_journal.entries(run_id))
+            for run_id in journaled
+            if repositories.runs.get(run_id) is None
+        )
+
+        return tuple(run for run in interrupted if run is not None)[:limit]
+
+    def resume(
+        self,
+        run_id: UUID,
+        *,
+        on_event: EventCallback | None = None,
+        cancel: CancellationToken | None = None,
+    ) -> RunResult:
+        """Continue an interrupted configured run from its journal, and keep it (ADR 0129).
+
+        It resumes from the revision it started from, under its own ID,
+        reporting events as `runs.run` does, and returns its result as
+        `runs.run` would have. A run that executes a production invocation
+        resumes as its invocation, with `invocations.resume`.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The run was never journaled.
+            RunNotResumableError: It finished, executes an invocation, is still
+                held by another process, or its journal cannot be resumed.
+            RunNotStartedError: No executable candidate could be made of the
+                revision it started from.
+            RunCancelledError: The token was cancelled before the run finished.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        if cancel is not None and cancel.cancelled:
+            raise RunCancelledError()
+
+        repositories = self._repositories()
+
+        if repositories.runs.get(run_id) is not None:
+            raise RunNotResumableError(str(ConfiguredRunResumeError.finished(run_id)))
+
+        entries = repositories.run_journal.entries(run_id)
+
+        if not entries:
+            raise NotFoundError(f"Run {run_id} was not found.")
+
+        runtime = self._runtime(repositories)
+        observer = _CallbackObserver(on_event)
+        runner = tracing_runner(
+            self._telemetry,
+            observer=observer,
+            journal=repositories.run_journal,
+            leases=repositories.run_leases,
+            children=repositories.run_children,
+            content=repositories.tool_content,
+        )
+
+        observer.emit(RunStarted(workflow_id=entries[0].workflow_id))
+
+        try:
+            run, specification = asyncio.run(
+                _until_cancelled(
+                    resume_configured_workflow(
+                        runtime=runtime,
+                        run_id=run_id,
+                        entries=entries,
+                        specifications=repositories.workflows,
+                        runner=runner,
+                    ),
+                    cancel,
+                )
+            )
+        except (ConfiguredRunResumeError, RunResumeError, RunLeaseError) as exc:
+            raise RunNotResumableError(str(exc)) from exc
+        except WorkflowGenerationError as exc:
+            raise RunNotStartedError(str(exc)) from exc
+
+        if repositories.runs.get(run.id) is None:
+            repositories.runs.save(run)
+
+        has_result, value, error = _outcome(run, specification)
+
+        observer.emit(RunFinished(run_id=run.id, succeeded=error is None))
+
+        return RunResult(
+            run_id=run.id,
+            workflow_id=run.workflow.id,
+            workflow_revision=run.workflow_revision,
+            succeeded=error is None,
+            has_result=has_result,
+            result=value,
+            error=error,
+            warnings=tuple(observer.warnings),
+            started_at=run.started_at,
+            completed_at=run.completed_at,
+            command=f"azathoth run show {run.id}",
+        )
+
     def children(
         self,
         run_id: UUID,
@@ -1040,6 +1174,38 @@ def _judged(
         return False, None, _halt(run)
 
     return _outcome(run, specification)
+
+
+def _interrupted(
+    run_id: UUID,
+    entries: tuple[RunJournalEntry, ...],
+) -> InterruptedRun | None:
+    """Return the API's view of one run its journal records starting, or None if it cannot.
+
+    A journal that does not begin with the run's start is no run to resume.
+    """
+
+    if not entries or not isinstance(entries[0].event, JournalRunStarted):
+        return None
+
+    started = entries[0].event
+    invocation_id = entries[0].invocation_id
+
+    return InterruptedRun(
+        run_id=run_id,
+        workflow_id=started.workflow.id,
+        workflow_name=started.workflow.name,
+        workflow_revision=started.workflow_revision,
+        invocation_id=invocation_id,
+        started_at=started.started_at,
+        last_recorded_at=entries[-1].recorded_at,
+        resumes=journal_resumes(entries),
+        command=(
+            f"azathoth run resume {run_id}"
+            if invocation_id is None
+            else f"azathoth invocation resume {invocation_id}"
+        ),
+    )
 
 
 def _child(

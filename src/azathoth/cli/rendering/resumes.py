@@ -87,8 +87,40 @@ def render_run_children(
     return "\n\n".join(blocks)
 
 
+def render_interrupted_runs(
+    workflow_id: UUID,
+    runs: Sequence[api.InterruptedRun],
+) -> str:
+    """Render a workflow's interrupted runs, newest first, each with the command that resumes it."""
+
+    if not runs:
+        return f"Workflow {workflow_id} has no interrupted runs."
+
+    blocks = []
+
+    for run in runs:
+        revision = "unknown" if run.workflow_revision is None else str(run.workflow_revision)
+        invocation = "no invocation" if run.invocation_id is None else str(run.invocation_id)
+
+        blocks.append(
+            "\n".join(
+                (
+                    f"Run ID: {run.run_id}",
+                    f"Started: {run.started_at.isoformat()}",
+                    *render_resume_lines(run.resumes),
+                    f"Revision: {revision}",
+                    f"Invocation ID: {invocation}",
+                    f"Resume: {run.command}",
+                )
+            )
+        )
+
+    return "\n\n".join(blocks)
+
+
 __all__ = [
     "CHILD_STATUS_UNFINISHED",
+    "render_interrupted_runs",
     "render_child_count_lines",
     "render_run_children",
     "render_resume_lines",

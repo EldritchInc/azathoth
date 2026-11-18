@@ -165,6 +165,17 @@ class RunNotStartedError(ApiError):
     code: ClassVar[str] = "run_not_started"
 
 
+class RunNotResumableError(ConflictError):
+    """A run cannot be resumed (ADR 0129).
+
+    It has finished, executes a production invocation, which resumes as its
+    invocation, is still held by another process, or its journal cannot be
+    resumed with the revision it started from.
+    """
+
+    code: ClassVar[str] = "run_not_resumable"
+
+
 class RunCancelledError(ApiError):
     """A run was stopped through its cancellation token before it finished.
 

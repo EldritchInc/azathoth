@@ -185,6 +185,14 @@ class RunJournalRepository(Protocol):
 
         ...
 
+    def journaled_runs(
+        self,
+        workflow_id: UUID,
+    ) -> tuple[UUID, ...]:
+        """Return every run of a workflow its journal records starting, newest first (ADR 0129)."""
+
+        ...
+
 
 class InMemoryRunJournalRepository:
     """Keep run journals in memory, for tests and short-lived processes."""
@@ -237,6 +245,18 @@ class InMemoryRunJournalRepository:
                 return entry.run_id
 
         return None
+
+    def journaled_runs(
+        self,
+        workflow_id: UUID,
+    ) -> tuple[UUID, ...]:
+        """Return every run of a workflow its journal records starting, newest first (ADR 0129)."""
+
+        return tuple(
+            entry.run_id
+            for entry in reversed(self._entries)
+            if entry.workflow_id == workflow_id and entry.position == 1
+        )
 
 
 Clock: TypeAlias = Callable[[], datetime]

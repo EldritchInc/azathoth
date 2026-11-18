@@ -306,6 +306,20 @@ or `"unfinished"` while no finished run is kept for it, when it has no
 indexed as it starts; a run neither kept nor journaled raises
 `NotFoundError` (ADR 0129).
 
+`instance.runs.interrupted(workflow_id, limit=None)` lists a workflow's
+runs that started and never finished, newest first, as `azathoth run
+interrupted` does: each an `InterruptedRun` with the revision it started
+from, when it started and last recorded anything, how often it was
+resumed, the invocation it executes if it executes one, and the `command`
+that resumes it. `instance.runs.resume(run_id, on_event=None, cancel=None)`
+continues an interrupted configured run from its journal under its own ID,
+as `azathoth run resume` does, reporting events as `runs.run` does, and
+returns its `RunResult`. A run that executes an invocation resumes as its
+invocation, with `invocations.resume`. A run that finished, executes an
+invocation, is still held by another process, or whose journal cannot be
+resumed raises `RunNotResumableError`; one never journaled raises
+`NotFoundError` (ADR 0129).
+
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
 imported or not, and keeps no run. Each value `inputs` names, JSON or a
@@ -489,6 +503,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `NothingToRollBackToError` | `nothing_to_roll_back_to` | The workflow is not in production, has no earlier revision, or the one named is already active; a `ConflictError` too. |
 | `ContentUnavailableError` | `content_unavailable` | Content a call reads, such as a run's record of citation checks, is not in the content store, or is not what it should be. |
 | `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
+| `RunNotResumableError` | `run_not_resumable` | The run finished, executes an invocation, is still held by another process, or its journal cannot be resumed; a `ConflictError` too. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |

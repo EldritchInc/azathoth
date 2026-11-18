@@ -770,6 +770,41 @@ class Annotations(ApiModel):
     )
 
 
+class InterruptedRun(ApiModel):
+    """A run that started and never finished, as its journal records it (ADR 0129)."""
+
+    run_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name in the revision the run started from.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The revision it started from, or None for a run from before revisions.",
+    )
+
+    invocation_id: UUID | None = Field(
+        description="The production invocation it executes, when it executes one.",
+    )
+
+    started_at: datetime
+
+    last_recorded_at: datetime = Field(
+        description="When its journal last recorded anything: how far it got.",
+    )
+
+    resumes: int = Field(
+        ge=0,
+        description="How often it was resumed and stopped again.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that resumes it: its invocation's, when it has one.",
+    )
+
+
 ChildStatus = Literal["succeeded", "failed", "unfinished"]
 """How a child run ended, or that no finished run is kept for it yet (ADR 0129)."""
 

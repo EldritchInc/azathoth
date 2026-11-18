@@ -28,7 +28,10 @@ never finished is in the journal, and nothing lists it.
 
 Every call here is an addition to the 1.x service API. The command line's
 commands become thin wrappers over the same calls, as production's did
-(ADR 0128), so there is one implementation of each. Each call is one of
+(ADR 0128), so there is one implementation of each. `run resume` is the one
+exception: it streams each step as `workflow run` does and traces as the
+command line does, so it keeps its own reporting, and resumes through the
+same `resume_configured_workflow` call the API makes. Each call is one of
 the 0127 catalog's named actions, for a remote's policy in 1.6.
 
 ### `instance.judges`

@@ -105,6 +105,27 @@ class SqlRunJournalRepository:
 
         return UUID(require_text(row[0], "Persisted run journal run ID was not text."))
 
+    def journaled_runs(
+        self,
+        workflow_id: UUID,
+    ) -> tuple[UUID, ...]:
+        """Return every run of a workflow its journal records starting, newest first (ADR 0129)."""
+
+        with self._database.transaction() as session:
+            rows = session.fetchall(
+                """
+                SELECT run_id
+                FROM run_journal
+                WHERE workflow_id = ? AND position = 1
+                ORDER BY sequence DESC
+                """,
+                (str(workflow_id),),
+            )
+
+        return tuple(
+            UUID(require_text(row[0], "Persisted run journal run ID was not text.")) for row in rows
+        )
+
 
 __all__ = [
     "SqlRunJournalRepository",

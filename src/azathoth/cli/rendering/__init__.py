@@ -54,6 +54,7 @@ from azathoth.cli.rendering.promotions import (
 from azathoth.cli.rendering.resumes import (
     CHILD_STATUS_UNFINISHED,
     render_child_count_lines,
+    render_interrupted_runs,
     render_resume_lines,
     render_run_children,
     render_unfinished_run,
@@ -101,6 +102,7 @@ __all__ = [
     "CHILD_STATUS_UNFINISHED",
     "render_child_count_lines",
     "render_resume_lines",
+    "render_interrupted_runs",
     "render_run_children",
     "render_unfinished_run",
     "render_workflow_run",
