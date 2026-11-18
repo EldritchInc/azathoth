@@ -1,8 +1,14 @@
 # Keeps the container image's pinned base current (ADR 0109): a new digest
-# of the base tag arrives as a pull request, tested like any other.
+# of the base tag arrives as a pull request, tested like any other. A new
+# Python version is a decision of its own, made once CI tests that version,
+# so Dependabot never proposes one; patch releases of the same Python still
+# arrive, as new digests of its tag do.
 version: 2
 updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

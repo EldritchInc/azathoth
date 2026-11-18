@@ -166,6 +166,17 @@ def test_dependabot_keeps_the_base_images_digest_current() -> None:
     )
 
 
+def test_dependabot_proposes_new_digests_but_not_new_python_versions() -> None:
+    text = (PROJECT_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+
+    assert re.search(
+        r'    ignore:\n      - dependency-name: "python"\n'
+        r'        update-types: \["version-update:semver-major", "version-update:semver-minor"\]',
+        text,
+    )
+    assert "version-update:semver-patch" not in text
+
+
 def test_the_container_guide_verifies_the_signature_this_workflow_makes() -> None:
     guide = (PROJECT_ROOT / "docs" / "container.md").read_text(encoding="utf-8")
     identity = (
