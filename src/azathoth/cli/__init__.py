@@ -45,6 +45,7 @@ from azathoth.cli.execution import (
     execute_configured_workflow,
 )
 from azathoth.cli.experiments import (
+    compare_experiment_command,
     list_workflow_experiments,
     show_experiment,
 )
@@ -88,6 +89,7 @@ from azathoth.cli.promotion import (
 )
 from azathoth.cli.rendering import (
     WorkflowRunSource,
+    render_experiment_comparison,
     render_model_usage_report,
     render_production_invocation,
     render_production_invocation_result,
@@ -222,6 +224,7 @@ __all__ = [
     "render_workflow_benchmark_execution",
     "render_workflow_benchmark_execution_summaries",
     "render_workflow_benchmark_result",
+    "render_experiment_comparison",
     "render_workflow_experiment",
     "render_workflow_experiment_summaries",
     "render_workflow_optimization_session",
@@ -242,6 +245,7 @@ __all__ = [
     "show_benchmark_case",
     "show_benchmark_execution",
     "show_experiment",
+    "compare_experiment_command",
     "show_goal",
     "show_invocation",
     "show_tool",

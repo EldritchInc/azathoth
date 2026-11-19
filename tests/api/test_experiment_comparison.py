@@ -109,19 +109,31 @@ def production_on(
 def keep_runs(
     repositories: Repositories,
     *,
-    winner_cost: float | None = 0.01,
+    winner_costs: tuple[float | None, float | None] = (0.01, 0.01),
+    winner_seconds: tuple[float, float] = (2.0, 3.0),
 ) -> None:
-    """Keep every case run: the configured candidate's, then the cheaper, faster winner's."""
+    """Keep every case run: the configured candidate's, then the winner's, cheaper and faster."""
 
     for run_id in (LOSING_FIRST_RUN_ID, LOSING_SECOND_RUN_ID):
         repositories.runs.save(kept_run(run_id, model=CONFIGURED_MODEL, cost_usd=0.05, seconds=5.0))
 
-    repositories.runs.save(
-        kept_run(WINNING_FIRST_RUN_ID, model=CHEAPER_MODEL, cost_usd=winner_cost, seconds=2.0)
-    )
-    repositories.runs.save(
-        kept_run(WINNING_SECOND_RUN_ID, model=CHEAPER_MODEL, cost_usd=0.01, seconds=3.0)
-    )
+    for run_id, cost, seconds in zip(
+        (WINNING_FIRST_RUN_ID, WINNING_SECOND_RUN_ID), winner_costs, winner_seconds, strict=True
+    ):
+        repositories.runs.save(
+            kept_run(run_id, model=CHEAPER_MODEL, cost_usd=cost, seconds=seconds)
+        )
+
+
+def stocked(
+    location: str,
+) -> Repositories:
+    """Return the repositories of the database at `location`, holding the experiment."""
+
+    stored = open_repositories(location)
+    stored.experiments.save(create_experiment(FIRST_EXPERIMENT_ID))
+
+    return stored
 
 
 @pytest.fixture
@@ -130,10 +142,7 @@ def repositories(
 ) -> Repositories:
     """Return the instance's repositories, holding the experiment."""
 
-    stored = open_repositories(location)
-    stored.experiments.save(create_experiment(FIRST_EXPERIMENT_ID))
-
-    return stored
+    return stocked(location)
 
 
 def test_without_production_the_winner_is_set_beside_the_configured_candidate(
@@ -205,7 +214,7 @@ def test_a_run_of_unknown_cost_makes_its_sides_cost_unknown(
     repositories: Repositories,
     instance: api.Azathoth,
 ) -> None:
-    keep_runs(repositories, winner_cost=None)
+    keep_runs(repositories, winner_costs=(None, 0.01))
 
     comparison = instance.experiments.compare(FIRST_EXPERIMENT_ID)
 

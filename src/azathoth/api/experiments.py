@@ -7,6 +7,7 @@ its first case's run, which says what each step ran on.
 """
 
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Final
 from uuid import UUID
 
@@ -25,6 +26,8 @@ from azathoth.api.models import (
     ExperimentStep,
     ExperimentSummary,
     RunCosts,
+    Savings,
+    SavingsProjection,
 )
 from azathoth.evaluation import BenchmarkDatasetRevision
 from azathoth.persistence.repositories import Repositories
@@ -41,6 +44,9 @@ from azathoth.workflows import (
 PRODUCTION_RUNS_WINNER: Final = "Production already runs the winner."
 
 WINNER_IS_CONFIGURED: Final = "The winner is the candidate the workflow is configured with."
+
+PROJECTION_DAYS: Final = 30
+"""How many days of production invocations a saving is projected over."""
 
 NO_BASELINE: Final = "The experiment holds neither what production runs nor what is configured."
 
@@ -412,11 +418,76 @@ def _compared_case(
     )
 
 
+def _saved(
+    baseline: float | None,
+    winner: float | None,
+) -> tuple[float | None, float | None]:
+    """Return what the winner saves on one measure, and that as a percentage of the baseline."""
+
+    if baseline is None or winner is None:
+        return None, None
+
+    saved = baseline - winner
+
+    return saved, (saved / baseline * 100.0 if baseline > 0 else None)
+
+
+def savings_of(
+    winner: RunCosts,
+    baseline: RunCosts,
+) -> Savings:
+    """Return what the winner saves per run over the baseline, measured."""
+
+    cost, cost_percent = _saved(baseline.cost_usd, winner.cost_usd)
+    latency, latency_percent = _saved(baseline.latency_seconds, winner.latency_seconds)
+
+    return Savings(
+        cost_usd=cost,
+        cost_percent=cost_percent,
+        latency_seconds=latency,
+        latency_percent=latency_percent,
+    )
+
+
+def projection_of(
+    repositories: Repositories,
+    workflow_id: UUID,
+    savings: Savings,
+    now: datetime,
+) -> SavingsProjection | None:
+    """Return the saving over production's invocations in the window before `now`, if any."""
+
+    since = now - timedelta(days=PROJECTION_DAYS)
+    invocations = sum(
+        invocation.created_at >= since
+        for invocation in repositories.invocations.invocations_for_workflow(workflow_id)
+    )
+
+    if not invocations:
+        return None
+
+    return SavingsProjection(
+        window_days=PROJECTION_DAYS,
+        since=since,
+        invocations=invocations,
+        cost_usd=None if savings.cost_usd is None else savings.cost_usd * invocations,
+        latency_seconds=(
+            None if savings.latency_seconds is None else savings.latency_seconds * invocations
+        ),
+    )
+
+
 def compare_experiment(
     repositories: Repositories,
     experiment: WorkflowExperimentRecord,
+    *,
+    now: datetime | None = None,
 ) -> ExperimentComparison:
-    """Return an experiment's winner set beside its baseline, with what each run cost and took."""
+    """Return an experiment's winner set beside its baseline, with what each run cost and took.
+
+    What the winner saves is measured per run on the benchmark, and projected
+    over production's invocations in the 30 days before `now`.
+    """
 
     detail = experiment_detail(experiment, runs=first_runs(repositories, experiment))
     winner = detail.candidates[0]
@@ -425,6 +496,10 @@ def compare_experiment(
         experiment.observations[0].id,
         repositories.production_states.get(detail.workflow_id),
     )
+
+    winner_runs = run_costs(repositories, winner)
+    baseline_runs = None if compared is None else run_costs(repositories, compared)
+    savings = None if baseline_runs is None else savings_of(winner_runs, baseline_runs)
 
     return ExperimentComparison(
         experiment_id=detail.experiment_id,
@@ -444,8 +519,19 @@ def compare_experiment(
             )
             for index, case in enumerate(winner.cases)
         ),
-        winner_runs=run_costs(repositories, winner),
-        baseline_runs=None if compared is None else run_costs(repositories, compared),
+        winner_runs=winner_runs,
+        baseline_runs=baseline_runs,
+        savings=savings,
+        projection=(
+            None
+            if savings is None
+            else projection_of(
+                repositories,
+                detail.workflow_id,
+                savings,
+                now if now is not None else datetime.now(UTC),
+            )
+        ),
     )
 
 
@@ -570,7 +656,10 @@ __all__ = [
     "PRODUCTION_RUNS_WINNER",
     "WINNER_IS_CONFIGURED",
     "Experiments",
+    "PROJECTION_DAYS",
     "compare_experiment",
+    "projection_of",
+    "savings_of",
     "run_costs",
     "candidate_scorecard",
     "experiment_detail",

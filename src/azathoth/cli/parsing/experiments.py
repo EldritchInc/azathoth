@@ -11,6 +11,8 @@ EXPERIMENT_ACTION_ATTRIBUTE = "experiment_action"
 
 EXPERIMENT_SHOW_ACTION = "show"
 
+EXPERIMENT_COMPARE_ACTION = "compare"
+
 EXPERIMENT_ID_ATTRIBUTE = "experiment_id"
 
 
@@ -38,4 +40,19 @@ def add_experiment_parser(
         type=UUID,
         metavar="EXPERIMENT_ID",
         help="Workflow experiment UUID to inspect.",
+    )
+
+    experiment_compare_parser = experiment_actions.add_parser(
+        EXPERIMENT_COMPARE_ACTION,
+        help=(
+            "Compare one experiment's winner with what production runs now, "
+            "and say what promoting it would save (ADR 0131)."
+        ),
+    )
+
+    experiment_compare_parser.add_argument(
+        EXPERIMENT_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="EXPERIMENT_ID",
+        help="Workflow experiment UUID whose winner to compare.",
     )

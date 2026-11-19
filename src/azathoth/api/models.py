@@ -1697,6 +1697,56 @@ class RunCosts(ApiModel):
     )
 
 
+class Savings(ApiModel):
+    """What the winner saves per run on the benchmark, measured: a negative saving is a cost."""
+
+    cost_usd: float | None = Field(
+        description="The baseline's mean cost less the winner's, or None when either is unknown.",
+    )
+
+    cost_percent: float | None = Field(
+        description="That saving as a percentage of the baseline's cost, or None when undefined.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The baseline's mean time less the winner's, or None when either is unknown.",
+    )
+
+    latency_percent: float | None = Field(
+        description="That saving as a percentage of the baseline's time, or None when undefined.",
+    )
+
+
+class SavingsProjection(ApiModel):
+    """The saving per run multiplied by production's recent invocations: a projection, not a fact.
+
+    The benchmark's cases may not resemble production's inputs, and the next
+    window may not resemble the last.
+    """
+
+    window_days: int = Field(
+        ge=1,
+        description="How many days of production invocations it counts.",
+    )
+
+    since: datetime = Field(
+        description="When that window began.",
+    )
+
+    invocations: int = Field(
+        ge=1,
+        description="How many invocations production made of the workflow in the window.",
+    )
+
+    cost_usd: float | None = Field(
+        description="What the window's invocations would have saved, or None when unknown.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The time they would have saved, in seconds, or None when unknown.",
+    )
+
+
 class ExperimentComparison(ApiModel):
     """An experiment's winner set beside what promoting it would replace (ADR 0131)."""
 
@@ -1727,6 +1777,16 @@ class ExperimentComparison(ApiModel):
     winner_runs: RunCosts
 
     baseline_runs: RunCosts | None
+
+    savings: Savings | None = Field(
+        description="What the winner saves per run, measured on the benchmark, or None.",
+    )
+
+    projection: SavingsProjection | None = Field(
+        description=(
+            "The saving over production's invocations in the last 30 days, or None without any."
+        ),
+    )
 
 
 class CaseStarted(ApiModel):

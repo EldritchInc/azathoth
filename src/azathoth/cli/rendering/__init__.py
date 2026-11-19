@@ -14,6 +14,7 @@ from azathoth.cli.rendering.citations import (
 )
 from azathoth.cli.rendering.evaluations import render_workflow_run_evaluations
 from azathoth.cli.rendering.experiments import (
+    render_experiment_comparison,
     render_workflow_experiment,
     render_workflow_experiment_summaries,
 )
@@ -92,6 +93,7 @@ __all__ = [
     "render_workflow_benchmark_execution",
     "render_workflow_benchmark_execution_summaries",
     "render_workflow_benchmark_result",
+    "render_experiment_comparison",
     "render_workflow_experiment",
     "render_workflow_experiment_summaries",
     "render_workflow_optimization_session",

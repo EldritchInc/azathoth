@@ -1,8 +1,9 @@
 """Workflow experiment inspection commands for the Azathoth CLI.
 
-`workflow experiments` and `experiment show` read through the service API
-(ADR 0131), so the command line and every other caller read experiments
-the same way. Their output is unchanged.
+`workflow experiments`, `experiment show` and `experiment compare` read
+through the service API (ADR 0131), so the command line and every other
+caller read experiments the same way. The first two print as they always
+have.
 """
 
 import sys
@@ -11,6 +12,7 @@ from uuid import UUID
 from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.rendering import (
+    render_experiment_comparison,
     render_workflow_experiment,
     render_workflow_experiment_summaries,
 )
@@ -68,5 +70,27 @@ def show_experiment(
         return 1
 
     print(render_workflow_experiment(experiment))
+
+    return 0
+
+
+def compare_experiment_command(
+    experiment_id: UUID,
+) -> int:
+    """Print one experiment's winner beside what promoting it would replace, and the saving."""
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    try:
+        comparison = service_instance(configuration).experiments.compare(experiment_id)
+    except api.ApiError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
+
+        return 1
+
+    print(render_experiment_comparison(comparison))
 
     return 0

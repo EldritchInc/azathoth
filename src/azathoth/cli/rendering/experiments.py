@@ -9,12 +9,17 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from azathoth.api import (
+    ComparedCase,
     ExperimentCandidate,
     ExperimentCase,
+    ExperimentComparison,
     ExperimentDetail,
     ExperimentSummary,
+    RunCosts,
+    Savings,
+    SavingsProjection,
 )
-from azathoth.api.experiments import experiment_detail, experiment_summary
+from azathoth.api.experiments import PROJECTION_DAYS, experiment_detail, experiment_summary
 from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
 from azathoth.workflows import WorkflowExperimentRecord
 
@@ -171,3 +176,171 @@ def _render_case(
         outcome = "failed"
 
     return f"Case {case_label}: {outcome}  run {case.run_id}  evaluation {case.evaluation_id}"
+
+
+def _outcome(
+    passed: bool | None,
+) -> str:
+    """Return how a case went, as a word."""
+
+    if passed is None:
+        return "unknown"
+
+    return "passed" if passed else "failed"
+
+
+def _compared_case(
+    case: ComparedCase,
+) -> str:
+    """Render one case as the winner and the baseline did on it."""
+
+    label = str(case.case_id) if case.case_id is not None else "none"
+
+    return (
+        f"Case {label}: winner {_outcome(case.winner_passed)}, "
+        f"baseline {_outcome(case.baseline_passed)}"
+    )
+
+
+def _run_line(
+    side: str,
+    costs: RunCosts,
+) -> str:
+    """Render what one side's runs cost and took, on the mean."""
+
+    if costs.runs == 0:
+        return f"{side} Run: unknown, no case run is kept"
+
+    cost = f"${costs.cost_usd:.6f}" if costs.cost_usd is not None else "cost unknown"
+    latency = (
+        f"{costs.latency_seconds:.2f} s" if costs.latency_seconds is not None else "time unknown"
+    )
+    plural = "run" if costs.runs == 1 else "runs"
+
+    return f"{side} Run: {cost}, {latency}, over {costs.runs} {plural}"
+
+
+def _percent(
+    value: float | None,
+) -> str:
+    """Render a share of the baseline, as a magnitude, or nothing when it is undefined."""
+
+    return "" if value is None else f" ({abs(value):.1f}%)"
+
+
+def _money(
+    saved: float | None,
+    percent: float | None,
+) -> str:
+    """Render a saving in dollars, said as a cost when it is negative."""
+
+    if saved is None:
+        return "cost unknown"
+
+    if saved < 0:
+        return f"costs ${-saved:.6f} more{_percent(percent)}"
+
+    return f"${saved:.6f}{_percent(percent)}"
+
+
+def _time(
+    saved: float | None,
+    percent: float | None,
+) -> str:
+    """Render a saving in seconds, said as a delay when it is negative."""
+
+    if saved is None:
+        return "time unknown"
+
+    if saved < 0:
+        return f"takes {-saved:.2f} s longer{_percent(percent)}"
+
+    return f"{saved:.2f} s{_percent(percent)}"
+
+
+def _savings_line(
+    savings: Savings,
+) -> str:
+    """Render what the winner saves per run on the benchmark."""
+
+    return (
+        f"Saves Per Run: {_money(savings.cost_usd, savings.cost_percent)}, "
+        f"{_time(savings.latency_seconds, savings.latency_percent)}"
+    )
+
+
+def _projection_line(
+    projection: SavingsProjection | None,
+    window_days: int,
+) -> str:
+    """Render the saving projected over production's recent invocations, labelled as one."""
+
+    if projection is None:
+        return f"Projection: none; production made no invocation in the last {window_days} days"
+
+    plural = "invocation" if projection.invocations == 1 else "invocations"
+
+    return (
+        f"Projection: over {projection.invocations} production {plural} in the last "
+        f"{projection.window_days} days, {_money(projection.cost_usd, None)} and "
+        f"{_time(projection.latency_seconds, None)}; a projection, not a measurement"
+    )
+
+
+def render_experiment_comparison(
+    comparison: ExperimentComparison,
+) -> str:
+    """Render one experiment's winner beside its baseline, and what promoting it would save.
+
+    Each step the two ran on different models is named with both, baseline
+    first. The saving is measured per run on the benchmark; the projection
+    over production's recent invocations is said to be one.
+    """
+
+    lines = [
+        f"Experiment ID: {comparison.experiment_id}",
+        f"Workflow ID: {comparison.workflow_id}",
+    ]
+
+    if comparison.baseline is None or comparison.baseline_candidate is None:
+        lines.extend(
+            (
+                f"Compared With: nothing. {comparison.reason}",
+                f"Winner Observation ID: {comparison.winner.observation_id}",
+                _run_line("Winner", comparison.winner_runs),
+            )
+        )
+
+        return "\n".join(lines)
+
+    lines.extend(
+        (
+            f"Compared With: {comparison.baseline}",
+            f"Winner Observation ID: {comparison.winner.observation_id}",
+            f"Baseline Observation ID: {comparison.baseline_candidate.observation_id}",
+        )
+    )
+
+    lines.extend(
+        f"Step {step.step_id}: {step.baseline_model or 'no model'} -> "
+        f"{step.winner_model or 'no model'}"
+        for step in comparison.steps
+        if step.differs
+    )
+
+    lines.extend(_compared_case(case) for case in comparison.cases)
+
+    lines.append(_run_line("Winner", comparison.winner_runs))
+
+    if comparison.baseline_runs is not None:
+        lines.append(_run_line("Baseline", comparison.baseline_runs))
+
+    if comparison.savings is not None:
+        lines.extend(
+            (
+                _savings_line(comparison.savings),
+                _projection_line(comparison.projection, PROJECTION_DAYS),
+            )
+        )
+
+    return "\n".join(lines)
