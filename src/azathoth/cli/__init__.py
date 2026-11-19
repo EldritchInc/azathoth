@@ -5,6 +5,11 @@ from azathoth.cli.annotations import (
     export_run_annotations,
 )
 from azathoth.cli.application import main
+from azathoth.cli.benchmark_authoring import (
+    create_benchmark,
+    edit_benchmark_case,
+    remove_benchmark_case,
+)
 from azathoth.cli.benchmark_cases import (
     SuppliedExpectedValue,
     add_benchmark_case,
@@ -159,7 +164,9 @@ __all__ = [
     "compare_benchmarks",
     "compare_configured_benchmarks",
     "configured_run_context",
+    "create_benchmark",
     "deauthorize_model",
+    "edit_benchmark_case",
     "execute_configured_benchmark",
     "execute_configured_workflow",
     "export_benchmark",
@@ -204,6 +211,7 @@ __all__ = [
     "promote_workflow",
     "rollback_workflow",
     "record_run_feedback",
+    "remove_benchmark_case",
     "remove_judge",
     "render_model_usage_report",
     "render_production_invocation",

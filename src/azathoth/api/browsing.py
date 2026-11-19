@@ -10,25 +10,62 @@ callers.
 import json
 import shlex
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import Final, TypeVar
+from typing import Final, TypeVar, cast
 from uuid import UUID
 
 from pydantic import JsonValue, ValidationError
 from pydantic_core import ErrorDetails
 
 from azathoth.api.authorship import AuthorAccess, author_view
+from azathoth.api.benchmark_cases import (
+    KEEP,
+    Keep,
+    case_detail,
+    case_from_input,
+    case_from_run,
+    case_not_found_message,
+    case_summary,
+    check_not_duplicated,
+    citation_expectation,
+    comparison_of,
+    edited_case,
+    required_text,
+)
+from azathoth.api.benchmark_execution import (
+    BenchmarkEventCallback,
+    BenchmarkRuntimeAccess,
+    Cancellable,
+    compare_benchmark,
+    run_benchmark,
+)
+from azathoth.api.benchmark_executions import (
+    benchmark_revision,
+    execution_detail,
+    execution_not_found_message,
+    execution_summary,
+)
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
     NotFoundError,
     RevisionNotFoundError,
 )
+from azathoth.api.files import resolved_file
 from azathoth.api.models import (
+    BenchmarkCaseChange,
+    BenchmarkCaseDetail,
+    BenchmarkCaseSummary,
     BenchmarkDetail,
+    BenchmarkExecutionDetail,
+    BenchmarkExecutionSummary,
     BenchmarkImport,
     BenchmarkSummary,
+    CaseCitations,
+    CaseComparison,
     DocumentProblem,
     Revision,
+    RunFile,
+    RunInput,
     ToolDetail,
     ToolImport,
     ToolSummary,
@@ -38,14 +75,18 @@ from azathoth.api.models import (
     WorkflowSummary,
 )
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     BenchmarkDatasetRevision,
     BenchmarkDocumentError,
     decode_benchmark_document,
     earliest_identical_benchmark_revision,
     encode_benchmark_document,
 )
+from azathoth.inputs import JSON_MEDIA_TYPE, ResolvedInput
 from azathoth.persistence.repositories import Repositories
 from azathoth.revisions import BaseRevisionError, LineageRecord
+from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
     ToolDocumentError,
     ToolDocumentRevision,
@@ -840,14 +881,17 @@ class Benchmarks:
         self,
         repositories: RepositoriesAccess,
         author: AuthorAccess,
+        runtime: BenchmarkRuntimeAccess,
     ) -> None:
         """Browse the benchmarks of the repositories `repositories` returns.
 
-        Imports are recorded as the author `author` returns (ADR 0122).
+        Imports are recorded as the author `author` returns (ADR 0122), and
+        benchmarks run in the runtime `runtime` composes, as runs do.
         """
 
         self._repositories = repositories
         self._author = author
+        self._runtime = runtime
 
     def list(
         self,
@@ -891,17 +935,7 @@ class Benchmarks:
         """
 
         history = self._history(benchmark_id)
-
-        selected = (
-            history[-1]
-            if revision is None
-            else next((entry for entry in history if entry.number == revision), None)
-        )
-
-        if selected is None:
-            raise RevisionNotFoundError(
-                f"Benchmark dataset {benchmark_id} has no revision {revision}."
-            )
+        selected = self._selected(benchmark_id, history, revision)
 
         summary = self._summary(
             selected,
@@ -915,6 +949,469 @@ class Benchmarks:
             latest_number=history[-1].number,
             document=_document(encode_benchmark_document(selected.dataset)),
         )
+
+    def cases(
+        self,
+        benchmark_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> tuple[BenchmarkCaseSummary, ...]:
+        """Return every case of one revision of a benchmark, in order, the latest by default.
+
+        It is the `read_catalog` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID.
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = self._selected(benchmark_id, self._history(benchmark_id), revision)
+
+        return tuple(case_summary(selected, case) for case in selected.dataset.cases)
+
+    def case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> BenchmarkCaseDetail:
+        """Return one case of one revision of a benchmark with its input and expected value.
+
+        It is the `read_catalog` action, and for a restricted case the
+        `read_restricted` action too (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or the revision holds no
+                case with this ID.
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = self._selected(benchmark_id, self._history(benchmark_id), revision)
+
+        return case_detail(selected, self._held(selected, case_id))
+
+    def create(
+        self,
+        name: str,
+        description: str,
+        *,
+        version: str = "1.0.0",
+    ) -> BenchmarkImport:
+        """Create a benchmark with a new ID and no cases, as its revision 1.
+
+        It is the `edit_benchmark` action (ADR 0130). A benchmark with no
+        cases cannot be run until one is added.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The name, the description or the version is blank.
+            InvalidAuthorError: Who is creating it could not be told.
+        """
+
+        dataset = BenchmarkDataset(
+            name=required_text(name, "A benchmark's name"),
+            description=required_text(description, "A benchmark's description"),
+            version=required_text(version, "A benchmark's version"),
+        )
+        saved = self._repositories().benchmarks.save_revision(dataset, author=self._author())
+
+        return BenchmarkImport(
+            created=saved.created,
+            benchmark=self.get(dataset.id, revision=saved.revision.number),
+        )
+
+    def add_case(
+        self,
+        benchmark_id: UUID,
+        *,
+        run_id: UUID | None = None,
+        input: RunInput | None = None,
+        file: RunFile | None = None,
+        file_uri: str | None = None,
+        comparison: CaseComparison,
+        expected: JsonValue | Keep = KEEP,
+        description: str | None = None,
+        citations: CaseCitations | None = None,
+        sensitivity: Sensitivity | None = None,
+    ) -> BenchmarkCaseChange:
+        """Append one case to a benchmark's latest revision, as its next revision.
+
+        A case is made from exactly one of a recorded run (`run_id`), JSON
+        (`input`) or a file (`file`, with the `file_uri` it was read from,
+        if any), as `benchmark add-case` makes it (ADR 0086). A run's case
+        replays the input it received and expects the value given, or else
+        the corrected output of its latest bad judgment (ADR 0129). Any
+        other case needs an expected value; JSON null is one, so `KEEP`
+        gives none. A case is labelled as given, or as its run was, and
+        never lower (ADR 0123). It is the `edit_benchmark` action, and for a
+        restricted run the `read_restricted` action too (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or no run was kept with
+                `run_id`.
+            InvalidArgumentError: The case names no source or more than one,
+                or Azathoth would refuse it, as `benchmark add-case` does.
+            ContentUnavailableError: The content store no longer holds the
+                content the run received.
+            ConflictError: The benchmark already has this case.
+            InvalidAuthorError: Who is adding it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+
+        if sum(source is not None for source in (run_id, input, file)) != 1:
+            raise InvalidArgumentError(
+                "A case is made from exactly one of a run, JSON input and a file."
+            )
+
+        if file_uri is not None and file is None:
+            raise InvalidArgumentError(
+                "A file_uri names where a file was read from: give the file too."
+            )
+
+        judged_by = comparison_of(comparison)
+        expectation = citation_expectation(citations)
+        repositories = self._repositories()
+
+        if run_id is not None:
+            case = case_from_run(
+                repositories,
+                run_id,
+                comparison=judged_by,
+                expected=expected,
+                description=description,
+                citations=expectation,
+                sensitivity=sensitivity,
+            )
+        else:
+            case = case_from_input(
+                (
+                    resolved_file(file, repositories.content, uri=file_uri)
+                    if file is not None
+                    else ResolvedInput(
+                        value=cast(RunInput, input).payload,
+                        media_type=JSON_MEDIA_TYPE,
+                    )
+                ),
+                comparison=judged_by,
+                expected=expected,
+                description=description,
+                citations=expectation,
+                sensitivity=sensitivity,
+            )
+
+        cases = (*latest.dataset.cases, case)
+
+        check_not_duplicated(benchmark_id, cases, case)
+
+        saved = self._save_cases(latest, cases)
+
+        return BenchmarkCaseChange(
+            case=case_detail(saved, case),
+            benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def update_case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+        *,
+        comparison: CaseComparison | None = None,
+        expected: JsonValue | Keep = KEEP,
+        description: str | None = None,
+        citations: CaseCitations | None | Keep = KEEP,
+        sensitivity: Sensitivity | None = None,
+    ) -> BenchmarkCaseChange:
+        """Change what one case of a benchmark's latest revision expects, as its next revision.
+
+        Only what is given changes: its comparison, its expected value (JSON
+        null too, so `KEEP` leaves it), its description, what its run must
+        cite (`None` clears it, `KEEP` leaves it) and its label, which may
+        rise but never fall. Its ID, its input and where it came from stay.
+        An edit that leaves the case as it was saves nothing. It is the
+        `edit_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or its latest revision
+                holds no case with this ID.
+            InvalidArgumentError: The edit changes nothing, or would make a
+                case Azathoth refuses, or a lower label than the case's.
+            ConflictError: Another case would then be the same case.
+            InvalidAuthorError: Who is editing it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+        edited = edited_case(
+            self._held(latest, case_id),
+            comparison=comparison,
+            expected=expected,
+            description=description,
+            citations=citations,
+            sensitivity=sensitivity,
+        )
+        cases = tuple(edited if case.id == case_id else case for case in latest.dataset.cases)
+
+        check_not_duplicated(benchmark_id, cases, edited)
+
+        saved = self._save_cases(latest, cases)
+
+        return BenchmarkCaseChange(
+            case=case_detail(saved, edited),
+            benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def remove_case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+    ) -> BenchmarkCaseChange:
+        """Save a benchmark's next revision without one case of its latest.
+
+        Every earlier revision still holds the case, so every execution that
+        ran it can still be read. It is the `edit_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or its latest revision
+                holds no case with this ID.
+            InvalidAuthorError: Who is removing it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+        removed = self._held(latest, case_id)
+        saved = self._save_cases(
+            latest,
+            tuple(case for case in latest.dataset.cases if case.id != case_id),
+        )
+
+        return BenchmarkCaseChange(
+            case=case_detail(latest, removed),
+            benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def executions(
+        self,
+        benchmark_id: UUID,
+        *,
+        limit: int | None = None,
+    ) -> tuple[BenchmarkExecutionSummary, ...]:
+        """Return a benchmark's saved runs and comparisons, newest first, at most `limit`.
+
+        Executions of a benchmark since removed stay readable, as `benchmark
+        executions` lists them. It is the `read_runs` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The limit is below 1.
+            NotFoundError: The benchmark is neither configured nor has any
+                saved execution.
+        """
+
+        _check_limit(limit)
+
+        repositories = self._repositories()
+        saved = repositories.benchmark_executions.executions_for_benchmark(benchmark_id)
+        history = repositories.benchmarks.revisions(benchmark_id)
+
+        if not saved and not history:
+            raise NotFoundError(f"Benchmark dataset {benchmark_id} is not configured.")
+
+        newest_first = sorted(
+            reversed(saved),
+            key=lambda execution: execution.recorded_at,
+            reverse=True,
+        )
+
+        return tuple(
+            execution_summary(execution, revision=benchmark_revision(history, execution))
+            for execution in newest_first[:limit]
+        )
+
+    def execution(
+        self,
+        execution_id: UUID,
+    ) -> BenchmarkExecutionDetail:
+        """Return one saved run or comparison with every workflow, best first, and every case.
+
+        Each case carries its evaluation's score and reason while the
+        evaluation is kept. It is the `read_runs` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No execution was saved with this ID.
+        """
+
+        repositories = self._repositories()
+        saved = repositories.benchmark_executions.get(execution_id)
+
+        if saved is None:
+            raise NotFoundError(execution_not_found_message(execution_id))
+
+        evaluations = {
+            case.evaluation_id: evaluation
+            for candidate in saved.candidates
+            for case in candidate.cases
+            if (evaluation := repositories.run_evaluations.get(case.evaluation_id)) is not None
+        }
+
+        return execution_detail(
+            saved,
+            revision=benchmark_revision(
+                repositories.benchmarks.revisions(saved.benchmark_id), saved
+            ),
+            evaluations=evaluations,
+        )
+
+    def run(
+        self,
+        benchmark_id: UUID,
+        workflow_id: UUID,
+        *,
+        on_event: BenchmarkEventCallback | None = None,
+        cancel: Cancellable | None = None,
+    ) -> BenchmarkExecutionDetail:
+        """Run one configured workflow against a benchmark's latest revision, as `benchmark run`.
+
+        Everything is checked before any case runs. `on_event` hears each
+        case start and finish, on the caller's thread, and `cancel` is
+        checked between cases: a cancelled benchmark keeps the case runs it
+        finished and records no execution. It is the `run_benchmark` action
+        (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark or workflow has the ID.
+            InvalidArgumentError: The benchmark has no cases, a comparison
+                cannot be evaluated, or the workflow declares no result.
+            JudgeUnavailableError: A semantic case has no usable judge, or a
+                judge failed.
+            RunNotStartedError: The workflow cannot be generated.
+            WorkflowResultMissingError: A run did not produce its declared result.
+            RunCancelledError: `cancel` asked it to stop.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        return self.execution(
+            run_benchmark(
+                self._repositories(),
+                self._runtime,
+                benchmark_id,
+                workflow_id,
+                on_event=on_event,
+                cancel=cancel,
+            )
+        )
+
+    def compare(
+        self,
+        benchmark_id: UUID,
+        workflow_ids: Sequence[UUID],
+        *,
+        target_latency_seconds: float,
+        target_cost_usd: float,
+        on_event: BenchmarkEventCallback | None = None,
+        cancel: Cancellable | None = None,
+    ) -> BenchmarkExecutionDetail:
+        """Compare configured workflows against a benchmark, ranked, as `benchmark compare`.
+
+        It needs two distinct workflows or more, each scored against the
+        latency and cost targets given, and is told and cancelled as `run`
+        is. It is the `run_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark or workflow has the ID.
+            InvalidArgumentError: Fewer than two distinct workflows, a target
+                that is not positive, or a benchmark that cannot run.
+            JudgeUnavailableError: A semantic case has no usable judge, or a
+                judge failed.
+            RunNotStartedError: A workflow cannot be generated.
+            WorkflowResultMissingError: A run did not produce its declared result.
+            RunCancelledError: `cancel` asked it to stop.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        return self.execution(
+            compare_benchmark(
+                self._repositories(),
+                self._runtime,
+                benchmark_id,
+                tuple(workflow_ids),
+                target_latency_seconds=target_latency_seconds,
+                target_cost_usd=target_cost_usd,
+                on_event=on_event,
+                cancel=cancel,
+            )
+        )
+
+    def _save_cases(
+        self,
+        latest: BenchmarkDatasetRevision,
+        cases: tuple[BenchmarkCase, ...],
+    ) -> BenchmarkDatasetRevision:
+        """Save the latest revision's dataset with `cases` as the benchmark's next revision.
+
+        A dataset identical to the latest saves nothing, and the latest is returned.
+
+        Raises:
+            InvalidAuthorError: Who is saving it could not be told.
+        """
+
+        dataset = latest.dataset
+
+        return (
+            self._repositories()
+            .benchmarks.save_revision(
+                BenchmarkDataset(
+                    id=dataset.id,
+                    name=dataset.name,
+                    description=dataset.description,
+                    version=dataset.version,
+                    cases=cases,
+                ),
+                author=self._author(),
+            )
+            .revision
+        )
+
+    def _revision_summary(
+        self,
+        benchmark_id: UUID,
+        selected: BenchmarkDatasetRevision,
+    ) -> BenchmarkSummary:
+        """Return the API's view of one revision of a benchmark, with its history and lineage."""
+
+        return self._summary(
+            selected,
+            self._history(benchmark_id),
+            _by_number(self._repositories().benchmarks.lineage(benchmark_id)),
+            command=_benchmark_command(selected),
+        )
+
+    @staticmethod
+    def _held(
+        selected: BenchmarkDatasetRevision,
+        case_id: UUID,
+    ) -> BenchmarkCase:
+        """Return the case of a revision with this ID.
+
+        Raises:
+            NotFoundError: The revision holds no case with this ID.
+        """
+
+        found = next((case for case in selected.dataset.cases if case.id == case_id), None)
+
+        if found is None:
+            raise NotFoundError(case_not_found_message(selected.dataset_id, case_id))
+
+        return found
 
     def history(
         self,
@@ -998,6 +1495,31 @@ class Benchmarks:
             raise NotFoundError(f"Benchmark dataset {benchmark_id} is not configured.")
 
         return history
+
+    @staticmethod
+    def _selected(
+        benchmark_id: UUID,
+        history: tuple[BenchmarkDatasetRevision, ...],
+        revision: int | None,
+    ) -> BenchmarkDatasetRevision:
+        """Return the revision numbered `revision` of a history, the latest without one.
+
+        Raises:
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = (
+            history[-1]
+            if revision is None
+            else next((entry for entry in history if entry.number == revision), None)
+        )
+
+        if selected is None:
+            raise RevisionNotFoundError(
+                f"Benchmark dataset {benchmark_id} has no revision {revision}."
+            )
+
+        return selected
 
     @staticmethod
     def _summary(

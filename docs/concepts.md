@@ -926,6 +926,13 @@ like. Judge cost is recorded as Azathoth's own, never as the workflow's.
 Benchmarks grow from use. A run marked bad, with its corrected output, becomes
 a new case through `benchmark add-case --from-run`.
 
+A benchmark starts empty with `benchmark create --name <NAME> --description
+<TEXT>`. `benchmark edit-case` changes what a case expects and how it is
+judged, and `benchmark remove-case` removes one; each saves the benchmark's
+next revision, so earlier revisions, and every execution that ran them, keep
+the case as it was. A case keeps its input and where it came from, and its
+label may be raised but never lowered.
+
 ## Durable Execution Evidence
 
 Completed workflow runs are durable evidence.

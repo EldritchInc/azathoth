@@ -15,7 +15,6 @@ token stops it.
 """
 
 import asyncio
-import base64
 import json
 import threading
 from collections.abc import Callable, Coroutine, Mapping
@@ -36,6 +35,7 @@ from azathoth.api.errors import (
     RunNotStartedError,
 )
 from azathoth.api.feedback import latest_dispositions, record_feedback, run_feedback
+from azathoth.api.files import INLINE_ONLY, INPUT_FILE_NAME, MAX_INPUT_FILE_BYTES, file_input
 from azathoth.api.models import (
     Annotations,
     ChildStatus,
@@ -68,20 +68,13 @@ from azathoth.api.models import (
 from azathoth.api.resuming import ConfiguredRunResumeError, resume_configured_workflow
 from azathoth.context import Context, context_sensitivity, create_input_sensitivity_event
 from azathoth.inputs import (
-    DEFAULT_MAX_INPUT_BYTES,
     JSON_MEDIA_TYPE,
     ContentStore,
     InlineInput,
-    InputContentError,
-    InputPolicy,
     InputProvenance,
     InputResolutionError,
     ResolvedInput,
-    check_binary_signature,
-    decode_content,
-    is_binary_media_type,
     resolve_inline_input,
-    validate_media_type,
 )
 from azathoth.jobs import (
     InvokeJobRequest,
@@ -165,14 +158,6 @@ CANCEL_POLL_SECONDS: Final = 0.05
 GENERATED_KEY_PREFIX: Final = "api-"
 """What begins the idempotency key an invocation is given when it names none."""
 
-INLINE_ONLY: Final = InputPolicy()
-"""An invocation's input is the value given: no reference is resolved."""
-
-MAX_INPUT_FILE_BYTES: Final = DEFAULT_MAX_INPUT_BYTES
-"""The largest file a run or an invocation is given, as for `--input-file`."""
-
-INPUT_FILE_NAME: Final = "The input file"
-"""What a refusal of a file given as input calls it."""
 
 EventCallback = Callable[[RunEvent], None]
 """Receive one run event, on the run's thread; it must return quickly."""
@@ -1518,49 +1503,6 @@ def _invocation_outcome(
             else None
         ),
     )
-
-
-def file_input(
-    run_file: RunFile,
-    *,
-    max_bytes: int = MAX_INPUT_FILE_BYTES,
-) -> InlineInput:
-    """Return the inline input a file stands for, checked as `--input-file` is (ADR 0121).
-
-    JSON and text content is decoded into its value. Binary content is
-    checked against its media type's signature, and stands as base64 until
-    it is resolved and kept (ADR 0112).
-
-    Raises:
-        InvalidArgumentError: The media type is not one Azathoth accepts, the
-            content is larger than `max_bytes`, or it is not its media type.
-    """
-
-    try:
-        media_type = validate_media_type(run_file.media_type)
-    except ValueError as exc:
-        raise InvalidArgumentError(str(exc)) from exc
-
-    if len(run_file.content) > max_bytes:
-        raise InvalidArgumentError(
-            f"{INPUT_FILE_NAME} is larger than the limit of {max_bytes} bytes."
-        )
-
-    try:
-        if is_binary_media_type(media_type):
-            check_binary_signature(run_file.content, media_type)
-
-            return InlineInput(
-                value=base64.b64encode(run_file.content).decode("ascii"),
-                media_type=media_type,
-            )
-
-        return InlineInput(
-            value=decode_content(run_file.content, media_type),
-            media_type=media_type,
-        )
-    except InputContentError as exc:
-        raise InvalidArgumentError(str(exc)) from exc
 
 
 def _context(

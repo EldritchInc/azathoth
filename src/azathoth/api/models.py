@@ -257,6 +257,336 @@ class BenchmarkImport(ApiModel):
     benchmark: BenchmarkDetail
 
 
+CaseComparison = Literal["exact", "normalized", "semantic", "schema"]
+"""How a benchmark case judges a result: equal, normalized, judged, or valid (ADR 0070)."""
+
+
+CaseSource = Literal["run", "file", "json"]
+"""Where a benchmark case came from: a recorded run, a file, or JSON given as it is (ADR 0130)."""
+
+
+class CitedSegmentSummary(ApiModel):
+    """One source segment a case's run must cite (ADR 0117)."""
+
+    source: str
+
+    segment: str
+
+
+class CaseCitations(ApiModel):
+    """What a case's run must cite, and whether a check that did not verify fails it."""
+
+    require: tuple[CitedSegmentSummary, ...]
+
+    on_unverified: Literal["fail", "ignore"] = Field(
+        description="`fail` fails the case on any check that did not verify; `ignore` does not.",
+    )
+
+
+class BenchmarkCaseSummary(ApiModel):
+    """One case of one benchmark revision, as a list of its cases shows it (ADR 0130)."""
+
+    benchmark_id: UUID
+
+    revision: int = Field(
+        ge=1,
+        description="The benchmark revision the case was read from.",
+    )
+
+    case_id: UUID
+
+    description: str = Field(
+        description="What the case expects, in words.",
+    )
+
+    comparison: CaseComparison
+
+    sensitivity: Sensitivity = Field(
+        description="Its input's label, internal when it has none (ADR 0123).",
+    )
+
+    source: CaseSource
+
+    source_run_id: UUID | None = Field(
+        description="The recorded run it was made from, when it was made from one.",
+    )
+
+    cited: bool = Field(
+        description="Whether it names what its run must cite.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the case.",
+    )
+
+
+class BenchmarkCaseDetail(BenchmarkCaseSummary):
+    """One benchmark case with its input, what it expects, and where its input came from."""
+
+    input: JsonValue = Field(
+        description="What the case's run is given: the content's handle for a PDF or an image.",
+    )
+
+    input_provenance: dict[str, JsonValue] | None = Field(
+        description=(
+            "Where its input was read from and which content it was, for a run's or a file's."
+        ),
+    )
+
+    expected: JsonValue = Field(
+        description="The value the case expects, compared as `comparison` says.",
+    )
+
+    citations: CaseCitations | None = Field(
+        description="What its run must cite, or None when it names nothing.",
+    )
+
+    source_feedback_id: UUID | None = Field(
+        description="The judgment whose corrected output it expects, when it was made from one.",
+    )
+
+    metadata: dict[str, JsonValue] = Field(
+        description="Everything else the case records, as `benchmark case-show` prints it.",
+    )
+
+
+class BenchmarkCaseChange(ApiModel):
+    """What adding, editing or removing one case did: the case, and the revision it saved."""
+
+    case: BenchmarkCaseDetail = Field(
+        description=(
+            "The case as the saved revision holds it, or, once removed, as the revision before "
+            "held it."
+        ),
+    )
+
+    benchmark: BenchmarkSummary = Field(
+        description=(
+            "The revision the change saved, or the latest when it saved none, being identical."
+        ),
+    )
+
+
+ExecutionKind = Literal["run", "compare"]
+"""What saved a benchmark execution: `benchmark run`, or `benchmark compare` (ADR 0075)."""
+
+
+class ScoringPolicySummary(ApiModel):
+    """The targets a comparison scored its workflows' latency and cost against."""
+
+    target_latency_seconds: float
+
+    target_cost_usd: float
+
+
+class CandidateScorecard(ApiModel):
+    """How a comparison scored one workflow, each score from 0 to 1."""
+
+    quality_score: float
+
+    reliability_score: float
+
+    latency_score: float
+
+    cost_score: float
+
+    citation_score: float | None = Field(
+        description="How well its runs cited, or None when no case named citations.",
+    )
+
+    overall_score: float
+
+    rationale: str
+
+
+class ComparisonTally(ApiModel):
+    """How many of one workflow's cases judged by one comparison passed."""
+
+    comparison: CaseComparison
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+
+class ExecutionCaseResult(ApiModel):
+    """How one case of an execution went for one workflow, and the evidence that judged it."""
+
+    case_id: UUID
+
+    comparison: CaseComparison
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    evaluation_id: UUID
+
+    passed: bool
+
+    run_failure: bool = Field(
+        description="Whether the run failed without the declared result, which fails the case.",
+    )
+
+    score: float | None = Field(
+        description="The evaluation's score from 0 to 1, or None when it is no longer kept.",
+    )
+
+    reason: str | None = Field(
+        description="Why the evaluation judged it so, or None when it is no longer kept.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+        description="What judging it cost, which is never charged to the workflow.",
+    )
+
+
+class ExecutionCandidateSummary(ApiModel):
+    """One workflow an execution ran, as a list of executions shows it."""
+
+    candidate_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    workflow_revision: int | None = Field(
+        description="The revision that ran, or None for an execution from before revisions.",
+    )
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+    accuracy: float = Field(
+        description="The fraction of its cases that passed.",
+    )
+
+    overall_score: float | None = Field(
+        description="Its overall score in a comparison, or None in a run, which is not scored.",
+    )
+
+
+class ExecutionCandidate(ExecutionCandidateSummary):
+    """One workflow an execution ran, with every case and how it was scored."""
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify what was judged.",
+    )
+
+    run_failures: int = Field(
+        ge=0,
+    )
+
+    judged_semantically: bool = Field(
+        description="Whether any of its cases was judged by the judge rotation.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    tallies: tuple[ComparisonTally, ...] = Field(
+        description="Its pass counts by comparison, for each comparison its cases used.",
+    )
+
+    scorecard: CandidateScorecard | None = Field(
+        description="How a comparison scored it, or None in a run.",
+    )
+
+    cases: tuple[ExecutionCaseResult, ...] = Field(
+        description="Every case, in the order the benchmark holds them.",
+    )
+
+
+class BenchmarkExecutionSummary(ApiModel):
+    """One saved run or comparison of a benchmark, as a list of them shows it (ADR 0130)."""
+
+    execution_id: UUID
+
+    benchmark_id: UUID
+
+    benchmark_revision: int | None = Field(
+        description=(
+            "The benchmark revision it ran, told by its content, or None when no revision "
+            "kept holds that content."
+        ),
+    )
+
+    benchmark_digest: str | None = Field(
+        description="The content digest of the benchmark it ran, or None from before 1.1.",
+    )
+
+    kind: ExecutionKind
+
+    recorded_at: datetime
+
+    sensitivity: Sensitivity = Field(
+        description="The label of the benchmark it ran (ADR 0123).",
+    )
+
+    case_count: int = Field(
+        ge=0,
+    )
+
+    candidates: tuple[ExecutionCandidateSummary, ...] = Field(
+        description="Every workflow it ran, best first in a comparison.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class BenchmarkExecutionDetail(ApiModel):
+    """One saved run or comparison of a benchmark with every workflow and case."""
+
+    execution_id: UUID
+
+    benchmark_id: UUID
+
+    benchmark_revision: int | None
+
+    benchmark_digest: str | None
+
+    kind: ExecutionKind
+
+    recorded_at: datetime
+
+    sensitivity: Sensitivity
+
+    case_count: int = Field(
+        ge=0,
+    )
+
+    scoring_policy: ScoringPolicySummary | None = Field(
+        description="What a comparison scored latency and cost against, or None in a run.",
+    )
+
+    candidates: tuple[ExecutionCandidate, ...] = Field(
+        description="Every workflow it ran, best first in a comparison.",
+    )
+
+    command: str
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 
@@ -1162,6 +1492,53 @@ class InvocationFinished(ApiModel):
     )
 
     status: Literal["succeeded", "failed", "rejected", "incomplete"]
+
+
+class CaseStarted(ApiModel):
+    """One case of a benchmark is about to run as one workflow (ADR 0130)."""
+
+    type: Literal["case_started"] = "case_started"
+
+    case_id: UUID
+
+    workflow_id: UUID
+
+    index: int = Field(
+        ge=1,
+        description="Its place among the workflow's cases, from 1.",
+    )
+
+    total: int = Field(
+        ge=1,
+        description="How many cases the workflow runs.",
+    )
+
+
+class CaseFinished(ApiModel):
+    """One case of a benchmark ran as one workflow, and was judged."""
+
+    type: Literal["case_finished"] = "case_finished"
+
+    case_id: UUID
+
+    workflow_id: UUID
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    passed: bool
+
+    score: float = Field(
+        description="The evaluation's score, from 0 to 1.",
+    )
+
+
+BenchmarkEvent = Annotated[
+    CaseStarted | CaseFinished,
+    Field(discriminator="type"),
+]
+"""One event of a benchmark execution, told apart by its `type`."""
 
 
 RunEvent = Annotated[

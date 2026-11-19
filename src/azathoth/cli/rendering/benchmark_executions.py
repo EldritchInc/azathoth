@@ -1,20 +1,36 @@
-"""Human-readable rendering of saved workflow benchmark executions."""
+"""Human-readable rendering of saved workflow benchmark executions.
+
+Each renderer reads the service API's view of an execution (ADR 0130). A
+saved record is read as the API reads it, so either renders the same.
+"""
 
 from collections.abc import Iterable
 
+from azathoth import api
+from azathoth.api.benchmark_executions import execution_detail, execution_summary
 from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
-from azathoth.sensitivity import effective_sensitivity
-from azathoth.workflows import (
-    WorkflowBenchmarkExecutionCandidate,
-    WorkflowBenchmarkExecutionCase,
-    WorkflowBenchmarkExecutionKind,
-    WorkflowBenchmarkExecutionRecord,
-    WorkflowScorecard,
-)
+from azathoth.workflows import WorkflowBenchmarkExecutionRecord
+
+Execution = api.BenchmarkExecutionDetail | WorkflowBenchmarkExecutionRecord
+"""An execution as the API returns it, or as it was saved."""
+
+ExecutionSummary = api.BenchmarkExecutionSummary | WorkflowBenchmarkExecutionRecord
+"""An execution as a list of them returns it, or as it was saved."""
+
+
+def _detail(
+    execution: Execution,
+) -> api.BenchmarkExecutionDetail:
+    """Return the API's view of an execution."""
+
+    if isinstance(execution, WorkflowBenchmarkExecutionRecord):
+        return execution_detail(execution)
+
+    return execution
 
 
 def render_workflow_benchmark_execution_summaries(
-    executions: Iterable[WorkflowBenchmarkExecutionRecord],
+    executions: Iterable[ExecutionSummary],
 ) -> str:
     """Render one line per saved execution in the order given.
 
@@ -23,11 +39,18 @@ def render_workflow_benchmark_execution_summaries(
     comparison names its winning workflow and the winner's overall score.
     """
 
-    return "\n".join(_render_summary(execution) for execution in executions)
+    return "\n".join(
+        _render_summary(
+            execution_summary(execution)
+            if isinstance(execution, WorkflowBenchmarkExecutionRecord)
+            else execution
+        )
+        for execution in executions
+    )
 
 
 def render_workflow_benchmark_execution(
-    execution: WorkflowBenchmarkExecutionRecord,
+    execution: Execution,
 ) -> str:
     """Render one saved execution with every candidate and every case.
 
@@ -38,18 +61,20 @@ def render_workflow_benchmark_execution(
     its comparison, and the run and evaluation that judged it.
     """
 
+    detail = _detail(execution)
+    ranked = detail.kind == "compare"
     lines = [
-        f"Execution ID: {execution.id}",
-        f"Recorded: {execution.recorded_at.isoformat()}",
-        f"Kind: {execution.kind.value}",
-        f"Benchmark ID: {execution.benchmark_id}",
-        f"Benchmark Digest: {_render_digest(execution.benchmark_digest)}",
-        *render_sensitivity_lines(effective_sensitivity(execution.sensitivity)),
-        f"Candidates: {len(execution.candidates)}",
-        f"Cases: {len(execution.case_ids)}",
+        f"Execution ID: {detail.execution_id}",
+        f"Recorded: {detail.recorded_at.isoformat()}",
+        f"Kind: {detail.kind}",
+        f"Benchmark ID: {detail.benchmark_id}",
+        f"Benchmark Digest: {_render_digest(detail.benchmark_digest)}",
+        *render_sensitivity_lines(detail.sensitivity),
+        f"Candidates: {len(detail.candidates)}",
+        f"Cases: {detail.case_count}",
     ]
 
-    policy = execution.scoring_policy
+    policy = detail.scoring_policy
 
     if policy is not None:
         lines.extend(
@@ -59,44 +84,29 @@ def render_workflow_benchmark_execution(
             )
         )
 
-    winner = execution.winner
+    if ranked:
+        lines.append(f"Winner Workflow ID: {detail.candidates[0].workflow_id}")
 
-    if winner is not None:
-        lines.append(f"Winner Workflow ID: {winner.workflow.id}")
-
-    ranked = execution.kind is WorkflowBenchmarkExecutionKind.COMPARE
-
-    for rank, candidate in enumerate(execution.ranked_candidates, start=1):
+    for rank, candidate in enumerate(detail.candidates, start=1):
         lines.extend(
             (
                 "",
                 f"Rank {rank}" if ranked else "Candidate",
-                f"Candidate ID: {candidate.id}",
-                f"Workflow: {candidate.workflow.name}",
-                f"Workflow ID: {candidate.workflow.id}",
+                f"Candidate ID: {candidate.candidate_id}",
+                f"Workflow: {candidate.workflow_name}",
+                f"Workflow ID: {candidate.workflow_id}",
                 "Workflow Revision: "
                 + (
-                    str(candidate.candidate_signature.workflow_revision)
-                    if candidate.candidate_signature.workflow_revision is not None
+                    str(candidate.workflow_revision)
+                    if candidate.workflow_revision is not None
                     else "unknown"
                 ),
                 "Strategy IDs: "
-                + ", ".join(
-                    str(strategy_id) for strategy_id in candidate.candidate_signature.strategy_ids
-                ),
+                + ", ".join(str(strategy_id) for strategy_id in candidate.strategy_ids),
                 f"Passed: {candidate.cases_passed}/{candidate.cases_run}",
                 f"Accuracy: {candidate.accuracy:.6f}",
                 *render_candidate_evidence(candidate),
-                *(
-                    _render_scorecard(
-                        _scorecard(
-                            execution,
-                            candidate,
-                        )
-                    )
-                    if ranked
-                    else ()
-                ),
+                *(_render_scorecard(_scorecard(detail, candidate)) if ranked else ()),
                 *(_render_case(case) for case in candidate.cases),
             )
         )
@@ -105,7 +115,7 @@ def render_workflow_benchmark_execution(
 
 
 def render_workflow_benchmark_comparison_execution(
-    execution: WorkflowBenchmarkExecutionRecord,
+    execution: Execution,
 ) -> str:
     """Render one recorded benchmark comparison, best candidate first.
 
@@ -119,26 +129,25 @@ def render_workflow_benchmark_comparison_execution(
         ValueError: The execution is not a comparison.
     """
 
-    if execution.kind is not WorkflowBenchmarkExecutionKind.COMPARE:
-        raise ValueError(f"Benchmark execution {execution.id} is not a comparison.")
+    detail = _detail(execution)
+
+    if detail.kind != "compare":
+        raise ValueError(f"Benchmark execution {detail.execution_id} is not a comparison.")
 
     lines = [
-        f"Execution ID: {execution.id}",
-        f"Benchmark ID: {execution.benchmark_id}",
-        *render_sensitivity_lines(effective_sensitivity(execution.sensitivity)),
+        f"Execution ID: {detail.execution_id}",
+        f"Benchmark ID: {detail.benchmark_id}",
+        *render_sensitivity_lines(detail.sensitivity),
     ]
 
-    for rank, candidate in enumerate(execution.ranked_candidates, start=1):
-        scorecard = _scorecard(
-            execution,
-            candidate,
-        )
+    for rank, candidate in enumerate(detail.candidates, start=1):
+        scorecard = _scorecard(detail, candidate)
 
         lines.extend(
             (
                 "",
                 f"Rank {rank}",
-                f"Workflow ID: {candidate.workflow.id}",
+                f"Workflow ID: {candidate.workflow_id}",
                 f"Quality: {scorecard.quality_score:.6f}",
                 f"Reliability: {scorecard.reliability_score:.6f}",
                 f"Latency: {scorecard.latency_score:.6f}",
@@ -157,14 +166,14 @@ def render_workflow_benchmark_comparison_execution(
 
 
 def render_candidate_evidence(
-    candidate: WorkflowBenchmarkExecutionCandidate,
+    candidate: api.ExecutionCandidate,
 ) -> tuple[str, ...]:
     """Render one candidate's pass counts, run failures, and judge totals."""
 
     return (
         *(
-            f"Passed ({tally.comparison.value}): {tally.cases_passed}/{tally.cases_run}"
-            for tally in candidate.comparison_tallies
+            f"Passed ({tally.comparison}): {tally.cases_passed}/{tally.cases_run}"
+            for tally in candidate.tallies
         ),
         f"Run failures: {candidate.run_failures}",
         *(
@@ -179,33 +188,34 @@ def render_candidate_evidence(
 
 
 def _render_summary(
-    execution: WorkflowBenchmarkExecutionRecord,
+    execution: api.BenchmarkExecutionSummary,
 ) -> str:
     """Render one saved execution summary line."""
 
     count = len(execution.candidates)
 
     prefix = (
-        f"{execution.id}  {execution.recorded_at.isoformat()}  {execution.kind.value}  "
+        f"{execution.execution_id}  {execution.recorded_at.isoformat()}  {execution.kind}  "
         f"{count} {'candidate' if count == 1 else 'candidates'}  "
-        f"{len(execution.case_ids)} cases"
+        f"{execution.case_count} cases"
     )
 
-    winner = execution.winner
+    best = execution.candidates[0]
 
-    if winner is None:
-        (candidate,) = execution.candidates
+    if execution.kind != "compare":
+        return f"{prefix}  workflow {best.workflow_id}  accuracy {best.accuracy:.6f}"
 
-        return f"{prefix}  workflow {candidate.workflow.id}  accuracy {candidate.accuracy:.6f}"
+    if best.overall_score is None:
+        raise ValueError(
+            f"Benchmark execution {execution.execution_id} candidate {best.candidate_id} "
+            "has no scorecard."
+        )
 
-    return (
-        f"{prefix}  winner {winner.workflow.id}  "
-        f"overall {_scorecard(execution, winner).overall_score:.6f}"
-    )
+    return f"{prefix}  winner {best.workflow_id}  overall {best.overall_score:.6f}"
 
 
 def _render_scorecard(
-    scorecard: WorkflowScorecard,
+    scorecard: api.CandidateScorecard,
 ) -> tuple[str, ...]:
     """Render one candidate's scorecard dimensions and rationale."""
 
@@ -225,22 +235,22 @@ def _render_scorecard(
 
 
 def _render_case(
-    case: WorkflowBenchmarkExecutionCase,
+    case: api.ExecutionCaseResult,
 ) -> str:
     """Render one case outcome with the evidence that judged it."""
 
     outcome = "passed" if case.passed else "failed"
 
     return (
-        f"Case {case.case_id}: {outcome}  {case.comparison.value}  "
+        f"Case {case.case_id}: {outcome}  {case.comparison}  "
         f"run {case.run_id}  evaluation {case.evaluation_id}"
     )
 
 
 def _scorecard(
-    execution: WorkflowBenchmarkExecutionRecord,
-    candidate: WorkflowBenchmarkExecutionCandidate,
-) -> WorkflowScorecard:
+    execution: api.BenchmarkExecutionDetail,
+    candidate: api.ExecutionCandidate,
+) -> api.CandidateScorecard:
     """Return a compared candidate's scorecard.
 
     Raises:
@@ -249,7 +259,8 @@ def _scorecard(
 
     if candidate.scorecard is None:
         raise ValueError(
-            f"Benchmark execution {execution.id} candidate {candidate.id} has no scorecard."
+            f"Benchmark execution {execution.execution_id} candidate {candidate.candidate_id} "
+            "has no scorecard."
         )
 
     return candidate.scorecard

@@ -1,6 +1,7 @@
 """Execution, scoring, comparison, and ranking for workflow benchmarks."""
 
 from collections.abc import Callable, Mapping
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -386,6 +387,28 @@ class WorkflowBenchmarkRanking(BaseModel):
         return self.entries[0]
 
 
+class BenchmarkCaseObserver(Protocol):
+    """What is told as each case of a benchmark starts and finishes (ADR 0130).
+
+    Either may raise to stop the benchmark before its next case, so a caller
+    can cancel between cases; what a case already kept stays kept.
+    """
+
+    def case_started(
+        self,
+        case: BenchmarkCase,
+        candidate: WorkflowCandidate,
+    ) -> None:
+        """Hear that one case is about to run as one candidate."""
+
+    def case_finished(
+        self,
+        result: "WorkflowBenchmarkCaseResult",
+        candidate: WorkflowCandidate,
+    ) -> None:
+        """Hear how one case went for one candidate."""
+
+
 class WorkflowBenchmarkRunner:
     """Execute workflow candidates across durable benchmark datasets."""
 
@@ -404,8 +427,13 @@ class WorkflowBenchmarkRunner:
             [BenchmarkCase],
             WorkflowCandidate,
         ],
+        *,
+        observer: BenchmarkCaseObserver | None = None,
     ) -> WorkflowBenchmarkResult:
         """Execute and evaluate every case in a benchmark dataset.
+
+        An observer hears each case start and finish, and may stop the
+        benchmark between cases by raising.
 
         Every case judges the candidate's declared result with the evaluator
         for the case's own comparison. All comparisons are checked before any
@@ -444,6 +472,9 @@ class WorkflowBenchmarkRunner:
                     f"Workflow {candidate.metadata.id} does not declare a result."
                 )
 
+            if observer is not None:
+                observer.case_started(case, candidate)
+
             context = benchmark_case_context(case)
 
             run = await self._runner.run_recording_failures(
@@ -458,14 +489,17 @@ class WorkflowBenchmarkRunner:
                 steps=candidate.steps,
             )
 
-            results.append(
-                WorkflowBenchmarkCaseResult(
-                    case_id=case.id,
-                    comparison=case.expected.comparison,
-                    run=run,
-                    evaluation=evaluation,
-                )
+            case_result = WorkflowBenchmarkCaseResult(
+                case_id=case.id,
+                comparison=case.expected.comparison,
+                run=run,
+                evaluation=evaluation,
             )
+
+            results.append(case_result)
+
+            if observer is not None:
+                observer.case_finished(case_result, candidate)
 
         return WorkflowBenchmarkResult(
             dataset_id=dataset.id,
@@ -555,8 +589,10 @@ class WorkflowBenchmarkComparator:
             str,
             Callable[[BenchmarkCase], WorkflowCandidate],
         ],
+        *,
+        observer: BenchmarkCaseObserver | None = None,
     ) -> WorkflowBenchmarkComparison:
-        """Execute every named candidate factory against one dataset."""
+        """Execute every named candidate factory against one dataset, told to `observer`."""
 
         candidates: list[WorkflowBenchmarkComparisonEntry] = []
 
@@ -564,6 +600,7 @@ class WorkflowBenchmarkComparator:
             result = await self._runner.run(
                 dataset,
                 candidate_factory,
+                observer=observer,
             )
 
             candidates.append(

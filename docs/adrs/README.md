@@ -152,3 +152,4 @@ requests that made it:
 - [ADR 0127: The Remote Serves the Service API](0127-the-remote-serves-the-service-api.md)
 - [ADR 0128: Production Through the Service API](0128-production-through-the-service-api.md)
 - [ADR 0129: Judges and a Run's Evidence Through the Service API](0129-judges-and-a-runs-evidence-through-the-service-api.md)
+- [ADR 0130: Benchmarks Through the Service API](0130-benchmarks-through-the-service-api.md)

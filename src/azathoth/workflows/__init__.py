@@ -4,6 +4,7 @@ from azathoth.workflows.attempt import (
 )
 from azathoth.workflows.benchmark import (
     BENCHMARK_INPUT_PRODUCER,
+    BenchmarkCaseObserver,
     WorkflowBenchmarkCandidateScorecard,
     WorkflowBenchmarkCaseResult,
     WorkflowBenchmarkComparator,
@@ -607,6 +608,7 @@ __all__ = [
     "WorkflowBenchmarkRanker",
     "WorkflowBenchmarkRanking",
     "WorkflowBenchmarkResult",
+    "BenchmarkCaseObserver",
     "WorkflowBenchmarkRunner",
     "WorkflowBenchmarkScorer",
     "WorkflowCandidate",
