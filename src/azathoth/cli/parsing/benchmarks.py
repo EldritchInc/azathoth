@@ -31,6 +31,9 @@ BENCHMARK_ADD_CASE_ACTION = "add-case"
 BENCHMARK_CASES_ACTION = "cases"
 BENCHMARK_CASE_SHOW_ACTION = "case-show"
 BENCHMARK_COMPARE_ACTION = "compare"
+BENCHMARK_CREATE_ACTION = "create"
+BENCHMARK_EDIT_CASE_ACTION = "edit-case"
+BENCHMARK_REMOVE_CASE_ACTION = "remove-case"
 BENCHMARK_EXECUTION_SHOW_ACTION = "execution-show"
 BENCHMARK_EXECUTIONS_ACTION = "executions"
 BENCHMARK_EXPORT_ACTION = "export"
@@ -54,6 +57,10 @@ BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE = "benchmark_execution_limit"
 BENCHMARK_HISTORY_LIMIT_ATTRIBUTE = "benchmark_history_limit"
 BENCHMARK_REVISION_ATTRIBUTE = "benchmark_revision"
 BENCHMARK_WORKFLOW_IDS_ATTRIBUTE = "workflow_ids"
+BENCHMARK_NAME_ATTRIBUTE = "benchmark_name"
+BENCHMARK_DESCRIPTION_ATTRIBUTE = "benchmark_description"
+BENCHMARK_VERSION_ATTRIBUTE = "benchmark_version"
+BENCHMARK_CASE_NO_CITATIONS_ATTRIBUTE = "benchmark_case_no_citations"
 
 
 def add_benchmark_parser(
@@ -390,4 +397,145 @@ def add_benchmark_parser(
         type=UUID,
         metavar="EXECUTION_ID",
         help="Benchmark execution UUID to inspect.",
+    )
+
+    _add_authoring_parsers(benchmark_actions)
+
+
+def _add_authoring_parsers(
+    benchmark_actions: _SubParsersAction[ArgumentParser],
+) -> None:
+    """Add the commands that create a benchmark and edit its cases (ADR 0130)."""
+
+    create_parser = benchmark_actions.add_parser(
+        BENCHMARK_CREATE_ACTION,
+        help="Create a benchmark dataset with no cases, as its first revision.",
+    )
+
+    create_parser.add_argument(
+        "--name",
+        dest=BENCHMARK_NAME_ATTRIBUTE,
+        required=True,
+        metavar="NAME",
+        help="The benchmark's name.",
+    )
+
+    create_parser.add_argument(
+        "--description",
+        dest=BENCHMARK_DESCRIPTION_ATTRIBUTE,
+        required=True,
+        metavar="TEXT",
+        help="What the benchmark measures.",
+    )
+
+    create_parser.add_argument(
+        "--version",
+        dest=BENCHMARK_VERSION_ATTRIBUTE,
+        default="1.0.0",
+        metavar="VERSION",
+        help="The benchmark's declared version. Defaults to 1.0.0.",
+    )
+
+    edit_parser = benchmark_actions.add_parser(
+        BENCHMARK_EDIT_CASE_ACTION,
+        help=(
+            "Change what one case expects and how it is judged, as a new benchmark revision. "
+            "Its input, and where it came from, stay."
+        ),
+    )
+
+    _add_case_identity(edit_parser)
+
+    edit_parser.add_argument(
+        "--comparison",
+        dest=BENCHMARK_CASE_COMPARISON_ATTRIBUTE,
+        choices=tuple(comparison.value for comparison in OutcomeComparison),
+        default=None,
+        help="Comparison that judges the case's expected value.",
+    )
+
+    edit_parser.add_argument(
+        "--expected",
+        dest=BENCHMARK_CASE_EXPECTED_ATTRIBUTE,
+        default=SUPPRESS,
+        type=json_value,
+        metavar="JSON",
+        help="Expected value as JSON; null expects null.",
+    )
+
+    edit_parser.add_argument(
+        "--description",
+        dest=BENCHMARK_CASE_DESCRIPTION_ATTRIBUTE,
+        default=None,
+        metavar="TEXT",
+        help="Description of the expected outcome.",
+    )
+
+    edit_parser.add_argument(
+        "--sensitivity",
+        dest=WORKFLOW_INPUT_SENSITIVITY_ATTRIBUTE,
+        type=sensitivity,
+        default=None,
+        metavar="LABEL",
+        help="A higher label for the case's input: internal or restricted. It is never lowered.",
+    )
+
+    citations = edit_parser.add_mutually_exclusive_group()
+
+    citations.add_argument(
+        "--require-citation",
+        dest=BENCHMARK_CASE_REQUIRED_CITATIONS_ATTRIBUTE,
+        action="append",
+        type=cited_segment,
+        default=None,
+        metavar="SOURCE:SEGMENT",
+        help=(
+            "Segment the case's run must cite and verify, replacing those it names. Repeat for "
+            "each segment."
+        ),
+    )
+
+    citations.add_argument(
+        "--no-citations",
+        dest=BENCHMARK_CASE_NO_CITATIONS_ATTRIBUTE,
+        action="store_true",
+        help="Stop requiring the case's run to cite anything.",
+    )
+
+    edit_parser.add_argument(
+        "--on-unverified",
+        dest=BENCHMARK_CASE_ON_UNVERIFIED_ATTRIBUTE,
+        choices=("fail", "ignore"),
+        default=None,
+        help=(
+            "Whether a citation the case's run kept that did not verify fails the case, with "
+            "the segments it names. Defaults to fail."
+        ),
+    )
+
+    remove_parser = benchmark_actions.add_parser(
+        BENCHMARK_REMOVE_CASE_ACTION,
+        help="Remove one case, as a new benchmark revision. Earlier revisions keep it.",
+    )
+
+    _add_case_identity(remove_parser)
+
+
+def _add_case_identity(
+    parser: ArgumentParser,
+) -> None:
+    """Add the benchmark and the case a command acts on."""
+
+    parser.add_argument(
+        BENCHMARK_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="BENCHMARK_ID",
+        help="Benchmark dataset UUID holding the case.",
+    )
+
+    parser.add_argument(
+        BENCHMARK_CASE_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="CASE_ID",
+        help="Benchmark case UUID.",
     )

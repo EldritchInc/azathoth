@@ -1,5 +1,6 @@
 """Command dispatch for the Azathoth CLI."""
 
+from azathoth.cli.dispatching.benchmark_authoring import dispatch_benchmark_authoring_command
 from azathoth.cli.dispatching.benchmarks import (
     dispatch_benchmark_command,
 )
@@ -16,6 +17,7 @@ from azathoth.cli.dispatching.worker import dispatch_worker_command
 from azathoth.cli.dispatching.workflows import dispatch_workflow_command
 
 __all__ = [
+    "dispatch_benchmark_authoring_command",
     "dispatch_benchmark_command",
     "dispatch_experiment_command",
     "dispatch_goal_command",

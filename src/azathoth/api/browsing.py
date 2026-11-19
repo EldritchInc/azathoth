@@ -17,7 +17,16 @@ from pydantic import JsonValue, ValidationError
 from pydantic_core import ErrorDetails
 
 from azathoth.api.authorship import AuthorAccess, author_view
-from azathoth.api.benchmark_cases import case_detail, case_not_found_message, case_summary
+from azathoth.api.benchmark_cases import (
+    KEEP,
+    Keep,
+    case_detail,
+    case_not_found_message,
+    case_summary,
+    check_not_duplicated,
+    edited_case,
+    required_text,
+)
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -25,11 +34,14 @@ from azathoth.api.errors import (
     RevisionNotFoundError,
 )
 from azathoth.api.models import (
+    BenchmarkCaseChange,
     BenchmarkCaseDetail,
     BenchmarkCaseSummary,
     BenchmarkDetail,
     BenchmarkImport,
     BenchmarkSummary,
+    CaseCitations,
+    CaseComparison,
     DocumentProblem,
     Revision,
     ToolDetail,
@@ -41,6 +53,8 @@ from azathoth.api.models import (
     WorkflowSummary,
 )
 from azathoth.evaluation import (
+    BenchmarkCase,
+    BenchmarkDataset,
     BenchmarkDatasetRevision,
     BenchmarkDocumentError,
     decode_benchmark_document,
@@ -49,6 +63,7 @@ from azathoth.evaluation import (
 )
 from azathoth.persistence.repositories import Repositories
 from azathoth.revisions import BaseRevisionError, LineageRecord
+from azathoth.sensitivity import Sensitivity
 from azathoth.tools import (
     ToolDocumentError,
     ToolDocumentRevision,
@@ -949,12 +964,179 @@ class Benchmarks:
         """
 
         selected = self._selected(benchmark_id, self._history(benchmark_id), revision)
+
+        return case_detail(selected, self._held(selected, case_id))
+
+    def create(
+        self,
+        name: str,
+        description: str,
+        *,
+        version: str = "1.0.0",
+    ) -> BenchmarkImport:
+        """Create a benchmark with a new ID and no cases, as its revision 1.
+
+        It is the `edit_benchmark` action (ADR 0130). A benchmark with no
+        cases cannot be run until one is added.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The name, the description or the version is blank.
+            InvalidAuthorError: Who is creating it could not be told.
+        """
+
+        dataset = BenchmarkDataset(
+            name=required_text(name, "A benchmark's name"),
+            description=required_text(description, "A benchmark's description"),
+            version=required_text(version, "A benchmark's version"),
+        )
+        saved = self._repositories().benchmarks.save_revision(dataset, author=self._author())
+
+        return BenchmarkImport(
+            created=saved.created,
+            benchmark=self.get(dataset.id, revision=saved.revision.number),
+        )
+
+    def update_case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+        *,
+        comparison: CaseComparison | None = None,
+        expected: JsonValue | Keep = KEEP,
+        description: str | None = None,
+        citations: CaseCitations | None | Keep = KEEP,
+        sensitivity: Sensitivity | None = None,
+    ) -> BenchmarkCaseChange:
+        """Change what one case of a benchmark's latest revision expects, as its next revision.
+
+        Only what is given changes: its comparison, its expected value (JSON
+        null too, so `KEEP` leaves it), its description, what its run must
+        cite (`None` clears it, `KEEP` leaves it) and its label, which may
+        rise but never fall. Its ID, its input and where it came from stay.
+        An edit that leaves the case as it was saves nothing. It is the
+        `edit_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or its latest revision
+                holds no case with this ID.
+            InvalidArgumentError: The edit changes nothing, or would make a
+                case Azathoth refuses, or a lower label than the case's.
+            ConflictError: Another case would then be the same case.
+            InvalidAuthorError: Who is editing it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+        edited = edited_case(
+            self._held(latest, case_id),
+            comparison=comparison,
+            expected=expected,
+            description=description,
+            citations=citations,
+            sensitivity=sensitivity,
+        )
+        cases = tuple(edited if case.id == case_id else case for case in latest.dataset.cases)
+
+        check_not_duplicated(benchmark_id, cases, edited)
+
+        saved = self._save_cases(latest, cases)
+
+        return BenchmarkCaseChange(
+            case=case_detail(saved, edited),
+            benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def remove_case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+    ) -> BenchmarkCaseChange:
+        """Save a benchmark's next revision without one case of its latest.
+
+        Every earlier revision still holds the case, so every execution that
+        ran it can still be read. It is the `edit_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or its latest revision
+                holds no case with this ID.
+            InvalidAuthorError: Who is removing it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+        removed = self._held(latest, case_id)
+        saved = self._save_cases(
+            latest,
+            tuple(case for case in latest.dataset.cases if case.id != case_id),
+        )
+
+        return BenchmarkCaseChange(
+            case=case_detail(latest, removed),
+            benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def _save_cases(
+        self,
+        latest: BenchmarkDatasetRevision,
+        cases: tuple[BenchmarkCase, ...],
+    ) -> BenchmarkDatasetRevision:
+        """Save the latest revision's dataset with `cases` as the benchmark's next revision.
+
+        A dataset identical to the latest saves nothing, and the latest is returned.
+
+        Raises:
+            InvalidAuthorError: Who is saving it could not be told.
+        """
+
+        dataset = latest.dataset
+
+        return (
+            self._repositories()
+            .benchmarks.save_revision(
+                BenchmarkDataset(
+                    id=dataset.id,
+                    name=dataset.name,
+                    description=dataset.description,
+                    version=dataset.version,
+                    cases=cases,
+                ),
+                author=self._author(),
+            )
+            .revision
+        )
+
+    def _revision_summary(
+        self,
+        benchmark_id: UUID,
+        selected: BenchmarkDatasetRevision,
+    ) -> BenchmarkSummary:
+        """Return the API's view of one revision of a benchmark, with its history and lineage."""
+
+        return self._summary(
+            selected,
+            self._history(benchmark_id),
+            _by_number(self._repositories().benchmarks.lineage(benchmark_id)),
+            command=_benchmark_command(selected),
+        )
+
+    @staticmethod
+    def _held(
+        selected: BenchmarkDatasetRevision,
+        case_id: UUID,
+    ) -> BenchmarkCase:
+        """Return the case of a revision with this ID.
+
+        Raises:
+            NotFoundError: The revision holds no case with this ID.
+        """
+
         found = next((case for case in selected.dataset.cases if case.id == case_id), None)
 
         if found is None:
-            raise NotFoundError(case_not_found_message(benchmark_id, case_id))
+            raise NotFoundError(case_not_found_message(selected.dataset_id, case_id))
 
-        return case_detail(selected, found)
+        return found
 
     def history(
         self,

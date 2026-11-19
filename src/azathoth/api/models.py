@@ -350,6 +350,23 @@ class BenchmarkCaseDetail(BenchmarkCaseSummary):
     )
 
 
+class BenchmarkCaseChange(ApiModel):
+    """What adding, editing or removing one case did: the case, and the revision it saved."""
+
+    case: BenchmarkCaseDetail = Field(
+        description=(
+            "The case as the saved revision holds it, or, once removed, as the revision before "
+            "held it."
+        ),
+    )
+
+    benchmark: BenchmarkSummary = Field(
+        description=(
+            "The revision the change saved, or the latest when it saved none, being identical."
+        ),
+    )
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 

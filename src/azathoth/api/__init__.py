@@ -5,6 +5,7 @@ this one in-process, synchronous layer. Open an instance with `open`, and
 read what it returns as the API's own frozen models.
 """
 
+from azathoth.api.benchmark_cases import KEEP, Keep
 from azathoth.api.browsing import (
     LIMIT_MESSAGE,
     RESULT_REQUIRED_MESSAGE,
@@ -64,6 +65,7 @@ from azathoth.api.models import (
     ApiStability,
     Author,
     Backend,
+    BenchmarkCaseChange,
     BenchmarkCaseDetail,
     BenchmarkCaseSummary,
     BenchmarkDetail,
@@ -174,6 +176,7 @@ __all__ = [
     "Author",
     "Azathoth",
     "Backend",
+    "BenchmarkCaseChange",
     "BenchmarkCaseDetail",
     "BenchmarkCaseSummary",
     "BenchmarkDetail",
@@ -184,6 +187,8 @@ __all__ = [
     "CaseCitations",
     "CaseComparison",
     "CaseSource",
+    "KEEP",
+    "Keep",
     "Capabilities",
     "ChildStatus",
     "CitedSegmentSummary",

@@ -9,6 +9,11 @@ from azathoth.cli.annotations import (
     export_invocation_annotations,
     export_run_annotations,
 )
+from azathoth.cli.benchmark_authoring import (
+    create_benchmark,
+    edit_benchmark_case,
+    remove_benchmark_case,
+)
 from azathoth.cli.benchmark_cases import add_benchmark_case
 from azathoth.cli.benchmarks import (
     compare_benchmarks,
@@ -24,6 +29,7 @@ from azathoth.cli.benchmarks import (
     show_benchmark_execution,
 )
 from azathoth.cli.dispatching import (
+    dispatch_benchmark_authoring_command,
     dispatch_benchmark_command,
     dispatch_experiment_command,
     dispatch_goal_command,
@@ -269,6 +275,16 @@ def _dispatch(
         return initialize_database()
 
     if command == BENCHMARK_COMMAND:
+        authored = dispatch_benchmark_authoring_command(
+            arguments,
+            create_benchmark=create_benchmark,
+            edit_benchmark_case=edit_benchmark_case,
+            remove_benchmark_case=remove_benchmark_case,
+        )
+
+        if authored is not None:
+            return authored
+
         return dispatch_benchmark_command(
             arguments,
             add_benchmark_case=add_benchmark_case,
