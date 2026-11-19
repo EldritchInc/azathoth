@@ -191,6 +191,16 @@ class RunCancelledError(ApiError):
         super().__init__(CANCELLED_MESSAGE)
 
 
+class JudgeUnavailableError(ConflictError):
+    """A benchmark's semantic cases need a judge the rotation cannot give (ADRs 0074 and 0130).
+
+    No judge is configured, or none may judge the cases now, being no longer
+    authorized or served, or not allowed their label; or a judge failed.
+    """
+
+    code: ClassVar[str] = "judge_unavailable"
+
+
 class RemoteUnreachableError(ApiError):
     """A remote could not be reached, or answered as no Azathoth remote does (ADR 0124)."""
 
@@ -241,6 +251,7 @@ __all__ = [
     "InvalidArgumentError",
     "InvalidAuthorError",
     "InvalidDocumentError",
+    "JudgeUnavailableError",
     "ModelInUseError",
     "ModelNotAuthorizedError",
     "NotFoundError",

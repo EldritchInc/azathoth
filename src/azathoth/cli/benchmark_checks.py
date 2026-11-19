@@ -2,20 +2,37 @@
 
 Each check reports its failure on standard error and returns a falsy result,
 so commands can reject a benchmark before runtime bootstrap, without provider
-credentials and without executing any case.
+credentials and without executing any case. Why each refuses is the service
+API's (ADR 0130), so both refuse a benchmark alike.
 """
 
 import sys
 from uuid import UUID
 
+from azathoth.api.benchmark_execution import (
+    missing_cases,
+    undeclared_result,
+    unsupported_comparison,
+)
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
-from azathoth.evaluation import (
-    BenchmarkDataset,
-    OutcomeComparison,
-    OutcomeEvaluator,
-    UnsupportedComparisonError,
-)
+from azathoth.evaluation import BenchmarkDataset
+
+
+def _reported(
+    problem: str | None,
+) -> bool:
+    """Report a problem on standard error, and return whether there was none."""
+
+    if problem is None:
+        return True
+
+    print(
+        problem,
+        file=sys.stderr,
+    )
+
+    return False
 
 
 def configured_benchmark(
@@ -42,15 +59,7 @@ def benchmark_has_cases(
 ) -> bool:
     """Report a benchmark that contains no cases."""
 
-    if dataset.cases:
-        return True
-
-    print(
-        f"Benchmark {dataset.id} has no cases.",
-        file=sys.stderr,
-    )
-
-    return False
+    return _reported(missing_cases(dataset))
 
 
 def comparisons_supported(
@@ -64,37 +73,9 @@ def comparisons_supported(
     checked once the runtime is loaded.
     """
 
-    evaluator = OutcomeEvaluator()
+    problem = unsupported_comparison(repositories(configuration), dataset)
 
-    judges_configured = bool(repositories(configuration).judges.rotation().entries)
-
-    for case in dataset.cases:
-        if case.expected.comparison is OutcomeComparison.SEMANTIC:
-            if not judges_configured:
-                print(
-                    f"Benchmark case {case.id} uses comparison 'semantic', "
-                    "but no judges are configured.",
-                    file=sys.stderr,
-                )
-
-                return False
-
-            continue
-
-        try:
-            evaluator.require_supported(
-                case.expected.comparison,
-                subject=f"Benchmark case {case.id}",
-            )
-        except UnsupportedComparisonError as exc:
-            print(
-                str(exc),
-                file=sys.stderr,
-            )
-
-            return False
-
-    return True
+    return _reported(None if problem is None else problem.message)
 
 
 def results_declared(
@@ -106,17 +87,4 @@ def results_declared(
     Unconfigured identifiers are left for runtime bootstrap to report.
     """
 
-    repository = repositories(configuration).workflows
-
-    for workflow_id in workflow_ids:
-        specification = repository.get(workflow_id)
-
-        if specification is not None and specification.result is None:
-            print(
-                f"Workflow {workflow_id} does not declare a result.",
-                file=sys.stderr,
-            )
-
-            return False
-
-    return True
+    return _reported(undeclared_result(repositories(configuration), workflow_ids))

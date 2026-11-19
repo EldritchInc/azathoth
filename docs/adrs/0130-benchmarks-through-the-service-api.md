@@ -35,6 +35,12 @@ unchanged. Three new commands give the new calls their command line:
 call is one of the 0127 catalog's named actions, for a remote's policy in
 1.6.
 
+`benchmark run` and `benchmark compare` are the exception, as `run resume`
+is (ADR 0129): they load the runtime from the command line's own provider
+discovery and render what they saved as they always have, so they keep
+their own reporting, and execute through the same calls `benchmarks.run`
+and `benchmarks.compare` make, with the same checks before any case runs.
+
 Every change saves the benchmark's next revision, as importing does (ADR
 0076); nothing is changed in place, so every execution still names the
 revision it ran, and every earlier revision can still be read.

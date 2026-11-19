@@ -35,6 +35,7 @@ from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidAuthorError,
     InvalidDocumentError,
+    JudgeUnavailableError,
     ModelInUseError,
     ModelNotAuthorizedError,
     NotFoundError,
@@ -69,6 +70,7 @@ from azathoth.api.models import (
     BenchmarkCaseDetail,
     BenchmarkCaseSummary,
     BenchmarkDetail,
+    BenchmarkEvent,
     BenchmarkExecutionDetail,
     BenchmarkExecutionSummary,
     BenchmarkImport,
@@ -76,7 +78,9 @@ from azathoth.api.models import (
     CandidateScorecard,
     CaseCitations,
     CaseComparison,
+    CaseFinished,
     CaseSource,
+    CaseStarted,
     ChildStatus,
     CitedSegmentSummary,
     ComparisonTally,
@@ -166,6 +170,9 @@ from azathoth.remote import (
 from azathoth.sensitivity import DataPolicy, PolicyAnswer, Sensitivity
 
 __all__ = [
+    "BenchmarkEvent",
+    "CaseFinished",
+    "CaseStarted",
     "BenchmarkExecutionDetail",
     "BenchmarkExecutionSummary",
     "CandidateScorecard",
@@ -230,6 +237,7 @@ __all__ = [
     "InvalidArgumentError",
     "InvalidAuthorError",
     "InvalidDocumentError",
+    "JudgeUnavailableError",
     "InvocationDetail",
     "InvocationError",
     "InvocationFinished",

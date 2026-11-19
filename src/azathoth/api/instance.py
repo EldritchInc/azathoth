@@ -88,7 +88,11 @@ class Azathoth:
         self._closed = False
         self._workflows = Workflows(self._open_repositories, self._author)
         self._tools = Tools(self._open_repositories, self._author)
-        self._benchmarks = Benchmarks(self._open_repositories, self._author)
+        self._benchmarks = Benchmarks(
+            self._open_repositories,
+            self._author,
+            self._configured_runtime,
+        )
         self._models = Models(self._open_repositories, self._model_directories)
         self._portfolio = Portfolio(
             self._open_repositories,

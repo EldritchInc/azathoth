@@ -31,6 +31,13 @@ from azathoth.api.benchmark_cases import (
     edited_case,
     required_text,
 )
+from azathoth.api.benchmark_execution import (
+    BenchmarkEventCallback,
+    BenchmarkRuntimeAccess,
+    Cancellable,
+    compare_benchmark,
+    run_benchmark,
+)
 from azathoth.api.benchmark_executions import (
     benchmark_revision,
     execution_detail,
@@ -874,14 +881,17 @@ class Benchmarks:
         self,
         repositories: RepositoriesAccess,
         author: AuthorAccess,
+        runtime: BenchmarkRuntimeAccess,
     ) -> None:
         """Browse the benchmarks of the repositories `repositories` returns.
 
-        Imports are recorded as the author `author` returns (ADR 0122).
+        Imports are recorded as the author `author` returns (ADR 0122), and
+        benchmarks run in the runtime `runtime` composes, as runs do.
         """
 
         self._repositories = repositories
         self._author = author
+        self._runtime = runtime
 
     def list(
         self,
@@ -1255,6 +1265,90 @@ class Benchmarks:
                 repositories.benchmarks.revisions(saved.benchmark_id), saved
             ),
             evaluations=evaluations,
+        )
+
+    def run(
+        self,
+        benchmark_id: UUID,
+        workflow_id: UUID,
+        *,
+        on_event: BenchmarkEventCallback | None = None,
+        cancel: Cancellable | None = None,
+    ) -> BenchmarkExecutionDetail:
+        """Run one configured workflow against a benchmark's latest revision, as `benchmark run`.
+
+        Everything is checked before any case runs. `on_event` hears each
+        case start and finish, on the caller's thread, and `cancel` is
+        checked between cases: a cancelled benchmark keeps the case runs it
+        finished and records no execution. It is the `run_benchmark` action
+        (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark or workflow has the ID.
+            InvalidArgumentError: The benchmark has no cases, a comparison
+                cannot be evaluated, or the workflow declares no result.
+            JudgeUnavailableError: A semantic case has no usable judge, or a
+                judge failed.
+            RunNotStartedError: The workflow cannot be generated.
+            WorkflowResultMissingError: A run did not produce its declared result.
+            RunCancelledError: `cancel` asked it to stop.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        return self.execution(
+            run_benchmark(
+                self._repositories(),
+                self._runtime,
+                benchmark_id,
+                workflow_id,
+                on_event=on_event,
+                cancel=cancel,
+            )
+        )
+
+    def compare(
+        self,
+        benchmark_id: UUID,
+        workflow_ids: Sequence[UUID],
+        *,
+        target_latency_seconds: float,
+        target_cost_usd: float,
+        on_event: BenchmarkEventCallback | None = None,
+        cancel: Cancellable | None = None,
+    ) -> BenchmarkExecutionDetail:
+        """Compare configured workflows against a benchmark, ranked, as `benchmark compare`.
+
+        It needs two distinct workflows or more, each scored against the
+        latency and cost targets given, and is told and cancelled as `run`
+        is. It is the `run_benchmark` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark or workflow has the ID.
+            InvalidArgumentError: Fewer than two distinct workflows, a target
+                that is not positive, or a benchmark that cannot run.
+            JudgeUnavailableError: A semantic case has no usable judge, or a
+                judge failed.
+            RunNotStartedError: A workflow cannot be generated.
+            WorkflowResultMissingError: A run did not produce its declared result.
+            RunCancelledError: `cancel` asked it to stop.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+        """
+
+        return self.execution(
+            compare_benchmark(
+                self._repositories(),
+                self._runtime,
+                benchmark_id,
+                tuple(workflow_ids),
+                target_latency_seconds=target_latency_seconds,
+                target_cost_usd=target_cost_usd,
+                on_event=on_event,
+                cancel=cancel,
+            )
         )
 
     def _save_cases(

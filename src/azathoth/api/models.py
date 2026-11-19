@@ -1494,6 +1494,53 @@ class InvocationFinished(ApiModel):
     status: Literal["succeeded", "failed", "rejected", "incomplete"]
 
 
+class CaseStarted(ApiModel):
+    """One case of a benchmark is about to run as one workflow (ADR 0130)."""
+
+    type: Literal["case_started"] = "case_started"
+
+    case_id: UUID
+
+    workflow_id: UUID
+
+    index: int = Field(
+        ge=1,
+        description="Its place among the workflow's cases, from 1.",
+    )
+
+    total: int = Field(
+        ge=1,
+        description="How many cases the workflow runs.",
+    )
+
+
+class CaseFinished(ApiModel):
+    """One case of a benchmark ran as one workflow, and was judged."""
+
+    type: Literal["case_finished"] = "case_finished"
+
+    case_id: UUID
+
+    workflow_id: UUID
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    passed: bool
+
+    score: float = Field(
+        description="The evaluation's score, from 0 to 1.",
+    )
+
+
+BenchmarkEvent = Annotated[
+    CaseStarted | CaseFinished,
+    Field(discriminator="type"),
+]
+"""One event of a benchmark execution, told apart by its `type`."""
+
+
 RunEvent = Annotated[
     RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished | InvocationFinished,
     Field(discriminator="type"),
