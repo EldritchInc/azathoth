@@ -10,7 +10,7 @@ callers.
 import json
 import shlex
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import Final, TypeVar
+from typing import Final, TypeVar, cast
 from uuid import UUID
 
 from pydantic import JsonValue, ValidationError
@@ -21,9 +21,13 @@ from azathoth.api.benchmark_cases import (
     KEEP,
     Keep,
     case_detail,
+    case_from_input,
+    case_from_run,
     case_not_found_message,
     case_summary,
     check_not_duplicated,
+    citation_expectation,
+    comparison_of,
     edited_case,
     required_text,
 )
@@ -33,6 +37,7 @@ from azathoth.api.errors import (
     NotFoundError,
     RevisionNotFoundError,
 )
+from azathoth.api.files import resolved_file
 from azathoth.api.models import (
     BenchmarkCaseChange,
     BenchmarkCaseDetail,
@@ -44,6 +49,8 @@ from azathoth.api.models import (
     CaseComparison,
     DocumentProblem,
     Revision,
+    RunFile,
+    RunInput,
     ToolDetail,
     ToolImport,
     ToolSummary,
@@ -61,6 +68,7 @@ from azathoth.evaluation import (
     earliest_identical_benchmark_revision,
     encode_benchmark_document,
 )
+from azathoth.inputs import JSON_MEDIA_TYPE, ResolvedInput
 from azathoth.persistence.repositories import Repositories
 from azathoth.revisions import BaseRevisionError, LineageRecord
 from azathoth.sensitivity import Sensitivity
@@ -995,6 +1003,98 @@ class Benchmarks:
         return BenchmarkImport(
             created=saved.created,
             benchmark=self.get(dataset.id, revision=saved.revision.number),
+        )
+
+    def add_case(
+        self,
+        benchmark_id: UUID,
+        *,
+        run_id: UUID | None = None,
+        input: RunInput | None = None,
+        file: RunFile | None = None,
+        file_uri: str | None = None,
+        comparison: CaseComparison,
+        expected: JsonValue | Keep = KEEP,
+        description: str | None = None,
+        citations: CaseCitations | None = None,
+        sensitivity: Sensitivity | None = None,
+    ) -> BenchmarkCaseChange:
+        """Append one case to a benchmark's latest revision, as its next revision.
+
+        A case is made from exactly one of a recorded run (`run_id`), JSON
+        (`input`) or a file (`file`, with the `file_uri` it was read from,
+        if any), as `benchmark add-case` makes it (ADR 0086). A run's case
+        replays the input it received and expects the value given, or else
+        the corrected output of its latest bad judgment (ADR 0129). Any
+        other case needs an expected value; JSON null is one, so `KEEP`
+        gives none. A case is labelled as given, or as its run was, and
+        never lower (ADR 0123). It is the `edit_benchmark` action, and for a
+        restricted run the `read_restricted` action too (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or no run was kept with
+                `run_id`.
+            InvalidArgumentError: The case names no source or more than one,
+                or Azathoth would refuse it, as `benchmark add-case` does.
+            ContentUnavailableError: The content store no longer holds the
+                content the run received.
+            ConflictError: The benchmark already has this case.
+            InvalidAuthorError: Who is adding it could not be told.
+        """
+
+        latest = self._history(benchmark_id)[-1]
+
+        if sum(source is not None for source in (run_id, input, file)) != 1:
+            raise InvalidArgumentError(
+                "A case is made from exactly one of a run, JSON input and a file."
+            )
+
+        if file_uri is not None and file is None:
+            raise InvalidArgumentError(
+                "A file_uri names where a file was read from: give the file too."
+            )
+
+        judged_by = comparison_of(comparison)
+        expectation = citation_expectation(citations)
+        repositories = self._repositories()
+
+        if run_id is not None:
+            case = case_from_run(
+                repositories,
+                run_id,
+                comparison=judged_by,
+                expected=expected,
+                description=description,
+                citations=expectation,
+                sensitivity=sensitivity,
+            )
+        else:
+            case = case_from_input(
+                (
+                    resolved_file(file, repositories.content, uri=file_uri)
+                    if file is not None
+                    else ResolvedInput(
+                        value=cast(RunInput, input).payload,
+                        media_type=JSON_MEDIA_TYPE,
+                    )
+                ),
+                comparison=judged_by,
+                expected=expected,
+                description=description,
+                citations=expectation,
+                sensitivity=sensitivity,
+            )
+
+        cases = (*latest.dataset.cases, case)
+
+        check_not_duplicated(benchmark_id, cases, case)
+
+        saved = self._save_cases(latest, cases)
+
+        return BenchmarkCaseChange(
+            case=case_detail(saved, case),
+            benchmark=self._revision_summary(benchmark_id, saved),
         )
 
     def update_case(

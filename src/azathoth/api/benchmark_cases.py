@@ -16,7 +16,12 @@ from uuid import UUID
 
 from pydantic import JsonValue, ValidationError
 
-from azathoth.api.errors import ConflictError, InvalidArgumentError
+from azathoth.api.errors import (
+    ConflictError,
+    ContentUnavailableError,
+    InvalidArgumentError,
+    NotFoundError,
+)
 from azathoth.api.models import (
     BenchmarkCaseDetail,
     BenchmarkCaseSummary,
@@ -35,8 +40,18 @@ from azathoth.evaluation import (
     json_schema_validator,
     json_values_equal,
 )
+from azathoth.inputs import ResolvedInput, is_binary_media_type
+from azathoth.persistence.repositories import Repositories
 from azathoth.sensitivity import Sensitivity, effective_sensitivity, stored_sensitivity
-from azathoth.workflows import SOURCE_FEEDBACK_METADATA_KEY, SOURCE_RUN_METADATA_KEY
+from azathoth.workflows import (
+    SOURCE_FEEDBACK_METADATA_KEY,
+    SOURCE_RUN_METADATA_KEY,
+    BenchmarkCaseSourceError,
+    benchmark_case_from_input,
+    benchmark_case_from_run,
+    latest_corrected_output,
+    workflow_run_input,
+)
 
 
 class Keep(Enum):
@@ -329,6 +344,115 @@ def check_not_duplicated(
             )
 
 
+def case_from_run(
+    repositories: Repositories,
+    run_id: UUID,
+    *,
+    comparison: OutcomeComparison,
+    expected: JsonValue | Keep,
+    description: str | None,
+    citations: CitationExpectation | None,
+    sensitivity: Sensitivity | None,
+) -> BenchmarkCase:
+    """Return the case replaying one recorded run's input, as `benchmark add-case` makes it.
+
+    Without an expected value, it expects the corrected output of the run's
+    latest bad judgment that carries one (ADR 0086); good feedback never
+    supplies one. A run given a PDF or an image is refused once the content
+    store no longer holds its content (ADR 0117).
+
+    Raises:
+        NotFoundError: No run was kept with this ID.
+        InvalidArgumentError: The run received no input, or input more than
+            once; it has no correction and no expected value is given; or
+            the label is lower than the run's.
+        ContentUnavailableError: The content store no longer holds the
+            content the run received.
+    """
+
+    run = repositories.runs.get(run_id)
+
+    if run is None:
+        raise NotFoundError(f"Run {run_id} was not found.")
+
+    feedback = None
+
+    try:
+        workflow_run_input(run)
+
+        if isinstance(expected, Keep):
+            feedback = latest_corrected_output(repositories.feedback.feedback_for_run(run_id))
+
+            if feedback is None:
+                raise InvalidArgumentError(
+                    f"Run {run_id} has no corrected output; pass --expected."
+                )
+
+            expected = feedback.corrected_output
+
+        case = benchmark_case_from_run(
+            run,
+            comparison=comparison,
+            expected=expected,
+            description=description,
+            feedback=feedback,
+            citations=citations,
+            sensitivity=sensitivity,
+        )
+    except BenchmarkCaseSourceError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
+
+    provenance = case.input_provenance
+
+    if (
+        provenance is not None
+        and is_binary_media_type(provenance.media_type)
+        and not repositories.content.contains(provenance.digest)
+    ):
+        raise ContentUnavailableError(
+            f"Run {run_id} received content {provenance.digest}, which the content store "
+            "no longer holds."
+        )
+
+    return case
+
+
+def case_from_input(
+    resolved: ResolvedInput,
+    *,
+    comparison: OutcomeComparison,
+    expected: JsonValue | Keep,
+    description: str | None,
+    citations: CitationExpectation | None,
+    sensitivity: Sensitivity | None,
+) -> BenchmarkCase:
+    """Return the case of one resolved input: JSON given as it is, or a file's.
+
+    It is internal without a label (ADR 0123), and needs an expected value.
+
+    Raises:
+        InvalidArgumentError: No expected value is given, or it cannot be
+            used with its comparison.
+    """
+
+    if isinstance(expected, Keep):
+        raise InvalidArgumentError(
+            "A case made from JSON or a file needs an expected value: only a run's judgment "
+            "can supply one."
+        )
+
+    try:
+        return benchmark_case_from_input(
+            resolved.model_copy(update={"sensitivity": sensitivity}),
+            comparison=comparison,
+            expected=expected,
+            description=description,
+            citations=citations,
+        )
+    except BenchmarkCaseSourceError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
+
+
 def _first_message(
     error: ValidationError,
 ) -> str:
@@ -342,6 +466,8 @@ __all__ = [
     "KEEP",
     "Keep",
     "case_detail",
+    "case_from_input",
+    "case_from_run",
     "case_not_found_message",
     "case_summary",
     "check_not_duplicated",
