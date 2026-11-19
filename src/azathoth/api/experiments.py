@@ -7,28 +7,42 @@ its first case's run, which says what each step ran on.
 """
 
 from collections.abc import Mapping, Sequence
+from typing import Final
 from uuid import UUID
 
 from azathoth.api.browsing import LIMIT_MESSAGE, RepositoriesAccess
 from azathoth.api.errors import ExperimentNotFoundError, InvalidArgumentError, NotFoundError
 from azathoth.api.models import (
     CandidateScorecard,
+    ComparedCase,
+    ComparedStep,
+    ComparisonBaseline,
     ExperimentCandidate,
     ExperimentCase,
+    ExperimentComparison,
     ExperimentDetail,
     ExperimentHeader,
     ExperimentStep,
     ExperimentSummary,
+    RunCosts,
 )
 from azathoth.evaluation import BenchmarkDatasetRevision
 from azathoth.persistence.repositories import Repositories
+from azathoth.prompting import PROMPT_SPECIFICATIONS, FixedModelSelection
 from azathoth.sensitivity import effective_sensitivity
 from azathoth.workflows import (
     WorkflowExperimentObservation,
     WorkflowExperimentRecord,
+    WorkflowProductionState,
     WorkflowRun,
     WorkflowScorecard,
 )
+
+PRODUCTION_RUNS_WINNER: Final = "Production already runs the winner."
+
+WINNER_IS_CONFIGURED: Final = "The winner is the candidate the workflow is configured with."
+
+NO_BASELINE: Final = "The experiment holds neither what production runs nor what is configured."
 
 
 def experiment_not_found_message(
@@ -233,6 +247,208 @@ def recorded_experiment(
     return experiment
 
 
+def _production_models(
+    state: WorkflowProductionState,
+) -> dict[UUID, str]:
+    """Return the model production pins each prompt step to, by step."""
+
+    return {
+        step.id: selection.identifier
+        for step in state.specification.steps
+        if isinstance(step.specification, PROMPT_SPECIFICATIONS)
+        and isinstance(selection := step.specification.model_selection, FixedModelSelection)
+    }
+
+
+def _runs_production(
+    candidate: ExperimentCandidate,
+    state: WorkflowProductionState,
+) -> bool:
+    """Return whether a candidate is what production runs: each prompt step on its model."""
+
+    if (
+        state.specification_revision is not None
+        and candidate.workflow_revision is not None
+        and state.specification_revision != candidate.workflow_revision
+    ):
+        return False
+
+    ran = {step.step_id: step.model for step in candidate.steps}
+
+    return all(ran.get(step_id) == model for step_id, model in _production_models(state).items())
+
+
+def _baseline(
+    candidates: Sequence[ExperimentCandidate],
+    recorded_first: UUID,
+    production: WorkflowProductionState | None,
+) -> tuple[ComparisonBaseline | None, ExperimentCandidate | None, str | None]:
+    """Return what the winner is compared against, the candidate it is, or why there is none.
+
+    What production runs comes first, since promoting replaces it; then the
+    configured candidate, which every experiment of a session runs first.
+    """
+
+    winner = candidates[0]
+
+    if production is not None:
+        running = next(
+            (candidate for candidate in candidates if _runs_production(candidate, production)),
+            None,
+        )
+
+        if running is winner:
+            return None, None, PRODUCTION_RUNS_WINNER
+
+        if running is not None:
+            return "production", running, None
+
+    configured = next(
+        (candidate for candidate in candidates if candidate.observation_id == recorded_first),
+        None,
+    )
+
+    if configured is None:
+        return None, None, NO_BASELINE
+
+    if configured is winner:
+        return None, None, WINNER_IS_CONFIGURED
+
+    return "configured", configured, None
+
+
+def _run_cost(
+    run: WorkflowRun,
+) -> float | None:
+    """Return what one run cost, or None when a step's cost is unknown."""
+
+    total = 0.0
+
+    for step in run.steps:
+        if step.execution is None:
+            continue
+
+        metrics = step.execution.metrics
+
+        if metrics is None or metrics.estimated_cost_usd is None:
+            return None
+
+        total += metrics.estimated_cost_usd
+
+    return total
+
+
+def run_costs(
+    repositories: Repositories,
+    candidate: ExperimentCandidate,
+) -> RunCosts:
+    """Return the mean cost and time of a candidate's case runs that are still kept."""
+
+    kept = [
+        run for case in candidate.cases if (run := repositories.runs.get(case.run_id)) is not None
+    ]
+
+    if not kept:
+        return RunCosts(runs=0, cost_usd=None, latency_seconds=None)
+
+    costs = [_run_cost(run) for run in kept]
+
+    return RunCosts(
+        runs=len(kept),
+        cost_usd=(
+            None
+            if any(cost is None for cost in costs)
+            else sum(cost for cost in costs if cost is not None) / len(kept)
+        ),
+        latency_seconds=sum(run.duration_seconds for run in kept) / len(kept),
+    )
+
+
+def _score(
+    repositories: Repositories,
+    evaluation_id: UUID,
+) -> float | None:
+    """Return an evaluation's score while it is kept."""
+
+    kept = repositories.run_evaluations.get(evaluation_id)
+
+    return kept.evaluation.score if kept is not None else None
+
+
+def _compared_steps(
+    winner: ExperimentCandidate,
+    baseline: ExperimentCandidate,
+) -> tuple[ComparedStep, ...]:
+    """Return each step either side ran, in the winner's order, then the baseline's own."""
+
+    winning = {step.step_id: step.model for step in winner.steps}
+    base = {step.step_id: step.model for step in baseline.steps}
+    order = [*winning, *(step_id for step_id in base if step_id not in winning)]
+
+    return tuple(
+        ComparedStep(
+            step_id=step_id,
+            winner_model=winning.get(step_id),
+            baseline_model=base.get(step_id),
+            differs=winning.get(step_id) != base.get(step_id),
+        )
+        for step_id in order
+    )
+
+
+def _compared_case(
+    repositories: Repositories,
+    case: ExperimentCase,
+    other: ExperimentCase | None,
+) -> ComparedCase:
+    """Return one case as the winner did on it, and the baseline in the same place."""
+
+    return ComparedCase(
+        case_id=case.case_id,
+        winner_passed=case.passed,
+        baseline_passed=None if other is None else other.passed,
+        winner_score=_score(repositories, case.evaluation_id),
+        baseline_score=None if other is None else _score(repositories, other.evaluation_id),
+    )
+
+
+def compare_experiment(
+    repositories: Repositories,
+    experiment: WorkflowExperimentRecord,
+) -> ExperimentComparison:
+    """Return an experiment's winner set beside its baseline, with what each run cost and took."""
+
+    detail = experiment_detail(experiment, runs=first_runs(repositories, experiment))
+    winner = detail.candidates[0]
+    baseline, compared, reason = _baseline(
+        detail.candidates,
+        experiment.observations[0].id,
+        repositories.production_states.get(detail.workflow_id),
+    )
+
+    return ExperimentComparison(
+        experiment_id=detail.experiment_id,
+        workflow_id=detail.workflow_id,
+        baseline=baseline,
+        reason=reason,
+        winner=winner,
+        baseline_candidate=compared,
+        steps=() if compared is None else _compared_steps(winner, compared),
+        cases=tuple(
+            _compared_case(
+                repositories,
+                case,
+                compared.cases[index]
+                if compared is not None and index < len(compared.cases)
+                else None,
+            )
+            for index, case in enumerate(winner.cases)
+        ),
+        winner_runs=run_costs(repositories, winner),
+        baseline_runs=None if compared is None else run_costs(repositories, compared),
+    )
+
+
 class Experiments:
     """The optimization experiments an instance has recorded, read and compared."""
 
@@ -327,9 +543,35 @@ class Experiments:
             runs=first_runs(repositories, experiment),
         )
 
+    def compare(
+        self,
+        experiment_id: UUID,
+    ) -> ExperimentComparison:
+        """Return an experiment's winner set beside what promoting it would replace.
+
+        The baseline is what production runs now, when the experiment holds
+        it, and otherwise the workflow's configured candidate, which every
+        experiment of a session runs first. Each side's cost and time are the
+        means over its case runs still kept. It reads durable state only,
+        and is the `read_runs` action (ADR 0131).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            ExperimentNotFoundError: No experiment has this ID.
+        """
+
+        repositories = self._repositories()
+
+        return compare_experiment(repositories, recorded_experiment(repositories, experiment_id))
+
 
 __all__ = [
+    "NO_BASELINE",
+    "PRODUCTION_RUNS_WINNER",
+    "WINNER_IS_CONFIGURED",
     "Experiments",
+    "compare_experiment",
+    "run_costs",
     "candidate_scorecard",
     "experiment_detail",
     "experiment_summary",

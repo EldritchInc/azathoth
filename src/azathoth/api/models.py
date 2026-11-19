@@ -1646,6 +1646,89 @@ class ExperimentDetail(ExperimentHeader):
     )
 
 
+ComparisonBaseline = Literal["production", "configured"]
+"""What an experiment's winner is compared against: what production runs, or what is configured."""
+
+
+class ComparedStep(ApiModel):
+    """One step of the winner and of the baseline, each with the model it ran on."""
+
+    step_id: UUID
+
+    winner_model: str | None
+
+    baseline_model: str | None
+
+    differs: bool = Field(
+        description="Whether the two ran the step on different models.",
+    )
+
+
+class ComparedCase(ApiModel):
+    """One case, as the winner and the baseline did on it."""
+
+    case_id: UUID | None
+
+    winner_passed: bool | None
+
+    baseline_passed: bool | None
+
+    winner_score: float | None = Field(
+        description="The winner's evaluation score, or None once the evaluation is not kept.",
+    )
+
+    baseline_score: float | None
+
+
+class RunCosts(ApiModel):
+    """What one candidate's case runs cost and took, each the mean over the runs still kept."""
+
+    runs: int = Field(
+        ge=0,
+        description="How many of its case runs are kept, and so measured.",
+    )
+
+    cost_usd: float | None = Field(
+        description="The mean cost of a run, or None when any kept run's cost is unknown.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The mean time a run took, or None when no run is kept.",
+    )
+
+
+class ExperimentComparison(ApiModel):
+    """An experiment's winner set beside what promoting it would replace (ADR 0131)."""
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    baseline: ComparisonBaseline | None = Field(
+        description="What the winner is compared against, or None when there is nothing to.",
+    )
+
+    reason: str | None = Field(
+        description="Why nothing is compared, or None when something is.",
+    )
+
+    winner: ExperimentCandidate
+
+    baseline_candidate: ExperimentCandidate | None
+
+    steps: tuple[ComparedStep, ...] = Field(
+        description="Each step either side's kept run ran, in the winner's order.",
+    )
+
+    cases: tuple[ComparedCase, ...] = Field(
+        description="Every case, in the order the candidates ran them.",
+    )
+
+    winner_runs: RunCosts
+
+    baseline_runs: RunCosts | None
+
+
 class CaseStarted(ApiModel):
     """One case of a benchmark is about to run as one workflow (ADR 0130)."""
 
