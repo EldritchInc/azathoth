@@ -97,6 +97,11 @@ release dates are on the
   through the same calls. A new error, `judge_unavailable`, refuses
   semantic cases no judge may judge
   ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
+- The design of optimization through the service API: reading a
+  workflow's experiments, optimizing it as it runs, comparing an
+  experiment's winner with what production runs now, what promoting it
+  would save, and whether it can still be promoted
+  ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
 
 ## 1.4.0
 
