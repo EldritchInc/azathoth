@@ -405,6 +405,14 @@ part of the workflow itself, pin them as fixed selections in a new revision.
 A fixed selection is never substituted, so a pinned step stays exactly as
 measured.
 
+Before promoting, `experiment compare <EXPERIMENT_ID>` sets the winner beside
+what promoting would replace: what production runs now, or the configured
+candidate when production runs nothing the experiment measured. It says what
+a run cost and took on each side, measured from the case runs the experiment
+kept, what the winner saves per run, and that saving projected over
+production's invocations in the last 30 days, which is a projection and not a
+measurement: the benchmark's cases may not be production's inputs.
+
 ### 7. Promote
 
 Production changes are explicit.

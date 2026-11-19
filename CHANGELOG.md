@@ -97,10 +97,35 @@ release dates are on the
   through the same calls. A new error, `judge_unavailable`, refuses
   semantic cases no judge may judge
   ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
-- The design of optimization through the service API: reading a
-  workflow's experiments, optimizing it as it runs, comparing an
-  experiment's winner with what production runs now, what promoting it
-  would save, and whether it can still be promoted
+- `azathoth experiment compare <EXPERIMENT_ID>` sets an experiment's winner
+  beside what promoting it would replace: what production runs now, when
+  the experiment holds it, or else the workflow's configured candidate. It
+  names each step whose model changes and how each case went on both
+  sides, and says what a run cost and took on each, measured from the case
+  runs the experiment kept. It says what the winner saves per run, in
+  dollars and seconds and as a share of the baseline, a negative saving
+  being a cost; projects that over production's invocations of the
+  workflow in the last 30 days, labelled as a projection; and ends with the
+  command that promotes the winner
+  ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+- `azathoth.api` reads experiments: `experiments.list` and
+  `experiments.get` read a workflow's experiments, every candidate ranked
+  with its scorecard, each case's run and evaluation, and the model each
+  step ran on. `workflow experiments` and `experiment show` read through
+  them, their output unchanged
+  ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+- `azathoth.api` optimizes: `optimization.optimize` checks everything
+  before any candidate runs, tells each generation as it starts and
+  finishes and each candidate as it finishes, stops between candidates
+  when cancelled, keeping every experiment it finished, and records every
+  experiment it names. `workflow optimize` optimizes through the same
+  function
+  ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+- `azathoth.api` compares and checks before promoting:
+  `experiments.compare` returns the comparison `experiment compare`
+  prints, with its savings and projection, and `experiments.promotable`
+  says whether the winner can still be rebuilt from the workflow's latest
+  revision with the models authorized now, and why not, saving nothing
   ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
 
 ## 1.4.0
