@@ -66,6 +66,8 @@ with api.open("azathoth.db") as instance:
 | `benchmarks.list()` | Every benchmark dataset at its latest revision. |
 | `benchmarks.get(id, revision=None)` | One revision with its document, the latest by default. |
 | `benchmarks.history(id, limit=None)` | Its revisions, newest first. |
+| `benchmarks.cases(id, revision=None)` | Each `BenchmarkCaseSummary` of a revision, in order: its comparison, label, description, and where it came from, `run`, `file` or `json` (ADR 0130). |
+| `benchmarks.case(id, case_id, revision=None)` | One `BenchmarkCaseDetail`, adding its input, expected value, citations, input provenance and metadata. |
 
 `import_document(document)` on each of the three appends the next revision,
 as the matching `import` command does, and returns it as `get` would. The
@@ -163,6 +165,39 @@ Judges see benchmark data, so a judge must be a model the providers serve
 now (`NotFoundError` otherwise) and the portfolio authorizes
 (`ModelNotAuthorizedError`); one already in the rotation is a
 `ConflictError`. Listing and removing reach no provider.
+
+## Benchmarks
+
+`instance.benchmarks` also creates a benchmark, changes its cases, and
+runs workflows against it (ADR 0130). Every change saves the benchmark's
+next revision, so every execution still names the revision it ran.
+
+| Call | Returns |
+| --- | --- |
+| `benchmarks.create(name, description, version="1.0.0")` | A `BenchmarkImport` of revision 1 of a new benchmark, with no cases. |
+| `benchmarks.add_case(id, run_id= \| input= \| file=, file_uri=None, comparison, expected=KEEP, description=None, citations=None, sensitivity=None)` | A `BenchmarkCaseChange`: the case appended, and the revision saved, as `azathoth benchmark add-case` does. |
+| `benchmarks.update_case(id, case_id, comparison=None, expected=KEEP, description=None, citations=KEEP, sensitivity=None)` | A `BenchmarkCaseChange` with only what is given changed; its ID, input and source stay. |
+| `benchmarks.remove_case(id, case_id)` | A `BenchmarkCaseChange`: the case as it was, and the revision saved without it. |
+| `benchmarks.executions(id, limit=None)` | Each `BenchmarkExecutionSummary`, newest first: `run` or `compare`, the revision it ran, its workflows best first, how many cases each passed, and its label. |
+| `benchmarks.execution(execution_id)` | One `BenchmarkExecutionDetail`, adding each workflow's strategies, pass counts by comparison, judge totals and scorecard, and each case with its evaluation's score and reason. |
+| `benchmarks.run(id, workflow_id, on_event=None, cancel=None)` | The `BenchmarkExecutionDetail` saved, as `azathoth benchmark run` does. |
+| `benchmarks.compare(id, workflow_ids, target_latency_seconds, target_cost_usd, on_event=None, cancel=None)` | The `BenchmarkExecutionDetail` saved, ranked, as `azathoth benchmark compare` does. |
+
+A case is made from exactly one of a recorded run, JSON given as a
+`RunInput`, or a `RunFile`, with the `file_uri` it was read from when one is
+known. A run's case expects the value given, or else the corrected output of
+the run's latest bad judgment; any other case needs an expected value.
+`expected=KEEP` gives none, since JSON null is a value; `citations=None`
+clears what a case's run must cite in an edit, and `KEEP` leaves it. A case
+is labelled as given, or as its run was, and its label may rise but never
+fall. A case another case already is raises `ConflictError`.
+
+`run` and `compare` check everything before any case runs, as the command
+line does. `on_event` receives a `CaseStarted` and a `CaseFinished` for each
+case of each workflow, on the caller's thread; a callback that raises is not
+called again. `cancel` is checked between cases: a cancelled benchmark
+raises `RunCancelledError`, keeps the runs of the cases it finished, and
+records no execution.
 
 ## Runs
 
@@ -504,7 +539,8 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `ContentUnavailableError` | `content_unavailable` | Content a call reads, such as a run's record of citation checks, is not in the content store, or is not what it should be. |
 | `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
 | `RunNotResumableError` | `run_not_resumable` | The run finished, executes an invocation, is still held by another process, or its journal cannot be resumed; a `ConflictError` too. |
-| `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
+| `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished, or a benchmark's between its cases. |
+| `JudgeUnavailableError` | `judge_unavailable` | A benchmark's semantic cases have no judge that may judge them, or a judge failed; a `ConflictError` too. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |
 | `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |

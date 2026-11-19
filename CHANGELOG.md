@@ -71,11 +71,31 @@ release dates are on the
   `run_not_resumable`, for a run that finished, executes an invocation, is
   still held by another process, or whose journal cannot be resumed
   ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
-- The design of benchmarks through the service API: reading a benchmark's
-  cases, creating a benchmark, adding, editing and removing its cases,
-  turning a run into a case, and running and comparing workflows against
-  it as it runs, each saving the next revision, with a case's label only
-  ever rising
+- `azathoth benchmark create --name <NAME> --description <TEXT>` creates a
+  benchmark with no cases. `azathoth benchmark edit-case <BENCHMARK_ID>
+  <CASE_ID>` changes a case's comparison, expected value, description,
+  citations or label, keeping its input and where it came from, and
+  `azathoth benchmark remove-case` removes one. Each saves the benchmark's
+  next revision; a label may be raised but never lowered, and an edit that
+  makes a case another's twin is refused
+  ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
+- `azathoth.api` reads and changes a benchmark's cases: `benchmarks.cases`
+  and `benchmarks.case` read them with where each came from, and
+  `benchmarks.create`, `add_case`, `update_case` and `remove_case` change
+  them as the command line does. `add_case` turns a run into a case,
+  expecting its latest correction when no value is given, or makes one
+  from JSON or a file. `benchmark cases`, `case-show` and `add-case` call
+  the API, their output unchanged
+  ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
+- `azathoth.api` runs benchmarks: `benchmarks.run` and `benchmarks.compare`
+  check everything before any case runs, tell each case as it starts and
+  finishes, stop between cases when cancelled, keeping the case runs that
+  finished and recording no execution, and return what they saved.
+  `benchmarks.executions` and `benchmarks.execution` read saved runs and
+  comparisons, with the revision each ran, and `benchmark executions` and
+  `execution-show` read through them. `benchmark run` and `compare` execute
+  through the same calls. A new error, `judge_unavailable`, refuses
+  semantic cases no judge may judge
   ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
 
 ## 1.4.0
