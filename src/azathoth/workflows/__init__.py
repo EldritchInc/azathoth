@@ -101,7 +101,10 @@ from azathoth.workflows.experiment_recorder import (
 from azathoth.workflows.experiment_repository import (
     WorkflowExperimentRepository,
 )
-from azathoth.workflows.experiment_runner import WorkflowExperimentRunner
+from azathoth.workflows.experiment_runner import (
+    WorkflowExperimentObserver,
+    WorkflowExperimentRunner,
+)
 from azathoth.workflows.failure import (
     WorkflowFailurePolicy,
 )
@@ -631,6 +634,7 @@ __all__ = [
     "WorkflowExperimentRecord",
     "WorkflowExperimentRepository",
     "WorkflowExperimentResult",
+    "WorkflowExperimentObserver",
     "WorkflowExperimentRunner",
     "WorkflowFailurePolicy",
     "WorkflowGenerationError",

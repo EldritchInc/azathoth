@@ -460,7 +460,7 @@ def _recorder(
     )
 
 
-def _checked_dataset(
+def checked_dataset(
     repositories: Repositories,
     benchmark_id: UUID,
     workflow_ids: tuple[UUID, ...],
@@ -500,7 +500,7 @@ def _checked_dataset(
     return dataset
 
 
-async def _refused(
+async def refused(
     execution: Coroutine[Any, Any, ExecutedT],
 ) -> ExecutedT:
     """Await an execution, turning what refuses it into the service API's errors.
@@ -555,12 +555,12 @@ def run_benchmark(
     if cancel is not None and cancel.cancelled:
         raise RunCancelledError()
 
-    dataset = _checked_dataset(repositories, benchmark_id, (workflow_id,))
+    dataset = checked_dataset(repositories, benchmark_id, (workflow_id,))
     observer = _EventObserver(on_event, cancel, len(dataset.cases))
 
     try:
         result = asyncio.run(
-            _refused(
+            refused(
                 execute_configured_benchmark(
                     runtime=runtime(repositories),
                     workflow_id=workflow_id,
@@ -620,12 +620,12 @@ def compare_benchmark(
             str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
         ) from exc
 
-    dataset = _checked_dataset(repositories, benchmark_id, workflow_ids)
+    dataset = checked_dataset(repositories, benchmark_id, workflow_ids)
     observer = _EventObserver(on_event, cancel, len(dataset.cases))
 
     try:
         ranking = asyncio.run(
-            _refused(
+            refused(
                 compare_configured_benchmarks(
                     runtime=runtime(repositories),
                     workflow_ids=workflow_ids,
@@ -646,6 +646,8 @@ def compare_benchmark(
 
 __all__ = [
     "BenchmarkEventCallback",
+    "checked_dataset",
+    "refused",
     "BenchmarkRuntimeAccess",
     "Cancellable",
     "ComparisonProblem",

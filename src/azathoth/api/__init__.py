@@ -76,6 +76,7 @@ from azathoth.api.models import (
     BenchmarkExecutionSummary,
     BenchmarkImport,
     BenchmarkSummary,
+    CandidateFinished,
     CandidateScorecard,
     CaseCitations,
     CaseComparison,
@@ -98,6 +99,8 @@ from azathoth.api.models import (
     ExperimentStep,
     ExperimentSummary,
     FeedbackDisposition,
+    GenerationFinished,
+    GenerationStarted,
     Initialization,
     InstanceDescription,
     InterruptedRun,
@@ -109,6 +112,9 @@ from azathoth.api.models import (
     InvocationSummary,
     JudgeSummary,
     ModelSummary,
+    OptimizationEvent,
+    OptimizationGeneration,
+    OptimizationSummary,
     PortfolioEntry,
     PortfolioRemoval,
     ProductionDependent,
@@ -149,6 +155,7 @@ from azathoth.api.models import (
     WorkflowSummary,
     parse_run_event,
 )
+from azathoth.api.optimization import Optimization
 from azathoth.api.production import Production
 from azathoth.api.providers import (
     BEDROCK_VARIABLES,
@@ -260,6 +267,13 @@ __all__ = [
     "Invocations",
     "JudgeSummary",
     "Experiments",
+    "Optimization",
+    "CandidateFinished",
+    "GenerationFinished",
+    "GenerationStarted",
+    "OptimizationEvent",
+    "OptimizationGeneration",
+    "OptimizationSummary",
     "Judges",
     "MatchScope",
     "ModelInUseError",

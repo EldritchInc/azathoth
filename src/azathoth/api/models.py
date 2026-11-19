@@ -1693,6 +1693,140 @@ BenchmarkEvent = Annotated[
 """One event of a benchmark execution, told apart by its `type`."""
 
 
+class GenerationStarted(ApiModel):
+    """One generation of an optimization session is about to run its candidates (ADR 0131)."""
+
+    type: Literal["generation_started"] = "generation_started"
+
+    generation: int = Field(
+        ge=1,
+        description="Its number, from 1; the final evaluation is numbered after the last.",
+    )
+
+    candidates: int = Field(
+        ge=1,
+        description="How many candidates it runs.",
+    )
+
+    final: bool = Field(
+        description="Whether it is the final evaluation of the last generation's proposals.",
+    )
+
+
+class CandidateFinished(ApiModel):
+    """One candidate of a generation ran every case, and was scored."""
+
+    type: Literal["candidate_finished"] = "candidate_finished"
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    workflow_id: UUID
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify the candidate.",
+    )
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+    overall_score: float
+
+
+class GenerationFinished(ApiModel):
+    """One generation's experiment was recorded, and its winner chosen."""
+
+    type: Literal["generation_finished"] = "generation_finished"
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    experiment_id: UUID = Field(
+        description="The experiment that measured it, which `experiments.get` reads.",
+    )
+
+    winner_strategy_ids: tuple[UUID, ...]
+
+    winner_score: float = Field(
+        description="Its winner's overall score.",
+    )
+
+    proposed: int = Field(
+        ge=0,
+        description="How many candidates it proposes for the next generation; 0 after the final.",
+    )
+
+
+OptimizationEvent = Annotated[
+    GenerationStarted | CandidateFinished | GenerationFinished,
+    Field(discriminator="type"),
+]
+"""One event of an optimization session, told apart by its `type`."""
+
+
+class OptimizationGeneration(ApiModel):
+    """One generation of a session: the experiment that measured it, and what it proposed."""
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    experiment_id: UUID
+
+    winner_strategy_ids: tuple[UUID, ...]
+
+    winner_score: float
+
+    proposed: int = Field(
+        ge=0,
+        description="How many candidates it proposed for the next generation.",
+    )
+
+
+class OptimizationSummary(ApiModel):
+    """What one optimization session measured, and which experiment holds its winner (ADR 0131)."""
+
+    workflow_id: UUID
+
+    benchmark_id: UUID
+
+    generations: tuple[OptimizationGeneration, ...] = Field(
+        min_length=1,
+    )
+
+    final_experiment_id: UUID | None = Field(
+        description="The final evaluation's experiment (ADR 0091), or None when it did not run.",
+    )
+
+    final_skipped: str | None = Field(
+        description="Why the final evaluation did not run, or None when it ran.",
+    )
+
+    winning_experiment_id: UUID = Field(
+        description="The experiment whose winner is the session's winner, to compare and promote.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+        description="Every judge call of every experiment, never charged to a candidate.",
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the winning experiment.",
+    )
+
+
 RunEvent = Annotated[
     RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished | InvocationFinished,
     Field(discriminator="type"),

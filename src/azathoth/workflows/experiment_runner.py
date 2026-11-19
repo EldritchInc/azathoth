@@ -1,6 +1,7 @@
 """Workflow experiment orchestration."""
 
 from collections.abc import Callable
+from typing import Protocol
 
 from azathoth.evaluation import (
     BenchmarkCase,
@@ -49,6 +50,29 @@ from azathoth.workflows.scoring import (
 )
 
 
+class WorkflowExperimentObserver(Protocol):
+    """What is told as each candidate of an experiment starts and finishes (ADR 0131).
+
+    Either may raise to stop the experiment before its next candidate, so a
+    caller can cancel between candidates; what a candidate already kept
+    stays kept, and no experiment is recorded.
+    """
+
+    def candidate_starting(
+        self,
+        candidate: WorkflowCandidate,
+    ) -> None:
+        """Hear that one candidate is about to run every case."""
+
+    def candidate_finished(
+        self,
+        candidate: WorkflowCandidate,
+        evidence: WorkflowExperimentEvidence,
+        benchmark: WorkflowBenchmarkResult,
+    ) -> None:
+        """Hear how one candidate did over every case, and its scorecard."""
+
+
 class WorkflowExperimentRunner:
     """Execute, evaluate, score, and rank workflow candidates over a benchmark.
 
@@ -84,8 +108,12 @@ class WorkflowExperimentRunner:
         *,
         workflows: tuple[WorkflowCandidate, ...],
         dataset: BenchmarkDataset,
+        observer: WorkflowExperimentObserver | None = None,
     ) -> WorkflowExperimentResult:
         """Execute every candidate against every benchmark case and rank them.
+
+        An observer hears each candidate as it starts and finishes, and may
+        stop the experiment between candidates by raising.
 
         The dataset must contain cases, every case comparison must be
         supported, and every candidate must declare a result, all checked
@@ -118,6 +146,9 @@ class WorkflowExperimentRunner:
         benchmarks: list[WorkflowBenchmarkResult] = []
 
         for workflow in workflows:
+            if observer is not None:
+                observer.candidate_starting(workflow)
+
             benchmark = await self._benchmark_runner.run(
                 dataset,
                 _every_case(workflow),
@@ -133,15 +164,18 @@ class WorkflowExperimentRunner:
                         )
                     )
 
-            evidence.append(
-                WorkflowExperimentEvidence(
-                    candidate_signature=workflow.signature,
-                    scorecard=self._score(benchmark),
-                    judge_calls=benchmark.judge_calls,
-                    judge_cost_usd=benchmark.judge_cost_usd,
-                )
+            entry = WorkflowExperimentEvidence(
+                candidate_signature=workflow.signature,
+                scorecard=self._score(benchmark),
+                judge_calls=benchmark.judge_calls,
+                judge_cost_usd=benchmark.judge_cost_usd,
             )
+
+            evidence.append(entry)
             benchmarks.append(benchmark)
+
+            if observer is not None:
+                observer.candidate_finished(workflow, entry, benchmark)
 
         scorecards = tuple(observation.scorecard for observation in evidence)
 
