@@ -4,12 +4,14 @@ import sys
 from collections.abc import Iterable
 from uuid import UUID
 
-from pydantic import JsonValue, ValidationError
+from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     WorkflowRunSource,
+    render_interrupted_runs,
     render_run_children,
     render_unfinished_run,
     render_workflow_run,
@@ -18,6 +20,7 @@ from azathoth.cli.rendering import (
     render_workflow_run_summaries,
 )
 from azathoth.cli.rendering.sensitivity import warn_if_restricted
+from azathoth.cli.service import service_instance
 from azathoth.context import context_sensitivity
 from azathoth.workflows import (
     WorkflowRunFeedback,
@@ -137,29 +140,51 @@ def list_run_children(
 ) -> int:
     """List the runs a run's steps started, oldest first, with each one's status (ADR 0105).
 
+    The children are the service API's (ADR 0129).
+
     It works for a run that never finished too, because a child is indexed
     as it starts. A run neither recorded nor journaled is not found.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
-    stores = repositories(configuration)
 
-    children = stores.run_children.children_of(run_id)
-
-    if not children and stores.runs.get(run_id) is None and not stores.run_journal.entries(run_id):
+    try:
+        children = service_instance(configuration).runs.children(run_id)
+    except api.ApiError as exc:
         print(
-            f"Run {run_id} was not found.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    print(
-        render_run_children(
-            run_id,
-            [(child, stores.runs.get(child.child_run_id)) for child in children],
+    print(render_run_children(run_id, children))
+
+    return 0
+
+
+def list_interrupted_runs(
+    workflow_id: UUID,
+) -> int:
+    """List a workflow's runs that started and never finished, newest first (ADR 0129).
+
+    Each names the command that resumes it, the run's or its invocation's.
+    Only durable state is read.
+    """
+
+    configuration = CliRuntimeConfiguration.from_environment()
+
+    try:
+        runs = service_instance(configuration).runs.interrupted(workflow_id)
+    except api.ApiError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
         )
-    )
+
+        return 1
+
+    print(render_interrupted_runs(workflow_id, runs))
 
     return 0
 
@@ -171,53 +196,32 @@ def record_run_feedback(
     reason: str | None = None,
     corrected_output: JsonValue = None,
 ) -> int:
-    """Record one immutable judgment about a persisted workflow run.
+    """Record one immutable judgment about a persisted workflow run, through the service API.
 
     Only existing runs can be judged. A corrected output contradicts a good
     disposition, so it is accepted only with bad feedback. Blank reasons are
     treated as absent, and domain validation decides whether the remaining
-    judgment is acceptable. Nothing is saved when any check fails.
+    judgment is acceptable. Nothing is saved when any check fails (ADR 0129).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    if repositories(configuration).runs.get(run_id) is None:
-        print(
-            f"Run {run_id} was not found.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    if disposition is WorkflowRunFeedbackDisposition.GOOD and corrected_output is not None:
-        print(
-            "A corrected output can only accompany bad feedback.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    normalized_reason = reason.strip() if reason is not None else None
-
     try:
-        feedback = WorkflowRunFeedback(
-            run_id=run_id,
-            disposition=disposition,
-            reason=normalized_reason or None,
+        feedback = service_instance(configuration).runs.record_feedback(
+            run_id,
+            disposition.value,
+            reason=reason,
             corrected_output=corrected_output,
         )
-    except ValidationError as exc:
-        for error in exc.errors():
-            print(
-                _validation_message(error["msg"]),
-                file=sys.stderr,
-            )
+    except api.ApiError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
+        )
 
         return 1
 
-    repositories(configuration).feedback.save(feedback)
-
-    print(f"Recorded {disposition.value} feedback {feedback.id} for run {run_id}.")
+    print(f"Recorded {feedback.disposition} feedback {feedback.feedback_id} for run {run_id}.")
 
     return 0
 
@@ -255,14 +259,6 @@ def _run_sources(
         sources[association.run_id] = WorkflowRunSource.PRODUCTION
 
     return sources
-
-
-def _validation_message(
-    message: str,
-) -> str:
-    """Remove pydantic's value-error prefix from one domain validation message."""
-
-    return message.removeprefix("Value error, ")
 
 
 def _latest_dispositions(

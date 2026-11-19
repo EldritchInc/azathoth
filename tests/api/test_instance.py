@@ -178,6 +178,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "CandidateRebuildError": "candidate_rebuild",
         "CandidateUnavailableError": "candidate_unavailable",
         "ConflictError": "conflict",
+        "ContentUnavailableError": "content_unavailable",
         "ExperimentNotFoundError": "experiment_not_found",
         "InstanceClosedError": "instance_closed",
         "InstanceNotFoundError": "instance_not_found",
@@ -198,6 +199,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "RemoteUnreachableError": "remote_unreachable",
         "RevisionNotFoundError": "revision_not_found",
         "RunCancelledError": "run_cancelled",
+        "RunNotResumableError": "run_not_resumable",
         "RunNotStartedError": "run_not_started",
         "WorkflowResultMissingError": "workflow_result_missing",
     }

@@ -99,6 +99,7 @@ from azathoth.cli.remote import (
 )
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.runs import (
+    list_interrupted_runs,
     list_run_children,
     list_workflow_runs,
     record_run_feedback,
@@ -320,6 +321,7 @@ def _dispatch(
             resume_run=resume_run,
             list_run_children=list_run_children,
             export_run_annotations=export_run_annotations,
+            list_interrupted_runs=list_interrupted_runs,
         )
 
     if command == EXPERIMENT_COMMAND:

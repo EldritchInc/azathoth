@@ -17,9 +17,11 @@ from azathoth.cli.parsing import (
     RUN_FEEDBACK_DISPOSITION_ATTRIBUTE,
     RUN_FEEDBACK_REASON_ATTRIBUTE,
     RUN_ID_ATTRIBUTE,
+    RUN_INTERRUPTED_ACTION,
     RUN_OUTPUT_ATTRIBUTE,
     RUN_RESUME_ACTION,
     RUN_SHOW_ACTION,
+    RUN_WORKFLOW_ID_ATTRIBUTE,
 )
 from azathoth.workflows import WorkflowRunFeedbackDisposition
 
@@ -36,6 +38,7 @@ def dispatch_run_command(
     resume_run: RunResumeHandler,
     list_run_children: RunIdentifierHandler,
     export_run_annotations: RunIdentifierHandler,
+    list_interrupted_runs: RunIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed run command."""
 
@@ -64,6 +67,9 @@ def dispatch_run_command(
 
     if action == RUN_CHILDREN_ACTION:
         return list_run_children(cast(UUID, getattr(arguments, RUN_ID_ATTRIBUTE)))
+
+    if action == RUN_INTERRUPTED_ACTION:
+        return list_interrupted_runs(cast(UUID, getattr(arguments, RUN_WORKFLOW_ID_ATTRIBUTE)))
 
     if action == RUN_RESUME_ACTION:
         return resume_run(

@@ -15,6 +15,7 @@ RUN_ACTION_ATTRIBUTE = "run_action"
 RUN_ANNOTATIONS_ACTION = "annotations"
 RUN_CHILDREN_ACTION = "children"
 RUN_FEEDBACK_ACTION = "feedback"
+RUN_INTERRUPTED_ACTION = "interrupted"
 RUN_RESUME_ACTION = "resume"
 RUN_SHOW_ACTION = "show"
 
@@ -23,6 +24,7 @@ RUN_FEEDBACK_CORRECTED_OUTPUT_ATTRIBUTE = "run_feedback_corrected_output"
 RUN_FEEDBACK_DISPOSITION_ATTRIBUTE = "run_feedback_disposition"
 RUN_FEEDBACK_REASON_ATTRIBUTE = "run_feedback_reason"
 RUN_OUTPUT_ATTRIBUTE = "run_output"
+RUN_WORKFLOW_ID_ATTRIBUTE = "run_workflow_id"
 
 RUN_FEEDBACK_GOOD = "good"
 RUN_FEEDBACK_BAD = "bad"
@@ -76,6 +78,18 @@ def add_run_parser(
         type=UUID,
         metavar="RUN_ID",
         help="Workflow run UUID whose children to list.",
+    )
+
+    run_interrupted_parser = run_actions.add_parser(
+        RUN_INTERRUPTED_ACTION,
+        help="List a workflow's runs that started and never finished, and how to resume each.",
+    )
+
+    run_interrupted_parser.add_argument(
+        RUN_WORKFLOW_ID_ATTRIBUTE,
+        type=UUID,
+        metavar="WORKFLOW_ID",
+        help="Workflow UUID whose interrupted runs to list.",
     )
 
     run_resume_parser = run_actions.add_parser(

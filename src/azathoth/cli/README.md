@@ -1462,6 +1462,28 @@ import or promotion never changes a run halfway. The steps of every layer
 the run committed are reused, as are the attempts the interrupted layer
 finished; an attempt in flight when the run stopped runs again.
 
+A workflow's runs that started and never finished are listed newest first,
+each with how far it got and the command that resumes it, its invocation's
+for a run that executes one (ADR 0129):
+
+```bash
+azathoth run interrupted <WORKFLOW_ID>
+```
+
+```text
+Run ID: <RUN_ID>
+Started: <TIME>
+Revision: 1
+Invocation ID: no invocation
+Resume: azathoth run resume <RUN_ID>
+```
+
+A workflow with none says so:
+
+```text
+Workflow <WORKFLOW_ID> has no interrupted runs.
+```
+
 `run show` does not show a run that never finished, because it is not
 recorded yet. It says how to resume it, and exits with status 1:
 

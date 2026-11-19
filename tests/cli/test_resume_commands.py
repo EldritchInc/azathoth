@@ -175,6 +175,42 @@ def test_an_interrupted_run_is_shown_unfinished_and_resumes_under_its_id(
     )
 
 
+def test_run_interrupted_lists_what_stopped_and_how_to_resume_it(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_id = interrupted(
+        database, "workflow", "run", SLEEP_WORKFLOW_ID, "--input", json.dumps(marker(database))
+    )
+
+    status, out, err = cli(capsys, "run", "interrupted", SLEEP_WORKFLOW_ID)
+
+    assert (status, err) == (0, "")
+    assert out.startswith(f"Run ID: {run_id}\nStarted: ")
+    assert "\nRevision: 1\nInvocation ID: no invocation\n" in out
+    assert out.endswith(f"\nResume: azathoth run resume {run_id}\n")
+
+    assert cli(capsys, "run", "resume", str(run_id))[0] == 0
+    assert cli(capsys, "run", "interrupted", SLEEP_WORKFLOW_ID) == (
+        0,
+        f"Workflow {SLEEP_WORKFLOW_ID} has no interrupted runs.\n",
+        "",
+    )
+
+
+def test_run_interrupted_refuses_a_workflow_that_is_not_configured(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workflow_id = UUID("c1800000-0000-4000-8000-000000000003")
+
+    assert cli(capsys, "run", "interrupted", str(workflow_id)) == (
+        1,
+        "",
+        f"Workflow {workflow_id} is not configured.\n",
+    )
+
+
 def test_a_resumed_run_reports_its_result_as_workflow_run_would(
     database: Path,
     capsys: pytest.CaptureFixture[str],
@@ -422,7 +458,9 @@ def test_the_cli_readme_documents_the_resume_commands() -> None:
 
     for line in (
         "azathoth run resume <RUN_ID>",
+        "azathoth run interrupted <WORKFLOW_ID>",
         "azathoth invocation resume <INVOCATION_ID>",
+        "Workflow <WORKFLOW_ID> has no interrupted runs.",
         "Run <RUN_ID> has not finished; resume it with azathoth run resume <RUN_ID>.",
         "Run <RUN_ID> has not finished; resume it with azathoth invocation resume <INVOCATION_ID>.",
         "Run <RUN_ID> executes invocation <INVOCATION_ID>; resume it with azathoth "

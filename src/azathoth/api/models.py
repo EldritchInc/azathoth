@@ -567,6 +567,32 @@ class InvocationOutcome(ApiModel):
     )
 
 
+class JudgeSummary(ApiModel):
+    """One model of the rotation that judges semantic cases, in its place (ADR 0129)."""
+
+    identifier: str
+
+    provider: str
+
+    model: str
+
+    position: int = Field(
+        ge=1,
+        description="Its place in the rotation, from 1: the order judges are tried.",
+    )
+
+    authorized: bool = Field(
+        description=(
+            "Whether the portfolio still authorizes it; one that no longer does is kept "
+            "until it is removed, and is never asked to judge."
+        ),
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that lists the rotation.",
+    )
+
+
 class InvocationSummary(ApiModel):
     """One invocation of a promoted workflow, as `azathoth workflow invocations` lists it."""
 
@@ -720,6 +746,140 @@ class InvocationRun(ApiModel):
     steps: tuple[RunStep, ...] = ()
 
 
+class Annotations(ApiModel):
+    """A run's verified citations, as a W3C Web Annotation collection (ADRs 0117 and 0129)."""
+
+    subject_id: UUID = Field(
+        description="The run or invocation asked about.",
+    )
+
+    run_id: UUID = Field(
+        description="The run whose cited steps kept the citations: an invocation's run.",
+    )
+
+    collection: dict[str, JsonValue] = Field(
+        description="The annotation collection, exactly as `azathoth run annotations` prints it.",
+    )
+
+    items: tuple[dict[str, JsonValue], ...] = Field(
+        description="The collection's annotations, in the order the run's steps checked them.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that prints the collection.",
+    )
+
+
+class InterruptedRun(ApiModel):
+    """A run that started and never finished, as its journal records it (ADR 0129)."""
+
+    run_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name in the revision the run started from.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The revision it started from, or None for a run from before revisions.",
+    )
+
+    invocation_id: UUID | None = Field(
+        description="The production invocation it executes, when it executes one.",
+    )
+
+    started_at: datetime
+
+    last_recorded_at: datetime = Field(
+        description="When its journal last recorded anything: how far it got.",
+    )
+
+    resumes: int = Field(
+        ge=0,
+        description="How often it was resumed and stopped again.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that resumes it: its invocation's, when it has one.",
+    )
+
+
+ChildStatus = Literal["succeeded", "failed", "unfinished"]
+"""How a child run ended, or that no finished run is kept for it yet (ADR 0129)."""
+
+
+class RunChildSummary(ApiModel):
+    """One run a step of another run started, and how it ended (ADRs 0105 and 0129)."""
+
+    child_run_id: UUID
+
+    child_workflow_id: UUID
+
+    child_invocation_id: UUID | None = Field(
+        description="The invocation the child executed, when it was started by invoking one.",
+    )
+
+    parent_run_id: UUID
+
+    parent_step_id: UUID = Field(
+        description="The step of the parent run that started the child.",
+    )
+
+    parent_attempt: int = Field(
+        ge=1,
+        description="The attempt of that step that started it.",
+    )
+
+    depth: int = Field(
+        ge=1,
+        description="How far below the run that started the whole tree it is: 1 for a child.",
+    )
+
+    started_at: datetime = Field(
+        description="When the child was indexed, as it started.",
+    )
+
+    status: ChildStatus = Field(
+        description=(
+            "How it ended, judged as `runs.get` judges it, or `unfinished` while no finished "
+            "run is kept for it."
+        ),
+    )
+
+    command: str | None = Field(
+        description="The `azathoth` command that shows the child, once it finished.",
+    )
+
+
+FeedbackDisposition = Literal["good", "bad"]
+"""How a person judged a run (ADR 0068)."""
+
+
+class RunFeedback(ApiModel):
+    """One immutable judgment of a kept run (ADRs 0068 and 0129)."""
+
+    feedback_id: UUID
+
+    run_id: UUID
+
+    disposition: FeedbackDisposition
+
+    reason: str | None = Field(
+        description="Why the run was judged so; a bad judgment always has one.",
+    )
+
+    corrected_output: JsonValue = Field(
+        description="What the run should have produced, given only with a bad judgment.",
+    )
+
+    created_at: datetime
+
+    command: str = Field(
+        description="The `azathoth` command that shows the run judged.",
+    )
+
+
 class RunSummary(ApiModel):
     """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
 
@@ -758,6 +918,11 @@ class RunSummary(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows the run.",
+    )
+
+    feedback: FeedbackDisposition | None = Field(
+        default=None,
+        description="The run's latest judgment, or None when it was never judged (ADR 0129).",
     )
 
 

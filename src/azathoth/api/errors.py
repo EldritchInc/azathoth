@@ -140,15 +140,40 @@ class NothingToRollBackToError(ConflictError):
 
 
 class ModelNotAuthorizedError(ConflictError):
-    """A step of a production state to restore has no model the portfolio authorizes (ADR 0128)."""
+    """A model a change needs is not one the portfolio authorizes.
+
+    A rollback's step has no model the portfolio still authorizes (ADR 0128),
+    or a judge to add is not authorized (ADR 0129).
+    """
 
     code: ClassVar[str] = "model_not_authorized"
+
+
+class ContentUnavailableError(ApiError):
+    """Content a call reads is not in the content store, or is not what it should be.
+
+    A run's record of citation checks the store no longer holds, or holds
+    something else under its digest, cannot be exported (ADR 0129).
+    """
+
+    code: ClassVar[str] = "content_unavailable"
 
 
 class RunNotStartedError(ApiError):
     """A run could not start: no executable candidate of the workflow could be made."""
 
     code: ClassVar[str] = "run_not_started"
+
+
+class RunNotResumableError(ConflictError):
+    """A run cannot be resumed (ADR 0129).
+
+    It has finished, executes a production invocation, which resumes as its
+    invocation, is still held by another process, or its journal cannot be
+    resumed with the revision it started from.
+    """
+
+    code: ClassVar[str] = "run_not_resumable"
 
 
 class RunCancelledError(ApiError):

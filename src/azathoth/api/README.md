@@ -148,6 +148,22 @@ instance.portfolio.set_data_policy(
 `force=True` the model is removed and its `dependents` are returned. A
 semantic judge is always kept until it leaves the judge rotation.
 
+## Judges
+
+`instance.judges` keeps the rotation of models that judge semantic
+benchmark cases, in the order they are tried (ADR 0129).
+
+| Call | Returns |
+| --- | --- |
+| `judges.list()` | Every `JudgeSummary`, in rotation order: the model's identifier, provider and model, its `position` from 1, and whether the portfolio still `authorized` it. |
+| `judges.add(identifier)` | The `JudgeSummary` appended, as `azathoth judge add` does. |
+| `judges.remove(identifier)` | The `JudgeSummary` removed, as it was in the rotation. |
+
+Judges see benchmark data, so a judge must be a model the providers serve
+now (`NotFoundError` otherwise) and the portfolio authorizes
+(`ModelNotAuthorizedError`); one already in the rotation is a
+`ConflictError`. Listing and removing reach no provider.
+
 ## Runs
 
 `instance.runs.run(workflow_id, input=None, sensitivity=None, on_event=None,
@@ -260,6 +276,49 @@ kept yet, so `get` raises `NotFoundError` saying how to resume it
 (ADR 0121). Every `RunSummary` holds the run's `sensitivity`: the most
 sensitive of its input's label and its parent run's, `INTERNAL` when
 neither is labelled (ADR 0123).
+
+`instance.runs.record_feedback(run_id, disposition, reason=None,
+corrected_output=None)` records one immutable `"good"` or `"bad"` judgment of
+a kept run, as `azathoth run feedback` does, and returns it as a
+`RunFeedback`; `instance.runs.feedback(run_id)` returns every judgment of a
+run, newest first. A bad judgment needs a reason, a blank reason is none,
+and a corrected output, what the run should have produced, is accepted only
+with bad; each refusal is an `InvalidArgumentError`, and nothing is saved.
+Every `RunSummary` and `RunDetail` holds the run's latest judgment as
+`feedback`, `None` when it was never judged (ADR 0129).
+
+`instance.runs.annotations(run_id)` and
+`instance.invocations.annotations(invocation_id)` return an `Annotations`:
+the W3C Web Annotation `collection` of every citation a run's steps
+verified, exactly as `azathoth run annotations` prints it, its `items`, and
+the run they are of. A run still under way exports what its committed
+steps checked; an invocation exports its run's, and one with no run yet is
+not found. A record the content store no longer holds raises
+`ContentUnavailableError` (ADR 0129).
+
+`instance.runs.children(run_id)` returns the runs a run's steps started,
+oldest first, as `azathoth run children` lists them: each a
+`RunChildSummary` with the child run and its workflow, the invocation it
+executed when it was invoked, the parent's step and attempt that started
+it, and its `status`, `"succeeded"` or `"failed"` as `runs.get` judges it,
+or `"unfinished"` while no finished run is kept for it, when it has no
+`command` yet. It works for a parent that never finished, since a child is
+indexed as it starts; a run neither kept nor journaled raises
+`NotFoundError` (ADR 0129).
+
+`instance.runs.interrupted(workflow_id, limit=None)` lists a workflow's
+runs that started and never finished, newest first, as `azathoth run
+interrupted` does: each an `InterruptedRun` with the revision it started
+from, when it started and last recorded anything, how often it was
+resumed, the invocation it executes if it executes one, and the `command`
+that resumes it. `instance.runs.resume(run_id, on_event=None, cancel=None)`
+continues an interrupted configured run from its journal under its own ID,
+as `azathoth run resume` does, reporting events as `runs.run` does, and
+returns its `RunResult`. A run that executes an invocation resumes as its
+invocation, with `invocations.resume`. A run that finished, executes an
+invocation, is still held by another process, or whose journal cannot be
+resumed raises `RunNotResumableError`; one never journaled raises
+`NotFoundError` (ADR 0129).
 
 `instance.runs.try_step(document, step_id, inputs=None, input=None,
 sensitivity=None, on_event=None, cancel=None)` tries one step of a workflow document alone,
@@ -442,7 +501,9 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `CandidateUnavailableError` | `candidate_unavailable` | No candidate of a workflow to promote could be made with the models authorized now. |
 | `CandidateRebuildError` | `candidate_rebuild` | An experiment's winner cannot be rebuilt from the latest revision; a `CandidateUnavailableError` too. |
 | `NothingToRollBackToError` | `nothing_to_roll_back_to` | The workflow is not in production, has no earlier revision, or the one named is already active; a `ConflictError` too. |
-| `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes; a `ConflictError` too. |
+| `ContentUnavailableError` | `content_unavailable` | Content a call reads, such as a run's record of citation checks, is not in the content store, or is not what it should be. |
+| `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
+| `RunNotResumableError` | `run_not_resumable` | The run finished, executes an invocation, is still held by another process, or its journal cannot be resumed; a `ConflictError` too. |
 | `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |
