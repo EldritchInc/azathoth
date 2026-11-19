@@ -8,7 +8,7 @@
 The service API (ADR 0120) lists a benchmark's revisions, reads one with
 its document, and imports a document as its next revision. Everything else
 a person does with a benchmark is the command line's alone: `benchmark
-cases` and `benchmark case show` read its cases, `benchmark add-case` adds
+cases` and `benchmark case-show` read its cases, `benchmark add-case` adds
 one from a recorded run or a file (ADR 0086), `benchmark run` and
 `benchmark compare` execute workflows against it (ADR 0040), and
 `benchmark executions` and `benchmark execution show` read what they saved

@@ -37,7 +37,6 @@ from azathoth.cli.service import (
     service_instance,
 )
 from azathoth.evaluation import (
-    BenchmarkCase,
     BenchmarkDatasetRevision,
     BenchmarkRepository,
     SemanticJudgingError,
@@ -49,7 +48,6 @@ from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
 )
-from azathoth.sensitivity import effective_sensitivity
 from azathoth.workflows import (
     WorkflowBenchmarkEvidenceRecorder,
     WorkflowGenerationError,
@@ -212,26 +210,22 @@ def _render_imported_at(
 def list_benchmark_cases(
     benchmark_id: UUID,
 ) -> int:
-    """List cases belonging to one durable benchmark dataset."""
+    """List cases belonging to one durable benchmark dataset, through the service API (ADR 0130)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).benchmarks
-
-    dataset = repository.get(
-        benchmark_id,
-    )
-
-    if dataset is None:
+    try:
+        cases = service_instance(configuration).benchmarks.cases(benchmark_id)
+    except api.ApiError as exc:
         print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    for case in dataset.cases:
-        print(f"{case.id}  {case.expected.description}")
+    for case in cases:
+        print(f"{case.case_id}  {case.description}")
 
     return 0
 
@@ -240,32 +234,15 @@ def show_benchmark_case(
     benchmark_id: UUID,
     case_id: UUID,
 ) -> int:
-    """Show one case from one durable benchmark dataset."""
+    """Show one case from one durable benchmark dataset, through the service API (ADR 0130)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).benchmarks
-
-    dataset = repository.get(
-        benchmark_id,
-    )
-
-    if dataset is None:
+    try:
+        case = service_instance(configuration).benchmarks.case(benchmark_id, case_id)
+    except api.ApiError as exc:
         print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    case = next(
-        (candidate for candidate in dataset.cases if candidate.id == case_id),
-        None,
-    )
-
-    if case is None:
-        print(
-            f"Benchmark case {case_id} is not configured in dataset {benchmark_id}.",
+            str(exc),
             file=sys.stderr,
         )
 
@@ -276,7 +253,7 @@ def show_benchmark_case(
     )
 
     warn_if_restricted(
-        effective_sensitivity(case.sensitivity),
+        case.sensitivity,
         f"Benchmark case {case_id}",
     )
 
@@ -325,13 +302,13 @@ def _print_benchmark_dataset(
 
 
 def _print_benchmark_case(
-    case: BenchmarkCase,
+    case: api.BenchmarkCaseDetail,
 ) -> None:
     """Render one durable benchmark case, naming its label when it is not internal (ADR 0123)."""
 
-    print(f"ID: {case.id}")
+    print(f"ID: {case.case_id}")
 
-    for line in render_sensitivity_lines(effective_sensitivity(case.sensitivity)):
+    for line in render_sensitivity_lines(case.sensitivity):
         print(line)
 
     print("Input:")
@@ -347,17 +324,17 @@ def _print_benchmark_case(
         print("Input Provenance:")
         print(
             json.dumps(
-                case.input_provenance.model_dump(mode="json"),
+                case.input_provenance,
                 ensure_ascii=False,
                 indent=2,
             )
         )
 
     print("Expected:")
-    print(f"  Description: {case.expected.description}")
-    print(f"  Comparison: {case.expected.comparison.value}")
+    print(f"  Description: {case.description}")
+    print(f"  Comparison: {case.comparison}")
 
-    citations = case.expected.citations
+    citations = case.citations
 
     if citations is not None:
         print("  Citations:")
@@ -370,7 +347,7 @@ def _print_benchmark_case(
     print(
         _indent(
             json.dumps(
-                case.expected.value,
+                case.expected,
                 ensure_ascii=False,
                 indent=2,
             ),

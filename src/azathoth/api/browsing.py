@@ -17,6 +17,7 @@ from pydantic import JsonValue, ValidationError
 from pydantic_core import ErrorDetails
 
 from azathoth.api.authorship import AuthorAccess, author_view
+from azathoth.api.benchmark_cases import case_detail, case_not_found_message, case_summary
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -24,6 +25,8 @@ from azathoth.api.errors import (
     RevisionNotFoundError,
 )
 from azathoth.api.models import (
+    BenchmarkCaseDetail,
+    BenchmarkCaseSummary,
     BenchmarkDetail,
     BenchmarkImport,
     BenchmarkSummary,
@@ -891,17 +894,7 @@ class Benchmarks:
         """
 
         history = self._history(benchmark_id)
-
-        selected = (
-            history[-1]
-            if revision is None
-            else next((entry for entry in history if entry.number == revision), None)
-        )
-
-        if selected is None:
-            raise RevisionNotFoundError(
-                f"Benchmark dataset {benchmark_id} has no revision {revision}."
-            )
+        selected = self._selected(benchmark_id, history, revision)
 
         summary = self._summary(
             selected,
@@ -915,6 +908,53 @@ class Benchmarks:
             latest_number=history[-1].number,
             document=_document(encode_benchmark_document(selected.dataset)),
         )
+
+    def cases(
+        self,
+        benchmark_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> tuple[BenchmarkCaseSummary, ...]:
+        """Return every case of one revision of a benchmark, in order, the latest by default.
+
+        It is the `read_catalog` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID.
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = self._selected(benchmark_id, self._history(benchmark_id), revision)
+
+        return tuple(case_summary(selected, case) for case in selected.dataset.cases)
+
+    def case(
+        self,
+        benchmark_id: UUID,
+        case_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> BenchmarkCaseDetail:
+        """Return one case of one revision of a benchmark with its input and expected value.
+
+        It is the `read_catalog` action, and for a restricted case the
+        `read_restricted` action too (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID, or the revision holds no
+                case with this ID.
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = self._selected(benchmark_id, self._history(benchmark_id), revision)
+        found = next((case for case in selected.dataset.cases if case.id == case_id), None)
+
+        if found is None:
+            raise NotFoundError(case_not_found_message(benchmark_id, case_id))
+
+        return case_detail(selected, found)
 
     def history(
         self,
@@ -998,6 +1038,31 @@ class Benchmarks:
             raise NotFoundError(f"Benchmark dataset {benchmark_id} is not configured.")
 
         return history
+
+    @staticmethod
+    def _selected(
+        benchmark_id: UUID,
+        history: tuple[BenchmarkDatasetRevision, ...],
+        revision: int | None,
+    ) -> BenchmarkDatasetRevision:
+        """Return the revision numbered `revision` of a history, the latest without one.
+
+        Raises:
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        selected = (
+            history[-1]
+            if revision is None
+            else next((entry for entry in history if entry.number == revision), None)
+        )
+
+        if selected is None:
+            raise RevisionNotFoundError(
+                f"Benchmark dataset {benchmark_id} has no revision {revision}."
+            )
+
+        return selected
 
     @staticmethod
     def _summary(

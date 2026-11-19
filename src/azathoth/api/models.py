@@ -257,6 +257,99 @@ class BenchmarkImport(ApiModel):
     benchmark: BenchmarkDetail
 
 
+CaseComparison = Literal["exact", "normalized", "semantic", "schema"]
+"""How a benchmark case judges a result: equal, normalized, judged, or valid (ADR 0070)."""
+
+
+CaseSource = Literal["run", "file", "json"]
+"""Where a benchmark case came from: a recorded run, a file, or JSON given as it is (ADR 0130)."""
+
+
+class CitedSegmentSummary(ApiModel):
+    """One source segment a case's run must cite (ADR 0117)."""
+
+    source: str
+
+    segment: str
+
+
+class CaseCitations(ApiModel):
+    """What a case's run must cite, and whether a check that did not verify fails it."""
+
+    require: tuple[CitedSegmentSummary, ...]
+
+    on_unverified: Literal["fail", "ignore"] = Field(
+        description="`fail` fails the case on any check that did not verify; `ignore` does not.",
+    )
+
+
+class BenchmarkCaseSummary(ApiModel):
+    """One case of one benchmark revision, as a list of its cases shows it (ADR 0130)."""
+
+    benchmark_id: UUID
+
+    revision: int = Field(
+        ge=1,
+        description="The benchmark revision the case was read from.",
+    )
+
+    case_id: UUID
+
+    description: str = Field(
+        description="What the case expects, in words.",
+    )
+
+    comparison: CaseComparison
+
+    sensitivity: Sensitivity = Field(
+        description="Its input's label, internal when it has none (ADR 0123).",
+    )
+
+    source: CaseSource
+
+    source_run_id: UUID | None = Field(
+        description="The recorded run it was made from, when it was made from one.",
+    )
+
+    cited: bool = Field(
+        description="Whether it names what its run must cite.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the case.",
+    )
+
+
+class BenchmarkCaseDetail(BenchmarkCaseSummary):
+    """One benchmark case with its input, what it expects, and where its input came from."""
+
+    input: JsonValue = Field(
+        description="What the case's run is given: the content's handle for a PDF or an image.",
+    )
+
+    input_provenance: dict[str, JsonValue] | None = Field(
+        description=(
+            "Where its input was read from and which content it was, for a run's or a file's."
+        ),
+    )
+
+    expected: JsonValue = Field(
+        description="The value the case expects, compared as `comparison` says.",
+    )
+
+    citations: CaseCitations | None = Field(
+        description="What its run must cite, or None when it names nothing.",
+    )
+
+    source_feedback_id: UUID | None = Field(
+        description="The judgment whose corrected output it expects, when it was made from one.",
+    )
+
+    metadata: dict[str, JsonValue] = Field(
+        description="Everything else the case records, as `benchmark case-show` prints it.",
+    )
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 
