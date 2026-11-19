@@ -385,6 +385,40 @@ nothing earlier to restore (`NothingToRollBackToError`) or when a step of
 the state it would restore has neither its fixed model nor any approved
 substitute in the portfolio (`ModelNotAuthorizedError`).
 
+## Experiments and Optimization
+
+`instance.optimization` optimizes a workflow against a benchmark, and
+`instance.experiments` reads, compares and checks what it recorded (ADR
+0131). Reading and comparing need no provider; optimizing and `promotable`
+ask the providers which models they serve now, as a run does.
+
+| Call | Returns |
+| --- | --- |
+| `optimization.optimize(workflow_id, benchmark_id, target_latency_seconds, target_cost_usd, generations=1, on_event=None, cancel=None)` | An `OptimizationSummary`, as `azathoth workflow optimize` measures it: each generation's experiment, winner and proposals, the final evaluation or why it did not run, the winning experiment and the judge totals. |
+| `experiments.list(workflow_id, limit=None)` | Each `ExperimentSummary`, newest first, as `azathoth workflow experiments` lists them: the benchmark and the revision it ran, its label, how many candidates and cases, and the winner's score. |
+| `experiments.get(experiment_id)` | One `ExperimentDetail`, as `azathoth experiment show` prints it: every candidate ranked, with its scorecard, its cases, and the model each step ran on while its first case's run is kept. |
+| `experiments.compare(experiment_id)` | An `ExperimentComparison`, as `azathoth experiment compare` prints it: the winner beside its baseline, what each run cost and took, the `savings` per run, the 30-day `projection`, and the promote `command`. |
+| `experiments.promotable(experiment_id)` | A `Promotability`: whether `production.promote(workflow_id, experiment_id=...)` would rebuild the winner now, and its `code` and `reason` when it would refuse. Nothing is saved. |
+
+`optimize` checks everything before any candidate runs: a benchmark with
+no cases, a comparison no evaluator supports, a target not above zero or
+fewer than one generation is an `InvalidArgumentError`, and a workflow
+that declares no result a `WorkflowResultMissingError`. `on_event` receives
+a `GenerationStarted`, a `CandidateFinished` for each candidate and a
+`GenerationFinished` for each generation, the final evaluation told as one
+more, on the caller's thread; a callback that raises is not called again.
+`cancel` is checked between candidates: a cancelled session raises
+`RunCancelledError` and keeps every experiment it finished.
+
+A comparison's baseline is what production runs now, when the experiment
+holds it, since promoting replaces it, and otherwise the configured
+candidate, which every experiment of a session runs first; `baseline` is
+`None`, with a `reason`, when the winner is its baseline or there is none.
+Each side's cost and time are the means over its kept case runs, and a
+cost is `None` when a model's pricing is unknown. The projection multiplies
+the saving per run by production's invocations in the last 30 days; it is a
+projection, never a measurement.
+
 ## Invocations
 
 `instance.invocations.get(invocation_id)` reads one invocation back, as
@@ -539,7 +573,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `ContentUnavailableError` | `content_unavailable` | Content a call reads, such as a run's record of citation checks, is not in the content store, or is not what it should be. |
 | `ModelNotAuthorizedError` | `model_not_authorized` | A step of the state a rollback would restore has no model the portfolio authorizes, or a judge to add is not authorized; a `ConflictError` too. |
 | `RunNotResumableError` | `run_not_resumable` | The run finished, executes an invocation, is still held by another process, or its journal cannot be resumed; a `ConflictError` too. |
-| `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished, or a benchmark's between its cases. |
+| `RunCancelledError` | `run_cancelled` | The run's token was cancelled before it finished, a benchmark's between its cases, or an optimization's between its candidates. |
 | `JudgeUnavailableError` | `judge_unavailable` | A benchmark's semantic cases have no judge that may judge them, or a judge failed; a `ConflictError` too. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |

@@ -44,6 +44,7 @@ from azathoth.cli.dispatching import (
     dispatch_workflow_command,
 )
 from azathoth.cli.experiments import (
+    compare_experiment_command,
     list_workflow_experiments,
     show_experiment,
 )
@@ -344,6 +345,7 @@ def _dispatch(
         return dispatch_experiment_command(
             arguments,
             show_experiment=show_experiment,
+            compare_experiment=compare_experiment_command,
         )
 
     if command == INVOCATION_COMMAND:

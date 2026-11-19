@@ -1,18 +1,31 @@
-"""Human-readable workflow experiment rendering."""
+"""Human-readable workflow experiment rendering.
+
+Each renderer takes the service API's view of an experiment (ADR 0131), or
+a recorded experiment, which it reads as the API would, so the command line
+prints what the API returns.
+"""
 
 from collections.abc import Iterable
+from uuid import UUID
 
-from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
-from azathoth.sensitivity import effective_sensitivity
-from azathoth.workflows import (
-    WorkflowExperimentCaseObservation,
-    WorkflowExperimentObservation,
-    WorkflowExperimentRecord,
+from azathoth.api import (
+    ComparedCase,
+    ExperimentCandidate,
+    ExperimentCase,
+    ExperimentComparison,
+    ExperimentDetail,
+    ExperimentSummary,
+    RunCosts,
+    Savings,
+    SavingsProjection,
 )
+from azathoth.api.experiments import PROJECTION_DAYS, experiment_detail, experiment_summary
+from azathoth.cli.rendering.sensitivity import render_sensitivity_lines
+from azathoth.workflows import WorkflowExperimentRecord
 
 
 def render_workflow_experiment_summaries(
-    experiments: Iterable[WorkflowExperimentRecord],
+    experiments: Iterable[ExperimentSummary | WorkflowExperimentRecord],
 ) -> str:
     """Render one line per experiment in the order given.
 
@@ -20,11 +33,18 @@ def render_workflow_experiment_summaries(
     case count, winning observation ID, and winning overall score.
     """
 
-    return "\n".join(_render_summary(experiment) for experiment in experiments)
+    return "\n".join(
+        _render_summary(
+            experiment_summary(experiment)
+            if isinstance(experiment, WorkflowExperimentRecord)
+            else experiment
+        )
+        for experiment in experiments
+    )
 
 
 def render_workflow_experiment(
-    experiment: WorkflowExperimentRecord,
+    experiment: ExperimentDetail | WorkflowExperimentRecord,
 ) -> str:
     """Render one durable experiment with every observation in rank order.
 
@@ -39,98 +59,83 @@ def render_workflow_experiment(
     show no judge lines.
     """
 
-    benchmark = str(experiment.benchmark_id) if experiment.benchmark_id is not None else "none"
+    detail = (
+        experiment_detail(experiment)
+        if isinstance(experiment, WorkflowExperimentRecord)
+        else experiment
+    )
+
+    benchmark = str(detail.benchmark_id) if detail.benchmark_id is not None else "none"
 
     lines = [
-        f"Experiment ID: {experiment.id}",
-        f"Recorded: {experiment.recorded_at.isoformat()}",
+        f"Experiment ID: {detail.experiment_id}",
+        f"Recorded: {detail.recorded_at.isoformat()}",
         f"Benchmark: {benchmark}",
         "Benchmark Digest: "
-        + (
-            experiment.benchmark_digest[:12]
-            if experiment.benchmark_digest is not None
-            else "unknown"
-        ),
-        *render_sensitivity_lines(effective_sensitivity(experiment.sensitivity)),
-        f"Candidates: {len(experiment.observations)}",
-        f"Cases: {_case_count(experiment)}",
-        f"Winner Observation ID: {experiment.winner.id}",
+        + (detail.benchmark_digest[:12] if detail.benchmark_digest is not None else "unknown"),
+        *render_sensitivity_lines(detail.sensitivity),
+        f"Candidates: {detail.candidate_count}",
+        f"Cases: {detail.case_count}",
+        f"Winner Observation ID: {detail.winner_observation_id}",
     ]
 
-    for rank, observation in enumerate(
-        experiment.ranked_observations,
-        start=1,
-    ):
+    for candidate in detail.candidates:
         _append_observation(
             lines,
-            rank,
-            observation,
+            detail.workflow_name,
+            detail.workflow_id,
+            candidate,
         )
 
     return "\n".join(lines)
 
 
 def _render_summary(
-    experiment: WorkflowExperimentRecord,
+    experiment: ExperimentSummary,
 ) -> str:
     """Render one experiment summary line."""
 
-    winner = experiment.winner
-
     return (
-        f"{experiment.id}  {experiment.recorded_at.isoformat()}  "
-        f"{len(experiment.observations)} candidates  "
-        f"{_case_count(experiment)} cases  "
-        f"winner {winner.id}  overall {winner.scorecard.overall_score:.6f}"
+        f"{experiment.experiment_id}  {experiment.recorded_at.isoformat()}  "
+        f"{experiment.candidate_count} candidates  "
+        f"{experiment.case_count} cases  "
+        f"winner {experiment.winner_observation_id}  overall {experiment.winner_score:.6f}"
     )
-
-
-def _case_count(
-    experiment: WorkflowExperimentRecord,
-) -> int:
-    """Return how many cases each candidate was judged on.
-
-    Every observation of one experiment judges the same benchmark, so the
-    winner's case count is the experiment's case count.
-    """
-
-    return len(experiment.winner.cases)
 
 
 def _append_observation(
     lines: list[str],
-    rank: int,
-    observation: WorkflowExperimentObservation,
+    workflow_name: str,
+    workflow_id: UUID,
+    candidate: ExperimentCandidate,
 ) -> None:
     """Append one ranked experiment observation."""
 
-    scorecard = observation.scorecard
+    scorecard = candidate.scorecard
 
-    cases_passed = observation.cases_passed
+    cases_passed = candidate.cases_passed
 
     lines.extend(
         (
             "",
-            f"Rank {rank}",
-            f"Observation ID: {observation.id}",
-            f"Workflow: {observation.workflow.name}",
-            f"Workflow ID: {observation.workflow.id}",
+            f"Rank {candidate.rank}",
+            f"Observation ID: {candidate.observation_id}",
+            f"Workflow: {workflow_name}",
+            f"Workflow ID: {workflow_id}",
             "Workflow Revision: "
             + (
-                str(observation.candidate_signature.workflow_revision)
-                if observation.candidate_signature.workflow_revision is not None
+                str(candidate.workflow_revision)
+                if candidate.workflow_revision is not None
                 else "unknown"
             ),
             "Strategy IDs: "
-            + ", ".join(
-                str(strategy_id) for strategy_id in observation.candidate_signature.strategy_ids
-            ),
+            + ", ".join(str(strategy_id) for strategy_id in candidate.strategy_ids),
             (
-                f"Passed: {cases_passed}/{len(observation.cases)}"
+                f"Passed: {cases_passed}/{candidate.cases_run}"
                 if cases_passed is not None
                 else "Passed: unknown"
             ),
-            *(_render_case(case) for case in observation.cases),
+            *(_render_case(case) for case in candidate.cases),
             f"Quality: {scorecard.quality_score:.6f}",
             f"Reliability: {scorecard.reliability_score:.6f}",
             f"Latency: {scorecard.latency_score:.6f}",
@@ -147,17 +152,17 @@ def _append_observation(
     if scorecard.rationale:
         lines.append(f"Rationale: {scorecard.rationale}")
 
-    if observation.judge_calls:
+    if candidate.judge_calls:
         lines.extend(
             (
-                f"Judge Calls: {observation.judge_calls}",
-                f"Judge Cost: ${observation.judge_cost_usd:.6f}",
+                f"Judge Calls: {candidate.judge_calls}",
+                f"Judge Cost: ${candidate.judge_cost_usd:.6f}",
             )
         )
 
 
 def _render_case(
-    case: WorkflowExperimentCaseObservation,
+    case: ExperimentCase,
 ) -> str:
     """Render one case outcome with the evidence that judged it."""
 
@@ -171,3 +176,173 @@ def _render_case(
         outcome = "failed"
 
     return f"Case {case_label}: {outcome}  run {case.run_id}  evaluation {case.evaluation_id}"
+
+
+def _outcome(
+    passed: bool | None,
+) -> str:
+    """Return how a case went, as a word."""
+
+    if passed is None:
+        return "unknown"
+
+    return "passed" if passed else "failed"
+
+
+def _compared_case(
+    case: ComparedCase,
+) -> str:
+    """Render one case as the winner and the baseline did on it."""
+
+    label = str(case.case_id) if case.case_id is not None else "none"
+
+    return (
+        f"Case {label}: winner {_outcome(case.winner_passed)}, "
+        f"baseline {_outcome(case.baseline_passed)}"
+    )
+
+
+def _run_line(
+    side: str,
+    costs: RunCosts,
+) -> str:
+    """Render what one side's runs cost and took, on the mean."""
+
+    if costs.runs == 0:
+        return f"{side} Run: unknown, no case run is kept"
+
+    cost = f"${costs.cost_usd:.6f}" if costs.cost_usd is not None else "cost unknown"
+    latency = (
+        f"{costs.latency_seconds:.2f} s" if costs.latency_seconds is not None else "time unknown"
+    )
+    plural = "run" if costs.runs == 1 else "runs"
+
+    return f"{side} Run: {cost}, {latency}, over {costs.runs} {plural}"
+
+
+def _percent(
+    value: float | None,
+) -> str:
+    """Render a share of the baseline, as a magnitude, or nothing when it is undefined."""
+
+    return "" if value is None else f" ({abs(value):.1f}%)"
+
+
+def _money(
+    saved: float | None,
+    percent: float | None,
+) -> str:
+    """Render a saving in dollars, said as a cost when it is negative."""
+
+    if saved is None:
+        return "cost unknown"
+
+    if saved < 0:
+        return f"costs ${-saved:.6f} more{_percent(percent)}"
+
+    return f"${saved:.6f}{_percent(percent)}"
+
+
+def _time(
+    saved: float | None,
+    percent: float | None,
+) -> str:
+    """Render a saving in seconds, said as a delay when it is negative."""
+
+    if saved is None:
+        return "time unknown"
+
+    if saved < 0:
+        return f"takes {-saved:.2f} s longer{_percent(percent)}"
+
+    return f"{saved:.2f} s{_percent(percent)}"
+
+
+def _savings_line(
+    savings: Savings,
+) -> str:
+    """Render what the winner saves per run on the benchmark."""
+
+    return (
+        f"Saves Per Run: {_money(savings.cost_usd, savings.cost_percent)}, "
+        f"{_time(savings.latency_seconds, savings.latency_percent)}"
+    )
+
+
+def _projection_line(
+    projection: SavingsProjection | None,
+    window_days: int,
+) -> str:
+    """Render the saving projected over production's recent invocations, labelled as one."""
+
+    if projection is None:
+        return f"Projection: none; production made no invocation in the last {window_days} days"
+
+    plural = "invocation" if projection.invocations == 1 else "invocations"
+
+    return (
+        f"Projection: over {projection.invocations} production {plural} in the last "
+        f"{projection.window_days} days, {_money(projection.cost_usd, None)} and "
+        f"{_time(projection.latency_seconds, None)}; a projection, not a measurement"
+    )
+
+
+def render_experiment_comparison(
+    comparison: ExperimentComparison,
+) -> str:
+    """Render one experiment's winner beside its baseline, and what promoting it would save.
+
+    Each step the two ran on different models is named with both, baseline
+    first. The saving is measured per run on the benchmark; the projection
+    over production's recent invocations is said to be one.
+    """
+
+    lines = [
+        f"Experiment ID: {comparison.experiment_id}",
+        f"Workflow ID: {comparison.workflow_id}",
+    ]
+
+    if comparison.baseline is None or comparison.baseline_candidate is None:
+        lines.extend(
+            (
+                f"Compared With: nothing. {comparison.reason}",
+                f"Winner Observation ID: {comparison.winner.observation_id}",
+                _run_line("Winner", comparison.winner_runs),
+            )
+        )
+
+        return "\n".join(lines)
+
+    lines.extend(
+        (
+            f"Compared With: {comparison.baseline}",
+            f"Winner Observation ID: {comparison.winner.observation_id}",
+            f"Baseline Observation ID: {comparison.baseline_candidate.observation_id}",
+        )
+    )
+
+    lines.extend(
+        f"Step {step.step_id}: {step.baseline_model or 'no model'} -> "
+        f"{step.winner_model or 'no model'}"
+        for step in comparison.steps
+        if step.differs
+    )
+
+    lines.extend(_compared_case(case) for case in comparison.cases)
+
+    lines.append(_run_line("Winner", comparison.winner_runs))
+
+    if comparison.baseline_runs is not None:
+        lines.append(_run_line("Baseline", comparison.baseline_runs))
+
+    if comparison.savings is not None:
+        lines.extend(
+            (
+                _savings_line(comparison.savings),
+                _projection_line(comparison.projection, PROJECTION_DAYS),
+            )
+        )
+
+    lines.append(f"Promote: {comparison.command}")
+
+    return "\n".join(lines)

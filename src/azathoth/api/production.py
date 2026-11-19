@@ -29,22 +29,93 @@ from azathoth.api.models import (
 from azathoth.api.running import RuntimeAccess
 from azathoth.persistence.repositories import Repositories
 from azathoth.prompting import PROMPT_SPECIFICATIONS, FixedModelSelection
+from azathoth.runtime import AzathothRuntime
 from azathoth.workflows import (
     NothingToRollBackToError as NothingEarlierError,
 )
 from azathoth.workflows import (
     ProductionRevisionNotFoundError,
     RollbackModelNotAuthorizedError,
+    WorkflowCandidate,
     WorkflowCandidateRebuildError,
     WorkflowGenerationError,
     WorkflowProductionRevision,
     WorkflowProductionState,
     WorkflowResultError,
+    WorkflowSpecification,
     active_production_revision,
     promote_workflow_candidate,
     rebuild_workflow_candidate,
     roll_back_workflow_production,
 )
+
+
+def promotion_command(
+    workflow_id: UUID,
+    experiment_id: UUID,
+) -> str:
+    """Return the command that promotes an experiment's winner."""
+
+    return f"azathoth workflow promote {workflow_id} --experiment {experiment_id}"
+
+
+def promotion_candidate(
+    repositories: Repositories,
+    runtime: AzathothRuntime,
+    workflow_id: UUID,
+    *,
+    experiment_id: UUID | None = None,
+) -> tuple[WorkflowSpecification, WorkflowCandidate]:
+    """Return the workflow's latest revision and the candidate promoting it would pin.
+
+    Without an experiment, it is the candidate a run would make; with one,
+    the experiment's winner, rebuilt from the latest revision with the models
+    authorized now (ADR 0092). Nothing is saved, so `experiments.promotable`
+    asks what `promote` would do.
+
+    Raises:
+        NotFoundError: The workflow is not configured.
+        WorkflowResultMissingError: The workflow declares no result.
+        ExperimentNotFoundError: No experiment has `experiment_id`.
+        CandidateUnavailableError: No candidate could be made with the
+            models authorized now.
+        CandidateRebuildError: The experiment's winner cannot be rebuilt.
+    """
+
+    specification = runtime.workflows.get(workflow_id)
+
+    if specification is None:
+        raise NotFoundError(f"Workflow {workflow_id} is not configured.")
+
+    if specification.result is None:
+        raise WorkflowResultMissingError(f"Workflow {workflow_id} does not declare a result.")
+
+    try:
+        candidate = runtime.generate_workflow_candidate(workflow_id)
+    except WorkflowGenerationError as exc:
+        raise CandidateUnavailableError(str(exc)) from exc
+
+    if experiment_id is None:
+        return specification, candidate
+
+    experiment = repositories.experiments.get(experiment_id)
+
+    if experiment is None:
+        raise ExperimentNotFoundError(f"Experiment {experiment_id} was not found.")
+
+    try:
+        rebuilt = rebuild_workflow_candidate(
+            specification=specification,
+            configured=candidate,
+            signature=experiment.winner.candidate_signature,
+            catalog=runtime.models,
+            registry=runtime.language_models,
+            portfolio=runtime.portfolio,
+        )
+    except WorkflowCandidateRebuildError as exc:
+        raise CandidateRebuildError(str(exc)) from exc
+
+    return specification, rebuilt
 
 
 class Production:
@@ -152,37 +223,12 @@ class Production:
 
         author = self._author()
         repositories = self._repositories()
-        runtime = self._runtime(repositories)
-        specification = runtime.workflows.get(workflow_id)
-
-        if specification is None:
-            raise NotFoundError(f"Workflow {workflow_id} is not configured.")
-
-        if specification.result is None:
-            raise WorkflowResultMissingError(f"Workflow {workflow_id} does not declare a result.")
-
-        try:
-            candidate = runtime.generate_workflow_candidate(workflow_id)
-        except WorkflowGenerationError as exc:
-            raise CandidateUnavailableError(str(exc)) from exc
-
-        if experiment_id is not None:
-            experiment = repositories.experiments.get(experiment_id)
-
-            if experiment is None:
-                raise ExperimentNotFoundError(f"Experiment {experiment_id} was not found.")
-
-            try:
-                candidate = rebuild_workflow_candidate(
-                    specification=specification,
-                    configured=candidate,
-                    signature=experiment.winner.candidate_signature,
-                    catalog=runtime.models,
-                    registry=runtime.language_models,
-                    portfolio=runtime.portfolio,
-                )
-            except WorkflowCandidateRebuildError as exc:
-                raise CandidateRebuildError(str(exc)) from exc
+        specification, candidate = promotion_candidate(
+            repositories,
+            self._runtime(repositories),
+            workflow_id,
+            experiment_id=experiment_id,
+        )
 
         try:
             revision = promote_workflow_candidate(
@@ -306,4 +352,6 @@ def _steps(
 
 __all__ = [
     "Production",
+    "promotion_candidate",
+    "promotion_command",
 ]

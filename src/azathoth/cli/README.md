@@ -2175,8 +2175,51 @@ An unknown experiment fails with:
 Experiment <EXPERIMENT_ID> was not found.
 ```
 
-`workflow experiments` and `experiment show` read durable state only. They do
-not require provider credentials or runtime bootstrap.
+# Compare an Experiment's Winner
+
+See what promoting an experiment's winner would change, and save, with:
+
+```bash
+azathoth experiment compare <EXPERIMENT_ID>
+```
+
+The winner is set beside what promoting it would replace: what production
+runs now, when the experiment holds it, or else the workflow's configured
+candidate, which every experiment of a session runs first. Each step the two
+ran on different models is named, baseline first, then each case, what a run
+cost and took on each side, and what the winner saves:
+
+```text
+Experiment ID: <EXPERIMENT_ID>
+Workflow ID: <WORKFLOW_ID>
+Compared With: production
+Winner Observation ID: <OBSERVATION_ID>
+Baseline Observation ID: <OBSERVATION_ID>
+Step <STEP_ID>: openrouter/acme/large -> openrouter/acme/small
+Case <CASE_ID>: winner passed, baseline passed
+Case <CASE_ID>: winner passed, baseline failed
+Winner Run: $0.010000, 2.50 s, over 2 runs
+Baseline Run: $0.050000, 5.00 s, over 2 runs
+Saves Per Run: $0.040000 (80.0%), 2.50 s (50.0%)
+Projection: over 120 production invocations in the last 30 days, $4.800000 and 300.00 s; a projection, not a measurement
+Promote: azathoth workflow promote <WORKFLOW_ID> --experiment <EXPERIMENT_ID>
+```
+
+Each run's cost and time are the means over the case runs the experiment
+kept. A winner that costs more or takes longer says so, as `costs $… more`
+or `takes … s longer`. The projection multiplies the saving per run by
+production's invocations in the last 30 days; the benchmark's cases may not
+be production's inputs, so it is never a measurement.
+
+When there is nothing to compare, it says why, and shows the winner alone:
+
+```text
+Compared With: nothing. Production already runs the winner.
+```
+
+`workflow experiments`, `experiment show` and `experiment compare` read
+durable state only. They do not require provider credentials or runtime
+bootstrap.
 
 # Optimization Does Not Promote
 

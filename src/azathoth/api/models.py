@@ -1494,6 +1494,332 @@ class InvocationFinished(ApiModel):
     status: Literal["succeeded", "failed", "rejected", "incomplete"]
 
 
+class ExperimentHeader(ApiModel):
+    """What every view of one recorded optimization experiment carries (ADR 0131)."""
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name, as its winning candidate recorded it.",
+    )
+
+    recorded_at: datetime
+
+    benchmark_id: UUID | None = Field(
+        description="The benchmark its candidates ran, or None from before benchmark optimization.",
+    )
+
+    benchmark_digest: str | None = Field(
+        description="The content digest of the benchmark it ran, or None when not recorded.",
+    )
+
+    benchmark_revision: int | None = Field(
+        description=(
+            "The latest benchmark revision holding the content it ran, or None when none does."
+        ),
+    )
+
+    sensitivity: Sensitivity = Field(
+        description="The label of the benchmark it ran, internal when it has none (ADR 0123).",
+    )
+
+    candidate_count: int = Field(
+        ge=1,
+    )
+
+    case_count: int = Field(
+        ge=1,
+        description="How many cases each candidate was judged on.",
+    )
+
+    winner_observation_id: UUID
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ExperimentSummary(ExperimentHeader):
+    """One recorded experiment, as a workflow's list shows it (ADR 0131)."""
+
+    winner_score: float = Field(
+        description="Its winning candidate's overall score.",
+    )
+
+
+class ExperimentCase(ApiModel):
+    """How one case went for one candidate of an experiment."""
+
+    case_id: UUID | None = Field(
+        description="The benchmark case, or None from before benchmark optimization.",
+    )
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    evaluation_id: UUID
+
+    passed: bool | None = Field(
+        description="Whether it passed, or None when it was not recorded.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+        description="What judging it cost, which is never charged to the candidate.",
+    )
+
+
+class ExperimentStep(ApiModel):
+    """One step of a candidate, as its first case's run ran it."""
+
+    step_id: UUID
+
+    strategy_id: UUID | None = Field(
+        description="The strategy the step ran, or None for a step that did not run.",
+    )
+
+    model: str | None = Field(
+        description="The provider-qualified model it ran on, or None for a step with no model.",
+    )
+
+
+class ExperimentCandidate(ApiModel):
+    """One candidate of an experiment, in its place in the ranking."""
+
+    observation_id: UUID
+
+    rank: int = Field(
+        ge=1,
+        description="Its place in the ranking, from 1 for the winner.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The workflow revision it was generated from, or None when not recorded.",
+    )
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify the candidate.",
+    )
+
+    steps: tuple[ExperimentStep, ...] = Field(
+        description=(
+            "Each step, with the model it ran on, while its first case's run is kept; "
+            "empty once it is not."
+        ),
+    )
+
+    cases_run: int = Field(
+        ge=1,
+    )
+
+    cases_passed: int | None = Field(
+        description="How many of its cases passed, or None when any outcome is unknown.",
+    )
+
+    scorecard: CandidateScorecard
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    cases: tuple[ExperimentCase, ...] = Field(
+        description="Every case it was judged on, in the order it ran them.",
+    )
+
+
+class ExperimentDetail(ExperimentHeader):
+    """One recorded experiment, with every candidate in rank order (ADR 0131)."""
+
+    candidates: tuple[ExperimentCandidate, ...] = Field(
+        description="Every candidate, best first.",
+    )
+
+
+ComparisonBaseline = Literal["production", "configured"]
+"""What an experiment's winner is compared against: what production runs, or what is configured."""
+
+
+class ComparedStep(ApiModel):
+    """One step of the winner and of the baseline, each with the model it ran on."""
+
+    step_id: UUID
+
+    winner_model: str | None
+
+    baseline_model: str | None
+
+    differs: bool = Field(
+        description="Whether the two ran the step on different models.",
+    )
+
+
+class ComparedCase(ApiModel):
+    """One case, as the winner and the baseline did on it."""
+
+    case_id: UUID | None
+
+    winner_passed: bool | None
+
+    baseline_passed: bool | None
+
+    winner_score: float | None = Field(
+        description="The winner's evaluation score, or None once the evaluation is not kept.",
+    )
+
+    baseline_score: float | None
+
+
+class RunCosts(ApiModel):
+    """What one candidate's case runs cost and took, each the mean over the runs still kept."""
+
+    runs: int = Field(
+        ge=0,
+        description="How many of its case runs are kept, and so measured.",
+    )
+
+    cost_usd: float | None = Field(
+        description="The mean cost of a run, or None when any kept run's cost is unknown.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The mean time a run took, or None when no run is kept.",
+    )
+
+
+class Savings(ApiModel):
+    """What the winner saves per run on the benchmark, measured: a negative saving is a cost."""
+
+    cost_usd: float | None = Field(
+        description="The baseline's mean cost less the winner's, or None when either is unknown.",
+    )
+
+    cost_percent: float | None = Field(
+        description="That saving as a percentage of the baseline's cost, or None when undefined.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The baseline's mean time less the winner's, or None when either is unknown.",
+    )
+
+    latency_percent: float | None = Field(
+        description="That saving as a percentage of the baseline's time, or None when undefined.",
+    )
+
+
+class SavingsProjection(ApiModel):
+    """The saving per run multiplied by production's recent invocations: a projection, not a fact.
+
+    The benchmark's cases may not resemble production's inputs, and the next
+    window may not resemble the last.
+    """
+
+    window_days: int = Field(
+        ge=1,
+        description="How many days of production invocations it counts.",
+    )
+
+    since: datetime = Field(
+        description="When that window began.",
+    )
+
+    invocations: int = Field(
+        ge=1,
+        description="How many invocations production made of the workflow in the window.",
+    )
+
+    cost_usd: float | None = Field(
+        description="What the window's invocations would have saved, or None when unknown.",
+    )
+
+    latency_seconds: float | None = Field(
+        description="The time they would have saved, in seconds, or None when unknown.",
+    )
+
+
+class Promotability(ApiModel):
+    """Whether an experiment's winner can still be promoted, and why not when it cannot (ADR 0131).
+
+    It is what `production.promote` would decide, asked without saving
+    anything: the winner rebuilt from the workflow's latest revision with the
+    models authorized now.
+    """
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    promotable: bool
+
+    code: str | None = Field(
+        description="The code `production.promote` would refuse with, or None when it would not.",
+    )
+
+    reason: str | None = Field(
+        description="Why it would refuse, or None when it would not.",
+    )
+
+    command: str = Field(
+        description="The `azathoth workflow promote` command that promotes the winner.",
+    )
+
+
+class ExperimentComparison(ApiModel):
+    """An experiment's winner set beside what promoting it would replace (ADR 0131)."""
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    baseline: ComparisonBaseline | None = Field(
+        description="What the winner is compared against, or None when there is nothing to.",
+    )
+
+    reason: str | None = Field(
+        description="Why nothing is compared, or None when something is.",
+    )
+
+    winner: ExperimentCandidate
+
+    baseline_candidate: ExperimentCandidate | None
+
+    steps: tuple[ComparedStep, ...] = Field(
+        description="Each step either side's kept run ran, in the winner's order.",
+    )
+
+    cases: tuple[ComparedCase, ...] = Field(
+        description="Every case, in the order the candidates ran them.",
+    )
+
+    winner_runs: RunCosts
+
+    baseline_runs: RunCosts | None
+
+    command: str = Field(
+        description="The `azathoth workflow promote` command that promotes the winner.",
+    )
+
+    savings: Savings | None = Field(
+        description="What the winner saves per run, measured on the benchmark, or None.",
+    )
+
+    projection: SavingsProjection | None = Field(
+        description=(
+            "The saving over production's invocations in the last 30 days, or None without any."
+        ),
+    )
+
+
 class CaseStarted(ApiModel):
     """One case of a benchmark is about to run as one workflow (ADR 0130)."""
 
@@ -1539,6 +1865,140 @@ BenchmarkEvent = Annotated[
     Field(discriminator="type"),
 ]
 """One event of a benchmark execution, told apart by its `type`."""
+
+
+class GenerationStarted(ApiModel):
+    """One generation of an optimization session is about to run its candidates (ADR 0131)."""
+
+    type: Literal["generation_started"] = "generation_started"
+
+    generation: int = Field(
+        ge=1,
+        description="Its number, from 1; the final evaluation is numbered after the last.",
+    )
+
+    candidates: int = Field(
+        ge=1,
+        description="How many candidates it runs.",
+    )
+
+    final: bool = Field(
+        description="Whether it is the final evaluation of the last generation's proposals.",
+    )
+
+
+class CandidateFinished(ApiModel):
+    """One candidate of a generation ran every case, and was scored."""
+
+    type: Literal["candidate_finished"] = "candidate_finished"
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    workflow_id: UUID
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify the candidate.",
+    )
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+    overall_score: float
+
+
+class GenerationFinished(ApiModel):
+    """One generation's experiment was recorded, and its winner chosen."""
+
+    type: Literal["generation_finished"] = "generation_finished"
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    experiment_id: UUID = Field(
+        description="The experiment that measured it, which `experiments.get` reads.",
+    )
+
+    winner_strategy_ids: tuple[UUID, ...]
+
+    winner_score: float = Field(
+        description="Its winner's overall score.",
+    )
+
+    proposed: int = Field(
+        ge=0,
+        description="How many candidates it proposes for the next generation; 0 after the final.",
+    )
+
+
+OptimizationEvent = Annotated[
+    GenerationStarted | CandidateFinished | GenerationFinished,
+    Field(discriminator="type"),
+]
+"""One event of an optimization session, told apart by its `type`."""
+
+
+class OptimizationGeneration(ApiModel):
+    """One generation of a session: the experiment that measured it, and what it proposed."""
+
+    generation: int = Field(
+        ge=1,
+    )
+
+    experiment_id: UUID
+
+    winner_strategy_ids: tuple[UUID, ...]
+
+    winner_score: float
+
+    proposed: int = Field(
+        ge=0,
+        description="How many candidates it proposed for the next generation.",
+    )
+
+
+class OptimizationSummary(ApiModel):
+    """What one optimization session measured, and which experiment holds its winner (ADR 0131)."""
+
+    workflow_id: UUID
+
+    benchmark_id: UUID
+
+    generations: tuple[OptimizationGeneration, ...] = Field(
+        min_length=1,
+    )
+
+    final_experiment_id: UUID | None = Field(
+        description="The final evaluation's experiment (ADR 0091), or None when it did not run.",
+    )
+
+    final_skipped: str | None = Field(
+        description="Why the final evaluation did not run, or None when it ran.",
+    )
+
+    winning_experiment_id: UUID = Field(
+        description="The experiment whose winner is the session's winner, to compare and promote.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+        description="Every judge call of every experiment, never charged to a candidate.",
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows the winning experiment.",
+    )
 
 
 RunEvent = Annotated[

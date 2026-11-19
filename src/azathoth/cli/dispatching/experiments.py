@@ -7,6 +7,7 @@ from uuid import UUID
 
 from azathoth.cli.parsing import (
     EXPERIMENT_ACTION_ATTRIBUTE,
+    EXPERIMENT_COMPARE_ACTION,
     EXPERIMENT_ID_ATTRIBUTE,
     EXPERIMENT_SHOW_ACTION,
 )
@@ -18,6 +19,7 @@ def dispatch_experiment_command(
     arguments: Namespace,
     *,
     show_experiment: ExperimentIdentifierHandler,
+    compare_experiment: ExperimentIdentifierHandler,
 ) -> int | None:
     """Dispatch one parsed experiment command."""
 
@@ -32,6 +34,17 @@ def dispatch_experiment_command(
 
     if action == EXPERIMENT_SHOW_ACTION:
         return show_experiment(
+            cast(
+                UUID,
+                getattr(
+                    arguments,
+                    EXPERIMENT_ID_ATTRIBUTE,
+                ),
+            )
+        )
+
+    if action == EXPERIMENT_COMPARE_ACTION:
+        return compare_experiment(
             cast(
                 UUID,
                 getattr(

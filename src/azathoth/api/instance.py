@@ -14,9 +14,11 @@ from azathoth.api.errors import (
     InstanceSchemaError,
     InstanceUnavailableError,
 )
+from azathoth.api.experiments import Experiments
 from azathoth.api.invocations import Invocations
 from azathoth.api.judges import Judges
 from azathoth.api.models import API_STABILITY, InstanceDescription
+from azathoth.api.optimization import Optimization
 from azathoth.api.production import Production
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
 from azathoth.api.remote import Remote, Remotes, reach
@@ -117,6 +119,8 @@ class Azathoth:
             telemetry,
         )
         self._judges = Judges(self._open_repositories, self._models)
+        self._experiments = Experiments(self._open_repositories, self._configured_runtime)
+        self._optimization = Optimization(self._open_repositories, self._configured_runtime)
         self._remotes = Remotes(self._open_repositories)
 
     def __enter__(
@@ -187,6 +191,22 @@ class Azathoth:
         """Return the rotation of models that judge semantic cases (ADR 0129)."""
 
         return self._judges
+
+    @property
+    def experiments(
+        self,
+    ) -> Experiments:
+        """Read and compare the optimization experiments this instance recorded (ADR 0131)."""
+
+        return self._experiments
+
+    @property
+    def optimization(
+        self,
+    ) -> Optimization:
+        """Optimize this instance's workflows against its benchmarks, as they run (ADR 0131)."""
+
+        return self._optimization
 
     @property
     def runs(
