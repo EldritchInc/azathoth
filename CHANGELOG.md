@@ -37,12 +37,39 @@ release dates are on the
   ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
 - Dependabot proposes new digests of the container image's base, and no
   longer new Python versions, which wait until CI tests them.
-- The design for judges and a run's evidence in the service API:
-  `instance.judges`, `runs.record_feedback` and `runs.feedback`,
-  `runs.annotations` and `invocations.annotations`, `runs.children`,
-  `runs.interrupted` and `runs.resume`, with `azathoth run interrupted` to
-  find a run that stopped. Two new errors carry codes of their own:
-  `content_unavailable` and `run_not_resumable`
+- `azathoth.api` keeps the judge rotation: `instance.judges` lists it in
+  order, and adds and removes a judge, which must be served now and
+  authorized. `judge add`, `judge list` and `judge remove` call it, and
+  listing and removing still reach no provider
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+- `azathoth.api` takes and reads a person's judgment of a run:
+  `runs.record_feedback` records one immutable good or bad judgment, a bad
+  one needing a reason and only it taking a corrected output, and
+  `runs.feedback` lists a run's judgments newest first. Every `RunSummary`
+  and `RunDetail` carries the run's latest judgment as `feedback`, and `run
+  feedback` calls the API
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+- `runs.annotations` and `invocations.annotations` return the W3C Web
+  Annotation collection of every citation a run's steps verified, exactly
+  as `run annotations` and `invocation annotations` print it, with its
+  annotations
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+- `runs.children` lists the runs a run's steps started, oldest first, with
+  the step and attempt that started each and how it ended, judged as
+  `runs.get` judges it. `run children` renders what it returns, so a child
+  whose declared result is missing now shows `failed`, as `run show` does
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+- `azathoth run interrupted <WORKFLOW_ID>` lists a workflow's runs that
+  started and never finished, newest first, with how often each was
+  resumed and the command that resumes it, its invocation's for a run that
+  executes one. `runs.interrupted` returns the same list, and `runs.resume`
+  continues an interrupted configured run from its journal under its own
+  ID, through the same call `run resume` makes
+  ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+- Two new errors carry codes of their own: `content_unavailable`, for a
+  record of citation checks the content store no longer holds, and
+  `run_not_resumable`, for a run that finished, executes an invocation, is
+  still held by another process, or whose journal cannot be resumed
   ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
 
 ## 1.4.0
