@@ -31,6 +31,12 @@ from azathoth.api.benchmark_cases import (
     edited_case,
     required_text,
 )
+from azathoth.api.benchmark_executions import (
+    benchmark_revision,
+    execution_detail,
+    execution_not_found_message,
+    execution_summary,
+)
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -43,6 +49,8 @@ from azathoth.api.models import (
     BenchmarkCaseDetail,
     BenchmarkCaseSummary,
     BenchmarkDetail,
+    BenchmarkExecutionDetail,
+    BenchmarkExecutionSummary,
     BenchmarkImport,
     BenchmarkSummary,
     CaseCitations,
@@ -1174,6 +1182,79 @@ class Benchmarks:
         return BenchmarkCaseChange(
             case=case_detail(latest, removed),
             benchmark=self._revision_summary(benchmark_id, saved),
+        )
+
+    def executions(
+        self,
+        benchmark_id: UUID,
+        *,
+        limit: int | None = None,
+    ) -> tuple[BenchmarkExecutionSummary, ...]:
+        """Return a benchmark's saved runs and comparisons, newest first, at most `limit`.
+
+        Executions of a benchmark since removed stay readable, as `benchmark
+        executions` lists them. It is the `read_runs` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The limit is below 1.
+            NotFoundError: The benchmark is neither configured nor has any
+                saved execution.
+        """
+
+        _check_limit(limit)
+
+        repositories = self._repositories()
+        saved = repositories.benchmark_executions.executions_for_benchmark(benchmark_id)
+        history = repositories.benchmarks.revisions(benchmark_id)
+
+        if not saved and not history:
+            raise NotFoundError(f"Benchmark dataset {benchmark_id} is not configured.")
+
+        newest_first = sorted(
+            reversed(saved),
+            key=lambda execution: execution.recorded_at,
+            reverse=True,
+        )
+
+        return tuple(
+            execution_summary(execution, revision=benchmark_revision(history, execution))
+            for execution in newest_first[:limit]
+        )
+
+    def execution(
+        self,
+        execution_id: UUID,
+    ) -> BenchmarkExecutionDetail:
+        """Return one saved run or comparison with every workflow, best first, and every case.
+
+        Each case carries its evaluation's score and reason while the
+        evaluation is kept. It is the `read_runs` action (ADR 0130).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No execution was saved with this ID.
+        """
+
+        repositories = self._repositories()
+        saved = repositories.benchmark_executions.get(execution_id)
+
+        if saved is None:
+            raise NotFoundError(execution_not_found_message(execution_id))
+
+        evaluations = {
+            case.evaluation_id: evaluation
+            for candidate in saved.candidates
+            for case in candidate.cases
+            if (evaluation := repositories.run_evaluations.get(case.evaluation_id)) is not None
+        }
+
+        return execution_detail(
+            saved,
+            revision=benchmark_revision(
+                repositories.benchmarks.revisions(saved.benchmark_id), saved
+            ),
+            evaluations=evaluations,
         )
 
     def _save_cases(

@@ -367,6 +367,226 @@ class BenchmarkCaseChange(ApiModel):
     )
 
 
+ExecutionKind = Literal["run", "compare"]
+"""What saved a benchmark execution: `benchmark run`, or `benchmark compare` (ADR 0075)."""
+
+
+class ScoringPolicySummary(ApiModel):
+    """The targets a comparison scored its workflows' latency and cost against."""
+
+    target_latency_seconds: float
+
+    target_cost_usd: float
+
+
+class CandidateScorecard(ApiModel):
+    """How a comparison scored one workflow, each score from 0 to 1."""
+
+    quality_score: float
+
+    reliability_score: float
+
+    latency_score: float
+
+    cost_score: float
+
+    citation_score: float | None = Field(
+        description="How well its runs cited, or None when no case named citations.",
+    )
+
+    overall_score: float
+
+    rationale: str
+
+
+class ComparisonTally(ApiModel):
+    """How many of one workflow's cases judged by one comparison passed."""
+
+    comparison: CaseComparison
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+
+class ExecutionCaseResult(ApiModel):
+    """How one case of an execution went for one workflow, and the evidence that judged it."""
+
+    case_id: UUID
+
+    comparison: CaseComparison
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    evaluation_id: UUID
+
+    passed: bool
+
+    run_failure: bool = Field(
+        description="Whether the run failed without the declared result, which fails the case.",
+    )
+
+    score: float | None = Field(
+        description="The evaluation's score from 0 to 1, or None when it is no longer kept.",
+    )
+
+    reason: str | None = Field(
+        description="Why the evaluation judged it so, or None when it is no longer kept.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+        description="What judging it cost, which is never charged to the workflow.",
+    )
+
+
+class ExecutionCandidateSummary(ApiModel):
+    """One workflow an execution ran, as a list of executions shows it."""
+
+    candidate_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    workflow_revision: int | None = Field(
+        description="The revision that ran, or None for an execution from before revisions.",
+    )
+
+    cases_run: int = Field(
+        ge=0,
+    )
+
+    cases_passed: int = Field(
+        ge=0,
+    )
+
+    accuracy: float = Field(
+        description="The fraction of its cases that passed.",
+    )
+
+    overall_score: float | None = Field(
+        description="Its overall score in a comparison, or None in a run, which is not scored.",
+    )
+
+
+class ExecutionCandidate(ExecutionCandidateSummary):
+    """One workflow an execution ran, with every case and how it was scored."""
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify what was judged.",
+    )
+
+    run_failures: int = Field(
+        ge=0,
+    )
+
+    judged_semantically: bool = Field(
+        description="Whether any of its cases was judged by the judge rotation.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    tallies: tuple[ComparisonTally, ...] = Field(
+        description="Its pass counts by comparison, for each comparison its cases used.",
+    )
+
+    scorecard: CandidateScorecard | None = Field(
+        description="How a comparison scored it, or None in a run.",
+    )
+
+    cases: tuple[ExecutionCaseResult, ...] = Field(
+        description="Every case, in the order the benchmark holds them.",
+    )
+
+
+class BenchmarkExecutionSummary(ApiModel):
+    """One saved run or comparison of a benchmark, as a list of them shows it (ADR 0130)."""
+
+    execution_id: UUID
+
+    benchmark_id: UUID
+
+    benchmark_revision: int | None = Field(
+        description=(
+            "The benchmark revision it ran, told by its content, or None when no revision "
+            "kept holds that content."
+        ),
+    )
+
+    benchmark_digest: str | None = Field(
+        description="The content digest of the benchmark it ran, or None from before 1.1.",
+    )
+
+    kind: ExecutionKind
+
+    recorded_at: datetime
+
+    sensitivity: Sensitivity = Field(
+        description="The label of the benchmark it ran (ADR 0123).",
+    )
+
+    case_count: int = Field(
+        ge=0,
+    )
+
+    candidates: tuple[ExecutionCandidateSummary, ...] = Field(
+        description="Every workflow it ran, best first in a comparison.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class BenchmarkExecutionDetail(ApiModel):
+    """One saved run or comparison of a benchmark with every workflow and case."""
+
+    execution_id: UUID
+
+    benchmark_id: UUID
+
+    benchmark_revision: int | None
+
+    benchmark_digest: str | None
+
+    kind: ExecutionKind
+
+    recorded_at: datetime
+
+    sensitivity: Sensitivity
+
+    case_count: int = Field(
+        ge=0,
+    )
+
+    scoring_policy: ScoringPolicySummary | None = Field(
+        description="What a comparison scored latency and cost against, or None in a run.",
+    )
+
+    candidates: tuple[ExecutionCandidate, ...] = Field(
+        description="Every workflow it ran, best first in a comparison.",
+    )
+
+    command: str
+
+
 class ModelSummary(ApiModel):
     """One model a configured provider currently serves.
 

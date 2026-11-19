@@ -598,42 +598,34 @@ def list_benchmark_executions(
     *,
     limit: int | None = None,
 ) -> int:
-    """List saved runs and comparisons of one benchmark, newest first.
+    """List saved runs and comparisons of one benchmark, newest first, through the API.
 
     Executions are listed for benchmarks that are configured or that have
     saved executions, so executions of a benchmark since removed remain
     inspectable. An identifier with neither fails, so a mistyped identifier
     is not mistaken for a benchmark that never ran. Only durable state is
-    read, so no provider credentials are needed.
+    read, so no provider credentials are needed (ADR 0130).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    execution_repository = repositories(configuration).benchmark_executions
-
-    executions = execution_repository.executions_for_benchmark(benchmark_id)
-
-    if not executions and repositories(configuration).benchmarks.get(benchmark_id) is None:
+    try:
+        executions = service_instance(configuration).benchmarks.executions(
+            benchmark_id,
+            limit=limit,
+        )
+    except api.ApiError as exc:
         print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    newest_first = sorted(
-        reversed(executions),
-        key=lambda execution: execution.recorded_at,
-        reverse=True,
-    )
-
-    if limit is not None:
-        newest_first = newest_first[:limit]
-
-    if not newest_first:
+    if not executions:
         return 0
 
-    print(render_workflow_benchmark_execution_summaries(newest_first))
+    print(render_workflow_benchmark_execution_summaries(executions))
 
     return 0
 
@@ -641,18 +633,18 @@ def list_benchmark_executions(
 def show_benchmark_execution(
     execution_id: UUID,
 ) -> int:
-    """Show one saved benchmark run or comparison with every candidate and case.
+    """Show one saved benchmark run or comparison with every candidate and case, through the API.
 
-    Only durable state is read, so no provider credentials are needed.
+    Only durable state is read, so no provider credentials are needed (ADR 0130).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    execution = repositories(configuration).benchmark_executions.get(execution_id)
-
-    if execution is None:
+    try:
+        execution = service_instance(configuration).benchmarks.execution(execution_id)
+    except api.ApiError as exc:
         print(
-            f"Benchmark execution {execution_id} was not found.",
+            str(exc),
             file=sys.stderr,
         )
 

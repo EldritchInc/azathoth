@@ -103,13 +103,17 @@ does not hold is `not_found`.
 | `compare(id, workflow_ids, *, target_latency_seconds, target_cost_usd, on_event=None, cancel=None)` | The execution it saved, ranked | `run_benchmark` |
 
 A `BenchmarkExecutionSummary` has the execution's ID, its kind (`run` or
-`comparison`), the benchmark and the revision it ran, its workflows, how
-many cases passed of how many, its label and when it was recorded. A
-`BenchmarkExecutionDetail` adds each candidate's case results: the case,
-its run, whether it passed, its score and the evaluation's reason, and the
-run's latency and cost; a comparison adds its scoring policy and its
-ranking. Executions of a benchmark since removed stay readable, as
-`benchmark executions` keeps them.
+`compare`, the command that saved it), the benchmark and the revision it
+ran, its workflows best first with how many cases each passed of how many,
+its label and when it was recorded. An execution records the benchmark's
+content, not its revision number, so the revision is the latest holding
+that content, or `None` when none does. A `BenchmarkExecutionDetail` adds
+each workflow's strategies, pass counts by comparison, run failures and
+judge totals, and each case's result: the case, its run and evaluation,
+whether it passed, and its score and reason while its evaluation is kept;
+a comparison adds its scoring policy and each workflow's scorecard.
+Executions of a benchmark since removed stay readable, as `benchmark
+executions` keeps them.
 
 `run` and `compare` check everything before any case runs, as the command
 line does: a comparison no evaluator supports, or a workflow that declares
