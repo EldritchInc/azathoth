@@ -12,7 +12,13 @@ from typing import Final
 from uuid import UUID
 
 from azathoth.api.browsing import LIMIT_MESSAGE, RepositoriesAccess
-from azathoth.api.errors import ExperimentNotFoundError, InvalidArgumentError, NotFoundError
+from azathoth.api.errors import (
+    CandidateUnavailableError,
+    ExperimentNotFoundError,
+    InvalidArgumentError,
+    NotFoundError,
+    WorkflowResultMissingError,
+)
 from azathoth.api.models import (
     CandidateScorecard,
     ComparedCase,
@@ -25,10 +31,13 @@ from azathoth.api.models import (
     ExperimentHeader,
     ExperimentStep,
     ExperimentSummary,
+    Promotability,
     RunCosts,
     Savings,
     SavingsProjection,
 )
+from azathoth.api.production import promotion_candidate, promotion_command
+from azathoth.api.running import RuntimeAccess
 from azathoth.evaluation import BenchmarkDatasetRevision
 from azathoth.persistence.repositories import Repositories
 from azathoth.prompting import PROMPT_SPECIFICATIONS, FixedModelSelection
@@ -521,6 +530,7 @@ def compare_experiment(
         ),
         winner_runs=winner_runs,
         baseline_runs=baseline_runs,
+        command=promotion_command(detail.workflow_id, detail.experiment_id),
         savings=savings,
         projection=(
             None
@@ -541,10 +551,15 @@ class Experiments:
     def __init__(
         self,
         repositories: RepositoriesAccess,
+        runtime: RuntimeAccess,
     ) -> None:
-        """Read experiments from `repositories`."""
+        """Read experiments from `repositories`, rebuilding winners in the runtime `runtime` makes.
+
+        A winner is rebuilt only to say whether it can be promoted.
+        """
 
         self._repositories = repositories
+        self._runtime = runtime
 
     def list(
         self,
@@ -649,6 +664,56 @@ class Experiments:
         repositories = self._repositories()
 
         return compare_experiment(repositories, recorded_experiment(repositories, experiment_id))
+
+    def promotable(
+        self,
+        experiment_id: UUID,
+    ) -> Promotability:
+        """Return whether an experiment's winner can still be promoted, and why not.
+
+        The winner is rebuilt from the workflow's latest revision with the
+        models authorized now, as `production.promote` rebuilds it, and
+        nothing is saved. It is the `read_runs` action (ADR 0131); promoting
+        is still `production.promote`.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            ExperimentNotFoundError: No experiment has this ID.
+            ProviderConfigurationError: A provider is configured in a way
+                that cannot be used.
+            ProviderUnavailableError: A provider could not be asked.
+        """
+
+        repositories = self._repositories()
+        experiment = recorded_experiment(repositories, experiment_id)
+        workflow_id = experiment.winner.workflow.id
+        command = promotion_command(workflow_id, experiment_id)
+
+        try:
+            promotion_candidate(
+                repositories,
+                self._runtime(repositories),
+                workflow_id,
+                experiment_id=experiment_id,
+            )
+        except (NotFoundError, WorkflowResultMissingError, CandidateUnavailableError) as exc:
+            return Promotability(
+                experiment_id=experiment_id,
+                workflow_id=workflow_id,
+                promotable=False,
+                code=exc.code,
+                reason=str(exc),
+                command=command,
+            )
+
+        return Promotability(
+            experiment_id=experiment_id,
+            workflow_id=workflow_id,
+            promotable=True,
+            code=None,
+            reason=None,
+            command=command,
+        )
 
 
 __all__ = [

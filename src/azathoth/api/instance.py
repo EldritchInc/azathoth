@@ -119,7 +119,7 @@ class Azathoth:
             telemetry,
         )
         self._judges = Judges(self._open_repositories, self._models)
-        self._experiments = Experiments(self._open_repositories)
+        self._experiments = Experiments(self._open_repositories, self._configured_runtime)
         self._optimization = Optimization(self._open_repositories, self._configured_runtime)
         self._remotes = Remotes(self._open_repositories)
 

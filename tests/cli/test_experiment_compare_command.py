@@ -63,6 +63,9 @@ def test_the_winner_is_printed_beside_the_baseline_with_what_it_saves(
     assert "Baseline Run: $0.050000, 5.00 s, over 2 runs" in out
     assert "Saves Per Run: $0.040000 (80.0%), 2.50 s (50.0%)" in out
     assert "Projection: none; production made no invocation in the last 30 days" in out
+    assert out[-1] == (
+        f"Promote: azathoth workflow promote {WORKFLOW_ID} --experiment {FIRST_EXPERIMENT_ID}"
+    )
 
 
 def test_a_winner_that_costs_more_says_so(

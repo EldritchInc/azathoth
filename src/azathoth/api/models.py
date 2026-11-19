@@ -1747,6 +1747,33 @@ class SavingsProjection(ApiModel):
     )
 
 
+class Promotability(ApiModel):
+    """Whether an experiment's winner can still be promoted, and why not when it cannot (ADR 0131).
+
+    It is what `production.promote` would decide, asked without saving
+    anything: the winner rebuilt from the workflow's latest revision with the
+    models authorized now.
+    """
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    promotable: bool
+
+    code: str | None = Field(
+        description="The code `production.promote` would refuse with, or None when it would not.",
+    )
+
+    reason: str | None = Field(
+        description="Why it would refuse, or None when it would not.",
+    )
+
+    command: str = Field(
+        description="The `azathoth workflow promote` command that promotes the winner.",
+    )
+
+
 class ExperimentComparison(ApiModel):
     """An experiment's winner set beside what promoting it would replace (ADR 0131)."""
 
@@ -1777,6 +1804,10 @@ class ExperimentComparison(ApiModel):
     winner_runs: RunCosts
 
     baseline_runs: RunCosts | None
+
+    command: str = Field(
+        description="The `azathoth workflow promote` command that promotes the winner.",
+    )
 
     savings: Savings | None = Field(
         description="What the winner saves per run, measured on the benchmark, or None.",

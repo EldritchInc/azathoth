@@ -343,4 +343,6 @@ def render_experiment_comparison(
             )
         )
 
+    lines.append(f"Promote: {comparison.command}")
+
     return "\n".join(lines)
