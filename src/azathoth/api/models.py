@@ -1494,6 +1494,158 @@ class InvocationFinished(ApiModel):
     status: Literal["succeeded", "failed", "rejected", "incomplete"]
 
 
+class ExperimentHeader(ApiModel):
+    """What every view of one recorded optimization experiment carries (ADR 0131)."""
+
+    experiment_id: UUID
+
+    workflow_id: UUID
+
+    workflow_name: str = Field(
+        description="The workflow's name, as its winning candidate recorded it.",
+    )
+
+    recorded_at: datetime
+
+    benchmark_id: UUID | None = Field(
+        description="The benchmark its candidates ran, or None from before benchmark optimization.",
+    )
+
+    benchmark_digest: str | None = Field(
+        description="The content digest of the benchmark it ran, or None when not recorded.",
+    )
+
+    benchmark_revision: int | None = Field(
+        description=(
+            "The latest benchmark revision holding the content it ran, or None when none does."
+        ),
+    )
+
+    sensitivity: Sensitivity = Field(
+        description="The label of the benchmark it ran, internal when it has none (ADR 0123).",
+    )
+
+    candidate_count: int = Field(
+        ge=1,
+    )
+
+    case_count: int = Field(
+        ge=1,
+        description="How many cases each candidate was judged on.",
+    )
+
+    winner_observation_id: UUID
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ExperimentSummary(ExperimentHeader):
+    """One recorded experiment, as a workflow's list shows it (ADR 0131)."""
+
+    winner_score: float = Field(
+        description="Its winning candidate's overall score.",
+    )
+
+
+class ExperimentCase(ApiModel):
+    """How one case went for one candidate of an experiment."""
+
+    case_id: UUID | None = Field(
+        description="The benchmark case, or None from before benchmark optimization.",
+    )
+
+    run_id: UUID = Field(
+        description="The run the case ran as, kept as any run is.",
+    )
+
+    evaluation_id: UUID
+
+    passed: bool | None = Field(
+        description="Whether it passed, or None when it was not recorded.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+        description="What judging it cost, which is never charged to the candidate.",
+    )
+
+
+class ExperimentStep(ApiModel):
+    """One step of a candidate, as its first case's run ran it."""
+
+    step_id: UUID
+
+    strategy_id: UUID | None = Field(
+        description="The strategy the step ran, or None for a step that did not run.",
+    )
+
+    model: str | None = Field(
+        description="The provider-qualified model it ran on, or None for a step with no model.",
+    )
+
+
+class ExperimentCandidate(ApiModel):
+    """One candidate of an experiment, in its place in the ranking."""
+
+    observation_id: UUID
+
+    rank: int = Field(
+        ge=1,
+        description="Its place in the ranking, from 1 for the winner.",
+    )
+
+    workflow_revision: int | None = Field(
+        description="The workflow revision it was generated from, or None when not recorded.",
+    )
+
+    strategy_ids: tuple[UUID, ...] = Field(
+        description="The strategies its steps ran with, which identify the candidate.",
+    )
+
+    steps: tuple[ExperimentStep, ...] = Field(
+        description=(
+            "Each step, with the model it ran on, while its first case's run is kept; "
+            "empty once it is not."
+        ),
+    )
+
+    cases_run: int = Field(
+        ge=1,
+    )
+
+    cases_passed: int | None = Field(
+        description="How many of its cases passed, or None when any outcome is unknown.",
+    )
+
+    scorecard: CandidateScorecard
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    cases: tuple[ExperimentCase, ...] = Field(
+        description="Every case it was judged on, in the order it ran them.",
+    )
+
+
+class ExperimentDetail(ExperimentHeader):
+    """One recorded experiment, with every candidate in rank order (ADR 0131)."""
+
+    candidates: tuple[ExperimentCandidate, ...] = Field(
+        description="Every candidate, best first.",
+    )
+
+
 class CaseStarted(ApiModel):
     """One case of a benchmark is about to run as one workflow (ADR 0130)."""
 

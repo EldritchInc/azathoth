@@ -1,14 +1,20 @@
-"""Workflow experiment inspection commands for the Azathoth CLI."""
+"""Workflow experiment inspection commands for the Azathoth CLI.
+
+`workflow experiments` and `experiment show` read through the service API
+(ADR 0131), so the command line and every other caller read experiments
+the same way. Their output is unchanged.
+"""
 
 import sys
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_workflow_experiment,
     render_workflow_experiment_summaries,
 )
+from azathoth.cli.service import service_instance
 
 
 def list_workflow_experiments(
@@ -26,29 +32,20 @@ def list_workflow_experiments(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    experiments = repositories(configuration).experiments.experiments_for_workflow(workflow_id)
-
-    if not experiments and repositories(configuration).workflows.get(workflow_id) is None:
+    try:
+        experiments = service_instance(configuration).experiments.list(workflow_id, limit=limit)
+    except api.ApiError as exc:
         print(
-            f"Workflow {workflow_id} is not configured.",
+            str(exc),
             file=sys.stderr,
         )
 
         return 1
 
-    newest_first = sorted(
-        experiments,
-        key=lambda experiment: experiment.recorded_at,
-        reverse=True,
-    )
-
-    if limit is not None:
-        newest_first = newest_first[:limit]
-
-    if not newest_first:
+    if not experiments:
         return 0
 
-    print(render_workflow_experiment_summaries(newest_first))
+    print(render_workflow_experiment_summaries(experiments))
 
     return 0
 
@@ -60,11 +57,11 @@ def show_experiment(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    experiment = repositories(configuration).experiments.get(experiment_id)
-
-    if experiment is None:
+    try:
+        experiment = service_instance(configuration).experiments.get(experiment_id)
+    except api.ApiError as exc:
         print(
-            f"Experiment {experiment_id} was not found.",
+            str(exc),
             file=sys.stderr,
         )
 

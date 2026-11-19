@@ -52,6 +52,7 @@ from azathoth.api.errors import (
     RunNotStartedError,
     WorkflowResultMissingError,
 )
+from azathoth.api.experiments import Experiments
 from azathoth.api.initialization import initialize
 from azathoth.api.instance import (
     Azathoth,
@@ -90,6 +91,12 @@ from azathoth.api.models import (
     ExecutionCandidateSummary,
     ExecutionCaseResult,
     ExecutionKind,
+    ExperimentCandidate,
+    ExperimentCase,
+    ExperimentDetail,
+    ExperimentHeader,
+    ExperimentStep,
+    ExperimentSummary,
     FeedbackDisposition,
     Initialization,
     InstanceDescription,
@@ -176,6 +183,12 @@ __all__ = [
     "BenchmarkExecutionDetail",
     "BenchmarkExecutionSummary",
     "CandidateScorecard",
+    "ExperimentCandidate",
+    "ExperimentCase",
+    "ExperimentDetail",
+    "ExperimentHeader",
+    "ExperimentStep",
+    "ExperimentSummary",
     "ComparisonTally",
     "ExecutionCandidate",
     "ExecutionCandidateSummary",
@@ -246,6 +259,7 @@ __all__ = [
     "InvocationSummary",
     "Invocations",
     "JudgeSummary",
+    "Experiments",
     "Judges",
     "MatchScope",
     "ModelInUseError",
