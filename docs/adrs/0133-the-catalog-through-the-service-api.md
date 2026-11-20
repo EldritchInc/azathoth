@@ -88,8 +88,9 @@ with `read_restricted` (ADR 0130). The core's owner may, so
 unknown revision is `revision_not_found`, a kind of `not_found`.
 
 `workflow diff <WORKFLOW_ID> <BEFORE> <AFTER>`, `tool diff <TOOL_ID>
-<VERSION> <BEFORE> <AFTER>` and `benchmark diff <BENCHMARK_ID> <BEFORE>
-<AFTER>` print it, a line for each change:
+<BEFORE> <AFTER> --version <VERSION>` and `benchmark diff <BENCHMARK_ID>
+<BEFORE> <AFTER>` print it, a line for each change, an object or a list
+abbreviated:
 
 ```text
 ~ /steps/0/specification/model_selection/model: "acme/large" -> "acme/small"
@@ -97,7 +98,11 @@ unknown revision is `revision_not_found`, a kind of `not_found`.
 - /description: "Count words."
 ```
 
-or that the two are identical. `--output json` prints the API's model.
+or that the two are identical. `--output json` prints the API's model. A
+tool's version is named with `--version`, as `tool export` names it. The
+owner may read restricted data, so `benchmark diff` prints a restricted
+case's values and warns on standard error that its output holds them, as
+`benchmark export` does.
 
 ### Goals
 

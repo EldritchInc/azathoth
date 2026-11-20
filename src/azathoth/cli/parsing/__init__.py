@@ -132,6 +132,12 @@ from azathoth.cli.parsing.remote import (
     REMOTE_WORKFLOWS_ATTRIBUTE,
     add_remote_parser,
 )
+from azathoth.cli.parsing.revision_diffs import (
+    DIFF_ACTION,
+    DIFF_AFTER_ATTRIBUTE,
+    DIFF_BEFORE_ATTRIBUTE,
+    DIFF_OUTPUT_ATTRIBUTE,
+)
 from azathoth.cli.parsing.runs import (
     RUN_ACTION_ATTRIBUTE,
     RUN_ANNOTATIONS_ACTION,
@@ -322,6 +328,10 @@ __all__ = [
     "BENCHMARK_EXECUTION_LIMIT_ATTRIBUTE",
     "BENCHMARK_EXECUTION_SHOW_ACTION",
     "BENCHMARK_EXPORT_ACTION",
+    "DIFF_ACTION",
+    "DIFF_AFTER_ATTRIBUTE",
+    "DIFF_BEFORE_ATTRIBUTE",
+    "DIFF_OUTPUT_ATTRIBUTE",
     "BENCHMARK_HISTORY_ACTION",
     "BENCHMARK_HISTORY_LIMIT_ATTRIBUTE",
     "BENCHMARK_ID_ATTRIBUTE",

@@ -17,6 +17,7 @@ from azathoth.cli.parsing.common import (
     positive_integer,
     sensitivity,
 )
+from azathoth.cli.parsing.revision_diffs import add_diff_parser
 
 WORKFLOW_COMMAND = "workflow"
 
@@ -142,6 +143,13 @@ def add_workflow_parser(
         default=None,
         metavar="NUMBER",
         help="Imported revision to export. Defaults to the latest.",
+    )
+
+    add_diff_parser(
+        workflow_actions,
+        noun="workflow",
+        id_attribute=WORKFLOW_ID_ATTRIBUTE,
+        id_metavar="WORKFLOW_ID",
     )
 
     workflow_import_parser = workflow_actions.add_parser(

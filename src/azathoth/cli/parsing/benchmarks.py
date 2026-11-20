@@ -13,6 +13,7 @@ from azathoth.cli.parsing.common import (
     positive_integer,
     sensitivity,
 )
+from azathoth.cli.parsing.revision_diffs import add_diff_parser
 from azathoth.cli.parsing.workflows import (
     TARGET_COST_ATTRIBUTE,
     TARGET_LATENCY_ATTRIBUTE,
@@ -143,6 +144,13 @@ def add_benchmark_parser(
         default=None,
         metavar="NUMBER",
         help="Imported revision to export. Defaults to the latest.",
+    )
+
+    add_diff_parser(
+        benchmark_actions,
+        noun="benchmark",
+        id_attribute=BENCHMARK_ID_ATTRIBUTE,
+        id_metavar="BENCHMARK_ID",
     )
 
     benchmark_cases_parser = benchmark_actions.add_parser(

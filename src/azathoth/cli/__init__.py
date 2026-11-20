@@ -111,6 +111,7 @@ from azathoth.cli.rendering import (
     render_workflow_run_feedback,
     render_workflow_run_summaries,
 )
+from azathoth.cli.revision_diffs import diff_benchmark, diff_tool, diff_workflow
 from azathoth.cli.runs import (
     list_workflow_runs,
     record_run_feedback,
@@ -169,6 +170,9 @@ __all__ = [
     "configured_run_context",
     "create_benchmark",
     "deauthorize_model",
+    "diff_benchmark",
+    "diff_tool",
+    "diff_workflow",
     "edit_benchmark_case",
     "execute_configured_benchmark",
     "execute_configured_workflow",

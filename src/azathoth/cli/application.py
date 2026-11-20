@@ -31,6 +31,7 @@ from azathoth.cli.benchmarks import (
 from azathoth.cli.dispatching import (
     dispatch_benchmark_authoring_command,
     dispatch_benchmark_command,
+    dispatch_diff_command,
     dispatch_experiment_command,
     dispatch_goal_command,
     dispatch_invocation_command,
@@ -107,6 +108,7 @@ from azathoth.cli.remote import (
     serve_remote,
 )
 from azathoth.cli.resumption import resume_invocation, resume_run
+from azathoth.cli.revision_diffs import diff_benchmark, diff_tool, diff_workflow
 from azathoth.cli.runs import (
     list_interrupted_runs,
     list_run_children,
@@ -277,6 +279,16 @@ def _dispatch(
 
     if command == INIT_COMMAND:
         return initialize_database()
+
+    diffed = dispatch_diff_command(
+        arguments,
+        diff_workflow=diff_workflow,
+        diff_tool=diff_tool,
+        diff_benchmark=diff_benchmark,
+    )
+
+    if diffed is not None:
+        return diffed
 
     if command == BENCHMARK_COMMAND:
         authored = dispatch_benchmark_authoring_command(

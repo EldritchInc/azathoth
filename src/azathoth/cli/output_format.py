@@ -30,3 +30,14 @@ class StatusOutputFormat(StrEnum):
 
     TEXT = "text"
     JSON = "json"
+
+
+class DiffOutputFormat(StrEnum):
+    """How `workflow diff`, `tool diff` and `benchmark diff` write a comparison (ADR 0133).
+
+    `text` writes a line per change, or that the revisions are identical.
+    `json` writes the service API's `RevisionComparison`.
+    """
+
+    TEXT = "text"
+    JSON = "json"
