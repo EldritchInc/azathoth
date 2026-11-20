@@ -2001,6 +2001,96 @@ class OptimizationSummary(ApiModel):
     )
 
 
+SpendPeriod = Literal["day", "week", "month"]
+"""How long each period of a spend report is (ADR 0132)."""
+
+SpendGroup = Literal["workflow", "model", "provider", "source"]
+"""What a spend report's spend is grouped by within each period."""
+
+
+class SpendTotals(ApiModel):
+    """What some model calls cost, billed and estimated apart (ADR 0132).
+
+    Billed dollars are what a provider reported it charged; estimated ones
+    Azathoth computed from a configured price. They are never added into
+    one figure. An unpriced call is counted, never taken for free.
+    """
+
+    billed_usd: float = Field(ge=0.0)
+
+    estimated_usd: float = Field(ge=0.0)
+
+    calls: int = Field(ge=0)
+
+    unpriced_calls: int = Field(
+        ge=0,
+        description="How many of the calls have no known cost.",
+    )
+
+
+class SpendGroupTotals(SpendTotals):
+    """What one group's calls cost: a workflow's, a model's, a provider's or a source's."""
+
+    key: str = Field(
+        min_length=1,
+        description=(
+            "The group: a workflow's ID, `provider/model`, a provider, or a source, "
+            "`unknown` where none is recorded."
+        ),
+    )
+
+    label: str = Field(
+        min_length=1,
+        description="What the group is called: a workflow's name, or else its key.",
+    )
+
+
+class SpendPeriodTotals(ApiModel):
+    """One period of a spend report, cut to the report's range at either end."""
+
+    start: datetime
+
+    end: datetime
+
+    totals: SpendTotals
+
+    groups: tuple[SpendGroupTotals, ...] = ()
+
+
+class SpendReport(ApiModel):
+    """What an instance spent from `since` up to `until`, period by period (ADR 0132).
+
+    Every time is told in the report's time zone, with its offset. Every
+    period of the range is listed, spent in or not.
+    """
+
+    since: datetime
+
+    until: datetime
+
+    time_zone: str = Field(min_length=1)
+
+    period: SpendPeriod
+
+    group: SpendGroup
+
+    workflow_id: UUID | None = Field(
+        description="The one workflow whose spend is reported, or None for every workflow.",
+    )
+
+    periods: tuple[SpendPeriodTotals, ...]
+
+    groups: tuple[SpendGroupTotals, ...] = Field(
+        description="Each group's spend over every period.",
+    )
+
+    totals: SpendTotals
+
+    command: str = Field(
+        description="The `azathoth spend` command that prints this report.",
+    )
+
+
 RunEvent = Annotated[
     RunStarted | StepStarted | StepFinished | ContextChanged | RunFinished | InvocationFinished,
     Field(discriminator="type"),
@@ -2070,4 +2160,10 @@ __all__ = [
     "WorkflowReadiness",
     "WorkflowSummary",
     "parse_run_event",
+    "SpendGroup",
+    "SpendGroupTotals",
+    "SpendPeriod",
+    "SpendPeriodTotals",
+    "SpendReport",
+    "SpendTotals",
 ]

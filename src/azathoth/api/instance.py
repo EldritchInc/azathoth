@@ -23,6 +23,7 @@ from azathoth.api.production import Production
 from azathoth.api.providers import ProviderSettings, language_models, model_directories
 from azathoth.api.remote import Remote, Remotes, reach
 from azathoth.api.running import Runs, configured_runtime
+from azathoth.api.spend import Spend
 from azathoth.inputs import S3ContentLocation, S3ContentStore
 from azathoth.persistence import (
     SCHEMA_VERSION,
@@ -121,6 +122,7 @@ class Azathoth:
         self._judges = Judges(self._open_repositories, self._models)
         self._experiments = Experiments(self._open_repositories, self._configured_runtime)
         self._optimization = Optimization(self._open_repositories, self._configured_runtime)
+        self._spend = Spend(self._open_repositories)
         self._remotes = Remotes(self._open_repositories)
 
     def __enter__(
@@ -207,6 +209,14 @@ class Azathoth:
         """Optimize this instance's workflows against its benchmarks, as they run (ADR 0131)."""
 
         return self._optimization
+
+    @property
+    def spend(
+        self,
+    ) -> Spend:
+        """Read what this instance spent, and when, billed and estimated apart (ADR 0132)."""
+
+        return self._spend
 
     @property
     def runs(
