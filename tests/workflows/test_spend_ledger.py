@@ -1,7 +1,7 @@
 """Tests that spend is a ledger of model calls, each counted once (ADR 0132)."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -412,8 +412,39 @@ def test_judging_of_a_run_no_longer_kept_is_left_out() -> None:
 # Order
 
 
-def test_the_ledger_is_in_the_order_the_calls_were_made() -> None:
-    first = one_run(Calling(0.1, model="acme/first"))
-    second = one_run(Calling(0.2, model="acme/second"))
+def ending_at(run: WorkflowRun, ended: datetime) -> WorkflowRun:
+    """Return a run whose only step ended at `ended`, as a clock may have read it."""
+
+    (step,) = run.steps
+
+    assert step.execution is not None
+
+    execution = step.execution.model_copy(update={"completed_at": ended})
+
+    return run.model_copy(update={"steps": (step.model_copy(update={"execution": execution}),)})
+
+
+def test_the_ledger_is_in_the_order_the_calls_ended() -> None:
+    first = ending_at(one_run(Calling(0.1, model="acme/first")), JUDGED_AT)
+    second = ending_at(one_run(Calling(0.2, model="acme/second")), JUDGED_AT + timedelta(seconds=1))
 
     assert [entry.model for entry in ledger([second, first])] == ["acme/first", "acme/second"]
+
+
+def test_a_childs_call_ending_in_the_same_instant_as_its_parents_comes_first() -> None:
+    #
+    # A coarse clock, such as Windows' of about 16 ms, can read a child's
+    # call and its parent's step as ending in the same instant.
+    #
+    runs, index = ran(Calling(0.25, model="acme/child"), own=0.125, model="acme/parent")
+    parent, child = runs
+    child_execution = child.steps[0].execution
+
+    assert child_execution is not None
+
+    tied = ending_at(parent, child_execution.completed_at)
+
+    assert [entry.model for entry in ledger([tied, child], index)] == [
+        "acme/child",
+        "acme/parent",
+    ]

@@ -188,10 +188,14 @@ def spend_ledger(
     A production invocation's run is `production`, any other kept run
     `run`, and a judge's call `judging`, on the workflow of the run it
     judged. A judge's call on a run no longer kept is left out, since
-    nothing says whose it was.
+    nothing says whose it was. Calls that end in the same instant, as a
+    coarse clock can read a child's and its parent's, are ordered deepest
+    first, since a child ends before the step that started it.
     """
 
     kept = {run.id: run for run in runs}
+    children = {run_id: children_of(run_id) for run_id in kept}
+    depths = {child.child_run_id: child.depth for each in children.values() for child in each}
     entries: list[SpendEntry] = []
 
     for run in kept.values():
@@ -199,7 +203,7 @@ def spend_ledger(
             _run_entries(
                 run,
                 source="production" if run.id in production_run_ids else "run",
-                children=children_of(run.id),
+                children=children[run.id],
                 runs=kept,
             )
         )
@@ -210,7 +214,7 @@ def spend_ledger(
         if judged is not None:
             entries.extend(_judging_entries(evaluation, judged))
 
-    return tuple(sorted(entries, key=lambda entry: entry.at))
+    return tuple(sorted(entries, key=lambda entry: (entry.at, -depths.get(entry.run_id, 0))))
 
 
 __all__ = [
