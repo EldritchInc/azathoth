@@ -5136,7 +5136,7 @@ Benchmark <BENCHMARK_ID> is restricted; its output contains restricted data.
 Benchmark case <CASE_ID> is restricted; its output contains restricted data.
 ```
 
-Nothing is redacted, in 1.4: the warning says what the operator now holds.
+Nothing is redacted, in 1.5: the warning says what the operator now holds.
 A run's span names its label as `azathoth.sensitivity`, so a collector can
 route or drop restricted runs' traces.
 
@@ -5168,7 +5168,7 @@ A restricted benchmark's cases run as restricted runs do, and its semantic
 judges must be private too. Optimizing against it substitutes only private
 models into its context prompts.
 
-Tools are not judged by labels in 1.4: a tool step receives a restricted
+Tools are not judged by labels in 1.5: a tool step receives a restricted
 run's data as any run's (ADR 0123).
 
 # End-to-End From Checked-In Examples

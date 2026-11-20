@@ -6,13 +6,37 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
-## Unreleased
+## 1.5.0
 
-- The design Azathoth 1.6 builds: a remote that serves the whole service
-  API over HTTP, `api.connect` and `--remote` to reach it, and a catalog of
-  named actions for a remote's policy to decide. Nothing in this release
-  implements it yet; the editor's 1.5 pages are built to it
-  ([ADR 0127](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0127-the-remote-serves-the-service-api.md)).
+Azathoth 1.5 brings everything the command line does to the service API.
+Production and its rollback; the judge rotation, a person's judgment of a
+run, what its steps cited, the runs it started and the runs that never
+finished; benchmarks, their cases and their runs; optimization, its
+experiments and a winner set beside what it would replace; and the rest of
+the catalog, a tool's versions, exports, where a model or a tool is used,
+and goals: each is a call of `azathoth.api`, which the command line now
+makes with its output unchanged, and which the local editor,
+[azathoth-ui](https://github.com/EldritchInc/azathoth-ui), calls to do all
+of it. Two things are new everywhere: `azathoth spend` says what an
+instance spent, billed and estimated dollars always apart, and `workflow
+diff`, `tool diff` and `benchmark diff` say what changed between two
+revisions. The database schema does not change, as Upgrading From 1.4
+below says.
+
+This release changes what the image runs on AWS only by what it adds: the
+stack's one-off `init` task finds its database at schema version 7 and
+leaves it there, and its workers run jobs as 1.4's did, each model call's
+cost now saying how it is known. Release validation requires a release
+that changes what the stack runs to be deployed to an AWS sandbox before it
+ships, and no sandbox was available, so this release was not deployed. The
+template was read, the worker run against botocore's `Stubber` and the S3
+tools against a stand-in for S3, as for every release; what only a real
+deployment proves, that the stack's workers run jobs on real SQS and S3, is
+unproven for 1.5.0, as what 1.4.0 and 1.3.0 left unproven still is
+([Release Validation](https://github.com/EldritchInc/azathoth/blob/main/docs/release-validation.md#9-the-aws-deployment)).
+
+### Production
+
 - `azathoth workflow rollback <WORKFLOW_ID>` returns a workflow's production
   to an earlier production revision, the one before the active revision by
   default, or the one `--to` names. It saves a new revision with the earlier
@@ -35,8 +59,9 @@ release dates are on the
   `candidate_unavailable`, `candidate_rebuild`, `nothing_to_roll_back_to`
   and `model_not_authorized`
   ([ADR 0128](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0128-production-through-the-service-api.md)).
-- Dependabot proposes new digests of the container image's base, and no
-  longer new Python versions, which wait until CI tests them.
+
+### Judges and a Run's Evidence
+
 - `azathoth.api` keeps the judge rotation: `instance.judges` lists it in
   order, and adds and removes a judge, which must be served now and
   authorized. `judge add`, `judge list` and `judge remove` call it, and
@@ -71,6 +96,9 @@ release dates are on the
   `run_not_resumable`, for a run that finished, executes an invocation, is
   still held by another process, or whose journal cannot be resumed
   ([ADR 0129](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0129-judges-and-a-runs-evidence-through-the-service-api.md)).
+
+### Benchmarks
+
 - `azathoth benchmark create --name <NAME> --description <TEXT>` creates a
   benchmark with no cases. `azathoth benchmark edit-case <BENCHMARK_ID>
   <CASE_ID>` changes a case's comparison, expected value, description,
@@ -97,6 +125,9 @@ release dates are on the
   through the same calls. A new error, `judge_unavailable`, refuses
   semantic cases no judge may judge
   ([ADR 0130](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0130-benchmarks-through-the-service-api.md)).
+
+### Optimization
+
 - `azathoth experiment compare <EXPERIMENT_ID>` sets an experiment's winner
   beside what promoting it would replace: what production runs now, when
   the experiment holds it, or else the workflow's configured candidate. It
@@ -127,6 +158,9 @@ release dates are on the
   says whether the winner can still be rebuilt from the workflow's latest
   revision with the models authorized now, and why not, saving nothing
   ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+
+### Spend
+
 - `azathoth spend` shows what an instance spent, from `--since` up to
   `--until`, by day, ISO week or month (`--by`) as the clock reads in a
   time zone (`--time-zone`, this computer's by default), so a day the
@@ -161,6 +195,9 @@ release dates are on the
   `tzdata`, so `azathoth spend` and `spend.report` read any time zone there,
   UTC included; without it, 1.5.0a5 refused every report on Windows
   ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+
+### The Catalog
+
 - The design of the rest of the catalog through the service API: a tool's
   versions, exports, where a model or a tool is used, comparing two
   revisions, goals, and making a tool from an MCP server, with
@@ -197,6 +234,59 @@ release dates are on the
   that whoever holds it can do anything the remote's owner can, and from
   1.6 through the whole service API
   ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+
+### Toward 1.6
+
+- The design Azathoth 1.6 builds: a remote that serves the whole service
+  API over HTTP, `api.connect` and `--remote` to reach it, and a catalog of
+  named actions for a remote's policy to decide. Nothing in this release
+  implements it yet; the editor's 1.5 pages are built to it
+  ([ADR 0127](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0127-the-remote-serves-the-service-api.md)).
+
+### Packaging
+
+- Dependabot proposes new digests of the container image's base, and no
+  longer new Python versions, which wait until CI tests them.
+
+### Upgrading From 1.4
+
+Upgrade, and run `azathoth init` as after every upgrade:
+
+```bash
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+If you serve workflows with `azathoth-mcp`, upgrade it in the same command,
+as [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#upgrading-leaving-and-uninstalling) shows: 1.5 of it requires 1.5 of
+`azathoth-ai`.
+
+The database schema does not change: it stays at version 7, and `init`
+has nothing of it to migrate. Documents, commands and the service API keep
+what 1.4 promised, growing only by additions, and every command that now
+goes through the service API prints what it did, but for the few lines
+below.
+
+What an existing installation will notice:
+
+- production revisions saved before 1.5 name nobody as their author, and a
+  malformed `AZATHOTH_AUTHOR` now stops a promotion before anything is
+  written, as it stops an import;
+- `run children` shows a child whose declared result is missing as
+  `failed`, as `run show` does;
+- an OpenRouter reply that names no cost is unpriced, never free, and costs
+  recorded before 1.5 read their basis from their provider;
+- importing a goal already kept, unchanged, succeeds and says the goal is
+  unchanged, where it was refused;
+- `remote token create` warns on standard error what a token can do.
+
+On Windows, Azathoth now installs `tzdata`, so spend is read in any time
+zone there, UTC included.
 
 ## 1.4.0
 

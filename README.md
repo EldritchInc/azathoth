@@ -207,7 +207,7 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.4 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Azathoth 1.5 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
 Windows, all tested in CI. It runs models on OpenRouter and Amazon Bedrock,
 keeps its state in SQLite or PostgreSQL, ships as a signed container image
 for amd64 and arm64, and deploys to AWS from one CloudFormation template. It
@@ -215,9 +215,12 @@ reads PDFs and images and cites the passages its answers came from, serves
 promoted workflows to AI clients over MCP with `azathoth-mcp`, and calls
 tools other MCP servers serve. It records who made every revision, keeps
 restricted data to the models declared private, and shares workflows, tools
-and benchmarks between instances through a remote. The local editor,
+and benchmarks between instances through a remote. Everything its command
+line does, from production and rollback to benchmarks, optimization and
+goals, is a call of its service API, which says what an instance spent and
+what changed between two revisions. The local editor,
 [azathoth-ui](https://github.com/EldritchInc/azathoth-ui), drives it through
-its service API.
+that API.
 The [changelog](https://github.com/EldritchInc/azathoth/blob/main/CHANGELOG.md)
 lists what each release added.
 
