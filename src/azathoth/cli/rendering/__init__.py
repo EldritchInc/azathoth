@@ -60,6 +60,10 @@ from azathoth.cli.rendering.resumes import (
     render_run_children,
     render_unfinished_run,
 )
+from azathoth.cli.rendering.revision_diffs import (
+    render_revision_change,
+    render_revision_comparison,
+)
 from azathoth.cli.rendering.run_summaries import (
     WorkflowRunSource,
     render_workflow_run_summaries,
@@ -89,6 +93,8 @@ __all__ = [
     "render_production_invocation",
     "render_production_invocation_result",
     "render_production_invocation_summaries",
+    "render_revision_change",
+    "render_revision_comparison",
     "render_tool_usage_report",
     "render_spend_report",
     "render_workflow_benchmark_comparison_execution",

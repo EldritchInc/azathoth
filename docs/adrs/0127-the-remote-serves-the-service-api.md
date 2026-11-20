@@ -1,6 +1,6 @@
 # ADR 0127: The Remote Serves the Service API
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0133
 - Date: 2026-11-17
 
 ## Context
@@ -101,6 +101,7 @@ resource. `Action` grows to the full catalog, stable within 1.x:
 | `read_runs` | Read runs, invocations, executions and experiments, and their traces |
 | `read_restricted` | Read data labelled restricted, wherever it appears |
 | `import_workflow`, `import_benchmark` | Import a workflow or benchmark revision |
+| `import_goal` | Import a reusable goal (ADR 0133) |
 | `import_tool` | Import a tool version, except a process tool |
 | `import_process_tool` | Import a process tool |
 | `tool_from_mcp` | Make a tool from an MCP server, which starts a command on the server |

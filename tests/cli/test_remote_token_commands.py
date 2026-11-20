@@ -8,7 +8,7 @@ import pytest
 
 import azathoth.cli.application as application
 from azathoth.cli import build_parser, main
-from azathoth.cli.remote import TOKEN_SHOWN_ONCE_NOTE, token_line
+from azathoth.cli.remote import TOKEN_POWER_WARNING, TOKEN_SHOWN_ONCE_NOTE, token_line
 from azathoth.remote import RemoteToken, SQLiteRemoteTokenRepository, TokenAuthenticator
 from azathoth.revisions import AUTHOR_VARIABLE, Author
 from tests.cli.test_benchmark_add_case import forbid_runtime
@@ -123,7 +123,7 @@ def test_a_created_token_is_shown_once_and_reaches_the_remote(
     (token,) = tokens.tokens()
     secret = out.splitlines()[1].removeprefix("Token: ")
 
-    assert (status, err) == (0, "")
+    assert (status, err) == (0, f"{TOKEN_POWER_WARNING}\n")
     assert out == f"Created remote token laptop.\nToken: {secret}\n{TOKEN_SHOWN_ONCE_NOTE}\n"
     assert secret.startswith("azr_")
     assert token.author == ERIS
@@ -131,6 +131,29 @@ def test_a_created_token_is_shown_once_and_reaches_the_remote(
     assert TOKEN_SHOWN_ONCE_NOTE == (
         "Keep the token now: this remote keeps only its digest, and cannot show it again."
     )
+
+
+def test_making_a_token_warns_that_it_can_do_whatever_the_owner_can(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _, _, err = run(capsys, "remote", "token", "create", "laptop")
+
+    assert err == f"{TOKEN_POWER_WARNING}\n"
+    assert TOKEN_POWER_WARNING == (
+        "Whoever holds this token can do anything this remote's owner can, and from Azathoth "
+        "1.6 through the whole service API: run, invoke, promote, authorize models and read "
+        "every run, not only push and pull. Give it only where you would give all of that."
+    )
+
+
+def test_a_name_that_is_refused_is_not_warned_of(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _, _, err = run(capsys, "remote", "token", "create", "my laptop")
+
+    assert TOKEN_POWER_WARNING not in err
 
 
 def test_a_taken_or_malformed_name_is_refused(
@@ -235,6 +258,7 @@ def test_the_guide_quotes_the_token_messages_exactly(
     secret = created.splitlines()[1].removeprefix("Token: azr_")
     messages = [
         *created.replace(secret, "<SECRET>").splitlines(),
+        TOKEN_POWER_WARNING,
         run(capsys, "remote", "token", "create", "laptop")[2],
         run(capsys, "remote", "token", "create", "my laptop")[2].replace("my laptop", "laptop"),
         run(capsys, "remote", "token", "revoke", "laptop")[1],

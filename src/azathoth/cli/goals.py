@@ -1,16 +1,17 @@
-"""Durable goal inspection commands for the Azathoth CLI."""
+"""Durable goal inspection commands for the Azathoth CLI.
+
+`goal list`, `goal show` and `goal import` go through the service API's
+`goals` (ADR 0133), so the command line and every other caller say the
+same of an instance's goals. Each prints as it always has.
+"""
 
 import sys
 from pathlib import Path
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
-from azathoth.goals import (
-    Goal,
-    GoalDocumentError,
-    decode_goal_document,
-)
+from azathoth.cli.service import service_instance
 
 
 def list_goals() -> int:
@@ -18,9 +19,14 @@ def list_goals() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).goals
+    try:
+        goals = service_instance(configuration).goals.list()
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    for goal in repository.goals():
+        return 1
+
+    for goal in goals:
         print(f"{goal.id}  {goal.name}")
 
     return 0
@@ -33,29 +39,20 @@ def show_goal(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).goals
-
-    goal = repository.get(
-        goal_id,
-    )
-
-    if goal is None:
-        print(
-            f"Goal {goal_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        goal = service_instance(configuration).goals.get(goal_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    _print_goal(
-        goal,
-    )
+    _print_goal(goal)
 
     return 0
 
 
 def _print_goal(
-    goal: Goal,
+    goal: api.GoalDetail,
 ) -> None:
     """Render one durable descriptive objective."""
 
@@ -82,7 +79,12 @@ def _print_goal(
 def import_goal(
     document_path: Path,
 ) -> int:
-    """Import one durable reusable goal from a JSON document."""
+    """Import one durable reusable goal from a JSON document.
+
+    A document that is not a goal is refused before the database is
+    touched, and a goal whose ID is taken is never replaced. Importing a
+    goal already kept, unchanged, says it is unchanged.
+    """
 
     try:
         document = document_path.read_text(
@@ -96,35 +98,21 @@ def import_goal(
 
         return 1
 
-    try:
-        goal = decode_goal_document(
-            document,
-        )
-    except GoalDocumentError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
-
-        return 1
-
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).goals
-
     try:
-        repository.save(
-            goal,
-        )
-    except ValueError as exc:
-        print(
-            str(exc),
-            file=sys.stderr,
-        )
+        imported = service_instance(configuration).goals.import_document(document)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    print(f"Imported goal {goal.id}.")
+    if not imported.created:
+        print(f"Goal {imported.goal.id} is unchanged.")
+
+        return 0
+
+    print(f"Imported goal {imported.goal.id}.")
 
     return 0
 

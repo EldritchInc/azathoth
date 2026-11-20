@@ -69,6 +69,8 @@ azathoth
 │   │   └── --limit <COUNT>
 │   ├── export <WORKFLOW_ID>
 │   │   └── --revision <NUMBER>
+│   ├── diff <WORKFLOW_ID> <BEFORE> <AFTER>
+│   │   └── --output text|json
 │   ├── run <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>
 │   │   ├── --media-type <TYPE>     (only with --input-file)
@@ -191,6 +193,15 @@ azathoth
 │   ├── export <TOOL_ID>
 │   │   ├── --version <VERSION>
 │   │   └── --revision <NUMBER>
+│   ├── diff <TOOL_ID> <BEFORE> <AFTER>
+│   │   ├── --version <VERSION>
+│   │   └── --output text|json
+│   ├── from-mcp
+│   │   ├── --tool <NAME>
+│   │   ├── --url <URL> | -- <COMMAND>...   (exactly one)
+│   │   ├── --authorization <VARIABLE>
+│   │   ├── --grant <VARIABLE>
+│   │   └── --timeout-seconds <SECONDS>
 │   ├── versions <TOOL_ID>
 │   ├── implementations <TOOL_ID>
 │   │   └── --version <VERSION>
@@ -215,6 +226,8 @@ azathoth
     │   └── --limit <COUNT>
     ├── export <BENCHMARK_ID>
     │   └── --revision <NUMBER>
+    ├── diff <BENCHMARK_ID> <BEFORE> <AFTER>
+    │   └── --output text|json
     ├── cases <BENCHMARK_ID>
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── add-case <BENCHMARK_ID>
@@ -1108,6 +1121,44 @@ an unknown revision fails with:
 ```text
 Workflow <WORKFLOW_ID> has no revision <NUMBER>.
 ```
+
+# Compare Two Revisions
+
+`workflow diff`, `tool diff` and `benchmark diff` print what differs
+between two imported revisions, through the service API's
+`compare_revisions` (ADR 0133). A tool's revisions belong to one exact
+version, named with `--version` as `tool export` names it:
+
+```bash
+azathoth workflow diff <WORKFLOW_ID> <BEFORE> <AFTER>
+azathoth tool diff <TOOL_ID> <BEFORE> <AFTER> --version <VERSION>
+azathoth benchmark diff <BENCHMARK_ID> <BEFORE> <AFTER>
+```
+
+Each prints a line per change, by its JSON Pointer, in document order: `~`
+for a value changed, `+` for one added and `-` for one removed. A value is
+printed as JSON, and an object or a list as `{...}` or `[...]`:
+
+```text
+~ /steps/0/specification/model_selection/model: "acme/large" -> "acme/small"
++ /cases/1: {...}
+- /description: "Count words."
+```
+
+Two revisions with the same content, such as one that reverted to the
+other, are said to be:
+
+```text
+Revisions <BEFORE> and <AFTER> are identical.
+```
+
+The documents are compared as they export, key by key and list item by
+list item, so a step inserted first reads as each step changing; nothing is
+guessed. `--output json` writes the service API's `RevisionComparison`
+instead. The owner may read restricted data, so `benchmark diff` prints a
+restricted case's values, and warns on standard error that its output holds
+them, as `benchmark export` does. An unknown revision fails as `show` and
+`export` do.
 
 # Inspection Versus Execution
 
@@ -3955,6 +4006,12 @@ Token: azr_<SECRET>
 Keep the token now: this remote keeps only its digest, and cannot show it again.
 ```
 
+It warns on standard error what the token can do (ADR 0133):
+
+```text
+Whoever holds this token can do anything this remote's owner can, and from Azathoth 1.6 through the whole service API: run, invoke, promote, authorize models and read every run, not only push and pull. Give it only where you would give all of that.
+```
+
 The database keeps only the token's sha256 digest, so a database that leaks
 holds no token that works, and a token that is lost is revoked and created
 again. A name is 1 to 64 letters, digits, `.`, `_` or `-`, and names one
@@ -4131,7 +4188,8 @@ one version, so each such revision holds every test case of its tool.
 
 `tool from-mcp` lists the tools one MCP server serves and prints the named
 tool's document, its implementation pinned to the digest of the tool's
-schemas as they are served now (ADR 0119). Name a server reached over HTTP
+schemas as they are served now (ADR 0119), through the service API's
+`tools.from_mcp` (ADR 0133). Name a server reached over HTTP
 by its URL, or give the command that starts a stdio server after `--`:
 
 ```bash
@@ -4305,6 +4363,18 @@ The goal command family manages durable reusable goals.
 azathoth goal import <FILE>
 azathoth goal list
 azathoth goal show <GOAL_ID>
+```
+
+Each goes through the service API's `goals` (ADR 0133). A goal is not
+revised: importing one appends nothing to a goal already kept. A document
+identical to the goal kept under its ID keeps nothing, and another goal
+with that ID is refused, the kept one never replaced:
+
+```text
+Imported goal <GOAL_ID>.
+Goal <GOAL_ID> is unchanged.
+Goal <GOAL_ID> already exists.
+Goal <GOAL_ID> is not configured.
 ```
 
 # Judge Commands

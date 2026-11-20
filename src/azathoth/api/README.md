@@ -60,12 +60,20 @@ with api.open("azathoth.db") as instance:
 | `workflows.list()` | Every workflow at its latest revision, in first-import order. |
 | `workflows.get(id, revision=None)` | One revision with its importable document, the latest by default. |
 | `workflows.history(id, limit=None)` | Its revisions, newest first. |
+| `workflows.export(id, revision=None)` | A `DocumentExport` of one revision, as `workflow export` prints it (ADR 0133). |
+| `workflows.compare_revisions(id, before, after)` | A `RevisionComparison` of two revisions, as `workflow diff` prints it. |
 | `tools.list()` | Every exact tool version at its latest revision. |
+| `tools.versions(id)` | Each version of one tool at its latest revision, as `tool versions` lists them. |
 | `tools.get(id, version, revision=None)` | One revision of one exact version, with its document. |
 | `tools.history(id, version=None, limit=None)` | Its revisions newest first, of one version when it is named. |
+| `tools.export(id, version, revision=None)` | A `DocumentExport` of one revision of one exact version. |
+| `tools.compare_revisions(id, version, before, after)` | A `RevisionComparison` of two revisions of one exact version. |
+| `tools.from_mcp(tool, url=None, command=(), authorization=None, grants=(), timeout_seconds=None)` | A `DocumentExport` of the tool an MCP server serves, pinned as it serves it now, as `tool from-mcp` prints it; nothing is imported. |
 | `benchmarks.list()` | Every benchmark dataset at its latest revision. |
 | `benchmarks.get(id, revision=None)` | One revision with its document, the latest by default. |
 | `benchmarks.history(id, limit=None)` | Its revisions, newest first. |
+| `benchmarks.export(id, revision=None)` | A `DocumentExport` of one revision, with its `sensitivity`. |
+| `benchmarks.compare_revisions(id, before, after, include_restricted=True)` | A `RevisionComparison` of two revisions; without `include_restricted`, a restricted case's values are withheld. |
 | `benchmarks.cases(id, revision=None)` | Each `BenchmarkCaseSummary` of a revision, in order: its comparison, label, description, and where it came from, `run`, `file` or `json` (ADR 0130). |
 | `benchmarks.case(id, case_id, revision=None)` | One `BenchmarkCaseDetail`, adding its input, expected value, citations, input provenance and metadata. |
 
@@ -90,6 +98,29 @@ earliest earlier revision with the same content when the import reverted to
 one. A `get` also carries `latest_number` and the `document`, exactly what
 the matching `import` command accepts. A benchmark also carries its
 `sensitivity`, the most sensitive of its cases' labels (ADR 0123).
+
+A `DocumentExport`'s `text` is exactly what the matching `export` command
+prints, so importing the latest revision's export again appends nothing,
+and its `file_name` suggests a file for it, such as
+`word-count-1.0.0.r3.tool.json`; one made from an MCP server has no
+revision yet, as `search-1.0.0.tool.json`. A benchmark's export carries its
+label, so a caller can say it holds restricted data.
+
+A `RevisionComparison` names both revisions, says whether they are
+`identical`, by content digest, and lists each `RevisionChange` in document
+order: its `kind`, `added`, `removed` or `changed`, its RFC 6901 JSON
+`pointer`, and its `before` and `after` values. Objects are compared key by
+key and lists item by item, so a case inserted first reads as each case
+changing; nothing is guessed. Without `include_restricted`, which is the
+`read_restricted` action, a restricted case's input, provenance, expected
+value and citations are `None` and the change is `withheld`.
+
+`tools.from_mcp` names the server by its `url` or by the `command` that
+starts it, never both (`InvalidArgumentError`); a tool the server does not
+serve is a `NotFoundError`, and a server that cannot be reached or listed,
+or needs an authorization variable that is not set, is an
+`McpUnavailableError`. Import the document with `import_document` once it
+has been read.
 
 Each value's `command` is the `azathoth` command that shows the same thing:
 `workflow show` and `benchmark show`, with `--revision` for a revision named
@@ -118,6 +149,8 @@ with api.open("azathoth.db", providers=api.ProviderSettings.from_environment()) 
 | --- | --- | --- |
 | `models.list()` | Every model the providers serve now, provider by provider. | Yes |
 | `models.get(identifier)` | One of them. | Yes |
+| `models.usage(identifier)` | A `ModelUsage`: each workflow that configures the model, where its production uses it, and the runs that called it, as `model usage` prints it (ADR 0133). | No |
+| `tools.usage(id)` | A `ToolUsage` of one tool identity, the same of a tool, with the names its versions are required by. | No |
 | `models.matching(requirements, sensitivity=None, scope="portfolio")` | The portfolio's models that meet a step's requirements, in the order a run tries them; with `sensitivity`, only those that may receive input so labelled; with `scope="catalog"`, every served model that meets them, each marked `authorized` or not. | Yes |
 | `portfolio.list()` | Every authorized model, in the order authorized. | No |
 | `portfolio.add(identifier, data_policy=...)` | Authorizes a model a provider serves now. | Yes |
@@ -149,6 +182,27 @@ instance.portfolio.set_data_policy(
 `ModelInUseError`, whose `dependents` names each workflow and step; with
 `force=True` the model is removed and its `dependents` are returned. A
 semantic judge is always kept until it leaves the judge rotation.
+
+A usage is the `read_catalog` and `read_runs` actions. A model nothing uses
+has no workflows, and is not an error; a tool nothing defines and no run
+executed is a `NotFoundError`.
+
+## Goals
+
+`instance.goals` keeps the reusable goals strategies are measured against
+(ADR 0133). A goal is not revised.
+
+| Call | Returns |
+| --- | --- |
+| `goals.list()` | Each `GoalSummary`, in import order. |
+| `goals.get(goal_id)` | One `GoalDetail`, adding its success criteria, constraints and document. |
+| `goals.import_document(document)` | A `GoalImport`, as `goal import` does. |
+
+Importing is the `import_goal` action. A document that is not a goal is an
+`InvalidDocumentError`, refused before the database is touched; one
+identical to the goal kept under its ID keeps nothing, and its `GoalImport`
+is not `created`; another goal with a kept ID is a `ConflictError`, and the
+kept one is never replaced.
 
 ## Judges
 
@@ -586,10 +640,10 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `InstanceUnavailableError` | `instance_unavailable` | PostgreSQL is named without the `postgres` extra. |
 | `InstanceSchemaError` | `instance_schema` | The PostgreSQL database does not hold this Azathoth's schema. |
 | `InstanceClosedError` | `instance_closed` | A call is made on a closed instance. |
-| `NotFoundError` | `not_found` | No workflow, tool version or benchmark has the ID named, or no remote the name. |
+| `NotFoundError` | `not_found` | No workflow, tool version, benchmark or goal has the ID named, no remote the name, or no MCP server serves the tool named. |
 | `RevisionNotFoundError` | `revision_not_found` | It has no revision with the number named; a `NotFoundError` too. |
 | `InvalidArgumentError` | `invalid_argument` | A history limit is below 1; a `ValueError` too. |
-| `ConflictError` | `conflict` | A model is already authorized, or is a semantic judge. |
+| `ConflictError` | `conflict` | A model is already authorized, or is a semantic judge, or another goal has the ID of one to import. |
 | `ModelInUseError` | `model_in_use` | Active production uses the model; a `ConflictError` too. |
 | `ProviderConfigurationError` | `provider_configuration` | Bedrock is on without boto3, without a region, or with unusable prices. |
 | `ProviderUnavailableError` | `provider_unavailable` | A provider could not be asked what it serves. |
@@ -609,6 +663,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |
 | `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |
 | `RemoteDivergedError` | `remote_diverged` | A pushed lineage diverged at the remote; a `ConflictError` too. |
+| `McpUnavailableError` | `mcp_unavailable` | An MCP server to make a tool from could not be reached or listed, or needs an authorization variable that is not set. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.
@@ -619,6 +674,10 @@ Tool <TOOL_ID>@<VERSION> is not configured.
 Tool <TOOL_ID>@<VERSION> has no revision <NUMBER>.
 Benchmark dataset <BENCHMARK_ID> is not configured.
 Benchmark dataset <BENCHMARK_ID> has no revision <NUMBER>.
+Tool <TOOL_ID> is not configured.
+Goal <GOAL_ID> is not configured.
+Goal <GOAL_ID> already exists.
+MCP server <SERVER> serves no tool named '<TOOL>'.
 A history limit must be at least 1.
 Model '<IDENTIFIER>' is not currently available.
 Model '<IDENTIFIER>' is already authorized.

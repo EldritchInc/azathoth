@@ -23,11 +23,13 @@ from azathoth.api.errors import (
 )
 from azathoth.api.models import (
     ModelSummary,
+    ModelUsage,
     PortfolioEntry,
     PortfolioRemoval,
     ProductionDependent,
     ProductionStepUsage,
 )
+from azathoth.api.usage import model_usage_of
 from azathoth.persistence.repositories import Repositories
 from azathoth.providers import (
     ModelCatalog,
@@ -267,6 +269,32 @@ class Models:
             raise _unavailable(identifier)
 
         return model
+
+    def usage(
+        self,
+        identifier: str,
+    ) -> ModelUsage:
+        """Return where one exact model is configured, in production, and executed.
+
+        A model is its provider's, so one no provider serves any longer can
+        still be asked of, and one nothing uses is used nowhere, not an
+        error. It reads no provider. It is the `read_catalog` and
+        `read_runs` actions (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+        """
+
+        repositories = self._repositories()
+
+        return model_usage_of(
+            model_usage_report(
+                identifier,
+                specifications=repositories.workflows.specifications(),
+                production_states=repositories.production_states.states(),
+                runs=repositories.runs.runs(),
+            )
+        )
 
     def matching(
         self,

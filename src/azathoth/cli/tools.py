@@ -23,7 +23,6 @@ from azathoth.tools import (
     ToolImplementation,
     ToolTestCase,
     earliest_identical_tool_revision,
-    encode_tool_document,
 )
 
 
@@ -70,26 +69,23 @@ def show_tool(
 def list_tool_versions(
     tool_id: UUID,
 ) -> int:
-    """List durable definition versions for one tool identity."""
+    """List durable definition versions for one tool identity, through the service API.
+
+    The versions are `tools.versions` (ADR 0133), printed one a line as
+    they always have been.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    definitions = tuple(
-        definition for definition in repository.definitions() if definition.id == tool_id
-    )
-
-    if not definitions:
-        print(
-            f"Tool {tool_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        versions = service_instance(configuration).tools.versions(tool_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    for definition in definitions:
-        print(definition.version)
+    for version in versions:
+        print(version.version)
 
     return 0
 
@@ -363,45 +359,19 @@ def export_tool(
     The latest revision of the exact version is exported unless another is
     named. Importing the latest revision's export again appends nothing;
     importing an earlier one's reverts to it (ADR 0122). Only durable state
-    is read.
+    is read, through `tools.export` (ADR 0133).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    latest = repository.latest_document_revision(
-        tool_id,
-        version,
-    )
-
-    if latest is None:
-        print(
-            f"Tool {tool_id}@{version} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        exported = service_instance(configuration).tools.export(tool_id, version, revision=revision)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    selected = (
-        latest
-        if revision is None
-        else repository.document_revision(
-            tool_id,
-            version,
-            revision,
-        )
-    )
-
-    if selected is None:
-        print(
-            f"Tool {tool_id}@{version} has no revision {revision}.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    print(encode_tool_document(selected.document))
+    sys.stdout.write(exported.text)
 
     return 0
 

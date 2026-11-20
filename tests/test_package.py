@@ -8,6 +8,7 @@ from importlib.metadata import (
     version,
 )
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -88,7 +89,7 @@ def current_documents() -> list[Path]:
 
 
 def test_package_exposes_version() -> None:
-    assert __version__ == "1.5.0a5"
+    assert __version__ == "1.5.0b1"
 
 
 @pytest.mark.parametrize(
@@ -147,7 +148,28 @@ def test_distribution_declares_runtime_dependencies() -> None:
         "httpx<1,>=0.28",
         "jsonschema<5,>=4.18",
         "pydantic>=2",
+        WINDOWS_TIME_ZONES,
     )
+
+
+WINDOWS_TIME_ZONES = 'tzdata>=2024.1; sys_platform == "win32"'
+"""Windows keeps no IANA time zone database, so spend reads one from `tzdata` (ADR 0132)."""
+
+
+def test_windows_is_given_the_time_zones_spend_is_read_in() -> None:
+    requirements = requires(DISTRIBUTION_NAME)
+
+    assert requirements is not None
+    assert WINDOWS_TIME_ZONES in requirements
+
+
+def test_every_time_zone_spend_names_is_known_here() -> None:
+    #
+    # Without a time zone database, zoneinfo knows no zone, not even UTC,
+    # and every spend report is refused, as it was on Windows before.
+    #
+    for name in ("UTC", "America/New_York", "Asia/Tokyo"):
+        assert ZoneInfo(name).key == name
 
 
 def test_distribution_declares_mit_license() -> None:

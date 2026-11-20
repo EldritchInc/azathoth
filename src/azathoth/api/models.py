@@ -218,6 +218,132 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class GoalSummary(ApiModel):
+    """One reusable goal: what a strategy is trying to accomplish (ADR 0133)."""
+
+    id: UUID
+
+    name: str = Field(
+        min_length=1,
+    )
+
+    description: str = Field(
+        min_length=1,
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class GoalDetail(GoalSummary):
+    """One reusable goal with its success criteria, constraints and document."""
+
+    success_criteria: tuple[str, ...] = Field(
+        min_length=1,
+        description="What a strategy meeting the goal achieves, in order.",
+    )
+
+    constraints: tuple[str, ...] = Field(
+        description="What a strategy must not do, in order; none when it has none.",
+    )
+
+    document: dict[str, JsonValue] = Field(
+        description="The goal as `azathoth goal import` accepts it.",
+    )
+
+
+class GoalImport(ApiModel):
+    """What importing one goal document did (ADR 0133).
+
+    A goal is not revised: importing another goal with an ID that is taken
+    is a conflict.
+    """
+
+    created: bool = Field(
+        description=(
+            "Whether the goal was kept. False when the document is identical to the goal "
+            "already kept under its ID, which `goal` then is."
+        ),
+    )
+
+    goal: GoalDetail
+
+
+RevisionChangeKind = Literal["added", "removed", "changed"]
+"""How a value differs between two revisions: only after, only before, or in both but unequal."""
+
+
+class RevisionChange(ApiModel):
+    """One value that differs between two revisions' documents (ADR 0133)."""
+
+    kind: RevisionChangeKind
+
+    pointer: str = Field(
+        description="Where the value is, as an RFC 6901 JSON Pointer; the empty one is the root.",
+    )
+
+    before: JsonValue = Field(
+        default=None,
+        description="The value before; None when it was added, or when it is withheld.",
+    )
+
+    after: JsonValue = Field(
+        default=None,
+        description="The value after; None when it was removed, or when it is withheld.",
+    )
+
+    withheld: bool = Field(
+        default=False,
+        description=(
+            "Whether a restricted case's values were left out of before or after, as None."
+        ),
+    )
+
+
+class RevisionComparison(ApiModel):
+    """What differs between two revisions of one workflow, tool version or benchmark (ADR 0133).
+
+    The comparison is structural: the two documents, as they export, are
+    compared value by value, and a list item by item.
+    """
+
+    before: Revision
+
+    after: Revision
+
+    identical: bool = Field(
+        description="Whether the two revisions have the same content digest.",
+    )
+
+    changes: tuple[RevisionChange, ...] = Field(
+        description="Each value that differs, in document order; none when they are identical.",
+    )
+
+
+class DocumentExport(ApiModel):
+    """One revision as the document that imports it again, and the file it suggests (ADR 0133).
+
+    `text` is exactly what the export command prints, so importing the
+    latest revision's export again appends nothing and importing an earlier
+    one's reverts to it (ADR 0122).
+    """
+
+    text: str
+
+    file_name: str = Field(
+        min_length=1,
+        description=(
+            "A file name for it, from the component's name, a tool's version and the revision."
+        ),
+    )
+
+    sensitivity: Sensitivity | None = Field(
+        default=None,
+        description="A benchmark's label, so a restricted one's export can say so; None otherwise.",
+    )
+
+
 class WorkflowImport(ApiModel):
     """What importing one workflow document did (ADR 0122)."""
 
@@ -681,6 +807,109 @@ class ProductionStepUsage(ApiModel):
     step_id: UUID
 
     role: Literal["primary", "substitute"]
+
+
+class StepAttemptUsage(ApiModel):
+    """One attempt of one step of a run that executed a model (ADR 0133)."""
+
+    step_id: UUID
+
+    attempt_number: int = Field(ge=1)
+
+
+class ModelRunUsage(ApiModel):
+    """One kept run that executed a model, and each step attempt that did."""
+
+    run_id: UUID
+
+    started_at: datetime
+
+    steps: tuple[StepAttemptUsage, ...] = Field(min_length=1)
+
+
+class ModelUsageWorkflow(ApiModel):
+    """Everything one workflow does with a model: configured, in production, and run."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    configured: bool = Field(description="Whether the workflow's configuration names the model.")
+
+    production: tuple[ProductionStepUsage, ...] = Field(
+        description="Each step of active production that uses it, and the role it holds there.",
+    )
+
+    runs: tuple[ModelRunUsage, ...] = Field(
+        description="Each kept run that executed it, in the order the runs were kept.",
+    )
+
+
+class ModelUsage(ApiModel):
+    """Where one exact model is configured, in production, and executed (ADR 0133).
+
+    A model nothing uses has no workflows, and is not an error.
+    """
+
+    identifier: str = Field(min_length=1)
+
+    in_production: bool
+
+    workflows: tuple[ModelUsageWorkflow, ...]
+
+
+class ToolExecutionUsage(ApiModel):
+    """One attempt of one step of a run that executed a tool's implementation."""
+
+    step_id: UUID
+
+    attempt_number: int = Field(ge=1)
+
+    implementation_id: UUID
+
+    tool_version: str
+
+    runtime: str
+
+
+class ToolRunUsage(ApiModel):
+    """One kept run that executed a tool, and each execution of it."""
+
+    run_id: UUID
+
+    started_at: datetime
+
+    executions: tuple[ToolExecutionUsage, ...] = Field(min_length=1)
+
+
+class ToolUsageWorkflow(ApiModel):
+    """Everything one workflow does with a tool: configured, in production, and run."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    configured: bool = Field(description="Whether the workflow's configuration requires the tool.")
+
+    production: bool = Field(description="Whether active production requires it.")
+
+    runs: tuple[ToolRunUsage, ...]
+
+
+class ToolUsage(ApiModel):
+    """Where one tool identity is configured, in production, and executed (ADR 0133)."""
+
+    tool_id: UUID
+
+    tool_names: tuple[str, ...] = Field(
+        description=(
+            "The names its versions are required by, in order; none for a tool only runs know."
+        ),
+    )
+
+    in_production: bool
+
+    workflows: tuple[ToolUsageWorkflow, ...]
 
 
 class ProductionDependent(ApiModel):
@@ -2166,4 +2395,19 @@ __all__ = [
     "SpendPeriodTotals",
     "SpendReport",
     "SpendTotals",
+    "DocumentExport",
+    "GoalDetail",
+    "GoalImport",
+    "GoalSummary",
+    "RevisionChange",
+    "RevisionChangeKind",
+    "RevisionComparison",
+    "ModelRunUsage",
+    "ModelUsage",
+    "ModelUsageWorkflow",
+    "StepAttemptUsage",
+    "ToolExecutionUsage",
+    "ToolRunUsage",
+    "ToolUsage",
+    "ToolUsageWorkflow",
 ]

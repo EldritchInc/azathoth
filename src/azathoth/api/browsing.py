@@ -8,6 +8,7 @@ callers.
 """
 
 import json
+import re
 import shlex
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Final, TypeVar, cast
@@ -44,6 +45,7 @@ from azathoth.api.benchmark_executions import (
     execution_not_found_message,
     execution_summary,
 )
+from azathoth.api.comparison import compare_documents, restricted_case_values
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -51,6 +53,7 @@ from azathoth.api.errors import (
     RevisionNotFoundError,
 )
 from azathoth.api.files import resolved_file
+from azathoth.api.mcp_tools import mcp_document
 from azathoth.api.models import (
     BenchmarkCaseChange,
     BenchmarkCaseDetail,
@@ -62,18 +65,22 @@ from azathoth.api.models import (
     BenchmarkSummary,
     CaseCitations,
     CaseComparison,
+    DocumentExport,
     DocumentProblem,
     Revision,
+    RevisionComparison,
     RunFile,
     RunInput,
     ToolDetail,
     ToolImport,
     ToolSummary,
+    ToolUsage,
     WorkflowCheck,
     WorkflowDetail,
     WorkflowImport,
     WorkflowSummary,
 )
+from azathoth.api.usage import tool_usage_of
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -96,6 +103,7 @@ from azathoth.tools import (
     supported_tool_runtimes,
     unsupported_runtime_message,
 )
+from azathoth.tools.mcp_execution import McpConnector
 from azathoth.workflows import (
     WorkflowDocumentError,
     WorkflowSpecification,
@@ -103,6 +111,7 @@ from azathoth.workflows import (
     decode_workflow_document,
     earliest_identical_revision,
     encode_workflow_document,
+    tool_usage_report,
 )
 
 LIMIT_MESSAGE: Final = "A history limit must be at least 1."
@@ -187,6 +196,26 @@ def _newest_first(
     return newest if limit is None else newest[:limit]
 
 
+def _numbered(
+    history: Sequence[RevisionT],
+    number: int,
+    missing: str,
+) -> RevisionT:
+    """Return the revision of a history numbered `number`.
+
+    Raises:
+        RevisionNotFoundError: The history has no revision with this number,
+            said as `missing`.
+    """
+
+    selected = next((entry for entry in history if entry.number == number), None)
+
+    if selected is None:
+        raise RevisionNotFoundError(missing)
+
+    return selected
+
+
 def _check_limit(
     limit: int | None,
 ) -> None:
@@ -206,6 +235,30 @@ def _encoded(
     """Return a document to import as JSON text."""
 
     return document if isinstance(document, str) else json.dumps(dict(document))
+
+
+_NOT_IN_A_NAME: Final = re.compile(r"[^a-z0-9.]+")
+
+
+def export_name(
+    name: str,
+    *,
+    kind: str,
+    revision: int | None,
+    version: str | None = None,
+) -> str:
+    """Return the file name an export suggests, such as `word-count-1.0.0.r3.tool.json`.
+
+    The component's name, and a tool's version, keep their letters, digits
+    and dots, lowercased, and anything else between them becomes one dash.
+    A document not yet imported has no revision, so its name has none.
+    """
+
+    words = [part for part in (name, version) if part is not None]
+    stem = "-".join(_NOT_IN_A_NAME.sub("-", part.lower()).strip("-.") for part in words).strip("-")
+    numbered = "" if revision is None else f".r{revision}"
+
+    return f"{stem or kind}{numbered}.{kind}.json"
 
 
 def _document(
@@ -478,6 +531,72 @@ class Workflows:
             document=_document(encode_workflow_document(selected.specification)),
         )
 
+    def export(
+        self,
+        workflow_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> DocumentExport:
+        """Return one revision as the document `workflow export` prints, the latest by default.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No workflow has this ID.
+            RevisionNotFoundError: The workflow has no revision with this number.
+        """
+
+        history = self._history(workflow_id)
+        selected = (
+            history[-1]
+            if revision is None
+            else next((entry for entry in history if entry.number == revision), None)
+        )
+
+        if selected is None:
+            raise RevisionNotFoundError(f"Workflow {workflow_id} has no revision {revision}.")
+
+        return DocumentExport(
+            text=encode_workflow_document(selected.specification) + "\n",
+            file_name=export_name(
+                selected.specification.metadata.name, kind="workflow", revision=selected.number
+            ),
+        )
+
+    def compare_revisions(
+        self,
+        workflow_id: UUID,
+        before: int,
+        after: int,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of a workflow, as `workflow diff` prints it.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No workflow has this ID.
+            RevisionNotFoundError: The workflow has no revision with one of
+                these numbers.
+        """
+
+        history = self._history(workflow_id)
+        lineage = self._lineage(workflow_id)
+        old, new = (
+            _numbered(history, number, f"Workflow {workflow_id} has no revision {number}.")
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_workflow_command(old)).revision,
+            self._summary(new, history, lineage, command=_workflow_command(new)).revision,
+            (
+                _document(encode_workflow_document(old.specification)),
+                _document(encode_workflow_document(new.specification)),
+            ),
+        )
+
     def history(
         self,
         workflow_id: UUID,
@@ -661,15 +780,81 @@ class Tools:
     ) -> tuple[ToolSummary, ...]:
         """Return every tool version at its latest revision.
 
+        It is the `read_catalog` action (ADR 0127).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
+
+        return self._summaries(None)
+
+    def versions(
+        self,
+        tool_id: UUID,
+    ) -> tuple[ToolSummary, ...]:
+        """Return each version of one tool at its latest revision, as `tool versions` lists them.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No version of the tool is configured.
+        """
+
+        versions = self._summaries(tool_id)
+
+        if not versions:
+            raise NotFoundError(f"Tool {tool_id} is not configured.")
+
+        return versions
+
+    def usage(
+        self,
+        tool_id: UUID,
+    ) -> ToolUsage:
+        """Return where one tool identity is configured, in production, and executed.
+
+        Workflows require a tool by name, and run history records its
+        identity, so configuration and production match the names any of
+        its versions has, and history the identity alone. It is the
+        `read_catalog` and `read_runs` actions (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No version of the tool is defined, and no run
+                executed it.
+        """
+
+        repositories = self._repositories()
+        usage = tool_usage_of(
+            tool_usage_report(
+                tool_id,
+                definitions=repositories.tools.definitions(),
+                specifications=repositories.workflows.specifications(),
+                production_states=repositories.production_states.states(),
+                runs=repositories.runs.runs(),
+            )
+        )
+
+        if not usage.tool_names and not usage.workflows:
+            raise NotFoundError(f"Tool {tool_id} is not configured.")
+
+        return usage
+
+    def _summaries(
+        self,
+        tool_id: UUID | None,
+    ) -> tuple[ToolSummary, ...]:
+        """Return each tool version at its latest revision, of one tool when it is named."""
 
         repository = self._repositories().tools
 
         summaries: list[ToolSummary] = []
 
         for definition in repository.definitions():
+            if tool_id is not None and definition.id != tool_id:
+                continue
+
             history = self._version_history(definition.id, definition.version)
 
             summaries.append(
@@ -728,6 +913,138 @@ class Tools:
             **summary.model_dump(),
             latest_number=history[-1].number,
             document=_document(encode_tool_document(selected.document)),
+        )
+
+    def export(
+        self,
+        tool_id: UUID,
+        version: str,
+        *,
+        revision: int | None = None,
+    ) -> DocumentExport:
+        """Return one revision of one version as the document `tool export` prints.
+
+        The latest revision of the version is exported unless another is
+        named. It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The tool has no such version.
+            RevisionNotFoundError: The version has no revision with this number.
+        """
+
+        history = self._version_history(tool_id, version)
+
+        if not history:
+            raise NotFoundError(f"Tool {tool_id}@{version} is not configured.")
+
+        selected = (
+            history[-1]
+            if revision is None
+            else next((entry for entry in history if entry.number == revision), None)
+        )
+
+        if selected is None:
+            raise RevisionNotFoundError(f"Tool {tool_id}@{version} has no revision {revision}.")
+
+        return DocumentExport(
+            text=encode_tool_document(selected.document) + "\n",
+            file_name=export_name(
+                selected.document.definition.name,
+                kind="tool",
+                revision=selected.number,
+                version=version,
+            ),
+        )
+
+    def compare_revisions(
+        self,
+        tool_id: UUID,
+        version: str,
+        before: int,
+        after: int,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of one exact tool version, as `tool diff` does.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The tool has no such version.
+            RevisionNotFoundError: The version has no revision with one of
+                these numbers.
+        """
+
+        history = self._version_history(tool_id, version)
+
+        if not history:
+            raise NotFoundError(f"Tool {tool_id}@{version} is not configured.")
+
+        lineage = _by_number(self._repositories().tools.document_lineage(tool_id, version))
+        old, new = (
+            _numbered(history, number, f"Tool {tool_id}@{version} has no revision {number}.")
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_tool_command(old)).revision,
+            self._summary(new, history, lineage, command=_tool_command(new)).revision,
+            (
+                _document(encode_tool_document(old.document)),
+                _document(encode_tool_document(new.document)),
+            ),
+        )
+
+    def from_mcp(
+        self,
+        tool: str,
+        *,
+        url: str | None = None,
+        command: Sequence[str] = (),
+        authorization: str | None = None,
+        grants: Sequence[str] = (),
+        timeout_seconds: float | None = None,
+        connect: McpConnector | None = None,
+    ) -> DocumentExport:
+        """Return the document of a tool an MCP server serves, as `tool from-mcp` prints it.
+
+        The server is named by its `url`, or by the `command` that starts it,
+        never both. Its implementation is pinned to the schemas the server
+        serves now, and keeps `authorization`, the variable naming its
+        bearer token, `grants`, the variables a started server is given, and
+        `timeout_seconds`; listing is given that timeout, or 30 seconds.
+        Nothing is imported: `import_document` keeps the document once a
+        person has read it. `connect`, when given, is what the MCP client
+        connects to, as tests do. It is the `tool_from_mcp` action, which
+        starts a command on the instance's host (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The server is named both ways or neither,
+                or the implementation could not be declared.
+            NotFoundError: The server serves no tool by this name.
+            McpUnavailableError: The server could not be reached or listed,
+                or an authorization variable it needs is not set.
+        """
+
+        self._repositories()
+
+        document = mcp_document(
+            tool=tool,
+            url=url,
+            command=tuple(command),
+            authorization=authorization,
+            grants=tuple(grants),
+            timeout_seconds=timeout_seconds,
+            connect=connect,
+        )
+        definition = document.definition
+
+        return DocumentExport(
+            text=encode_tool_document(document) + "\n",
+            file_name=export_name(
+                definition.name, kind="tool", revision=None, version=definition.version
+            ),
         )
 
     def history(
@@ -948,6 +1265,35 @@ class Benchmarks:
             **summary.model_dump(),
             latest_number=history[-1].number,
             document=_document(encode_benchmark_document(selected.dataset)),
+        )
+
+    def export(
+        self,
+        benchmark_id: UUID,
+        *,
+        revision: int | None = None,
+    ) -> DocumentExport:
+        """Return one revision as the document `benchmark export` prints, the latest by default.
+
+        It is the `read_catalog` action, and for a restricted benchmark the
+        `read_restricted` action too (ADR 0133); its label is told, so a
+        caller can say the export holds restricted data.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID.
+            RevisionNotFoundError: The benchmark has no revision with this number.
+        """
+
+        history = self._history(benchmark_id)
+        selected = self._selected(benchmark_id, history, revision)
+
+        return DocumentExport(
+            text=encode_benchmark_document(selected.dataset) + "\n",
+            file_name=export_name(
+                selected.dataset.name, kind="benchmark", revision=selected.number
+            ),
+            sensitivity=selected.dataset.sensitivity,
         )
 
     def cases(
@@ -1412,6 +1758,51 @@ class Benchmarks:
             raise NotFoundError(case_not_found_message(selected.dataset_id, case_id))
 
         return found
+
+    def compare_revisions(
+        self,
+        benchmark_id: UUID,
+        before: int,
+        after: int,
+        *,
+        include_restricted: bool = True,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of a benchmark, as `benchmark diff` does.
+
+        It is the `read_catalog` action (ADR 0133). A restricted case's input
+        and expected value are told only with `include_restricted`, which is
+        the `read_restricted` action too; without it, each change leaves them
+        out as `None` and says so.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID.
+            RevisionNotFoundError: The benchmark has no revision with one of
+                these numbers.
+        """
+
+        history = self._history(benchmark_id)
+        lineage = _by_number(self._repositories().benchmarks.lineage(benchmark_id))
+        old, new = (
+            _numbered(
+                history, number, f"Benchmark dataset {benchmark_id} has no revision {number}."
+            )
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_benchmark_command(old)).revision,
+            self._summary(new, history, lineage, command=_benchmark_command(new)).revision,
+            (
+                _document(encode_benchmark_document(old.dataset)),
+                _document(encode_benchmark_document(new.dataset)),
+            ),
+            withheld=(
+                ((), ())
+                if include_restricted
+                else (restricted_case_values(old.dataset), restricted_case_values(new.dataset))
+            ),
+        )
 
     def history(
         self,

@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth.cli.parsing.common import positive_integer
+from azathoth.cli.parsing.revision_diffs import add_diff_parser
 
 TOOL_COMMAND = "tool"
 
@@ -155,6 +156,14 @@ def add_tool_parser(
         default=None,
         metavar="NUMBER",
         help="Imported revision to export. Defaults to the latest.",
+    )
+
+    add_diff_parser(
+        tool_actions,
+        noun="tool",
+        id_attribute=TOOL_ID_ATTRIBUTE,
+        id_metavar="TOOL_ID",
+        version_attribute=TOOL_VERSION_ATTRIBUTE,
     )
 
     tool_from_mcp_parser = tool_actions.add_parser(

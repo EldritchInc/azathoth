@@ -27,7 +27,6 @@ from azathoth.workflows import (
     WorkflowResultReference,
     WorkflowSpecificationRevision,
     describe_value_reference,
-    encode_workflow_document,
 )
 
 
@@ -164,21 +163,20 @@ def export_workflow(
 
     The document is exactly what `workflow import` accepts. Importing the
     latest revision's export again appends nothing; importing an earlier
-    one's reverts to it (ADR 0122). Only durable state is read.
+    one's reverts to it (ADR 0122). Only durable state is read, through
+    `workflows.export` (ADR 0133).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    selected = _selected_revision(
-        repositories(configuration).workflows,
-        workflow_id,
-        revision,
-    )
+    try:
+        exported = service_instance(configuration).workflows.export(workflow_id, revision=revision)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    if selected is None:
         return 1
 
-    print(encode_workflow_document(selected.specification))
+    sys.stdout.write(exported.text)
 
     return 0
 

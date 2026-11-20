@@ -497,6 +497,10 @@ Goals describe what should be achieved.
 
 They do not contain executable strategy, evaluator, workflow, model, or optimizer policy.
 
+A goal is not revised. Importing one already kept, unchanged, keeps
+nothing, and another goal with its ID is refused, so a goal never changes
+under what was measured against it.
+
 See [`azathoth.goals`](../src/azathoth/goals/README.md).
 
 ### Strategies
@@ -940,6 +944,16 @@ judged, and `benchmark remove-case` removes one; each saves the benchmark's
 next revision, so earlier revisions, and every execution that ran them, keep
 the case as it was. A case keeps its input and where it came from, and its
 label may be raised but never lowered.
+
+## Comparing Revisions
+
+Every import of a workflow, a tool version or a benchmark is a numbered
+revision, and `workflow diff`, `tool diff` and `benchmark diff` say what
+differs between any two: each value changed, added or removed, by where it
+is in the document. Nothing is guessed: a step inserted first reads as each
+step changing, so what is printed is exactly what differs where. A caller
+who may not read restricted data is shown where a restricted case changed,
+never what it holds.
 
 ## Durable Execution Evidence
 

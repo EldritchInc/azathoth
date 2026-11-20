@@ -147,7 +147,7 @@ def test_goal_import_rejects_invalid_document_before_creating_database(
     assert not database.exists()
 
 
-def test_goal_import_rejects_duplicate_goal(
+def test_goal_import_of_a_kept_goal_unchanged_keeps_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -171,6 +171,47 @@ def test_goal_import_rejects_duplicate_goal(
     document_path.write_text(
         encode_goal_document(
             create_goal(),
+        ),
+        encoding="utf-8",
+    )
+
+    result = import_goal(
+        document_path,
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.err == ""
+    assert captured.out == f"Goal {GOAL_ID} is unchanged.\n"
+
+    assert repository.goals() == (create_goal(),)
+
+
+def test_goal_import_rejects_another_goal_with_a_kept_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "azathoth.db"
+    document_path = tmp_path / "goal.json"
+
+    configure_database(
+        database=database,
+        monkeypatch=monkeypatch,
+    )
+
+    repository = SQLiteGoalRepository(
+        database,
+    )
+
+    repository.save(
+        create_goal(),
+    )
+
+    document_path.write_text(
+        encode_goal_document(
+            create_goal().model_copy(update={"name": "Answer differently"}),
         ),
         encoding="utf-8",
     )
