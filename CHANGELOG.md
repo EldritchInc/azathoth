@@ -161,6 +161,12 @@ release dates are on the
   `tzdata`, so `azathoth spend` and `spend.report` read any time zone there,
   UTC included; without it, 1.5.0a5 refused every report on Windows
   ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+- The design of the rest of the catalog through the service API: a tool's
+  versions, exports, where a model or a tool is used, comparing two
+  revisions, goals, and making a tool from an MCP server, with
+  `import_goal` added to the catalog of actions, and a warning before a
+  remote token is made
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
 
 ## 1.4.0
 
