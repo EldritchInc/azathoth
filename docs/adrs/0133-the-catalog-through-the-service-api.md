@@ -70,7 +70,7 @@ are required by; a tool nothing defines and no run executed is
 | --- | --- | --- |
 | `workflows.compare_revisions(workflow_id, before, after)` | A `RevisionComparison` | `read_catalog` |
 | `tools.compare_revisions(tool_id, version, before, after)` | A `RevisionComparison` | `read_catalog` |
-| `benchmarks.compare_revisions(benchmark_id, before, after)` | A `RevisionComparison` | `read_catalog`, and `read_restricted` for a restricted benchmark |
+| `benchmarks.compare_revisions(benchmark_id, before, after)` | A `RevisionComparison` | `read_catalog`, and `read_restricted` to see a restricted case's values |
 
 A comparison is structural: it compares the two revisions' documents, as
 their exports are, value by value. A `RevisionComparison` names both
@@ -79,10 +79,13 @@ each change by its JSON Pointer (RFC 6901), in document order: `added`, with
 the value after; `removed`, with the value before; or `changed`, with both.
 A list is compared item by item, so a step inserted at the front reads as
 each step changing; a document is small enough that this is still read
-quickly, and it never guesses at moves. A restricted benchmark's case
-values are left out of its comparison, `null` where they would be, unless
-the caller may read restricted data, as a case is shown (ADR 0123). An
-unknown revision is `not_found`.
+quickly, and it never guesses at moves. A restricted case's input,
+provenance, expected value and citations are left out of a comparison,
+`null` where they would be and the change marked `withheld`, unless the
+caller may read restricted data: the values a case's detail shows only
+with `read_restricted` (ADR 0130). The core's owner may, so
+`include_restricted` is true unless a remote's policy says otherwise. An
+unknown revision is `revision_not_found`, a kind of `not_found`.
 
 `workflow diff <WORKFLOW_ID> <BEFORE> <AFTER>`, `tool diff <TOOL_ID>
 <VERSION> <BEFORE> <AFTER>` and `benchmark diff <BENCHMARK_ID> <BEFORE>

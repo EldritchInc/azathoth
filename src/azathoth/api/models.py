@@ -218,6 +218,57 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+RevisionChangeKind = Literal["added", "removed", "changed"]
+"""How a value differs between two revisions: only after, only before, or in both but unequal."""
+
+
+class RevisionChange(ApiModel):
+    """One value that differs between two revisions' documents (ADR 0133)."""
+
+    kind: RevisionChangeKind
+
+    pointer: str = Field(
+        description="Where the value is, as an RFC 6901 JSON Pointer; the empty one is the root.",
+    )
+
+    before: JsonValue = Field(
+        default=None,
+        description="The value before; None when it was added, or when it is withheld.",
+    )
+
+    after: JsonValue = Field(
+        default=None,
+        description="The value after; None when it was removed, or when it is withheld.",
+    )
+
+    withheld: bool = Field(
+        default=False,
+        description=(
+            "Whether a restricted case's values were left out of before or after, as None."
+        ),
+    )
+
+
+class RevisionComparison(ApiModel):
+    """What differs between two revisions of one workflow, tool version or benchmark (ADR 0133).
+
+    The comparison is structural: the two documents, as they export, are
+    compared value by value, and a list item by item.
+    """
+
+    before: Revision
+
+    after: Revision
+
+    identical: bool = Field(
+        description="Whether the two revisions have the same content digest.",
+    )
+
+    changes: tuple[RevisionChange, ...] = Field(
+        description="Each value that differs, in document order; none when they are identical.",
+    )
+
+
 class DocumentExport(ApiModel):
     """One revision as the document that imports it again, and the file it suggests (ADR 0133).
 
@@ -2293,6 +2344,9 @@ __all__ = [
     "SpendReport",
     "SpendTotals",
     "DocumentExport",
+    "RevisionChange",
+    "RevisionChangeKind",
+    "RevisionComparison",
     "ModelRunUsage",
     "ModelUsage",
     "ModelUsageWorkflow",

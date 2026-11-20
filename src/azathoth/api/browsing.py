@@ -45,6 +45,7 @@ from azathoth.api.benchmark_executions import (
     execution_not_found_message,
     execution_summary,
 )
+from azathoth.api.comparison import compare_documents, restricted_case_values
 from azathoth.api.errors import (
     InvalidArgumentError,
     InvalidDocumentError,
@@ -66,6 +67,7 @@ from azathoth.api.models import (
     DocumentExport,
     DocumentProblem,
     Revision,
+    RevisionComparison,
     RunFile,
     RunInput,
     ToolDetail,
@@ -190,6 +192,26 @@ def _newest_first(
     newest = tuple(reversed(tuple(history)))
 
     return newest if limit is None else newest[:limit]
+
+
+def _numbered(
+    history: Sequence[RevisionT],
+    number: int,
+    missing: str,
+) -> RevisionT:
+    """Return the revision of a history numbered `number`.
+
+    Raises:
+        RevisionNotFoundError: The history has no revision with this number,
+            said as `missing`.
+    """
+
+    selected = next((entry for entry in history if entry.number == number), None)
+
+    if selected is None:
+        raise RevisionNotFoundError(missing)
+
+    return selected
 
 
 def _check_limit(
@@ -535,6 +557,39 @@ class Workflows:
             text=encode_workflow_document(selected.specification) + "\n",
             file_name=export_name(
                 selected.specification.metadata.name, kind="workflow", revision=selected.number
+            ),
+        )
+
+    def compare_revisions(
+        self,
+        workflow_id: UUID,
+        before: int,
+        after: int,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of a workflow, as `workflow diff` prints it.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No workflow has this ID.
+            RevisionNotFoundError: The workflow has no revision with one of
+                these numbers.
+        """
+
+        history = self._history(workflow_id)
+        lineage = self._lineage(workflow_id)
+        old, new = (
+            _numbered(history, number, f"Workflow {workflow_id} has no revision {number}.")
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_workflow_command(old)).revision,
+            self._summary(new, history, lineage, command=_workflow_command(new)).revision,
+            (
+                _document(encode_workflow_document(old.specification)),
+                _document(encode_workflow_document(new.specification)),
             ),
         )
 
@@ -895,6 +950,44 @@ class Tools:
                 kind="tool",
                 revision=selected.number,
                 version=version,
+            ),
+        )
+
+    def compare_revisions(
+        self,
+        tool_id: UUID,
+        version: str,
+        before: int,
+        after: int,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of one exact tool version, as `tool diff` does.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The tool has no such version.
+            RevisionNotFoundError: The version has no revision with one of
+                these numbers.
+        """
+
+        history = self._version_history(tool_id, version)
+
+        if not history:
+            raise NotFoundError(f"Tool {tool_id}@{version} is not configured.")
+
+        lineage = _by_number(self._repositories().tools.document_lineage(tool_id, version))
+        old, new = (
+            _numbered(history, number, f"Tool {tool_id}@{version} has no revision {number}.")
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_tool_command(old)).revision,
+            self._summary(new, history, lineage, command=_tool_command(new)).revision,
+            (
+                _document(encode_tool_document(old.document)),
+                _document(encode_tool_document(new.document)),
             ),
         )
 
@@ -1609,6 +1702,51 @@ class Benchmarks:
             raise NotFoundError(case_not_found_message(selected.dataset_id, case_id))
 
         return found
+
+    def compare_revisions(
+        self,
+        benchmark_id: UUID,
+        before: int,
+        after: int,
+        *,
+        include_restricted: bool = True,
+    ) -> RevisionComparison:
+        """Return what differs between two revisions of a benchmark, as `benchmark diff` does.
+
+        It is the `read_catalog` action (ADR 0133). A restricted case's input
+        and expected value are told only with `include_restricted`, which is
+        the `read_restricted` action too; without it, each change leaves them
+        out as `None` and says so.
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No benchmark has this ID.
+            RevisionNotFoundError: The benchmark has no revision with one of
+                these numbers.
+        """
+
+        history = self._history(benchmark_id)
+        lineage = _by_number(self._repositories().benchmarks.lineage(benchmark_id))
+        old, new = (
+            _numbered(
+                history, number, f"Benchmark dataset {benchmark_id} has no revision {number}."
+            )
+            for number in (before, after)
+        )
+
+        return compare_documents(
+            self._summary(old, history, lineage, command=_benchmark_command(old)).revision,
+            self._summary(new, history, lineage, command=_benchmark_command(new)).revision,
+            (
+                _document(encode_benchmark_document(old.dataset)),
+                _document(encode_benchmark_document(new.dataset)),
+            ),
+            withheld=(
+                ((), ())
+                if include_restricted
+                else (restricted_case_values(old.dataset), restricted_case_values(new.dataset))
+            ),
+        )
 
     def history(
         self,
