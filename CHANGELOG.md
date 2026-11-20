@@ -157,6 +157,10 @@ release dates are on the
   and totals, as `azathoth spend` prints it, and `api.spend_csv` writes it
   as CSV, RFC 4180, its times with their offsets and its amounts unrounded
   ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+- On Windows, which keeps no IANA time zone database, Azathoth installs
+  `tzdata`, so `azathoth spend` and `spend.report` read any time zone there,
+  UTC included; without it, 1.5.0a5 refused every report on Windows
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
 
 ## 1.4.0
 

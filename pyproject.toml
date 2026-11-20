@@ -33,6 +33,7 @@ dependencies = [
     "httpx>=0.28,<1",
     "jsonschema>=4.18,<5",
     "pydantic>=2",
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.urls]
