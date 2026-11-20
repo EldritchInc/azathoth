@@ -23,7 +23,6 @@ from azathoth.tools import (
     ToolImplementation,
     ToolTestCase,
     earliest_identical_tool_revision,
-    encode_tool_document,
 )
 
 
@@ -360,45 +359,19 @@ def export_tool(
     The latest revision of the exact version is exported unless another is
     named. Importing the latest revision's export again appends nothing;
     importing an earlier one's reverts to it (ADR 0122). Only durable state
-    is read.
+    is read, through `tools.export` (ADR 0133).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    latest = repository.latest_document_revision(
-        tool_id,
-        version,
-    )
-
-    if latest is None:
-        print(
-            f"Tool {tool_id}@{version} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        exported = service_instance(configuration).tools.export(tool_id, version, revision=revision)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    selected = (
-        latest
-        if revision is None
-        else repository.document_revision(
-            tool_id,
-            version,
-            revision,
-        )
-    )
-
-    if selected is None:
-        print(
-            f"Tool {tool_id}@{version} has no revision {revision}.",
-            file=sys.stderr,
-        )
-
-        return 1
-
-    print(encode_tool_document(selected.document))
+    sys.stdout.write(exported.text)
 
     return 0
 

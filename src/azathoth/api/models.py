@@ -218,6 +218,29 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class DocumentExport(ApiModel):
+    """One revision as the document that imports it again, and the file it suggests (ADR 0133).
+
+    `text` is exactly what the export command prints, so importing the
+    latest revision's export again appends nothing and importing an earlier
+    one's reverts to it (ADR 0122).
+    """
+
+    text: str
+
+    file_name: str = Field(
+        min_length=1,
+        description=(
+            "A file name for it, from the component's name, a tool's version and the revision."
+        ),
+    )
+
+    sensitivity: Sensitivity | None = Field(
+        default=None,
+        description="A benchmark's label, so a restricted one's export can say so; None otherwise.",
+    )
+
+
 class WorkflowImport(ApiModel):
     """What importing one workflow document did (ADR 0122)."""
 
@@ -2166,4 +2189,5 @@ __all__ = [
     "SpendPeriodTotals",
     "SpendReport",
     "SpendTotals",
+    "DocumentExport",
 ]

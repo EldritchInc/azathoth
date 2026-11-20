@@ -41,7 +41,6 @@ from azathoth.evaluation import (
     BenchmarkRepository,
     SemanticJudgingError,
     UnsupportedComparisonError,
-    encode_benchmark_document,
 )
 from azathoth.revisions import LineageRecord
 from azathoth.runtime import (
@@ -106,23 +105,25 @@ def export_benchmark(
     """Print one imported benchmark revision as an importable JSON document.
 
     Importing the latest revision's export again appends nothing; importing
-    an earlier one's reverts to it (ADR 0122). Only durable state is read.
+    an earlier one's reverts to it (ADR 0122). Only durable state is read,
+    through `benchmarks.export` (ADR 0133).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    selected = _selected_revision(
-        repositories(configuration).benchmarks,
-        benchmark_id,
-        revision,
-    )
+    try:
+        exported = service_instance(configuration).benchmarks.export(
+            benchmark_id, revision=revision
+        )
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    if selected is None:
         return 1
 
-    print(encode_benchmark_document(selected.dataset))
+    sys.stdout.write(exported.text)
 
-    warn_if_restricted(selected.dataset.sensitivity, f"Benchmark {benchmark_id}")
+    if exported.sensitivity is not None:
+        warn_if_restricted(exported.sensitivity, f"Benchmark {benchmark_id}")
 
     return 0
 
