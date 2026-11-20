@@ -356,6 +356,18 @@ from azathoth.workflows.scoring import (
     run_citation_score,
 )
 from azathoth.workflows.spend import SpendEntry, SpendSource, run_cost, spend_ledger
+from azathoth.workflows.spend_report import (
+    SPEND_GROUPS,
+    SPEND_PERIODS,
+    SpendGroup,
+    SpendGroupTotals,
+    SpendPeriod,
+    SpendPeriodTotals,
+    SpendReport,
+    SpendReportError,
+    SpendTotals,
+    spend_report,
+)
 from azathoth.workflows.sql_benchmark_execution_repository import (
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
     SqlWorkflowBenchmarkExecutionRepository,
@@ -503,6 +515,7 @@ __all__ = [
     "journaled_run_cost",
     "run_cost",
     "spend_ledger",
+    "spend_report",
     "resume_point",
     "run_started",
     "JournalRunStarted",
@@ -675,6 +688,15 @@ __all__ = [
     "WorkflowRunEvaluation",
     "SpendEntry",
     "SpendSource",
+    "SPEND_GROUPS",
+    "SPEND_PERIODS",
+    "SpendGroup",
+    "SpendGroupTotals",
+    "SpendPeriod",
+    "SpendPeriodTotals",
+    "SpendReport",
+    "SpendReportError",
+    "SpendTotals",
     "WorkflowRunEvaluationRepository",
     "CombinedRunObserver",
     "WorkflowRunEvent",
