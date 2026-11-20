@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from azathoth.context import ContextEvent
+from azathoth.costs import CostBasis, cost_basis_of, require_cost_for_basis
 
 
 class StrategyMetadata(BaseModel):
@@ -37,7 +38,12 @@ class StrategyResourceBinding(BaseModel):
 
 
 class StrategyExecutionMetrics(BaseModel):
-    """Provider-neutral measurements produced during strategy execution."""
+    """Provider-neutral measurements produced during strategy execution.
+
+    `cost_basis` says how `estimated_cost_usd` is known, as the model's
+    reply said; metrics stored before 1.5 have none, and
+    `known_cost_basis` reads it from their provider (ADR 0132).
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -48,6 +54,21 @@ class StrategyExecutionMetrics(BaseModel):
     total_tokens: int | None = Field(default=None, ge=0)
     latency_ms: int | None = Field(default=None, ge=0)
     estimated_cost_usd: float | None = Field(default=None, ge=0.0)
+    cost_basis: CostBasis | None = None
+
+    @property
+    def known_cost_basis(self) -> CostBasis | None:
+        """Return how the cost is known: its own basis, or else its provider's."""
+
+        return cost_basis_of(self.provider, self.estimated_cost_usd, self.cost_basis)
+
+    @model_validator(mode="after")
+    def validate_cost_basis(self) -> "StrategyExecutionMetrics":
+        """Refuse a basis for metrics with no cost."""
+
+        require_cost_for_basis(self.estimated_cost_usd, self.cost_basis)
+
+        return self
 
     @model_validator(mode="after")
     def validate_total_tokens(self) -> "StrategyExecutionMetrics":

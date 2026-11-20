@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from azathoth.costs import CostBasis, require_cost_for_basis
 from azathoth.inputs import ContentRef
 
 
@@ -220,8 +221,11 @@ class ModelResponse(BaseModel):
 
     `estimated_cost_usd` is None when the cost is unknown, such as for a
     Bedrock model its operator has not priced (ADR 0103). Unknown is never
-    free. `citations` are the provider's own, when the prompt asked for them
-    (ADR 0116).
+    free. `cost_basis` says how a known cost is known: `billed` when the
+    provider reported its charge, `estimated` when Azathoth priced it, and
+    None for a reply recorded before 1.5 or one with no cost (ADR 0132).
+    `citations` are the provider's own, when the prompt asked for them (ADR
+    0116).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -239,5 +243,14 @@ class ModelResponse(BaseModel):
     latency_ms: int
 
     estimated_cost_usd: float | None
+    cost_basis: CostBasis | None = None
 
     citations: tuple[NativeCitation, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_cost_basis(self) -> Self:
+        """Refuse a basis for a reply with no cost."""
+
+        require_cost_for_basis(self.estimated_cost_usd, self.cost_basis)
+
+        return self

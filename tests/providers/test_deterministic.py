@@ -86,6 +86,7 @@ def test_reports_zero_cost() -> None:
 
     assert response.latency_ms == 0
     assert response.estimated_cost_usd == 0.0
+    assert response.cost_basis == "billed"
 
 
 def test_multiple_calls_are_deterministic() -> None:

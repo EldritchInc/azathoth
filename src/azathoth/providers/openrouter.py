@@ -49,7 +49,8 @@ class _OpenRouterUsage(BaseModel):
     prompt_tokens: int = Field(ge=0)
     completion_tokens: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
-    cost: float = Field(default=0.0, ge=0.0)
+    cost: float | None = Field(default=None, ge=0.0)
+    """What OpenRouter charged, or None when it said nothing: unknown, never free."""
 
 
 class _OpenRouterResponse(BaseModel):
@@ -121,6 +122,7 @@ class OpenRouterLanguageModel:
             total_tokens=payload.usage.total_tokens,
             latency_ms=latency_ms,
             estimated_cost_usd=payload.usage.cost,
+            cost_basis=None if payload.usage.cost is None else "billed",
         )
 
     async def _send(

@@ -269,6 +269,7 @@ class BedrockLanguageModel:
 
         input_tokens = reply.usage.input_tokens
         output_tokens = reply.usage.output_tokens
+        cost = self._cost(input_tokens, output_tokens)
 
         return ModelResponse(
             text="".join(block.answer() for block in reply.output.message.content),
@@ -283,7 +284,8 @@ class BedrockLanguageModel:
             completion_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
             latency_ms=reply.metrics.latency_ms,
-            estimated_cost_usd=self._cost(input_tokens, output_tokens),
+            estimated_cost_usd=cost,
+            cost_basis=None if cost is None else "estimated",
         )
 
     def _cost(
