@@ -12,12 +12,14 @@ from azathoth.evaluation import (
     EvaluationStatus,
     ExpectedOutcome,
     InvalidJudgeResponseError,
+    JudgeCallUsage,
     JudgeEntry,
     JudgeRotation,
     OutcomeComparison,
     SemanticEvaluator,
     SemanticJudgingError,
     judge_call_count,
+    judge_call_usages,
     judge_calls_cost_usd,
     parse_judge_verdict,
     semantic_judge_prompt,
@@ -249,6 +251,44 @@ def test_a_judge_calls_usage_says_how_its_cost_is_known() -> None:
 
     assert isinstance(calls, list)
     assert calls[0]["usage"]["cost_basis"] == "billed"
+
+
+def test_each_judge_call_that_replied_is_told_with_its_judge_cost_and_basis() -> None:
+    evaluation = evaluate(
+        create_evaluator(
+            beta=ScriptedJudgeModel("Yes, they match.", cost_basis="estimated"),
+            gamma=ScriptedJudgeModel(PASS_REPLY, cost_usd=0.002, cost_basis="billed"),
+        )
+    )
+
+    assert judge_call_usages(evaluation) == (
+        JudgeCallUsage(judge="judges/beta", cost_usd=0.001, cost_basis="estimated"),
+        JudgeCallUsage(judge="judges/gamma", cost_usd=0.002, cost_basis="billed"),
+    )
+
+
+def test_a_judge_call_that_raised_before_replying_is_not_told() -> None:
+    evaluation = evaluate(
+        create_evaluator(
+            beta=ScriptedJudgeModel(RuntimeError("rate limited")),
+            gamma=ScriptedJudgeModel(PASS_REPLY),
+        )
+    )
+
+    assert [usage.judge for usage in judge_call_usages(evaluation)] == ["judges/gamma"]
+
+
+def test_a_judge_calls_provider_is_the_start_of_its_identifier() -> None:
+    usage = JudgeCallUsage(judge="openrouter/acme/judge", cost_usd=0.1, cost_basis=None)
+
+    assert usage.provider == "openrouter"
+    assert usage.model == "acme/judge"
+
+
+def test_a_judge_call_recorded_before_1_5_reads_its_basis_from_its_provider() -> None:
+    usage = JudgeCallUsage(judge="openrouter/acme/judge", cost_usd=0.1, cost_basis=None)
+
+    assert usage.known_cost_basis == "billed"
 
 
 def test_expectation_is_judged_by_its_assigned_judge_only() -> None:

@@ -355,6 +355,7 @@ from azathoth.workflows.scoring import (
     aggregate_workflow_scorecards,
     run_citation_score,
 )
+from azathoth.workflows.spend import SpendEntry, SpendSource, run_cost, spend_ledger
 from azathoth.workflows.sql_benchmark_execution_repository import (
     WORKFLOW_BENCHMARK_EXECUTION_TABLES,
     SqlWorkflowBenchmarkExecutionRepository,
@@ -500,6 +501,8 @@ __all__ = [
     "journaled_extractions",
     "journaled_initial_context",
     "journaled_run_cost",
+    "run_cost",
+    "spend_ledger",
     "resume_point",
     "run_started",
     "JournalRunStarted",
@@ -670,6 +673,8 @@ __all__ = [
     "WorkflowRetryPolicy",
     "WorkflowRun",
     "WorkflowRunEvaluation",
+    "SpendEntry",
+    "SpendSource",
     "WorkflowRunEvaluationRepository",
     "CombinedRunObserver",
     "WorkflowRunEvent",

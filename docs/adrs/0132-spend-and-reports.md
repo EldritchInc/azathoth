@@ -51,7 +51,7 @@ schema does not change, since metrics are stored as their JSON.
 
 ### Each call is counted once
 
-Spend is a ledger of calls. Each entry has when the call was made, the
+Spend is a ledger of calls. Each entry has when the call ended, the
 workflow and run it belongs to, its model and provider, its source, its
 basis, and its cost or that it was unpriced:
 
@@ -59,12 +59,16 @@ basis, and its cost or that it was unpriced:
 | --- | --- |
 | `run` | A step of a kept run, a benchmark's or an experiment's case runs among them |
 | `production` | A step of a production invocation's run |
-| `judging` | A judge's calls for a benchmark execution or an experiment, told as their record holds them |
+| `judging` | Each call a judge made judging a kept run, as the run's evaluation records it, on that run's workflow |
 
 A step that started child runs is entered at its own cost, the children's
 taken back out, and each child run is entered for itself. So every dollar
-is counted once, on the model that spent it. A run that failed or was
-cancelled spent what its committed steps record, and is counted.
+is counted once, on the model that spent it. A tool's step calls no model,
+so only its children are entered. A run that failed is counted for the
+steps it executed. A run that never finished, interrupted or cancelled, is
+not yet kept, and is counted once it is resumed and finishes. A judge's
+call that raised before replying recorded no usage, so nothing is known of
+it, and it is left out, as a benchmark's judge cost leaves it.
 
 ### Spend is grouped into periods in a time zone
 
