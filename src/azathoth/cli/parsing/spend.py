@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser, _SubParsersAction
+from pathlib import Path
 from typing import Final
 from uuid import UUID
 
@@ -20,10 +21,12 @@ SPEND_TIME_ZONE_ATTRIBUTE: Final = "spend_time_zone"
 
 SPEND_WORKFLOW_ATTRIBUTE: Final = "spend_workflow"
 
-SPEND_FORMAT_ATTRIBUTE: Final = "spend_format"
+SPEND_OUTPUT_ATTRIBUTE: Final = "spend_output"
 
-SPEND_FORMATS: Final = ("text", "json")
-"""How `azathoth spend` prints its report."""
+SPEND_OUTPUT_FILE_ATTRIBUTE: Final = "spend_output_file"
+
+SPEND_OUTPUTS: Final = ("text", "json", "csv")
+"""How `azathoth spend` writes its report."""
 
 SPEND_PERIOD_CHOICES: Final = ("day", "week", "month")
 """The periods a report can be grouped into, as `api.SpendPeriod` lists them."""
@@ -100,9 +103,20 @@ def add_spend_parser(
     )
 
     spend_parser.add_argument(
-        "--format",
-        dest=SPEND_FORMAT_ATTRIBUTE,
-        choices=SPEND_FORMATS,
+        "--output",
+        dest=SPEND_OUTPUT_ATTRIBUTE,
+        choices=SPEND_OUTPUTS,
         default="text",
-        help="Print the report as text (default), or as the service API's JSON.",
+        help=(
+            "Output format: text (default), json writes the service API's SpendReport, "
+            "csv writes a row for each group in each period, for a spreadsheet."
+        ),
+    )
+
+    spend_parser.add_argument(
+        "--output-file",
+        dest=SPEND_OUTPUT_FILE_ATTRIBUTE,
+        type=Path,
+        metavar="PATH",
+        help="Write the report to this file instead of standard output.",
     )

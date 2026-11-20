@@ -1,5 +1,7 @@
 """Contract tests for reading what an instance spent (ADR 0132)."""
 
+import csv
+import io
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -306,3 +308,110 @@ def test_spend_reaches_the_runs_kept_in_any_period(
     (month,) = spent.periods
 
     assert month.totals.calls == 1
+
+
+# CSV
+
+
+def rows_of(text: str) -> list[dict[str, str]]:
+    """Return a CSV document's rows, by its header."""
+
+    return list(csv.DictReader(io.StringIO(text, newline="")))
+
+
+def test_a_report_as_csv_has_a_header_and_a_row_per_group_in_each_period(
+    repositories: Repositories,
+    instance: api.Azathoth,
+) -> None:
+    keep(repositories, "2026-11-18T12:00:00-05:00", 0.25)
+    keep(repositories, "2026-11-18T13:00:00-05:00", 0.5, basis="estimated", workflow=OTHER)
+    keep(repositories, "2026-11-18T14:00:00-05:00", None, workflow=OTHER)
+
+    text = api.spend_csv(
+        instance.spend.report(since=SINCE, until=UNTIL, time_zone="America/New_York")
+    )
+
+    assert text.splitlines()[0] == ",".join(api.SPEND_CSV_COLUMNS)
+    assert api.SPEND_CSV_COLUMNS == (
+        "period_start",
+        "period_end",
+        "group",
+        "label",
+        "billed_usd",
+        "estimated_usd",
+        "calls",
+        "unpriced_calls",
+    )
+    assert rows_of(text) == [
+        {
+            "period_start": "2026-11-18T00:00:00-05:00",
+            "period_end": "2026-11-19T00:00:00-05:00",
+            "group": str(WORKFLOW.id),
+            "label": "summarize",
+            "billed_usd": "0.25",
+            "estimated_usd": "0.0",
+            "calls": "1",
+            "unpriced_calls": "0",
+        },
+        {
+            "period_start": "2026-11-18T00:00:00-05:00",
+            "period_end": "2026-11-19T00:00:00-05:00",
+            "group": str(OTHER.id),
+            "label": "translate",
+            "billed_usd": "0.0",
+            "estimated_usd": "0.5",
+            "calls": "2",
+            "unpriced_calls": "1",
+        },
+        {
+            "period_start": "2026-11-19T00:00:00-05:00",
+            "period_end": "2026-11-20T00:00:00-05:00",
+            "group": "",
+            "label": "",
+            "billed_usd": "0.0",
+            "estimated_usd": "0.0",
+            "calls": "0",
+            "unpriced_calls": "0",
+        },
+    ]
+
+
+def test_a_csv_ends_each_line_as_rfc_4180_does(
+    instance: api.Azathoth,
+) -> None:
+    text = api.spend_csv(instance.spend.report(since=SINCE, until=UNTIL))
+
+    assert text.endswith("\r\n")
+    assert "\n" not in text.replace("\r\n", "")
+
+
+def test_a_csvs_amounts_are_unrounded(
+    repositories: Repositories,
+    instance: api.Azathoth,
+) -> None:
+    keep(repositories, "2026-11-18T12:00:00-05:00", 0.000012345678)
+
+    (row, _) = rows_of(
+        api.spend_csv(instance.spend.report(since=SINCE, until=UNTIL, time_zone="America/New_York"))
+    )
+
+    assert float(row["billed_usd"]) == 0.000012345678
+
+
+def test_a_label_with_a_comma_or_a_quote_is_quoted(
+    repositories: Repositories,
+    instance: api.Azathoth,
+) -> None:
+    named = WorkflowMetadata(
+        id=UUID("5e000000-0000-4000-8000-0000000000c3"),
+        name='sort, then "rank"',
+        description="Sort and rank.",
+    )
+    keep(repositories, "2026-11-18T12:00:00-05:00", 0.25, workflow=named)
+
+    text = api.spend_csv(
+        instance.spend.report(since=SINCE, until=UNTIL, time_zone="America/New_York")
+    )
+
+    assert '"sort, then ""rank"""' in text
+    assert rows_of(text)[0]["label"] == 'sort, then "rank"'

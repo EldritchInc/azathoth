@@ -3,10 +3,14 @@
 Spend is a ledger of model calls, each counted once: every kept run's,
 production's, and its judges'. A report groups it into periods in a time
 zone, billed and estimated apart, and is the `read_spend` action (ADR
-0127). `azathoth spend` prints it.
+0127). `azathoth spend` prints it, and `spend_csv` writes it for a
+spreadsheet.
 """
 
+import csv
+import io
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 
 from azathoth.api.browsing import RepositoriesAccess
@@ -32,6 +36,55 @@ def instance_ledger(repositories: Repositories) -> tuple[SpendEntry, ...]:
         ),
         evaluations=repositories.run_evaluations.evaluations(),
     )
+
+
+SPEND_CSV_COLUMNS: Final = (
+    "period_start",
+    "period_end",
+    "group",
+    "label",
+    "billed_usd",
+    "estimated_usd",
+    "calls",
+    "unpriced_calls",
+)
+"""The header of a spend report written as CSV, in order."""
+
+
+def spend_csv(report: SpendReport) -> str:
+    """Return a spend report as CSV: a header, then a row for each group in each period.
+
+    It is RFC 4180, each line ending in CRLF and any field holding a comma,
+    a quote or a line break quoted. Times are ISO 8601 with their offsets,
+    and amounts unrounded, so a spreadsheet adds them exactly. A period
+    nothing was spent in is one row with no group, so it is never left out.
+    """
+
+    text = io.StringIO()
+    writer = csv.writer(text, lineterminator="\r\n")
+    writer.writerow(SPEND_CSV_COLUMNS)
+
+    for period in report.periods:
+        start, end = period.start.isoformat(), period.end.isoformat()
+
+        if not period.groups:
+            writer.writerow((start, end, "", "", 0.0, 0.0, 0, 0))
+
+        for group in period.groups:
+            writer.writerow(
+                (
+                    start,
+                    end,
+                    group.key,
+                    group.label,
+                    repr(group.billed_usd),
+                    repr(group.estimated_usd),
+                    group.calls,
+                    group.unpriced_calls,
+                )
+            )
+
+    return text.getvalue()
 
 
 def spend_command(
@@ -128,7 +181,9 @@ class Spend:
 
 
 __all__ = [
+    "SPEND_CSV_COLUMNS",
     "Spend",
     "instance_ledger",
     "spend_command",
+    "spend_csv",
 ]

@@ -1,5 +1,7 @@
 """Tests for `azathoth spend`, which prints what an instance spent (ADR 0132)."""
 
+import csv
+import io
 from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -57,7 +59,7 @@ def test_the_command_parses_with_its_defaults() -> None:
     assert (arguments.spend_since, arguments.spend_until) == (None, None)
     assert (arguments.spend_by, arguments.spend_group) == ("day", "workflow")
     assert (arguments.spend_time_zone, arguments.spend_workflow) == (None, None)
-    assert arguments.spend_format == "text"
+    assert (arguments.spend_output, arguments.spend_output_file) == ("text", None)
 
 
 def test_the_command_parses_every_option() -> None:
@@ -76,15 +78,17 @@ def test_the_command_parses_every_option() -> None:
             NEW_YORK,
             "--workflow",
             str(WORKFLOW.id),
-            "--format",
-            "json",
+            "--output",
+            "csv",
+            "--output-file",
+            "spend.csv",
         ]
     )
 
     assert (arguments.spend_since, arguments.spend_until) == ("2026-11-01", "2026-12-01")
     assert (arguments.spend_by, arguments.spend_group) == ("week", "model")
     assert (arguments.spend_time_zone, arguments.spend_workflow) == (NEW_YORK, WORKFLOW.id)
-    assert arguments.spend_format == "json"
+    assert (arguments.spend_output, arguments.spend_output_file) == ("csv", Path("spend.csv"))
 
 
 @pytest.mark.parametrize(("option", "value"), [("--by", "fortnight"), ("--group", "colour")])
@@ -247,6 +251,80 @@ def test_json_is_the_service_apis_report(
     assert report.group == "model"
     assert [group.key for group in report.groups] == ["openrouter/acme/small"]
     assert report.totals.billed_usd == 0.25
+
+
+# CSV and files
+
+
+def test_csv_is_a_row_per_group_in_each_period(
+    stored: Repositories,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    keep(stored, "2026-11-18T12:00:00-05:00", 0.25)
+
+    assert (
+        spend_command(
+            since="2026-11-18", until="2026-11-20", time_zone=NEW_YORK, output_format="csv"
+        )
+        == 0
+    )
+
+    out = capsys.readouterr().out
+    rows = list(csv.DictReader(io.StringIO(out, newline="")))
+
+    assert out.splitlines()[0] == ",".join(api.SPEND_CSV_COLUMNS)
+
+    assert [(row["period_start"], row["label"], row["billed_usd"]) for row in rows] == [
+        ("2026-11-18T00:00:00-05:00", "summarize", "0.25"),
+        ("2026-11-19T00:00:00-05:00", "", "0.0"),
+    ]
+
+
+@pytest.mark.parametrize("output_format", ["text", "json", "csv"])
+def test_a_report_is_written_to_the_file_named_and_printed_nowhere(
+    stored: Repositories,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    output_format: str,
+) -> None:
+    keep(stored, "2026-11-18T12:00:00-05:00", 0.25)
+    path = tmp_path / f"spend.{output_format}"
+
+    assert (
+        spend_command(
+            since="2026-11-18",
+            until="2026-11-20",
+            time_zone=NEW_YORK,
+            output_format=output_format,
+            output_file=path,
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    written = path.read_bytes().decode("utf-8")
+
+    assert captured.out == ""
+    assert captured.err.strip() == f"Wrote the report to {path}."
+
+    if output_format == "csv":
+        assert written.splitlines()[0].startswith("period_start,period_end,")
+        assert "\r\n" in written
+    elif output_format == "json":
+        assert api.SpendReport.model_validate_json(written).totals.billed_usd == 0.25
+    else:
+        assert written.startswith("Since: 2026-11-18T00:00:00-05:00\n")
+
+
+def test_a_file_that_cannot_be_written_is_refused(
+    stored: Repositories,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "missing" / "spend.csv"
+
+    assert spend_command(time_zone=NEW_YORK, output_format="csv", output_file=path) == 1
+    assert capsys.readouterr().err.startswith(f"Couldn't write the report to {path}: ")
 
 
 # What it refuses

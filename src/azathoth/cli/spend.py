@@ -1,7 +1,8 @@
 """What an instance spent, on the command line (ADR 0132).
 
-`azathoth spend` prints `spend.report` from the service API: as text, or
-as the API's own JSON. A date is its midnight in the report's time zone,
+`azathoth spend` prints `spend.report` from the service API: as text, as
+the API's own JSON, or as CSV for a spreadsheet, to standard output or to
+a file. A date is its midnight in the report's time zone,
 and a time without an offset is read there too. The time zone is this
 computer's own unless one is named, and the range the last 30 days
 through today unless one is given.
@@ -93,8 +94,13 @@ def spend_command(
     time_zone: str | None = None,
     workflow_id: UUID | None = None,
     output_format: str = "text",
+    output_file: Path | None = None,
 ) -> int:
-    """Print what this instance spent from `since` up to `until`, returning the exit code."""
+    """Print what this instance spent from `since` up to `until`, returning the exit code.
+
+    With `output_file`, the report is written there instead, in UTF-8, and
+    standard error says so.
+    """
 
     name = time_zone if time_zone is not None else local_time_zone()
     zone = _zone_named(name)
@@ -136,9 +142,27 @@ def spend_command(
 
         return 1
 
-    print(
-        report.model_dump_json(indent=2) if output_format == "json" else render_spend_report(report)
-    )
+    if output_format == "csv":
+        written = api.spend_csv(report)
+    elif output_format == "json":
+        written = report.model_dump_json(indent=2) + "\n"
+    else:
+        written = render_spend_report(report) + "\n"
+
+    if output_file is None:
+        sys.stdout.write(written)
+
+        return 0
+
+    try:
+        with output_file.open("w", encoding="utf-8", newline="") as file:
+            file.write(written)
+    except OSError as exc:
+        print(f"Couldn't write the report to {output_file}: {exc.strerror}.", file=sys.stderr)
+
+        return 1
+
+    print(f"Wrote the report to {output_file}.", file=sys.stderr)
 
     return 0
 

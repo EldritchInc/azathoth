@@ -96,10 +96,13 @@ grouping or period not listed, is `invalid_argument`.
 | `spend.report(*, since, until, period="day", group="workflow", time_zone="UTC", workflow_id=None)` | A `SpendReport` | `read_spend` |
 
 `azathoth spend` prints it, with `--since`, `--until`, `--by`, `--group`,
-`--time-zone` and `--workflow`, as text, as JSON with `--format json`, or
-as CSV with `--format csv`. A CSV report is RFC 4180, with a header row;
-its times are ISO 8601 with their offsets and its amounts unrounded, so a
-spreadsheet adds them exactly. `--output` writes it to a file.
+`--time-zone` and `--workflow`, as text, as JSON with `--output json`, or
+as CSV with `--output csv`, `--output` naming the format as every other
+command's does. A CSV report is RFC 4180, with a header row and a row for
+each group in each period, a period nothing was spent in one row with no
+group; its times are ISO 8601 with their offsets and its amounts
+unrounded, so a spreadsheet adds them exactly. `--output-file` writes it
+to a file, and `api.spend_csv` writes the same CSV for any caller.
 
 The call is the command's: the command line is a thin wrapper over it, as
 every 1.5 command that reads is. Serving it at `/v1/spend` on a remote

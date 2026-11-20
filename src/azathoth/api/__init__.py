@@ -185,7 +185,7 @@ from azathoth.api.running import (
     EventCallback,
     Runs,
 )
-from azathoth.api.spend import Spend
+from azathoth.api.spend import SPEND_CSV_COLUMNS, Spend, spend_csv
 from azathoth.remote import (
     Capabilities,
     ComponentStatus,
@@ -291,7 +291,9 @@ __all__ = [
     "JudgeSummary",
     "Experiments",
     "Optimization",
+    "SPEND_CSV_COLUMNS",
     "Spend",
+    "spend_csv",
     "SpendGroup",
     "SpendGroupTotals",
     "SpendPeriod",
