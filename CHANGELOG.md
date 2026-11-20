@@ -164,8 +164,38 @@ release dates are on the
 - The design of the rest of the catalog through the service API: a tool's
   versions, exports, where a model or a tool is used, comparing two
   revisions, goals, and making a tool from an MCP server, with
-  `import_goal` added to the catalog of actions, and a warning before a
+  `import_goal` added to the catalog of actions, and a warning when a
   remote token is made
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+- `azathoth.api` browses the rest of the catalog: `tools.versions` lists a
+  tool's versions, and `workflows.export`, `tools.export` and
+  `benchmarks.export` return a `DocumentExport`, the text the `export`
+  commands print with a file name to suggest, and a benchmark's label.
+  `models.usage` and `tools.usage` return where a model or a tool is
+  configured, in production and executed, as `model usage` and `tool
+  usage` print it. Each of those commands now calls the API, with
+  unchanged output
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+- `azathoth workflow diff`, `tool diff` and `benchmark diff` print what
+  differs between two revisions, a line per change by its JSON Pointer, or
+  that the two are identical; `--output json` writes the service API's
+  `RevisionComparison`, which each namespace's `compare_revisions` returns.
+  Without `include_restricted`, a restricted case's values are withheld as
+  `null`
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+- `azathoth.api` keeps goals: `instance.goals` lists, gets and imports
+  them, the new `import_goal` action. Importing a goal already kept,
+  unchanged, now keeps nothing and `goal import` says the goal is
+  unchanged, where it was refused; another goal with a kept ID is still
+  refused
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+- `tools.from_mcp` returns the document of a tool an MCP server serves,
+  as `tool from-mcp` prints it, importing nothing; a server that cannot be
+  reached or listed is the new `mcp_unavailable` error
+  ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
+- `remote token create` warns on standard error, when it makes a token,
+  that whoever holds it can do anything the remote's owner can, and from
+  1.6 through the whole service API
   ([ADR 0133](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0133-the-catalog-through-the-service-api.md)).
 
 ## 1.4.0
