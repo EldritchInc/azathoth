@@ -127,6 +127,11 @@ release dates are on the
   says whether the winner can still be rebuilt from the workflow's latest
   revision with the models authorized now, and why not, saving nothing
   ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+- The design of spend and its reports: every cost says whether it was
+  billed or estimated, each model call is counted once, child runs
+  included, and spend is grouped by day, week or month in a time zone, as
+  text, JSON or CSV
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
 
 ## 1.4.0
 
