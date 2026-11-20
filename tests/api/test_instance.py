@@ -188,6 +188,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "InvalidAuthorError": "invalid_author",
         "InvalidDocumentError": "invalid_document",
         "JudgeUnavailableError": "judge_unavailable",
+        "McpUnavailableError": "mcp_unavailable",
         "ModelInUseError": "model_in_use",
         "ModelNotAuthorizedError": "model_not_authorized",
         "NotFoundError": "not_found",

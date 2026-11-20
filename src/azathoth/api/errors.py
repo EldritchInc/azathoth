@@ -225,6 +225,15 @@ class RemoteDivergedError(ConflictError):
     code: ClassVar[str] = "remote_diverged"
 
 
+class McpUnavailableError(ApiError):
+    """An MCP server could not be reached, listed or used to make a tool (ADR 0133).
+
+    It failed the caller, not the person: a remote answers it with 502.
+    """
+
+    code: ClassVar[str] = "mcp_unavailable"
+
+
 class InstanceClosedError(ApiError):
     """A call was made on an instance that was already closed."""
 
@@ -252,6 +261,7 @@ __all__ = [
     "InvalidAuthorError",
     "InvalidDocumentError",
     "JudgeUnavailableError",
+    "McpUnavailableError",
     "ModelInUseError",
     "ModelNotAuthorizedError",
     "NotFoundError",

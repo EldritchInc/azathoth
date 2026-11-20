@@ -256,8 +256,16 @@ class GoalDetail(GoalSummary):
 class GoalImport(ApiModel):
     """What importing one goal document did (ADR 0133).
 
-    A goal is not revised: importing one whose ID is taken is a conflict.
+    A goal is not revised: importing another goal with an ID that is taken
+    is a conflict.
     """
+
+    created: bool = Field(
+        description=(
+            "Whether the goal was kept. False when the document is identical to the goal "
+            "already kept under its ID, which `goal` then is."
+        ),
+    )
 
     goal: GoalDetail
 

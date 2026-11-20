@@ -82,7 +82,8 @@ def import_goal(
     """Import one durable reusable goal from a JSON document.
 
     A document that is not a goal is refused before the database is
-    touched, and a goal whose ID is taken is never replaced.
+    touched, and a goal whose ID is taken is never replaced. Importing a
+    goal already kept, unchanged, says it is unchanged.
     """
 
     try:
@@ -105,6 +106,11 @@ def import_goal(
         print(str(exc), file=sys.stderr)
 
         return 1
+
+    if not imported.created:
+        print(f"Goal {imported.goal.id} is unchanged.")
+
+        return 0
 
     print(f"Imported goal {imported.goal.id}.")
 

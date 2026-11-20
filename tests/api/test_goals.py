@@ -128,8 +128,21 @@ def test_a_goal_document_is_imported_as_text_or_values(
     from_text = instance.goals.import_document(encode_goal_document(answer_accurately()))
     from_values = instance.goals.import_document(json.loads(encode_goal_document(answer_briefly())))
 
-    assert from_text.goal == instance.goals.get(FIRST_GOAL_ID)
+    assert from_text == api.GoalImport(created=True, goal=instance.goals.get(FIRST_GOAL_ID))
+    assert from_values.created
     assert from_values.goal == instance.goals.get(SECOND_GOAL_ID)
+
+
+def test_a_goal_imported_again_unchanged_keeps_nothing(
+    location: str,
+    instance: api.Azathoth,
+) -> None:
+    save_goals(location, answer_accurately())
+
+    imported = instance.goals.import_document(encode_goal_document(answer_accurately()))
+
+    assert imported == api.GoalImport(created=False, goal=instance.goals.get(FIRST_GOAL_ID))
+    assert len(instance.goals.list()) == 1
 
 
 def test_a_document_that_is_not_a_goal_is_refused(
@@ -217,5 +230,13 @@ def test_the_goal_commands_say_what_is_refused(
     assert capsys.readouterr().err == f"Goal {MISSING_ID} is not configured.\n"
     assert import_goal(document) == 0
     capsys.readouterr()
+    assert import_goal(document) == 0
+    assert capsys.readouterr().out == f"Goal {FIRST_GOAL_ID} is unchanged.\n"
+
+    document.write_text(
+        encode_goal_document(answer_accurately().model_copy(update={"name": "Renamed"})),
+        encoding="utf-8",
+    )
+
     assert import_goal(document) == 1
     assert capsys.readouterr().err == f"Goal {FIRST_GOAL_ID} already exists.\n"

@@ -53,6 +53,7 @@ from azathoth.api.errors import (
     RevisionNotFoundError,
 )
 from azathoth.api.files import resolved_file
+from azathoth.api.mcp_tools import mcp_document
 from azathoth.api.models import (
     BenchmarkCaseChange,
     BenchmarkCaseDetail,
@@ -102,6 +103,7 @@ from azathoth.tools import (
     supported_tool_runtimes,
     unsupported_runtime_message,
 )
+from azathoth.tools.mcp_execution import McpConnector
 from azathoth.workflows import (
     WorkflowDocumentError,
     WorkflowSpecification,
@@ -242,19 +244,21 @@ def export_name(
     name: str,
     *,
     kind: str,
-    revision: int,
+    revision: int | None,
     version: str | None = None,
 ) -> str:
     """Return the file name an export suggests, such as `word-count-1.0.0.r3.tool.json`.
 
     The component's name, and a tool's version, keep their letters, digits
     and dots, lowercased, and anything else between them becomes one dash.
+    A document not yet imported has no revision, so its name has none.
     """
 
     words = [part for part in (name, version) if part is not None]
     stem = "-".join(_NOT_IN_A_NAME.sub("-", part.lower()).strip("-.") for part in words).strip("-")
+    numbered = "" if revision is None else f".r{revision}"
 
-    return f"{stem or kind}.r{revision}.{kind}.json"
+    return f"{stem or kind}{numbered}.{kind}.json"
 
 
 def _document(
@@ -988,6 +992,58 @@ class Tools:
             (
                 _document(encode_tool_document(old.document)),
                 _document(encode_tool_document(new.document)),
+            ),
+        )
+
+    def from_mcp(
+        self,
+        tool: str,
+        *,
+        url: str | None = None,
+        command: Sequence[str] = (),
+        authorization: str | None = None,
+        grants: Sequence[str] = (),
+        timeout_seconds: float | None = None,
+        connect: McpConnector | None = None,
+    ) -> DocumentExport:
+        """Return the document of a tool an MCP server serves, as `tool from-mcp` prints it.
+
+        The server is named by its `url`, or by the `command` that starts it,
+        never both. Its implementation is pinned to the schemas the server
+        serves now, and keeps `authorization`, the variable naming its
+        bearer token, `grants`, the variables a started server is given, and
+        `timeout_seconds`; listing is given that timeout, or 30 seconds.
+        Nothing is imported: `import_document` keeps the document once a
+        person has read it. `connect`, when given, is what the MCP client
+        connects to, as tests do. It is the `tool_from_mcp` action, which
+        starts a command on the instance's host (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            InvalidArgumentError: The server is named both ways or neither,
+                or the implementation could not be declared.
+            NotFoundError: The server serves no tool by this name.
+            McpUnavailableError: The server could not be reached or listed,
+                or an authorization variable it needs is not set.
+        """
+
+        self._repositories()
+
+        document = mcp_document(
+            tool=tool,
+            url=url,
+            command=tuple(command),
+            authorization=authorization,
+            grants=tuple(grants),
+            timeout_seconds=timeout_seconds,
+            connect=connect,
+        )
+        definition = document.definition
+
+        return DocumentExport(
+            text=encode_tool_document(document) + "\n",
+            file_name=export_name(
+                definition.name, kind="tool", revision=None, version=definition.version
             ),
         )
 

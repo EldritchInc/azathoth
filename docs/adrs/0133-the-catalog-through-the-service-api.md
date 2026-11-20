@@ -113,7 +113,11 @@ case's values and warns on standard error that its output holds them, as
 | `goals.import_document(document)` | A `GoalImport` | `import_goal` |
 
 A goal document that is not valid is `invalid_document`, and an unknown
-goal is `not_found`, as `goal show` says. Importing a goal is a new action
+goal is `not_found`, as `goal show` says. A goal is not revised: a
+`GoalImport` says whether the goal was `created`, and a document identical
+to the goal kept under its ID keeps nothing, as an unchanged workflow does,
+so `goal import` says the goal is unchanged; another goal with that ID is a
+`conflict`, and the kept one is never replaced. Importing a goal is a new action
 of ADR 0127's catalog, `import_goal`, since no listed action allows it;
 the catalog grows by addition, and stays stable within 1.x.
 
@@ -126,7 +130,8 @@ the catalog grows by addition, and stays stable within 1.x.
 It returns the document `tool from-mcp` prints, pinned to the tool as the
 server serves it now, and imports nothing: importing it is
 `tools.import_document`, `import_tool` or `import_process_tool`, so a
-person sees the document before anything is kept. A server named both by a
+person sees the document before anything is kept. Its file name has no
+revision, since none is kept yet: `search-1.0.0.tool.json`. A server named both by a
 URL and by a command, or by neither, is `invalid_argument`; one that serves
 no tool by that name is `not_found`; one that cannot be reached, or fails,
 is a new error, `mcp_unavailable` (502), since it failed the caller, not

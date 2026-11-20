@@ -2,7 +2,8 @@
 
 A goal says what a strategy is trying to accomplish. Goals are read and
 imported only: none is revised, and importing never replaces one, as
-`goal import` never has.
+`goal import` never has. Importing a goal already kept, unchanged, keeps
+nothing and says so, as importing an unchanged workflow does.
 """
 
 import json
@@ -94,13 +95,14 @@ class Goals:
     ) -> GoalImport:
         """Import one goal document, as `goal import` does.
 
-        The document is checked before the instance is touched. It is the
-        `import_goal` action (ADR 0133).
+        The document is checked before the instance is touched. A document
+        identical to the goal kept under its ID keeps nothing, and that goal
+        is returned. It is the `import_goal` action (ADR 0133).
 
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidDocumentError: It is not a goal document.
-            ConflictError: A goal with its ID already exists.
+            ConflictError: Another goal with its ID already exists.
         """
 
         text = document if isinstance(document, str) else json.dumps(dict(document))
@@ -110,12 +112,21 @@ class Goals:
         except GoalDocumentError as exc:
             raise InvalidDocumentError(str(exc)) from exc
 
+        repository = self._repositories().goals
+        kept = repository.get(goal.id)
+
+        if kept is not None:
+            if kept != goal:
+                raise ConflictError(f"Goal {goal.id} already exists.")
+
+            return GoalImport(created=False, goal=_detail(kept))
+
         try:
-            self._repositories().goals.save(goal)
+            repository.save(goal)
         except ValueError as exc:
             raise ConflictError(str(exc)) from exc
 
-        return GoalImport(goal=_detail(goal))
+        return GoalImport(created=True, goal=_detail(goal))
 
 
 __all__ = [
