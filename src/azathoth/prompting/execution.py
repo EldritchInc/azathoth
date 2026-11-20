@@ -105,6 +105,7 @@ async def execute_prompt_response(
             total_tokens=response.total_tokens,
             latency_ms=response.latency_ms,
             estimated_cost_usd=response.estimated_cost_usd,
+            cost_basis=response.cost_basis,
         ),
     )
 

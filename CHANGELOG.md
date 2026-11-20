@@ -127,6 +127,36 @@ release dates are on the
   says whether the winner can still be rebuilt from the workflow's latest
   revision with the models authorized now, and why not, saving nothing
   ([ADR 0131](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0131-optimization-through-the-service-api.md)).
+- `azathoth spend` shows what an instance spent, from `--since` up to
+  `--until`, by day, ISO week or month (`--by`) as the clock reads in a
+  time zone (`--time-zone`, this computer's by default), so a day the
+  clocks change is as long as it was. Each period's spend is grouped by
+  workflow, model, provider or source (`--group`), and `--workflow` keeps
+  to one. Billed and estimated dollars are said apart, never added, and
+  unpriced calls are counted, never taken as free. It covers the last 30
+  days through today unless told otherwise, and `--output json` or
+  `--output csv` writes the service API's report or a spreadsheet's rows,
+  to `--output-file` if named
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+- Every model call's cost says how it is known, as `cost_basis` on its
+  reply and its step's metrics: `billed` when its provider reported the
+  charge, as OpenRouter does, and `estimated` when Azathoth priced it, as
+  Bedrock's are. A judge's call records it too. Costs recorded before 1.5
+  read their basis from their provider, and the database schema does not
+  change. An OpenRouter reply that names no cost is now unpriced, never
+  free
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+- Spend counts each model call once: a step that started child runs is
+  counted at its own cost, the children's taken back out, and each child
+  run for itself, so a report by model puts every dollar on the model that
+  spent it. Production invocations' runs are their own source, and each
+  judge's call is judging, on the workflow of the run it judged
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
+- `azathoth.api` reports spend: `spend.report` returns a `SpendReport`,
+  every period of the range listed, spent in or not, each with its groups
+  and totals, as `azathoth spend` prints it, and `api.spend_csv` writes it
+  as CSV, RFC 4180, its times with their offsets and its amounts unrounded
+  ([ADR 0132](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0132-spend-and-reports.md)).
 
 ## 1.4.0
 

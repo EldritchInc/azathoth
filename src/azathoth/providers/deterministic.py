@@ -46,5 +46,9 @@ class DeterministicLanguageModel:
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
             latency_ms=0,
+            #
+            # Nothing is charged, and that is known exactly, so it is a bill.
+            #
             estimated_cost_usd=0.0,
+            cost_basis="billed",
         )

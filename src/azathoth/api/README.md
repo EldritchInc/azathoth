@@ -419,6 +419,36 @@ cost is `None` when a model's pricing is unknown. The projection multiplies
 the saving per run by production's invocations in the last 30 days; it is a
 projection, never a measurement.
 
+## Spend
+
+`instance.spend` reports what an instance spent (ADR 0132). It reads the
+database alone, and asks no provider.
+
+| Call | Returns |
+| --- | --- |
+| `spend.report(since, until, period="day", group="workflow", time_zone="UTC", workflow_id=None)` | A `SpendReport`, as `azathoth spend` prints it: every period from `since` up to `until`, each with its `totals` and its `groups`, each group's totals over the whole range, the report's `totals`, and its `command`. |
+
+Spend is a ledger of model calls, each counted once: each kept run's steps
+that called a model, a production invocation's run as `production`, and
+each judge call that replied as `judging`, on the workflow of the run it
+judged. A step that started child runs is counted at its own cost, the
+children's taken back out. `period` is `day`, `week`, an ISO week starting
+Monday, or `month`, read in `time_zone`, an IANA name; `group` is
+`workflow`, `model`, `provider` or `source`. Every time is told in the time
+zone, with its offset, and every period of the range is listed, the first
+and last cut to it.
+
+A `SpendTotals` keeps `billed_usd` and `estimated_usd` apart, and counts the
+`calls` and the `unpriced_calls`, whose cost is unknown. A time with no
+offset, a `since` after its `until`, a period or grouping not listed, or a
+time zone that is not one is an `InvalidArgumentError`; a `workflow_id`
+neither configured nor spent on is a `NotFoundError`.
+
+`spend_csv(report)` writes a report as CSV, its columns
+`SPEND_CSV_COLUMNS`: a row for each group in each period, and one with no
+group for a period nothing was spent in. It is RFC 4180, its times ISO 8601
+with their offsets and its amounts unrounded.
+
 ## Invocations
 
 `instance.invocations.get(invocation_id)` reads one invocation back, as

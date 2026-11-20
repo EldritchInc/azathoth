@@ -65,6 +65,7 @@ from azathoth.cli.rendering.run_summaries import (
     render_workflow_run_summaries,
 )
 from azathoth.cli.rendering.runs import render_workflow_run
+from azathoth.cli.rendering.spend import render_spend_report
 from azathoth.cli.rendering.usage import (
     render_model_usage_report,
     render_tool_usage_report,
@@ -89,6 +90,7 @@ __all__ = [
     "render_production_invocation_result",
     "render_production_invocation_summaries",
     "render_tool_usage_report",
+    "render_spend_report",
     "render_workflow_benchmark_comparison_execution",
     "render_workflow_benchmark_execution",
     "render_workflow_benchmark_execution_summaries",

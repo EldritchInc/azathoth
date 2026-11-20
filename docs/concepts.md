@@ -1140,6 +1140,20 @@ WorkflowRun
 
 Azathoth records the durable relationship between the external invocation and the run it produced.
 
+## Spend
+
+Every model call records what it cost and how that is known: `billed`, when
+its provider reported the charge, as OpenRouter does, or `estimated`, when
+Azathoth priced it from a price its operator configured, as Bedrock's are.
+A call with no price is unpriced, which is unknown, never free.
+
+`azathoth spend` adds the calls up, by day, week or month in a time zone, and
+by workflow, model, provider or source: a run, a production invocation, or a
+judge. Each call is counted once, so a child run's cost belongs to the child,
+on its own model, not to the step that started it. Billed and estimated
+dollars are always shown apart, and `--output csv` takes them to a
+spreadsheet.
+
 ## Package Guide
 
 Detailed architecture lives with each major package.
@@ -1155,6 +1169,7 @@ Detailed architecture lives with each major package.
 | [`azathoth.goals`](../src/azathoth/goals/README.md) | Durable objective intent |
 | [`azathoth.strategies`](../src/azathoth/strategies/README.md) | Executable strategy contracts and outcomes |
 | [`azathoth.execution`](../src/azathoth/execution/README.md) | Strategy execution evidence |
+| [`azathoth.costs`](../src/azathoth/costs/README.md) | How a model call's cost is known: billed or estimated |
 | [`azathoth.evaluation`](../src/azathoth/evaluation/README.md) | Expected outcomes, evaluators, evidence, and benchmarks |
 | [`azathoth.prompting`](../src/azathoth/prompting/README.md) | Prompt specifications, bindings, model selection, and executable prompt strategies |
 | [`azathoth.providers`](../src/azathoth/providers/README.md) | Provider truth, model metadata, authorization, discovery, and executable registries |

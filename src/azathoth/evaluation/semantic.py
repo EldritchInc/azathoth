@@ -3,8 +3,9 @@
 import json
 from collections.abc import Mapping
 
-from pydantic import JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from azathoth.costs import COST_BASES, CostBasis, cost_basis_of
 from azathoth.evaluation.judges import (
     JudgeEntry,
     JudgeRotation,
@@ -277,6 +278,84 @@ def _judge_call_evidence(
     )
 
 
+class JudgeCallUsage(BaseModel):
+    """What one judge call that replied cost, and how that is known (ADR 0132)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    judge: str = Field(min_length=1)
+    """The judge's provider-qualified identifier, such as `openrouter/acme/judge`."""
+
+    cost_usd: float | None = Field(ge=0.0)
+    cost_basis: CostBasis | None
+
+    @property
+    def provider(self) -> str:
+        """Return the judge's provider: its identifier up to the first slash."""
+
+        return self.judge.split("/", 1)[0]
+
+    @property
+    def model(self) -> str:
+        """Return the judge's model: its identifier after the provider."""
+
+        return self.judge.split("/", 1)[-1]
+
+    @property
+    def known_cost_basis(self) -> CostBasis | None:
+        """Return how the cost is known: its own basis, or else its provider's."""
+
+        return cost_basis_of(self.provider, self.cost_usd, self.cost_basis)
+
+
+def judge_call_usages(
+    evaluation: EvaluationResult,
+) -> tuple[JudgeCallUsage, ...]:
+    """Return every judge call of one evaluation that replied, in the order made.
+
+    A call that raised before replying recorded no usage, so nothing it may
+    have cost is known, and it is left out, as `judge_calls_cost_usd` leaves
+    it. A cost the record does not hold as a number is unknown.
+    """
+
+    usages: list[JudgeCallUsage] = []
+
+    for item in _judge_call_evidence(evaluation):
+        if not isinstance(item.value, list):
+            continue
+
+        for call in item.value:
+            if not isinstance(call, dict):
+                continue
+
+            judge = call.get("judge")
+            usage = call.get("usage")
+
+            if not isinstance(judge, str) or not judge or not isinstance(usage, dict):
+                continue
+
+            cost = usage.get("estimated_cost_usd")
+            basis = usage.get("cost_basis")
+            known = (
+                float(cost)
+                if isinstance(cost, int | float) and not isinstance(cost, bool) and cost >= 0
+                else None
+            )
+
+            usages.append(
+                JudgeCallUsage(
+                    judge=judge,
+                    cost_usd=known,
+                    cost_basis=next(
+                        (each for each in COST_BASES if each == basis and known is not None),
+                        None,
+                    ),
+                )
+            )
+
+    return tuple(usages)
+
+
 def _judge_usages(
     evaluation: EvaluationResult,
 ) -> tuple[dict[str, JsonValue], ...]:
@@ -372,6 +451,7 @@ def _judge_call(
                 "total_tokens": response.total_tokens,
                 "latency_ms": response.latency_ms,
                 "estimated_cost_usd": response.estimated_cost_usd,
+                "cost_basis": response.cost_basis,
             }
             if response is not None
             else None

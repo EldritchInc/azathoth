@@ -101,6 +101,7 @@ def test_a_reply_becomes_provider_neutral_evidence() -> None:
         total_tokens=1_250,
         latency_ms=412,
         estimated_cost_usd=(1_000 * 0.8 + 250 * 3.2) / 1_000_000,
+        cost_basis="estimated",
     )
 
 
@@ -171,7 +172,10 @@ def test_a_reply_that_stopped_at_its_token_limit_is_an_answer() -> None:
 def test_an_unpriced_model_has_an_unknown_cost_never_a_free_one() -> None:
     client = FakeBedrockClient(replies={NOVA_PRO: [converse_reply()]})
 
-    assert complete(client, pricing=None).estimated_cost_usd is None
+    response = complete(client, pricing=None)
+
+    assert response.estimated_cost_usd is None
+    assert response.cost_basis is None
 
 
 def test_a_call_with_no_tokens_costs_nothing_at_any_price() -> None:

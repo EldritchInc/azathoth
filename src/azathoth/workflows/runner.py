@@ -308,8 +308,19 @@ class WorkflowRunner:
             + sum(child_cost for child_cost in costs if child_cost is not None)
         )
 
+        #
+        # A cost made unknown by a child keeps no basis, since an unknown
+        # cost has none (ADR 0132).
+        #
         return execution.model_copy(
-            update={"metrics": metrics.model_copy(update={"estimated_cost_usd": cost})}
+            update={
+                "metrics": metrics.model_copy(
+                    update={
+                        "estimated_cost_usd": cost,
+                        "cost_basis": None if cost is None else metrics.cost_basis,
+                    }
+                )
+            }
         )
 
     def _providing_content(

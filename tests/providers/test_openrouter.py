@@ -103,6 +103,7 @@ def test_openrouter_language_model_records_usage() -> None:
     assert response.completion_tokens == 1
     assert response.total_tokens == 8
     assert response.estimated_cost_usd == 0.000012
+    assert response.cost_basis == "billed"
     assert response.latency_ms >= 0
 
 
