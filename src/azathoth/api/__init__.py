@@ -53,6 +53,7 @@ from azathoth.api.errors import (
     WorkflowResultMissingError,
 )
 from azathoth.api.experiments import Experiments
+from azathoth.api.goals import Goals
 from azathoth.api.initialization import initialize
 from azathoth.api.instance import (
     Azathoth,
@@ -106,6 +107,9 @@ from azathoth.api.models import (
     FeedbackDisposition,
     GenerationFinished,
     GenerationStarted,
+    GoalDetail,
+    GoalImport,
+    GoalSummary,
     Initialization,
     InstanceDescription,
     InterruptedRun,
@@ -305,6 +309,10 @@ __all__ = [
     "Optimization",
     "SPEND_CSV_COLUMNS",
     "DocumentExport",
+    "GoalDetail",
+    "GoalImport",
+    "GoalSummary",
+    "Goals",
     "RevisionChange",
     "RevisionChangeKind",
     "RevisionComparison",

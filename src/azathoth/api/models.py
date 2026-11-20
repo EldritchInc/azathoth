@@ -218,6 +218,50 @@ class BenchmarkDetail(BenchmarkSummary):
     )
 
 
+class GoalSummary(ApiModel):
+    """One reusable goal: what a strategy is trying to accomplish (ADR 0133)."""
+
+    id: UUID
+
+    name: str = Field(
+        min_length=1,
+    )
+
+    description: str = Field(
+        min_length=1,
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class GoalDetail(GoalSummary):
+    """One reusable goal with its success criteria, constraints and document."""
+
+    success_criteria: tuple[str, ...] = Field(
+        min_length=1,
+        description="What a strategy meeting the goal achieves, in order.",
+    )
+
+    constraints: tuple[str, ...] = Field(
+        description="What a strategy must not do, in order; none when it has none.",
+    )
+
+    document: dict[str, JsonValue] = Field(
+        description="The goal as `azathoth goal import` accepts it.",
+    )
+
+
+class GoalImport(ApiModel):
+    """What importing one goal document did (ADR 0133).
+
+    A goal is not revised: importing one whose ID is taken is a conflict.
+    """
+
+    goal: GoalDetail
+
+
 RevisionChangeKind = Literal["added", "removed", "changed"]
 """How a value differs between two revisions: only after, only before, or in both but unequal."""
 
@@ -2344,6 +2388,9 @@ __all__ = [
     "SpendReport",
     "SpendTotals",
     "DocumentExport",
+    "GoalDetail",
+    "GoalImport",
+    "GoalSummary",
     "RevisionChange",
     "RevisionChangeKind",
     "RevisionComparison",

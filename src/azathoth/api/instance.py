@@ -15,6 +15,7 @@ from azathoth.api.errors import (
     InstanceUnavailableError,
 )
 from azathoth.api.experiments import Experiments
+from azathoth.api.goals import Goals
 from azathoth.api.invocations import Invocations
 from azathoth.api.judges import Judges
 from azathoth.api.models import API_STABILITY, InstanceDescription
@@ -53,7 +54,7 @@ class Azathoth:
     closed, every call raises `InstanceClosedError`.
 
     Operations are grouped by what they act on: `workflows`, `tools`,
-    `benchmarks`, `models`, `portfolio`, `judges`, `runs`, `production`
+    `benchmarks`, `goals`, `models`, `portfolio`, `judges`, `runs`, `production`
     and `invocations`; `remote`
     names a remote to push to and pull from, and `remotes` the names this
     instance gives remotes.
@@ -91,6 +92,7 @@ class Azathoth:
         self._closed = False
         self._workflows = Workflows(self._open_repositories, self._author)
         self._tools = Tools(self._open_repositories, self._author)
+        self._goals = Goals(self._open_repositories)
         self._benchmarks = Benchmarks(
             self._open_repositories,
             self._author,
@@ -209,6 +211,14 @@ class Azathoth:
         """Optimize this instance's workflows against its benchmarks, as they run (ADR 0131)."""
 
         return self._optimization
+
+    @property
+    def goals(
+        self,
+    ) -> Goals:
+        """Return this instance's reusable goals (ADR 0133)."""
+
+        return self._goals
 
     @property
     def spend(
