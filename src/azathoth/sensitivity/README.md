@@ -62,11 +62,11 @@ If its provider neither retains nor trains on data, declare that with `azathoth 
 
 Labels guard Azathoth's own paths out, to models, child workflows, push,
 pull and telemetry, against mistakes. They are not a boundary against a tool
-written to carry data elsewhere: tools gain data policies after 1.4.
+written to carry data elsewhere: tools gain data policies after 1.5.
 
 ## Where Labels Are Enforced
 
-In 1.4 a restricted run's data may leave Azathoth through models, and a
+In 1.5 a restricted run's data may leave Azathoth through models, and a
 restricted benchmark through a remote, and every such path is guarded:
 
 | Path | Guard |
@@ -79,7 +79,7 @@ restricted benchmark through a remote, and every such path is guarded:
 | Pushing and pulling | A push refuses restricted data a remote does not accept, and a pull withholds restricted benchmarks unless it asks for them (ADR 0124) |
 
 A fixed prompt holds only its own text, so it is not guarded. Tools are not
-guarded in 1.4.
+guarded in 1.5.
 
 Labels are also shown wherever data is: the API's run, invocation and
 benchmark views carry `sensitivity`, show commands name a label that is not

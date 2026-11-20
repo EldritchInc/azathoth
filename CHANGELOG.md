@@ -6,7 +6,7 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
-## Unreleased
+## 1.5.0
 
 Azathoth 1.5 brings everything the command line does to the service API.
 Production and its rollback; the judge rotation, a person's judgment of a

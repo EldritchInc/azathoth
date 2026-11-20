@@ -25,6 +25,7 @@ UNRELEASED = "Unreleased"
 """The entry for what is on `main` but not yet released, renamed when it is."""
 
 RELEASE_DECISIONS = {
+    "1.5.0": range(127, 134),
     "1.4.0": range(120, 127),
     "1.3.0": range(112, 120),
     "1.2.0": range(111, 112),
@@ -38,8 +39,8 @@ record after the newest belongs to `Unreleased`.
 
 NEXT_ADR = max(RELEASE_DECISIONS[next(iter(RELEASE_DECISIONS))]) + 1
 
-RELEASE_1_5 = UNRELEASED
-"""The entry that records 1.5: `Unreleased` until the release renames it `1.5.0`."""
+RELEASE_1_5 = "1.5.0"
+"""The entry that records 1.5."""
 
 #
 # The command RELEASING.md gives for a release's notes, with its version.
@@ -126,7 +127,7 @@ def fenced(
 def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     releases = RELEASE_HEADING.findall(text())
 
-    assert releases == ["1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]
+    assert releases == ["1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]
     assert releases[: len(RELEASE_DECISIONS)] == list(RELEASE_DECISIONS)
 
     if is_final(__version__):
@@ -204,8 +205,17 @@ def test_this_releases_upgrade_runs_the_install_guides_upgrade_commands() -> Non
     upgrade = entry(latest_release())
 
     for language in ("bash", "powershell"):
-        assert fenced(upgrade, language, "### Upgrading From 1.3") == fenced(
+        assert fenced(upgrade, language, "### Upgrading From 1.4") == fenced(
             install, language, "## Upgrading, Leaving and Uninstalling"
+        )
+
+
+def test_1_4s_upgrade_from_1_3_still_shows_its_commands() -> None:
+    upgrade = entry("1.4.0")
+
+    for language in ("bash", "powershell"):
+        assert fenced(upgrade, language, "### Upgrading From 1.3") == (
+            "python -m pip install --upgrade azathoth-ai\nazathoth init\n"
         )
 
 
@@ -220,16 +230,6 @@ def test_1_4_says_what_an_existing_installation_will_notice() -> None:
     assert "`azathoth-mcp` asks the providers what they serve on every call" in upgrade
     assert "Unlabelled data is internal and runs as it did" in upgrade
     assert "`azathoth-ai[remote]`" in upgrade
-
-
-def test_1_5s_upgrade_from_1_4_runs_the_install_guides_upgrade_commands() -> None:
-    install = (PROJECT_ROOT / "docs" / "install.md").read_text(encoding="utf-8")
-    upgrade = entry(RELEASE_1_5)
-
-    for language in ("bash", "powershell"):
-        assert fenced(upgrade, language, "### Upgrading From 1.4") == fenced(
-            install, language, "## Upgrading, Leaving and Uninstalling"
-        )
 
 
 def test_1_5_says_what_an_existing_installation_will_notice() -> None:

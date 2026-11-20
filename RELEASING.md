@@ -550,8 +550,8 @@ git push origin v<version>
 For example:
 
 ```bash
-git tag -a v1.4.0 -m "Azathoth 1.4.0"
-git push origin v1.4.0
+git tag -a v1.5.0 -m "Azathoth 1.5.0"
+git push origin v1.5.0
 ```
 
 The workflow then builds, validates and publishes to PyPI, and then
