@@ -38,6 +38,9 @@ record after the newest belongs to `Unreleased`.
 
 NEXT_ADR = max(RELEASE_DECISIONS[next(iter(RELEASE_DECISIONS))]) + 1
 
+RELEASE_1_5 = UNRELEASED
+"""The entry that records 1.5: `Unreleased` until the release renames it `1.5.0`."""
+
 #
 # The command RELEASING.md gives for a release's notes, with its version.
 #
@@ -217,6 +220,58 @@ def test_1_4_says_what_an_existing_installation_will_notice() -> None:
     assert "`azathoth-mcp` asks the providers what they serve on every call" in upgrade
     assert "Unlabelled data is internal and runs as it did" in upgrade
     assert "`azathoth-ai[remote]`" in upgrade
+
+
+def test_1_5s_upgrade_from_1_4_runs_the_install_guides_upgrade_commands() -> None:
+    install = (PROJECT_ROOT / "docs" / "install.md").read_text(encoding="utf-8")
+    upgrade = entry(RELEASE_1_5)
+
+    for language in ("bash", "powershell"):
+        assert fenced(upgrade, language, "### Upgrading From 1.4") == fenced(
+            install, language, "## Upgrading, Leaving and Uninstalling"
+        )
+
+
+def test_1_5_says_what_an_existing_installation_will_notice() -> None:
+    upgrade = " ".join(entry(RELEASE_1_5).split())
+
+    assert "The database schema does not change: it stays at version 7" in upgrade
+    assert "1.5 of it requires 1.5 of `azathoth-ai`" in upgrade
+    assert "production revisions saved before 1.5 name nobody as their author" in upgrade
+    assert "a malformed `AZATHOTH_AUTHOR` now stops a promotion" in upgrade
+    assert "`run children` shows a child whose declared result is missing as `failed`" in upgrade
+    assert "an OpenRouter reply that names no cost is unpriced, never free" in upgrade
+    assert "importing a goal already kept, unchanged, succeeds" in upgrade
+    assert "`remote token create` warns on standard error" in upgrade
+    assert "Azathoth now installs `tzdata`" in upgrade
+
+
+def test_1_5_says_it_brings_the_command_line_to_the_service_api() -> None:
+    release = " ".join(entry(RELEASE_1_5).split())
+
+    assert "Azathoth 1.5 brings everything the command line does to the service API." in release
+    assert "[azathoth-ui](https://github.com/EldritchInc/azathoth-ui)" in release
+
+    for section in (
+        "### Production",
+        "### Judges and a Run's Evidence",
+        "### Benchmarks",
+        "### Optimization",
+        "### Spend",
+        "### The Catalog",
+        "### Toward 1.6",
+        "### Upgrading From 1.4",
+    ):
+        assert f"\n{section}\n" in entry(RELEASE_1_5), section
+
+
+def test_1_5_says_it_was_not_deployed_to_aws_because_no_sandbox_was_available() -> None:
+    release = " ".join(entry(RELEASE_1_5).split())
+
+    assert "no sandbox was available, so this release was not deployed" in release
+    assert "finds its database at schema version 7 and leaves it there" in release
+    assert "is unproven for 1.5.0, as what 1.4.0 and 1.3.0 left unproven still is" in release
+    assert f"]({REPOSITORY}/docs/release-validation.md#9-the-aws-deployment)" in release
 
 
 def test_1_4_says_its_service_api_is_stable() -> None:
