@@ -8,6 +8,7 @@ import pytest
 
 from azathoth.api.remote import NO_TOKEN_MESSAGE, no_token_message, not_named_message
 from azathoth.cli.remote import (
+    TOKEN_POWER_WARNING,
     TOKEN_SHOWN_ONCE_NOTE,
     component_line,
     model_line,
@@ -93,6 +94,7 @@ def test_the_adr_quotes_the_refusals_exactly() -> None:
 
 def test_the_guide_quotes_the_messages_exactly() -> None:
     for message in (
+        TOKEN_POWER_WARNING,
         TOKEN_SHOWN_ONCE_NOTE,
         serving_line(URL, accept_restricted=False),
         serving_line(URL, accept_restricted=True),

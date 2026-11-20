@@ -37,11 +37,22 @@ TOKEN_SHOWN_ONCE_NOTE = (
 )
 """What `remote token create` says after the token it shows."""
 
+TOKEN_POWER_WARNING = (
+    "Whoever holds this token can do anything this remote's owner can, and from Azathoth 1.6 "
+    "through the whole service API: run, invoke, promote, authorize models and read every run, "
+    "not only push and pull. Give it only where you would give all of that."
+)
+"""What `remote token create` warns on standard error when it makes a token (ADR 0133)."""
+
 
 def create_remote_token(
     name: str,
 ) -> int:
-    """Create a token under a name, recording who created it, and show it once."""
+    """Create a token under a name, recording who created it, and show it once.
+
+    Making one warns on standard error what the token can do: everything
+    the owner can, as the core's policy grants (ADRs 0127 and 0133).
+    """
 
     author = current_author()
 
@@ -57,6 +68,7 @@ def create_remote_token(
 
         return 1
 
+    print(TOKEN_POWER_WARNING, file=sys.stderr)
     print(f"Created remote token {issued.token.name}.")
     print(f"Token: {issued.secret}")
     print(TOKEN_SHOWN_ONCE_NOTE)
@@ -520,6 +532,7 @@ def token_line(
 
 __all__ = [
     "SHORT_DIGEST_LENGTH",
+    "TOKEN_POWER_WARNING",
     "TOKEN_SHOWN_ONCE_NOTE",
     "add_remote",
     "component_line",

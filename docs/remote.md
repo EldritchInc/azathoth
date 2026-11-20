@@ -79,7 +79,12 @@ Keep the token now: this remote keeps only its digest, and cannot show it again.
 ```
 
 Copy the token now. The remote keeps only its digest, so a token that is
-lost is revoked and created again; see [Tokens](#tokens).
+lost is revoked and created again; see [Tokens](#tokens). It also warns, on
+standard error, what the token can do:
+
+```text
+Whoever holds this token can do anything this remote's owner can, and from Azathoth 1.6 through the whole service API: run, invoke, promote, authorize models and read every run, not only push and pull. Give it only where you would give all of that.
+```
 
 ## 3. Serve It
 
@@ -343,7 +348,10 @@ A revoked token no longer reaches the remote, and `remote token list --all`
 still shows it, with when it was revoked. With the core's policy, every
 token is its owner's: whoever holds one may do anything the owner may, so
 give one to each machine, or to each person you'd trust with everything the
-remote holds, named for them, so that revoking one shuts out only them. A
+remote holds, named for them, so that revoking one shuts out only them.
+From Azathoth 1.6 a token reaches the whole service API, not only push and
+pull, so whoever holds one can run, invoke, promote, authorize models and
+read every run. A
 token's name is not proof of who used it, and the author each revision
 records is whatever its sender's `AZATHOTH_AUTHOR` said. A policy plugin,
 such as the team tier's, can decide more finely.

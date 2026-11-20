@@ -139,10 +139,15 @@ the person.
 
 ### A token is the owner's
 
-`remote token create` warns on standard error, before it makes a token,
+`remote token create` warns on standard error, whenever it makes a token,
 that the token can do whatever its owner can, and from Azathoth 1.6 does so
 through the whole service API: run, invoke, promote, authorize models and
-read every run, not only push and pull. The remote's guide says the same.
+read every run, not only push and pull. A name that is refused makes no
+token, so it is not warned of. The remote's guide says the same:
+
+```text
+Whoever holds this token can do anything this remote's owner can, and from Azathoth 1.6 through the whole service API: run, invoke, promote, authorize models and read every run, not only push and pull. Give it only where you would give all of that.
+```
 
 ## Consequences
 

@@ -3955,6 +3955,12 @@ Token: azr_<SECRET>
 Keep the token now: this remote keeps only its digest, and cannot show it again.
 ```
 
+It warns on standard error what the token can do (ADR 0133):
+
+```text
+Whoever holds this token can do anything this remote's owner can, and from Azathoth 1.6 through the whole service API: run, invoke, promote, authorize models and read every run, not only push and pull. Give it only where you would give all of that.
+```
+
 The database keeps only the token's sha256 digest, so a database that leaks
 holds no token that works, and a token that is lost is revoked and created
 again. A name is 1 to 64 letters, digits, `.`, `_` or `-`, and names one
