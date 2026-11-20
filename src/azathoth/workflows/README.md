@@ -1190,6 +1190,24 @@ Each builds and validates the record before saving anything, then saves every
 case run, every evaluation, and the record. Evidence that cannot form a valid
 record leaves every repository unchanged.
 
+## Spend
+
+`spend_ledger` turns kept runs, the index of their children, production's
+invocation runs and run evaluations into one `SpendEntry` for each model
+call, in the order the calls ended (ADR 0132). A tool's step calls no model,
+so only the child runs it started are entered, each for itself; a model
+step that started children is entered at its own cost, theirs taken back
+out. A child no longer kept, or unpriced, leaves its parent's own cost
+unknown. Each judge call that replied is `judging`, on the workflow of the
+run it judged.
+
+`spend_report` groups the entries from `since` up to `until` into periods,
+`day`, ISO `week` or `month`, as the clock reads in an IANA time zone, and
+each period by workflow, model, provider or source. Every period is listed,
+the first and last cut to the range; billed and estimated dollars are summed
+apart and exactly, and unpriced calls counted. A range, period, grouping or
+time zone it cannot use is a `SpendReportError`.
+
 ## Production Promotion
 
 Production promotion is explicit.

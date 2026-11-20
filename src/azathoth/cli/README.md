@@ -3597,6 +3597,57 @@ The rotation is checked before production dependents.
 Configured workflows that pin the model, and historical runs that executed it,
 do not. Use `model usage` to inspect those before deauthorizing.
 
+# Show What an Instance Spent
+
+See what this instance spent, and when, with:
+
+```bash
+azathoth spend --since 2026-11-18 --until 2026-11-20 --time-zone America/New_York
+```
+
+`--since` and `--until` each take a date, its midnight in the time zone, or
+an ISO 8601 time; a time without an offset is read in the time zone, and
+`--until` is not included. Without them, it covers the last 30 days through
+today. The time zone is this computer's unless `--time-zone` names one.
+`--by day`, `week` or `month` sets each period, a week starting on Monday;
+`--group workflow`, `model`, `provider` or `source` groups each period's
+spend; `--workflow <WORKFLOW_ID>` counts only that workflow's.
+
+```text
+Since: 2026-11-18T00:00:00-05:00
+Until: 2026-11-20T00:00:00-05:00
+Time Zone: America/New_York
+Periods: day
+Grouped By: workflow
+Billed: $0.250000
+Estimated: $0.500000
+Calls: 3
+Unpriced Calls: 1
+
+2026-11-18: $0.250000 billed, $0.500000 estimated, 3 calls, 1 unpriced
+  summarize: $0.250000 billed, $0.500000 estimated, 3 calls, 1 unpriced
+2026-11-19: nothing spent
+Unpriced calls have no known cost: they are counted, never taken as free.
+```
+
+A billed dollar is what a provider reported it charged, as OpenRouter does;
+an estimated one Azathoth computed from a configured price, as Bedrock's
+are. They are never added together. Each model call is counted once: a
+child run's cost is the child's, on its own model, and a judge's calls are
+the `judging` source, on the workflow they judged.
+
+`--output json` writes the service API's `SpendReport`, and `--output csv`
+writes a row for each group in each period, for a spreadsheet:
+
+```text
+period_start,period_end,group,label,billed_usd,estimated_usd,calls,unpriced_calls
+2026-11-18T00:00:00-05:00,2026-11-19T00:00:00-05:00,<WORKFLOW_ID>,summarize,0.25,0.5,3,1
+2026-11-19T00:00:00-05:00,2026-11-20T00:00:00-05:00,,,0.0,0.0,0,0
+```
+
+`--output-file <PATH>` writes the report there instead. `spend` reads durable
+state only. It does not require provider credentials or runtime bootstrap.
+
 # Trace Model Usage
 
 Show everywhere one exact model is depended upon with:
