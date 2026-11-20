@@ -116,6 +116,7 @@ from azathoth.cli.runs import (
     record_run_feedback,
     show_run,
 )
+from azathoth.cli.spend import local_time_zone, spend_command
 from azathoth.cli.tool_verification import verify_tool
 from azathoth.cli.tools import (
     export_tool,
@@ -246,6 +247,8 @@ __all__ = [
     "show_benchmark_execution",
     "show_experiment",
     "compare_experiment_command",
+    "local_time_zone",
+    "spend_command",
     "show_goal",
     "show_invocation",
     "show_tool",

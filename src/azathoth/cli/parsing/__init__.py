@@ -149,6 +149,20 @@ from azathoth.cli.parsing.runs import (
     RUN_WORKFLOW_ID_ATTRIBUTE,
     add_run_parser,
 )
+from azathoth.cli.parsing.spend import (
+    SPEND_BY_ATTRIBUTE,
+    SPEND_COMMAND,
+    SPEND_FORMAT_ATTRIBUTE,
+    SPEND_FORMATS,
+    SPEND_GROUP_ATTRIBUTE,
+    SPEND_GROUP_CHOICES,
+    SPEND_PERIOD_CHOICES,
+    SPEND_SINCE_ATTRIBUTE,
+    SPEND_TIME_ZONE_ATTRIBUTE,
+    SPEND_UNTIL_ATTRIBUTE,
+    SPEND_WORKFLOW_ATTRIBUTE,
+    add_spend_parser,
+)
 from azathoth.cli.parsing.tools import (
     TOOL_ACTION_ATTRIBUTE,
     TOOL_COMMAND,
@@ -278,6 +292,8 @@ def build_parser() -> ArgumentParser:
 
     add_goal_parser(commands)
 
+    add_spend_parser(commands)
+
     add_init_parser(commands)
     add_job_parser(commands)
     add_worker_parser(commands)
@@ -365,6 +381,17 @@ __all__ = [
     "REMOTE_ADD_ACTION",
     "REMOTE_BENCHMARKS_ATTRIBUTE",
     "REMOTE_COMMAND",
+    "SPEND_BY_ATTRIBUTE",
+    "SPEND_COMMAND",
+    "SPEND_FORMATS",
+    "SPEND_FORMAT_ATTRIBUTE",
+    "SPEND_GROUP_ATTRIBUTE",
+    "SPEND_GROUP_CHOICES",
+    "SPEND_PERIOD_CHOICES",
+    "SPEND_SINCE_ATTRIBUTE",
+    "SPEND_TIME_ZONE_ATTRIBUTE",
+    "SPEND_UNTIL_ATTRIBUTE",
+    "SPEND_WORKFLOW_ATTRIBUTE",
     "REMOTE_HOST_ATTRIBUTE",
     "REMOTE_INCLUDE_RESTRICTED_ATTRIBUTE",
     "REMOTE_LIST_ACTION",

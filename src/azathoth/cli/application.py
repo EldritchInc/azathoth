@@ -39,6 +39,7 @@ from azathoth.cli.dispatching import (
     dispatch_model_command,
     dispatch_remote_command,
     dispatch_run_command,
+    dispatch_spend_command,
     dispatch_tool_command,
     dispatch_worker_command,
     dispatch_workflow_command,
@@ -81,6 +82,7 @@ from azathoth.cli.parsing import (
     MODEL_COMMAND,
     REMOTE_COMMAND,
     RUN_COMMAND,
+    SPEND_COMMAND,
     TOOL_COMMAND,
     WORKER_COMMAND,
     WORKFLOW_COMMAND,
@@ -112,6 +114,7 @@ from azathoth.cli.runs import (
     record_run_feedback,
     show_run,
 )
+from azathoth.cli.spend import spend_command
 from azathoth.cli.streams import use_utf8_streams
 from azathoth.cli.termination import (
     INTERRUPTED_MESSAGE,
@@ -388,6 +391,9 @@ def _dispatch(
             list_judges=list_judges,
             remove_judge=remove_judge,
         )
+
+    if command == SPEND_COMMAND:
+        return dispatch_spend_command(arguments, report_spend=spend_command)
 
     if command == REMOTE_COMMAND:
         return dispatch_remote_command(
