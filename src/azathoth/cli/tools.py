@@ -70,26 +70,23 @@ def show_tool(
 def list_tool_versions(
     tool_id: UUID,
 ) -> int:
-    """List durable definition versions for one tool identity."""
+    """List durable definition versions for one tool identity, through the service API.
+
+    The versions are `tools.versions` (ADR 0133), printed one a line as
+    they always have been.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    definitions = tuple(
-        definition for definition in repository.definitions() if definition.id == tool_id
-    )
-
-    if not definitions:
-        print(
-            f"Tool {tool_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        versions = service_instance(configuration).tools.versions(tool_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    for definition in definitions:
-        print(definition.version)
+    for version in versions:
+        print(version.version)
 
     return 0
 

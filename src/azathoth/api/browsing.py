@@ -661,15 +661,48 @@ class Tools:
     ) -> tuple[ToolSummary, ...]:
         """Return every tool version at its latest revision.
 
+        It is the `read_catalog` action (ADR 0127).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
+
+        return self._summaries(None)
+
+    def versions(
+        self,
+        tool_id: UUID,
+    ) -> tuple[ToolSummary, ...]:
+        """Return each version of one tool at its latest revision, as `tool versions` lists them.
+
+        It is the `read_catalog` action (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No version of the tool is configured.
+        """
+
+        versions = self._summaries(tool_id)
+
+        if not versions:
+            raise NotFoundError(f"Tool {tool_id} is not configured.")
+
+        return versions
+
+    def _summaries(
+        self,
+        tool_id: UUID | None,
+    ) -> tuple[ToolSummary, ...]:
+        """Return each tool version at its latest revision, of one tool when it is named."""
 
         repository = self._repositories().tools
 
         summaries: list[ToolSummary] = []
 
         for definition in repository.definitions():
+            if tool_id is not None and definition.id != tool_id:
+                continue
+
             history = self._version_history(definition.id, definition.version)
 
             summaries.append(
