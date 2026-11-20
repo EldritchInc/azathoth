@@ -706,6 +706,109 @@ class ProductionStepUsage(ApiModel):
     role: Literal["primary", "substitute"]
 
 
+class StepAttemptUsage(ApiModel):
+    """One attempt of one step of a run that executed a model (ADR 0133)."""
+
+    step_id: UUID
+
+    attempt_number: int = Field(ge=1)
+
+
+class ModelRunUsage(ApiModel):
+    """One kept run that executed a model, and each step attempt that did."""
+
+    run_id: UUID
+
+    started_at: datetime
+
+    steps: tuple[StepAttemptUsage, ...] = Field(min_length=1)
+
+
+class ModelUsageWorkflow(ApiModel):
+    """Everything one workflow does with a model: configured, in production, and run."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    configured: bool = Field(description="Whether the workflow's configuration names the model.")
+
+    production: tuple[ProductionStepUsage, ...] = Field(
+        description="Each step of active production that uses it, and the role it holds there.",
+    )
+
+    runs: tuple[ModelRunUsage, ...] = Field(
+        description="Each kept run that executed it, in the order the runs were kept.",
+    )
+
+
+class ModelUsage(ApiModel):
+    """Where one exact model is configured, in production, and executed (ADR 0133).
+
+    A model nothing uses has no workflows, and is not an error.
+    """
+
+    identifier: str = Field(min_length=1)
+
+    in_production: bool
+
+    workflows: tuple[ModelUsageWorkflow, ...]
+
+
+class ToolExecutionUsage(ApiModel):
+    """One attempt of one step of a run that executed a tool's implementation."""
+
+    step_id: UUID
+
+    attempt_number: int = Field(ge=1)
+
+    implementation_id: UUID
+
+    tool_version: str
+
+    runtime: str
+
+
+class ToolRunUsage(ApiModel):
+    """One kept run that executed a tool, and each execution of it."""
+
+    run_id: UUID
+
+    started_at: datetime
+
+    executions: tuple[ToolExecutionUsage, ...] = Field(min_length=1)
+
+
+class ToolUsageWorkflow(ApiModel):
+    """Everything one workflow does with a tool: configured, in production, and run."""
+
+    workflow_id: UUID
+
+    workflow_name: str
+
+    configured: bool = Field(description="Whether the workflow's configuration requires the tool.")
+
+    production: bool = Field(description="Whether active production requires it.")
+
+    runs: tuple[ToolRunUsage, ...]
+
+
+class ToolUsage(ApiModel):
+    """Where one tool identity is configured, in production, and executed (ADR 0133)."""
+
+    tool_id: UUID
+
+    tool_names: tuple[str, ...] = Field(
+        description=(
+            "The names its versions are required by, in order; none for a tool only runs know."
+        ),
+    )
+
+    in_production: bool
+
+    workflows: tuple[ToolUsageWorkflow, ...]
+
+
 class ProductionDependent(ApiModel):
     """One workflow whose active production uses a model."""
 
@@ -2190,4 +2293,12 @@ __all__ = [
     "SpendReport",
     "SpendTotals",
     "DocumentExport",
+    "ModelRunUsage",
+    "ModelUsage",
+    "ModelUsageWorkflow",
+    "StepAttemptUsage",
+    "ToolExecutionUsage",
+    "ToolRunUsage",
+    "ToolUsage",
+    "ToolUsageWorkflow",
 ]

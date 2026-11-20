@@ -1,18 +1,20 @@
-"""Resource usage discovery commands for the Azathoth CLI."""
+"""Resource usage discovery commands for the Azathoth CLI.
+
+`model usage` and `tool usage` read through the service API (ADR 0133),
+so the command line and every other caller say the same of where a model
+or a tool is used. Each prints as it always has.
+"""
 
 import sys
 from uuid import UUID
 
+from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering import (
     render_model_usage_report,
     render_tool_usage_report,
 )
-from azathoth.workflows import (
-    model_usage_report,
-    tool_usage_report,
-)
+from azathoth.cli.service import service_instance
 
 
 def model_usage(
@@ -27,14 +29,14 @@ def model_usage(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    report = model_usage_report(
-        identifier,
-        specifications=repositories(configuration).workflows.specifications(),
-        production_states=repositories(configuration).production_states.states(),
-        runs=repositories(configuration).runs.runs(),
-    )
+    try:
+        usage = service_instance(configuration).models.usage(identifier)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    print(render_model_usage_report(report))
+        return 1
+
+    print(render_model_usage_report(usage))
 
     return 0
 
@@ -51,22 +53,13 @@ def tool_usage(
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    report = tool_usage_report(
-        tool_id,
-        definitions=repositories(configuration).tools.definitions(),
-        specifications=repositories(configuration).workflows.specifications(),
-        production_states=repositories(configuration).production_states.states(),
-        runs=repositories(configuration).runs.runs(),
-    )
-
-    if not report.tool_names and not report.used:
-        print(
-            f"Tool {tool_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        usage = service_instance(configuration).tools.usage(tool_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    print(render_tool_usage_report(report))
+    print(render_tool_usage_report(usage))
 
     return 0

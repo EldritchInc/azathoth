@@ -58,8 +58,8 @@ export are the same bytes.
 
 A `ModelUsage` says, for each workflow that depends on one exact model,
 whether its configuration names it, each production step and the role it
-holds there, and each run that executed it, newest first, as `model usage`
-prints it; an unused model has no workflows, and is not an error. A
+holds there, and each run that executed it, in the order the runs were
+kept, as `model usage` prints it; an unused model has no workflows, and is not an error. A
 `ToolUsage` says the same of a tool's identity, with the names its versions
 are required by; a tool nothing defines and no run executed is
 `not_found`.

@@ -71,11 +71,13 @@ from azathoth.api.models import (
     ToolDetail,
     ToolImport,
     ToolSummary,
+    ToolUsage,
     WorkflowCheck,
     WorkflowDetail,
     WorkflowImport,
     WorkflowSummary,
 )
+from azathoth.api.usage import tool_usage_of
 from azathoth.evaluation import (
     BenchmarkCase,
     BenchmarkDataset,
@@ -105,6 +107,7 @@ from azathoth.workflows import (
     decode_workflow_document,
     earliest_identical_revision,
     encode_workflow_document,
+    tool_usage_report,
 )
 
 LIMIT_MESSAGE: Final = "A history limit must be at least 1."
@@ -745,6 +748,39 @@ class Tools:
             raise NotFoundError(f"Tool {tool_id} is not configured.")
 
         return versions
+
+    def usage(
+        self,
+        tool_id: UUID,
+    ) -> ToolUsage:
+        """Return where one tool identity is configured, in production, and executed.
+
+        Workflows require a tool by name, and run history records its
+        identity, so configuration and production match the names any of
+        its versions has, and history the identity alone. It is the
+        `read_catalog` and `read_runs` actions (ADR 0133).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No version of the tool is defined, and no run
+                executed it.
+        """
+
+        repositories = self._repositories()
+        usage = tool_usage_of(
+            tool_usage_report(
+                tool_id,
+                definitions=repositories.tools.definitions(),
+                specifications=repositories.workflows.specifications(),
+                production_states=repositories.production_states.states(),
+                runs=repositories.runs.runs(),
+            )
+        )
+
+        if not usage.tool_names and not usage.workflows:
+            raise NotFoundError(f"Tool {tool_id} is not configured.")
+
+        return usage
 
     def _summaries(
         self,

@@ -1,29 +1,40 @@
-"""Human-readable rendering for workflow resource usage reports."""
+"""Human-readable rendering for workflow resource usage reports.
 
+Each renderer takes the service API's model (ADR 0133), or the workflows'
+own report, which it reads as that model first, so both read alike.
+"""
+
+from azathoth.api import (
+    ModelRunUsage,
+    ModelUsage,
+    ModelUsageWorkflow,
+    ProductionStepUsage,
+    ToolRunUsage,
+    ToolUsage,
+    ToolUsageWorkflow,
+)
+from azathoth.api.usage import model_usage_of, tool_usage_of
 from azathoth.workflows import (
-    WorkflowModelUsageEntry,
     WorkflowModelUsageReport,
-    WorkflowProductionModelUsage,
-    WorkflowRunModelUsage,
-    WorkflowRunToolUsage,
-    WorkflowToolUsageEntry,
     WorkflowToolUsageReport,
 )
 
 
 def render_model_usage_report(
-    report: WorkflowModelUsageReport,
+    report: ModelUsage | WorkflowModelUsageReport,
 ) -> str:
     """Render where one model is configured, active, and executed."""
 
+    usage = model_usage_of(report) if isinstance(report, WorkflowModelUsageReport) else report
+
     lines = [
-        f"Model: {report.identifier}",
-        f"Workflows: {len(report.workflows)}",
-        f"In Production: {_render_flag(report.in_production)}",
+        f"Model: {usage.identifier}",
+        f"Workflows: {len(usage.workflows)}",
+        f"In Production: {_render_flag(usage.in_production)}",
     ]
 
     for index, entry in enumerate(
-        report.workflows,
+        usage.workflows,
         start=1,
     ):
         _append_model_entry(
@@ -36,19 +47,21 @@ def render_model_usage_report(
 
 
 def render_tool_usage_report(
-    report: WorkflowToolUsageReport,
+    report: ToolUsage | WorkflowToolUsageReport,
 ) -> str:
     """Render where one tool identity is configured, active, and executed."""
 
+    usage = tool_usage_of(report) if isinstance(report, WorkflowToolUsageReport) else report
+
     lines = [
-        f"Tool ID: {report.tool_id}",
-        f"Names: {', '.join(report.tool_names) if report.tool_names else 'unknown'}",
-        f"Workflows: {len(report.workflows)}",
-        f"In Production: {_render_flag(report.in_production)}",
+        f"Tool ID: {usage.tool_id}",
+        f"Names: {', '.join(usage.tool_names) if usage.tool_names else 'unknown'}",
+        f"Workflows: {len(usage.workflows)}",
+        f"In Production: {_render_flag(usage.in_production)}",
     ]
 
     for index, entry in enumerate(
-        report.workflows,
+        usage.workflows,
         start=1,
     ):
         _append_tool_entry(
@@ -63,7 +76,7 @@ def render_tool_usage_report(
 def _append_model_entry(
     lines: list[str],
     index: int,
-    entry: WorkflowModelUsageEntry,
+    entry: ModelUsageWorkflow,
 ) -> None:
     """Append one workflow's model usage."""
 
@@ -71,8 +84,8 @@ def _append_model_entry(
         (
             "",
             f"Workflow {index}",
-            f"Name: {entry.workflow.name}",
-            f"ID: {entry.workflow.id}",
+            f"Name: {entry.workflow_name}",
+            f"ID: {entry.workflow_id}",
             f"Configured: {_render_flag(entry.configured)}",
             f"Production: {_render_model_production(entry.production)}",
             f"Runs: {len(entry.runs)}",
@@ -85,7 +98,7 @@ def _append_model_entry(
 def _append_tool_entry(
     lines: list[str],
     index: int,
-    entry: WorkflowToolUsageEntry,
+    entry: ToolUsageWorkflow,
 ) -> None:
     """Append one workflow's tool usage."""
 
@@ -93,10 +106,10 @@ def _append_tool_entry(
         (
             "",
             f"Workflow {index}",
-            f"Name: {entry.workflow.name}",
-            f"ID: {entry.workflow.id}",
+            f"Name: {entry.workflow_name}",
+            f"ID: {entry.workflow_id}",
             f"Configured: {_render_flag(entry.configured)}",
-            f"Production: {_render_flag(entry.in_production)}",
+            f"Production: {_render_flag(entry.production)}",
             f"Runs: {len(entry.runs)}",
         )
     )
@@ -105,30 +118,30 @@ def _append_tool_entry(
 
 
 def _render_model_production(
-    usages: tuple[WorkflowProductionModelUsage, ...],
+    usages: tuple[ProductionStepUsage, ...],
 ) -> str:
     """Render production roles held by one model."""
 
     if not usages:
         return "no"
 
-    return ", ".join(f"{usage.role.value} step {usage.step_id}" for usage in usages)
+    return ", ".join(f"{usage.role} step {usage.step_id}" for usage in usages)
 
 
 def _render_model_run(
-    run: WorkflowRunModelUsage,
+    run: ModelRunUsage,
 ) -> str:
     """Render one run's successful executions of a model."""
 
     executions = ", ".join(
-        f"step {usage.step_id} attempt {usage.attempt_number}" for usage in run.usages
+        f"step {usage.step_id} attempt {usage.attempt_number}" for usage in run.steps
     )
 
     return f"Run {run.run_id} at {run.started_at.isoformat()}: {executions}"
 
 
 def _render_tool_run(
-    run: WorkflowRunToolUsage,
+    run: ToolRunUsage,
 ) -> str:
     """Render one run's successful executions of a tool."""
 
@@ -138,7 +151,7 @@ def _render_tool_run(
             f"implementation {usage.implementation_id} "
             f"version {usage.tool_version} runtime {usage.runtime}"
         )
-        for usage in run.usages
+        for usage in run.executions
     )
 
     return f"Run {run.run_id} at {run.started_at.isoformat()}: {executions}"
