@@ -95,6 +95,7 @@ from azathoth.remote.records import (
 from azathoth.remote.seams import (
     AUDIT_SEAM,
     AUTH_SEAM,
+    HIGH_PRIVILEGE_ACTIONS,
     POLICY_SEAM,
     REMOTE_PLUGIN_GROUP,
     SEAMS,
@@ -168,6 +169,7 @@ __all__ = [
     "DEFAULT_HOST",
     "DEFAULT_PORT",
     "DEFAULT_TIMEOUT_SECONDS",
+    "HIGH_PRIVILEGE_ACTIONS",
     "MAX_CONTENT_BYTES",
     "MAX_PUSH_BYTES",
     "MISSING_REMOTE_EXTRA_MESSAGE",

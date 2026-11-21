@@ -66,22 +66,86 @@ class Principal(BaseModel):
 
 
 class Action(StrEnum):
-    """What a caller asks a remote to do."""
+    """What a caller asks a remote to do: the action catalog (ADRs 0127 and 0133).
+
+    Every route of a remote asks its policy for one of these, and for the
+    resource it acts on when it names one. The catalog is stable within
+    1.x: it grows only by additions, and no value changes. It names what can
+    be done; a policy decides who may.
+    """
 
     READ_CAPABILITIES = "read_capabilities"
     PUSH = "push"
     PULL = "pull"
     READ_CONTENT = "read_content"
-    MANAGE_TOKENS = "manage_tokens"
     READ_PORTFOLIO = "read_portfolio"
+    READ_CATALOG = "read_catalog"
+    READ_RUNS = "read_runs"
+    READ_RESTRICTED = "read_restricted"
+    IMPORT_WORKFLOW = "import_workflow"
+    IMPORT_BENCHMARK = "import_benchmark"
+    IMPORT_GOAL = "import_goal"
+    IMPORT_TOOL = "import_tool"
+    IMPORT_PROCESS_TOOL = "import_process_tool"
+    TOOL_FROM_MCP = "tool_from_mcp"
+    INSTALL_STANDARD_TOOLS = "install_standard_tools"
+    RUN_WORKFLOW = "run_workflow"
+    INVOKE = "invoke"
+    PROMOTE = "promote"
+    AUTHORIZE_MODEL = "authorize_model"
+    DECLARE_POLICY = "declare_policy"
+    MANAGE_JUDGES = "manage_judges"
+    ANNOTATE_RUN = "annotate_run"
+    EDIT_BENCHMARK = "edit_benchmark"
+    RUN_BENCHMARK = "run_benchmark"
+    OPTIMIZE = "optimize"
+    READ_SPEND = "read_spend"
+    MANAGE_TOKENS = "manage_tokens"
 
     @property
     def description(
         self,
     ) -> str:
-        """Return the action as a message names it, such as `read content`."""
+        """Return the action as a message names it, such as `read content`.
 
-        return self.value.replace("_", " ")
+        A refusal says that its caller "may not" do this, so the few whose
+        value would not read as a phrase are worded.
+        """
+
+        return _DESCRIPTIONS.get(self, self.value.replace("_", " "))
+
+    @property
+    def high_privilege(
+        self,
+    ) -> bool:
+        """Return whether the action is one of the five of high privilege (ADR 0127)."""
+
+        return self in HIGH_PRIVILEGE_ACTIONS
+
+
+_DESCRIPTIONS: Final[Mapping[Action, str]] = {
+    Action.READ_CATALOG: "read the catalog",
+    Action.READ_RESTRICTED: "read restricted data",
+    Action.TOOL_FROM_MCP: "make a tool from an MCP server",
+}
+"""The actions whose description is worded rather than read from their value."""
+
+HIGH_PRIVILEGE_ACTIONS: Final = frozenset(
+    {
+        Action.IMPORT_PROCESS_TOOL,
+        Action.TOOL_FROM_MCP,
+        Action.INSTALL_STANDARD_TOOLS,
+        Action.READ_RESTRICTED,
+        Action.MANAGE_TOKENS,
+    }
+)
+"""The five actions of high privilege (ADR 0127).
+
+Each lets a caller run code on the remote, read what should not spread, or
+let others in: a process tool runs a command; making a tool from an MCP
+server starts one; the standard tools are installed for everyone;
+restricted data is not to spread; and tokens let others in.
+"""
 
 
 class Decision(BaseModel):
@@ -390,6 +454,7 @@ def load_seams(
 __all__ = [
     "AUDIT_SEAM",
     "AUTH_SEAM",
+    "HIGH_PRIVILEGE_ACTIONS",
     "POLICY_SEAM",
     "REMOTE_PLUGIN_GROUP",
     "SEAMS",
