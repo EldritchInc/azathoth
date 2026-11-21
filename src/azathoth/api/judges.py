@@ -37,6 +37,8 @@ class Judges:
 
         No provider is reached.
 
+        It is the `read_portfolio` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
@@ -48,6 +50,8 @@ class Judges:
         identifier: str,
     ) -> JudgeSummary:
         """Append one model the providers serve and the portfolio authorizes to the rotation.
+
+        It is the `manage_judges` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -79,6 +83,8 @@ class Judges:
         """Remove one model from the rotation, and return it as it was there.
 
         No provider is reached.
+
+        It is the `manage_judges` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

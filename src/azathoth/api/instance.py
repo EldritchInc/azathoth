@@ -274,6 +274,9 @@ class Azathoth:
         `http`, when given, makes the HTTP client each call is sent over, as
         tests do.
 
+        A remote never serves it, since it names this instance's own
+        remotes, and remotes never hold each other's tokens (ADR 0127).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The URL is not an http or https URL, or no
@@ -287,6 +290,8 @@ class Azathoth:
         self,
     ) -> InstanceDescription:
         """Return what this instance is: its database, and the Azathoth serving it.
+
+        It is the `read_capabilities` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

@@ -471,6 +471,8 @@ class Workflows:
     ) -> tuple[WorkflowSummary, ...]:
         """Return every workflow at its latest revision, in first-import order.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
@@ -500,6 +502,8 @@ class Workflows:
         revision: int | None = None,
     ) -> WorkflowDetail:
         """Return one revision of a workflow with its document, the latest by default.
+
+        It is the `read_catalog` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -605,6 +609,8 @@ class Workflows:
     ) -> tuple[WorkflowSummary, ...]:
         """Return a workflow's revisions newest first, at most `limit` of them.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -633,6 +639,8 @@ class Workflows:
         missing its model selection is not also told it lacks a tool. A rule
         of the whole workflow, such as that a step depends only on steps in
         it, is checked once every part is valid on its own.
+
+        It is the `read_catalog` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -678,6 +686,8 @@ class Workflows:
         builds on appends nothing, and that revision is returned. A workflow
         must declare its result. Nothing is saved when the document is
         refused.
+
+        It is the `import_workflow` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -882,6 +892,8 @@ class Tools:
 
         The latest revision of the version is returned unless another is named.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: The tool has no such version.
@@ -1056,6 +1068,8 @@ class Tools:
     ) -> tuple[ToolSummary, ...]:
         """Return a tool's revisions newest first, of one version when it is named.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -1108,6 +1122,9 @@ class Tools:
         revision is returned. A document whose implementations use a runtime
         Azathoth cannot run, or whose artifacts belong to another tool or
         version, is refused and nothing is saved.
+
+        It is the `import_tool` action, and for a process tool the
+        `import_process_tool` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1215,6 +1232,8 @@ class Benchmarks:
     ) -> tuple[BenchmarkSummary, ...]:
         """Return every benchmark at its latest revision.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
@@ -1244,6 +1263,9 @@ class Benchmarks:
         revision: int | None = None,
     ) -> BenchmarkDetail:
         """Return one revision of a benchmark with its document, the latest by default.
+
+        It is the `read_catalog` action, and for a restricted benchmark the
+        `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1392,8 +1414,11 @@ class Benchmarks:
         the corrected output of its latest bad judgment (ADR 0129). Any
         other case needs an expected value; JSON null is one, so `KEEP`
         gives none. A case is labelled as given, or as its run was, and
-        never lower (ADR 0123). It is the `edit_benchmark` action, and for a
-        restricted run the `read_restricted` action too (ADR 0130).
+        never lower (ADR 0123).
+
+        It is the `edit_benchmark` action, and when the case is made from a
+        run the `read_runs` action too, and when the case is made from a run
+        of restricted input the `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1769,10 +1794,12 @@ class Benchmarks:
     ) -> RevisionComparison:
         """Return what differs between two revisions of a benchmark, as `benchmark diff` does.
 
-        It is the `read_catalog` action (ADR 0133). A restricted case's input
-        and expected value are told only with `include_restricted`, which is
-        the `read_restricted` action too; without it, each change leaves them
-        out as `None` and says so.
+        A restricted case's input and expected value are told only with
+        `include_restricted`; without it, each change leaves them out as
+        `None` and says so.
+
+        It is the `read_catalog` action, and for a restricted case the
+        `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1812,6 +1839,8 @@ class Benchmarks:
     ) -> tuple[BenchmarkSummary, ...]:
         """Return a benchmark's revisions newest first, at most `limit` of them.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -1840,6 +1869,8 @@ class Benchmarks:
         or on the latest without one; built on an earlier one than the
         latest, it forks (ADR 0122). A document identical to the revision it
         builds on appends nothing, and that revision is returned.
+
+        It is the `import_benchmark` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

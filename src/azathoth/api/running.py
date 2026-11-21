@@ -328,6 +328,8 @@ class Runs:
         (ADR 0123). The run is kept whether it succeeded or failed, and its
         result says which.
 
+        It is the `run_workflow` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: A file given as input is not its media
@@ -428,6 +430,8 @@ class Runs:
 
         Events report the run as it happens, and `invocation_finished` ends
         every call, including a replay or a rejection.
+
+        It is the `invoke` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -547,6 +551,8 @@ class Runs:
         judged by the revision that ran. A run that has not finished is not
         kept yet, so it is not listed.
 
+        It is the `read_runs` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -579,6 +585,9 @@ class Runs:
         run_id: UUID,
     ) -> RunDetail:
         """Return one kept run with its input, its result and each step's evidence (ADR 0121).
+
+        It is the `read_runs` action, and for a run of restricted input the
+        `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -625,6 +634,8 @@ class Runs:
         output, what the run should have produced, is accepted only with
         bad. Nothing is saved when any check fails.
 
+        It is the `annotate_run` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The disposition is neither good nor bad, a
@@ -649,6 +660,8 @@ class Runs:
         A run still under way exports what its committed steps checked. Only
         durable state is read.
 
+        It is the `read_runs` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: The run was neither kept nor journaled.
@@ -668,6 +681,8 @@ class Runs:
         Each says how often it was resumed, and the command that resumes it:
         `run resume`, or `invocation resume` for a run that executes an
         invocation. Only durable state is read.
+
+        It is the `read_runs` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -705,6 +720,8 @@ class Runs:
         reporting events as `runs.run` does, and returns its result as
         `runs.run` would have. A run that executes a production invocation
         resumes as its invocation, with `invocations.resume`.
+
+        It is the `annotate_run` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -793,6 +810,8 @@ class Runs:
         It works for a run that never finished, since a child is indexed as
         it starts. Only durable state is read.
 
+        It is the `read_runs` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: The run was neither kept nor journaled.
@@ -815,6 +834,8 @@ class Runs:
         run_id: UUID,
     ) -> tuple[RunFeedback, ...]:
         """Return every judgment of a kept run, newest first (ADR 0129).
+
+        It is the `read_runs` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -849,6 +870,8 @@ class Runs:
         run's own. No run, journal or trace is kept, and the document need
         not have been imported; what the step keeps by its digest in the
         content store, such as a file given, is kept as any run keeps it.
+
+        It is the `run_workflow` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -934,6 +957,8 @@ class Runs:
         so labelled (ADR 0123): a context prompt step of a restricted run
         could run only on models declared to neither retain nor train on
         data, and one with none says why.
+
+        It is the `read_catalog` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

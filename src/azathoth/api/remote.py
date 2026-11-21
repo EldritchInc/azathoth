@@ -334,6 +334,9 @@ class Remotes:
     ) -> tuple[NamedRemote, ...]:
         """Return every remote named, ordered by name.
 
+        A remote never serves it, since it names this instance's own
+        remotes, and remotes never hold each other's tokens (ADR 0127).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
@@ -345,6 +348,9 @@ class Remotes:
         name: str,
     ) -> NamedRemote:
         """Return the remote of a name.
+
+        A remote never serves it, since it names this instance's own
+        remotes, and remotes never hold each other's tokens (ADR 0127).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -369,6 +375,9 @@ class Remotes:
 
         Only the variable's name is kept, never a token.
 
+        A remote never serves it, since it names this instance's own
+        remotes, and remotes never hold each other's tokens (ADR 0127).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The name, URL or variable is not one.
@@ -390,6 +399,9 @@ class Remotes:
 
         The last portfolio read from the remote is forgotten too, unless
         another name is kept for its URL. Nothing at the remote changes.
+
+        A remote never serves it, since it names this instance's own
+        remotes, and remotes never hold each other's tokens (ADR 0127).
 
         Raises:
             InstanceClosedError: The instance was closed.
