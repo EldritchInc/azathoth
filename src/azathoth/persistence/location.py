@@ -1,9 +1,17 @@
 """Where Azathoth keeps its durable state (ADR 0102)."""
 
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+DATABASE_VARIABLE: Final = "AZATHOTH_DATABASE"
+"""The environment variable that names the database."""
+
+DEFAULT_DATABASE: Final = Path("azathoth.db")
+"""The database when `AZATHOTH_DATABASE` names none: an SQLite file in the working directory."""
 
 POSTGRES_SCHEMES: Final = ("postgresql", "postgres")
 """The URL schemes that name a PostgreSQL database."""
@@ -78,6 +86,22 @@ def parse_database_location(
     return SQLiteLocation(path=Path(value))
 
 
+def database_location(
+    environment: Mapping[str, str] | None = None,
+) -> DatabaseLocation:
+    """Return the database `AZATHOTH_DATABASE` names, or `azathoth.db` when it names none.
+
+    It is how the command line, and so `azathoth remote serve`, finds its
+    database, and how a remote's plugin finds the same one (ADR 0134). An
+    empty value names none. `environment` defaults to the process's own.
+    """
+
+    values = os.environ if environment is None else environment
+    named = values.get(DATABASE_VARIABLE)
+
+    return parse_database_location(named) if named else SQLiteLocation(path=DEFAULT_DATABASE)
+
+
 def redact_url(
     url: str,
 ) -> str:
@@ -104,10 +128,13 @@ def redact_url(
 
 
 __all__ = [
+    "DATABASE_VARIABLE",
+    "DEFAULT_DATABASE",
     "POSTGRES_SCHEMES",
     "DatabaseLocation",
     "PostgresLocation",
     "SQLiteLocation",
+    "database_location",
     "is_postgres_url",
     "parse_database_location",
     "redact_url",

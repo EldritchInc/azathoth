@@ -164,6 +164,41 @@ Remote plugin <PLUGIN> names the seam '<NAME>'; a remote's seams are auth, polic
 Remote plugin <PLUGIN> gave the <SEAM> seam an instance of <TYPE>, which is not <KIND>.
 ```
 
+### Writing a Plugin
+
+Within 1.x, a plugin may build on these names, and on nothing else in
+Azathoth; each grows only by additions (ADR 0134):
+
+- `azathoth.remote.seams`: `Principal`, `Action`, `HIGH_PRIVILEGE_ACTIONS`,
+  `Decision`, `AuditEvent`, `AuditEventKind`, `Authenticator`, `Policy`,
+  `AuditSink` and `RemotePluginError`.
+- `azathoth.api.calls`: `SERVICE_CALLS`, `ServiceCall` and `service_call`,
+  which say, for every call of the service API, what a remote asks its
+  policy and tells its audit.
+- `azathoth.persistence`: `Database`, `Session`, `Table`, `Dialect`, `Row`,
+  `Parameter`, `InitializationOutcome`, `IntegrityError`, `open_database`,
+  `run_backfills`, `database_location`, `require_text` and
+  `require_integer`.
+- `azathoth.persistence.repositories`: `open_repositories` and
+  `postgres_database`, which shares the process's one connection to a
+  PostgreSQL database with the core.
+- `azathoth.remote.tokens`: `TOKEN_PREFIX`, `RemoteToken` and
+  `RemoteTokenRepository`, the owner's tokens.
+- `azathoth.revisions`: `Author`, `AuthorError` and `resolve_author`, which
+  name whoever runs a command as the core names an author.
+
+A factory takes no arguments, so a plugin finds the remote's database with
+`database_location()`, as `azathoth remote serve` does. Its tables are its
+own, named apart from the core's, and it records their version itself:
+`Database.initialize` records the core's schema version, so a plugin that
+called it could mark a database the core never initialized as initialized.
+A factory that cannot serve raises `RemotePluginError`, whose message the
+remote prints before it stops.
+
+A remote calls its seams from the threads it answers requests on, so each
+must be safe to call from several at once. An authenticator returns `None`
+for a header that names no one it knows, rather than raising.
+
 ## The Server
 
 `azathoth.remote.server` serves the protocol over HTTP with Starlette,

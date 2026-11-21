@@ -9,11 +9,13 @@ from pydantic import SecretStr
 
 from azathoth.inputs import S3ContentLocation, content_store_location
 from azathoth.persistence import (
+    DATABASE_VARIABLE,
     DatabaseLocation,
     PostgresLocation,
     SQLiteLocation,
-    parse_database_location,
+    database_location,
 )
+from azathoth.persistence import DEFAULT_DATABASE as DEFAULT_DATABASE
 from azathoth.providers import (
     AWS_DEFAULT_REGION_VARIABLE,
     AWS_REGION_VARIABLE,
@@ -22,9 +24,8 @@ from azathoth.providers import (
     bedrock_enabled,
 )
 
-DEFAULT_DATABASE = Path("azathoth.db")
-
-DATABASE_ENVIRONMENT_VARIABLE = "AZATHOTH_DATABASE"
+DATABASE_ENVIRONMENT_VARIABLE = DATABASE_VARIABLE
+"""The variable that names the database; `azathoth.persistence` keeps the rule (ADR 0134)."""
 
 OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE = "OPENROUTER_API_KEY"
 
@@ -97,18 +98,12 @@ class CliRuntimeConfiguration:
 
         values = environment if environment is not None else os.environ
 
-        database_value = values.get(DATABASE_ENVIRONMENT_VARIABLE)
-
         api_key_value = values.get(OPENROUTER_API_KEY_ENVIRONMENT_VARIABLE)
 
-        location = parse_database_location(database_value) if database_value else None
+        location = database_location(values)
 
         database: Path | PostgresLocation = (
-            location
-            if isinstance(location, PostgresLocation)
-            else location.path
-            if location is not None
-            else DEFAULT_DATABASE
+            location if isinstance(location, PostgresLocation) else location.path
         )
 
         api_key = SecretStr(api_key_value) if api_key_value else None

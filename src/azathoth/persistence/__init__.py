@@ -14,6 +14,7 @@ from azathoth.persistence.database import (
     Row,
     Session,
     Table,
+    run_backfills,
 )
 from azathoth.persistence.dialect import Dialect
 from azathoth.persistence.errors import (
@@ -27,10 +28,13 @@ from azathoth.persistence.errors import (
     PersistenceError,
 )
 from azathoth.persistence.location import (
+    DATABASE_VARIABLE,
+    DEFAULT_DATABASE,
     POSTGRES_SCHEMES,
     DatabaseLocation,
     PostgresLocation,
     SQLiteLocation,
+    database_location,
     parse_database_location,
     redact_url,
 )
@@ -40,6 +44,8 @@ from azathoth.persistence.sqlite import SQLiteDatabase
 from azathoth.persistence.values import require_integer, require_text
 
 __all__ = [
+    "DATABASE_VARIABLE",
+    "DEFAULT_DATABASE",
     "MISSING_DRIVER_MESSAGE",
     "POSTGRES_SCHEMES",
     "SCHEMA_TABLE",
@@ -63,9 +69,11 @@ __all__ = [
     "SQLiteLocation",
     "Session",
     "Table",
+    "database_location",
     "open_database",
     "parse_database_location",
     "redact_url",
     "require_integer",
     "require_text",
+    "run_backfills",
 ]
