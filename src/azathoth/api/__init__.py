@@ -14,6 +14,7 @@ from azathoth.api.browsing import (
     Tools,
     Workflows,
 )
+from azathoth.api.calls import SERVICE_CALLS, ServiceCall, service_call
 from azathoth.api.catalog import (
     MatchScope,
     Models,
@@ -252,6 +253,7 @@ __all__ = [
     "MAX_INPUT_FILE_BYTES",
     "OPENROUTER_API_KEY_VARIABLE",
     "RESULT_REQUIRED_MESSAGE",
+    "SERVICE_CALLS",
     "SENSITIVITY_WITHOUT_INPUT_MESSAGE",
     "Annotations",
     "ApiError",
@@ -395,6 +397,7 @@ __all__ = [
     "RunStepDetail",
     "RunSummary",
     "Runs",
+    "ServiceCall",
     "Sensitivity",
     "StandardTool",
     "StepFailure",
@@ -417,4 +420,5 @@ __all__ = [
     "initialize",
     "open",
     "parse_run_event",
+    "service_call",
 ]
