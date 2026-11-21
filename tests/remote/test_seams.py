@@ -246,7 +246,7 @@ def test_the_core_audits_nothing() -> None:
     )
 
 
-def test_audit_events_are_the_eight_a_remote_records() -> None:
+def test_audit_kinds_are_the_protocols_eight_then_the_catalogs_outcomes() -> None:
     assert [kind.value for kind in AuditEventKind] == [
         "push",
         "pull",
@@ -256,10 +256,85 @@ def test_audit_events_are_the_eight_a_remote_records() -> None:
         "request_denied",
         "capabilities_read",
         "portfolio_read",
+        "workflow_imported",
+        "benchmark_imported",
+        "goal_imported",
+        "tool_imported",
+        "process_tool_imported",
+        "tool_made_from_mcp",
+        "standard_tools_installed",
+        "workflow_run",
+        "step_tried",
+        "workflow_invoked",
+        "workflow_promoted",
+        "workflow_rolled_back",
+        "model_authorized",
+        "model_removed",
+        "data_policy_declared",
+        "judge_added",
+        "judge_removed",
+        "run_annotated",
+        "run_resumed",
+        "benchmark_created",
+        "benchmark_case_added",
+        "benchmark_case_changed",
+        "benchmark_case_removed",
+        "benchmark_run",
+        "workflow_optimized",
+        "restricted_read",
     ]
 
     with pytest.raises(ValidationError):
         AuditEvent(kind=AuditEventKind.PULL, occurred_at=datetime(2026, 11, 10))
+
+
+def test_each_audit_kind_records_one_action_and_a_refusal_records_none() -> None:
+    assert AuditEventKind.REQUEST_DENIED.action is None
+    assert {kind: kind.action for kind in AuditEventKind if kind.action is not None} == {
+        AuditEventKind.PUSH: Action.PUSH,
+        AuditEventKind.PULL: Action.PULL,
+        AuditEventKind.CONTENT_READ: Action.READ_CONTENT,
+        AuditEventKind.TOKEN_CREATED: Action.MANAGE_TOKENS,
+        AuditEventKind.TOKEN_REVOKED: Action.MANAGE_TOKENS,
+        AuditEventKind.CAPABILITIES_READ: Action.READ_CAPABILITIES,
+        AuditEventKind.PORTFOLIO_READ: Action.READ_PORTFOLIO,
+        AuditEventKind.WORKFLOW_IMPORTED: Action.IMPORT_WORKFLOW,
+        AuditEventKind.BENCHMARK_IMPORTED: Action.IMPORT_BENCHMARK,
+        AuditEventKind.GOAL_IMPORTED: Action.IMPORT_GOAL,
+        AuditEventKind.TOOL_IMPORTED: Action.IMPORT_TOOL,
+        AuditEventKind.PROCESS_TOOL_IMPORTED: Action.IMPORT_PROCESS_TOOL,
+        AuditEventKind.TOOL_MADE_FROM_MCP: Action.TOOL_FROM_MCP,
+        AuditEventKind.STANDARD_TOOLS_INSTALLED: Action.INSTALL_STANDARD_TOOLS,
+        AuditEventKind.WORKFLOW_RUN: Action.RUN_WORKFLOW,
+        AuditEventKind.STEP_TRIED: Action.RUN_WORKFLOW,
+        AuditEventKind.WORKFLOW_INVOKED: Action.INVOKE,
+        AuditEventKind.WORKFLOW_PROMOTED: Action.PROMOTE,
+        AuditEventKind.WORKFLOW_ROLLED_BACK: Action.PROMOTE,
+        AuditEventKind.MODEL_AUTHORIZED: Action.AUTHORIZE_MODEL,
+        AuditEventKind.MODEL_REMOVED: Action.AUTHORIZE_MODEL,
+        AuditEventKind.DATA_POLICY_DECLARED: Action.DECLARE_POLICY,
+        AuditEventKind.JUDGE_ADDED: Action.MANAGE_JUDGES,
+        AuditEventKind.JUDGE_REMOVED: Action.MANAGE_JUDGES,
+        AuditEventKind.RUN_ANNOTATED: Action.ANNOTATE_RUN,
+        AuditEventKind.RUN_RESUMED: Action.ANNOTATE_RUN,
+        AuditEventKind.BENCHMARK_CREATED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_ADDED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_CHANGED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_REMOVED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_RUN: Action.RUN_BENCHMARK,
+        AuditEventKind.WORKFLOW_OPTIMIZED: Action.OPTIMIZE,
+        AuditEventKind.RESTRICTED_READ: Action.READ_RESTRICTED,
+    }
+
+
+def test_only_reading_what_is_not_restricted_goes_unaudited() -> None:
+    audited = {kind.action for kind in AuditEventKind}
+
+    assert {action for action in Action if action not in audited} == {
+        Action.READ_CATALOG,
+        Action.READ_RUNS,
+        Action.READ_SPEND,
+    }
 
 
 # Plugins

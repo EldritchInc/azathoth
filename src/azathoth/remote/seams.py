@@ -179,7 +179,14 @@ class Decision(BaseModel):
 
 
 class AuditEventKind(StrEnum):
-    """What a remote tells its audit it did, or refused."""
+    """What a remote tells its audit it did, or refused (ADRs 0124 and 0127).
+
+    The protocol's eight come first. After them is one kind for each
+    outcome of an action that changes something or reads restricted data,
+    so promoting and rolling back, both the `promote` action, are told
+    apart. Reading what is not restricted is not audited. Kinds grow only
+    by additions within 1.x, and no value changes.
+    """
 
     PUSH = "push"
     PULL = "pull"
@@ -189,6 +196,78 @@ class AuditEventKind(StrEnum):
     REQUEST_DENIED = "request_denied"
     CAPABILITIES_READ = "capabilities_read"
     PORTFOLIO_READ = "portfolio_read"
+    WORKFLOW_IMPORTED = "workflow_imported"
+    BENCHMARK_IMPORTED = "benchmark_imported"
+    GOAL_IMPORTED = "goal_imported"
+    TOOL_IMPORTED = "tool_imported"
+    PROCESS_TOOL_IMPORTED = "process_tool_imported"
+    TOOL_MADE_FROM_MCP = "tool_made_from_mcp"
+    STANDARD_TOOLS_INSTALLED = "standard_tools_installed"
+    WORKFLOW_RUN = "workflow_run"
+    STEP_TRIED = "step_tried"
+    WORKFLOW_INVOKED = "workflow_invoked"
+    WORKFLOW_PROMOTED = "workflow_promoted"
+    WORKFLOW_ROLLED_BACK = "workflow_rolled_back"
+    MODEL_AUTHORIZED = "model_authorized"
+    MODEL_REMOVED = "model_removed"
+    DATA_POLICY_DECLARED = "data_policy_declared"
+    JUDGE_ADDED = "judge_added"
+    JUDGE_REMOVED = "judge_removed"
+    RUN_ANNOTATED = "run_annotated"
+    RUN_RESUMED = "run_resumed"
+    BENCHMARK_CREATED = "benchmark_created"
+    BENCHMARK_CASE_ADDED = "benchmark_case_added"
+    BENCHMARK_CASE_CHANGED = "benchmark_case_changed"
+    BENCHMARK_CASE_REMOVED = "benchmark_case_removed"
+    BENCHMARK_RUN = "benchmark_run"
+    WORKFLOW_OPTIMIZED = "workflow_optimized"
+    RESTRICTED_READ = "restricted_read"
+
+    @property
+    def action(
+        self,
+    ) -> Action | None:
+        """Return the action this kind records, or None for a refusal, which records none."""
+
+        return _KIND_ACTIONS.get(self)
+
+
+_KIND_ACTIONS: Final[Mapping[AuditEventKind, Action]] = {
+    AuditEventKind.PUSH: Action.PUSH,
+    AuditEventKind.PULL: Action.PULL,
+    AuditEventKind.CONTENT_READ: Action.READ_CONTENT,
+    AuditEventKind.TOKEN_CREATED: Action.MANAGE_TOKENS,
+    AuditEventKind.TOKEN_REVOKED: Action.MANAGE_TOKENS,
+    AuditEventKind.CAPABILITIES_READ: Action.READ_CAPABILITIES,
+    AuditEventKind.PORTFOLIO_READ: Action.READ_PORTFOLIO,
+    AuditEventKind.WORKFLOW_IMPORTED: Action.IMPORT_WORKFLOW,
+    AuditEventKind.BENCHMARK_IMPORTED: Action.IMPORT_BENCHMARK,
+    AuditEventKind.GOAL_IMPORTED: Action.IMPORT_GOAL,
+    AuditEventKind.TOOL_IMPORTED: Action.IMPORT_TOOL,
+    AuditEventKind.PROCESS_TOOL_IMPORTED: Action.IMPORT_PROCESS_TOOL,
+    AuditEventKind.TOOL_MADE_FROM_MCP: Action.TOOL_FROM_MCP,
+    AuditEventKind.STANDARD_TOOLS_INSTALLED: Action.INSTALL_STANDARD_TOOLS,
+    AuditEventKind.WORKFLOW_RUN: Action.RUN_WORKFLOW,
+    AuditEventKind.STEP_TRIED: Action.RUN_WORKFLOW,
+    AuditEventKind.WORKFLOW_INVOKED: Action.INVOKE,
+    AuditEventKind.WORKFLOW_PROMOTED: Action.PROMOTE,
+    AuditEventKind.WORKFLOW_ROLLED_BACK: Action.PROMOTE,
+    AuditEventKind.MODEL_AUTHORIZED: Action.AUTHORIZE_MODEL,
+    AuditEventKind.MODEL_REMOVED: Action.AUTHORIZE_MODEL,
+    AuditEventKind.DATA_POLICY_DECLARED: Action.DECLARE_POLICY,
+    AuditEventKind.JUDGE_ADDED: Action.MANAGE_JUDGES,
+    AuditEventKind.JUDGE_REMOVED: Action.MANAGE_JUDGES,
+    AuditEventKind.RUN_ANNOTATED: Action.ANNOTATE_RUN,
+    AuditEventKind.RUN_RESUMED: Action.ANNOTATE_RUN,
+    AuditEventKind.BENCHMARK_CREATED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_ADDED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_CHANGED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_REMOVED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_RUN: Action.RUN_BENCHMARK,
+    AuditEventKind.WORKFLOW_OPTIMIZED: Action.OPTIMIZE,
+    AuditEventKind.RESTRICTED_READ: Action.READ_RESTRICTED,
+}
+"""The action each kind records; a refusal, `request_denied`, records none."""
 
 
 class AuditEvent(BaseModel):
