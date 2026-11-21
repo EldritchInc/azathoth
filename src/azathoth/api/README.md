@@ -664,6 +664,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |
 | `RemoteDivergedError` | `remote_diverged` | A pushed lineage diverged at the remote; a `ConflictError` too. |
 | `McpUnavailableError` | `mcp_unavailable` | An MCP server to make a tool from could not be reached or listed, or needs an authorization variable that is not set. |
+| `PermissionDeniedError` | `permission_denied` | A remote's policy refused the caller the call's action; its message is the policy's reason (ADR 0127). A local instance never raises it. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.
