@@ -19,6 +19,7 @@ too.
 """
 
 import inspect
+import threading
 import typing
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -30,6 +31,9 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, create
 from azathoth.api.calls import SERVICE_CALLS, ServiceCall, service_call
 from azathoth.api.errors import InvalidArgumentError
 from azathoth.api.instance import Azathoth
+from azathoth.api.providers import ProviderSettings
+from azathoth.persistence.repositories import Repositories
+from azathoth.telemetry import NO_TELEMETRY, Telemetry
 
 CALLS_ROUTE: Final = "/v1/calls/{name}"
 """Where a remote serves each call of the service API, by the call's name."""
@@ -210,6 +214,54 @@ def call_signature(
     )
 
 
+class CallerInstances:
+    """The service API a remote answers each caller with, over the repositories it serves.
+
+    Each caller gets an `Azathoth` of their own, made the first time they
+    call, so what they import or authorize is recorded as theirs: their
+    principal's name is the author. Every instance shares the remote's
+    repositories, and none is ever closed, since closing one would close
+    the database the others serve.
+    """
+
+    def __init__(
+        self,
+        repositories: Repositories,
+        *,
+        providers: ProviderSettings | None = None,
+        telemetry: Telemetry = NO_TELEMETRY,
+    ) -> None:
+        self._repositories = repositories
+        self._providers = providers
+        self._telemetry = telemetry
+        self._instances: dict[str, Azathoth] = {}
+        self._lock = threading.Lock()
+
+    def instance(
+        self,
+        author: str,
+    ) -> Azathoth:
+        """Return the instance a caller of a name is answered with, recording them as author.
+
+        Raises:
+            InvalidAuthorError: The name is not one an author may have.
+        """
+
+        with self._lock:
+            instance = self._instances.get(author)
+
+            if instance is None:
+                instance = Azathoth(
+                    self._repositories,
+                    providers=self._providers,
+                    telemetry=self._telemetry,
+                    author=author,
+                )
+                self._instances[author] = instance
+
+            return instance
+
+
 def call_signatures() -> Mapping[str, CallSignature]:
     """Return how every call a remote answers while the request waits travels, by name."""
 
@@ -225,6 +277,7 @@ __all__ = [
     "SERVER_ONLY_PARAMETERS",
     "CallArgumentsError",
     "CallSignature",
+    "CallerInstances",
     "NotServedError",
     "call_signature",
     "call_signatures",

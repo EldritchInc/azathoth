@@ -11,6 +11,7 @@ audited. The service routes (ADR 0127) refuse with a code as well.
 | `GET /v1/service` | read capabilities | the `ServiceDescription` |
 | `GET /v1/permissions` | | the caller's `PermissionsResponse` |
 | `POST /v1/permissions` | | the `ResourcePermissionsResponse` to a `PermissionsRequest` |
+| `POST /v1/calls/{name}` | the call's own | the call's result, given its arguments by name |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
@@ -28,6 +29,7 @@ policy or a long push never holds up another request; at most
 pool holds connections, and the rest wait their turn.
 """
 
+import logging
 import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
@@ -43,11 +45,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from azathoth.api.calls import ServiceCall, service_call
 from azathoth.api.errors import ApiError
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
 from azathoth.providers import ModelPortfolioRepository
+from azathoth.remote.calling import (
+    CALLS_ROUTE,
+    CallerInstances,
+    CallSignature,
+    call_signature,
+)
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
 from azathoth.remote.protocol import (
@@ -124,6 +133,14 @@ DIGEST_PATTERN: Final = re.compile(CONTENT_DIGEST_PATTERN)
 PLUGIN_ERROR_CODE: Final = "plugin_error"
 """The code of a service route's answer when a plugin of the remote's failed it."""
 
+JOB_CODE: Final = "job"
+"""The code a call that runs as a job is answered with until the remote runs jobs."""
+
+JSON_MEDIA_TYPE: Final = "application/json"
+"""The media type a call's result is answered with."""
+
+_LOG = logging.getLogger(__name__)
+
 
 class _Refused(Exception):
     """A request refused, with the status and message to answer it with, and its code."""
@@ -173,11 +190,14 @@ class RemoteServer:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         environ: Mapping[str, str] | None = None,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        instances: CallerInstances | None = None,
     ) -> None:
         """Serve the given repositories; `environ` defaults to the process's own environment.
 
         At most `max_concurrent` calls to the seams and repositories run at
-        once.
+        once. With `instances`, the remote serves the service API, answering
+        each caller with an instance of their own; without, it serves only
+        the protocol.
 
         Raises:
             ValueError: `max_concurrent` is below 1.
@@ -197,6 +217,7 @@ class RemoteServer:
         self.accepts_restricted = accepts_restricted
         self._clock = clock
         self.max_concurrent = max_concurrent
+        self.instances = instances
         #
         # A limiter belongs to the event loop it is first used on, so each
         # loop that serves this remote gets one of its own.
@@ -234,6 +255,7 @@ class RemoteServer:
                 Route("/health", self.health, methods=["GET"]),
                 Route(SERVICE_ROUTE, self.service, methods=["GET"]),
                 Route(PERMISSIONS_ROUTE, self.permissions_route, methods=["GET", "POST"]),
+                Route(CALLS_ROUTE, self.call_route, methods=["POST"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -284,6 +306,14 @@ class RemoteServer:
         """
 
         return await self._serve(request, None, None, self._permissions, service=True)
+
+    async def call_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer one call of the service API with its result, for a caller the policy allows."""
+
+        return await self._serve(request, None, None, self._call, service=True)
 
     async def capabilities(
         self,
@@ -382,6 +412,49 @@ class RemoteServer:
         described = await self._blocking(lambda: service_description(self.seams))
 
         return JSONResponse(described.model_dump(mode="json")), None, None
+
+    async def _call(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        signature = _served_signature(request.path_params["name"], served=self.instances)
+        arguments = signature.read_arguments(await _body(request, MAX_PUSH_BYTES))
+        await self._decide_call(principal, signature.call, arguments)
+        instances = self.instances
+        assert instances is not None
+
+        def answer() -> bytes:
+            method = signature.bound(instances.instance(principal.name))
+
+            return signature.write_result(method(**arguments))
+
+        try:
+            body = await self._blocking(answer)
+        except ApiError:
+            raise
+        except Exception:
+            _LOG.exception("The remote failed to answer %s.", signature.name)
+
+            raise _Refused(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                f"This remote failed to answer {signature.name}; its log says why.",
+            ) from None
+
+        return Response(body, media_type=JSON_MEDIA_TYPE), None, None
+
+    async def _decide_call(
+        self,
+        principal: Principal,
+        call: ServiceCall,
+        arguments: Mapping[str, object],
+    ) -> None:
+        """Refuse a call any of whose actions the policy does not allow, on what it names."""
+
+        resource = call_resource(call, arguments)
+
+        for action in call.actions:
+            await self._decide(principal, action, resource)
 
     async def _permissions(
         self,
@@ -751,6 +824,64 @@ def _parse(
         ) from None
 
 
+def call_resource(
+    call: ServiceCall,
+    arguments: Mapping[str, object],
+) -> str | None:
+    """Return what a call acts on, as the policy is asked about it: its kind and its ID.
+
+    A call that names no resource, or whose resource argument was not
+    given, acts on none.
+    """
+
+    if call.resource is None:
+        return None
+
+    value = arguments.get(call.resource.parameter)
+
+    return None if value is None else f"{call.resource.kind} {value}"
+
+
+def _served_signature(
+    name: str,
+    *,
+    served: CallerInstances | None,
+) -> CallSignature:
+    """Return how a call a remote answers travels, or refuse it, saying why.
+
+    Raises:
+        _Refused: The remote serves no service API, the service API has no
+            such call, the remote never serves it, or it runs as a job.
+    """
+
+    if served is None:
+        raise _Refused(
+            HTTPStatus.NOT_FOUND,
+            "This remote serves only push, pull and status, not the service API.",
+        )
+
+    try:
+        call = service_call(name)
+    except LookupError:
+        raise _Refused(HTTPStatus.NOT_FOUND, f"The service API has no call named {name}.") from None
+
+    if not call.served:
+        raise _Refused(
+            HTTPStatus.NOT_FOUND,
+            f"A remote never serves {name}: it names this instance's own remotes, which a "
+            "remote never holds.",
+        )
+
+    if call.job:
+        raise _Refused(
+            HTTPStatus.NOT_IMPLEMENTED,
+            f"{name} runs on the remote's workers, which this remote does not run jobs on yet.",
+            JOB_CODE,
+        )
+
+    return call_signature(name)
+
+
 def _require_protocol(
     protocol: int,
 ) -> None:
@@ -808,8 +939,11 @@ __all__ = [
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
+    "JOB_CODE",
+    "JSON_MEDIA_TYPE",
     "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
+    "call_resource",
     "RemoteServer",
     "error_response",
 ]

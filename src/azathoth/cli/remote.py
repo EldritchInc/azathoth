@@ -30,6 +30,7 @@ from azathoth.remote import (
     TokenAuthenticator,
     load_seams,
 )
+from azathoth.remote.calling import CallerInstances
 from azathoth.remote.serving import RemoteAlreadyServedError, serving_lock
 from azathoth.revisions import RevisionKind
 
@@ -132,10 +133,13 @@ def serve_remote(
 ) -> int:
     """Serve this instance as a remote with uvicorn, until stopped.
 
-    The `remote` extra must be installed, and the plugins installed for the
-    remote's seams must be ones it can use; otherwise nothing is served,
-    and the reason is printed. An SQLite database is served by one process
-    at a time: a second server on the same file is refused (ADR 0135).
+    It serves the remote protocol and the service API, answering each
+    caller with an instance that records them as author, over the
+    providers the environment turns on. The `remote` extra must be
+    installed, and the plugins installed for the remote's seams must be
+    ones it can use; otherwise nothing is served, and the reason is
+    printed. An SQLite database is served by one process at a time: a
+    second server on the same file is refused (ADR 0135).
     """
 
     try:
@@ -166,6 +170,7 @@ def serve_remote(
         portfolio=held.portfolio,
         seams=seams,
         accepts_restricted=accept_restricted,
+        instances=CallerInstances(held, providers=api.ProviderSettings.from_environment()),
     )
 
     try:
