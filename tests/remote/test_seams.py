@@ -21,8 +21,10 @@ from azathoth.remote import (
     Decision,
     NoAuditSink,
     OwnerOnlyPolicy,
+    Policy,
     Principal,
     RemotePluginError,
+    Seams,
     load_seams,
 )
 
@@ -60,6 +62,22 @@ class TeamPolicy:
             return Decision(allowed=True)
 
         return Decision(allowed=False, reason="Only pulls.")
+
+
+class DetailedPolicy(TeamPolicy):
+    """A plugin policy that says more of its edition, and may change what it says."""
+
+    def __init__(
+        self,
+        detail: object,
+    ) -> None:
+        self.detail = detail
+
+    @property
+    def edition_detail(
+        self,
+    ) -> object:
+        return self.detail
 
 
 class ListAudit:
@@ -415,3 +433,59 @@ def test_seams_tell_the_capabilities_of_their_remote() -> None:
         accepts_restricted=True,
     )
     assert default().capabilities(accepts_restricted=False).edition == "community"
+
+
+# What a policy says of its edition
+
+
+def seams_of(
+    policy: Any,
+) -> Seams:
+    return Seams(authenticator=TokenAuthenticator(), policy=policy, audit=NoAuditSink())
+
+
+def test_the_core_says_nothing_more_of_its_edition() -> None:
+    assert seams_of(OwnerOnlyPolicy()).edition_detail is None
+
+
+def test_a_policy_written_before_edition_detail_is_still_a_policy_and_says_nothing_more() -> None:
+    assert isinstance(TeamPolicy(), Policy)
+    assert seams_of(TeamPolicy()).edition_detail is None
+
+
+def test_a_policy_may_say_more_of_its_edition_and_change_what_it_says() -> None:
+    policy = DetailedPolicy("Licensed to Acme, 10 seats")
+    seams = seams_of(policy)
+
+    assert isinstance(policy, Policy)
+    assert seams.edition_detail == "Licensed to Acme, 10 seats"
+
+    policy.detail = "Licence expired on 2027-11-21; owner-only until renewed"
+
+    assert seams.edition_detail == "Licence expired on 2027-11-21; owner-only until renewed"
+
+    policy.detail = None
+
+    assert seams.edition_detail is None
+
+
+@pytest.mark.parametrize("detail", ["", "   ", "two\nlines", "tab\there", "a" * 201, 10, b"bytes"])
+def test_an_edition_detail_is_one_printable_line_of_at_most_200_characters(
+    detail: object,
+) -> None:
+    with pytest.raises(RemotePluginError) as caught:
+        _ = seams_of(DetailedPolicy(detail)).edition_detail
+
+    assert str(caught.value).startswith("The remote's policy gave an edition detail of ")
+    assert str(caught.value).endswith(
+        "; an edition detail is one printable line of at most 200 characters."
+    )
+
+
+def test_the_capabilities_do_not_change() -> None:
+    capabilities = seams_of(DetailedPolicy("Licensed to Acme")).capabilities(
+        accepts_restricted=False
+    )
+
+    assert "edition_detail" not in capabilities.model_dump()
+    assert capabilities.edition == "team"

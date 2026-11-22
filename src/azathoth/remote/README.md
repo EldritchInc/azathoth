@@ -199,6 +199,13 @@ A remote calls its seams from the threads it answers requests on, so each
 must be safe to call from several at once. An authenticator returns `None`
 for a header that names no one it knows, rather than raising.
 
+A policy names its `edition`, and may say more of it with an
+`edition_detail` property: one printable line of at most 200 characters,
+such as who the edition is licensed to, read afresh each time. A remote
+shows both and never acts on either, since any plugin may name any edition;
+what a caller may do is the policy's `decide` alone. The capabilities do not
+change, since clients before 1.6 refuse a field they do not know.
+
 ## The Server
 
 `azathoth.remote.server` serves the protocol over HTTP with Starlette,

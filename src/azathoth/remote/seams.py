@@ -41,6 +41,9 @@ AUDIT_SEAM: Final = "audit"
 SEAMS: Final = (AUTH_SEAM, POLICY_SEAM, AUDIT_SEAM)
 """Every seam a plugin may fill, in the order messages name them."""
 
+MAX_EDITION_DETAIL_LENGTH: Final = 200
+"""The longest a policy's edition detail may be."""
+
 
 class RemotePluginError(RuntimeError):
     """The plugins installed for a remote cannot serve it."""
@@ -307,7 +310,15 @@ class Authenticator(Protocol):
 
 @runtime_checkable
 class Policy(Protocol):
-    """Says whether a caller may do what they ask, and which edition the remote is."""
+    """Says whether a caller may do what they ask, and which edition the remote is.
+
+    A policy may also have an `edition_detail` property: one printable line
+    of at most `MAX_EDITION_DETAIL_LENGTH` characters saying more of its
+    edition, such as who it is licensed to, or None. It is not one of the
+    protocol's members, so a policy without it is still a `Policy`. A
+    remote shows the edition and its detail, and never acts on either
+    (ADR 0134).
+    """
 
     @property
     def edition(
@@ -416,6 +427,42 @@ class Seams:
     policy: Policy
     audit: AuditSink
     plugins: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def edition_detail(
+        self,
+    ) -> str | None:
+        """Return what the policy says of its edition beside its name, or None.
+
+        It is read from the policy each time, so a policy may change what it
+        says, as a licence nears its end. A policy without it says nothing
+        more.
+
+        Raises:
+            RemotePluginError: The policy's detail is not one printable line
+                of at most `MAX_EDITION_DETAIL_LENGTH` characters.
+        """
+
+        detail: object = getattr(self.policy, "edition_detail", None)
+
+        if detail is None:
+            return None
+
+        if (
+            not isinstance(detail, str)
+            or not detail.strip()
+            or not detail.isprintable()
+            or len(detail) > MAX_EDITION_DETAIL_LENGTH
+        ):
+            shown = repr(detail)
+
+            raise RemotePluginError(
+                f"The remote's policy gave an edition detail of "
+                f"{shown if len(shown) <= 80 else shown[:77] + '...'}; an edition detail is one "
+                f"printable line of at most {MAX_EDITION_DETAIL_LENGTH} characters."
+            )
+
+        return detail
 
     def capabilities(
         self,
@@ -534,6 +581,7 @@ __all__ = [
     "AUDIT_SEAM",
     "AUTH_SEAM",
     "HIGH_PRIVILEGE_ACTIONS",
+    "MAX_EDITION_DETAIL_LENGTH",
     "POLICY_SEAM",
     "REMOTE_PLUGIN_GROUP",
     "SEAMS",
