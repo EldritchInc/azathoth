@@ -54,6 +54,31 @@ class NotServedError(LookupError):
     """A call that a remote does not serve over HTTP was asked for its signature."""
 
 
+UNKNOWN_ARGUMENT: Final = "extra_forbidden"
+"""The kind of pydantic error an argument the call does not take is."""
+
+
+def arguments_refused(
+    name: str,
+    error: ValidationError,
+) -> CallArgumentsError:
+    """Return why arguments are not the ones a call takes, naming one thing wrong.
+
+    An argument the call does not take is named before anything else, since
+    it is most often one misnamed, which is also why one the call needs is
+    missing: `workflow` given for `workflow_id` names `workflow`. Otherwise
+    the first error pydantic gives is named. Pydantic's own order is not
+    the same in every version, so it is never relied on to choose.
+    """
+
+    errors = error.errors()
+    (first, *_) = sorted(errors, key=lambda each: each["type"] != UNKNOWN_ARGUMENT)
+    location = ".".join(str(part) for part in first["loc"])
+    where = f" at {location}" if location else ""
+
+    return CallArgumentsError(f"These are not the arguments {name} takes{where}: {first['msg']}.")
+
+
 @dataclass(frozen=True)
 class CallSignature:
     """What one call takes and returns, as it travels over HTTP."""
@@ -88,13 +113,7 @@ class CallSignature:
         try:
             read = self.arguments.model_validate_json(body or b"{}")
         except ValidationError as exc:
-            (first, *_) = exc.errors()
-            location = ".".join(str(part) for part in first["loc"])
-            where = f" at {location}" if location else ""
-
-            raise CallArgumentsError(
-                f"These are not the arguments {self.name} takes{where}: {first['msg']}."
-            ) from None
+            raise arguments_refused(self.name, exc) from None
 
         return {field: getattr(read, field) for field in type(read).model_fields}
 
@@ -116,13 +135,7 @@ class CallSignature:
         try:
             written = self.arguments.model_validate(arguments)
         except ValidationError as exc:
-            (first, *_) = exc.errors()
-            location = ".".join(str(part) for part in first["loc"])
-            where = f" at {location}" if location else ""
-
-            raise CallArgumentsError(
-                f"These are not the arguments {self.name} takes{where}: {first['msg']}."
-            ) from None
+            raise arguments_refused(self.name, exc) from None
 
         return written.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()
 
@@ -275,10 +288,12 @@ def call_signatures() -> Mapping[str, CallSignature]:
 __all__ = [
     "CALLS_ROUTE",
     "SERVER_ONLY_PARAMETERS",
+    "UNKNOWN_ARGUMENT",
     "CallArgumentsError",
     "CallSignature",
     "CallerInstances",
     "NotServedError",
+    "arguments_refused",
     "call_signature",
     "call_signatures",
 ]

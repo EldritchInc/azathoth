@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from azathoth import api
 from azathoth.api.benchmark_cases import Keep
@@ -21,6 +22,7 @@ from azathoth.remote.calling import (
     SERVER_ONLY_PARAMETERS,
     CallArgumentsError,
     NotServedError,
+    arguments_refused,
     call_signature,
     call_signatures,
 )
@@ -195,6 +197,45 @@ def test_arguments_that_are_not_the_calls_are_refused_saying_where(
     assert str(caught.value).startswith(refusal)
     assert isinstance(caught.value, InvalidArgumentError)
     assert caught.value.code == "invalid_argument"
+
+
+def test_a_misnamed_argument_is_named_rather_than_the_one_it_was_meant_for() -> None:
+    with pytest.raises(CallArgumentsError) as caught:
+        call_signature("workflows.get").read_arguments(b'{"workflow": "c1060000"}')
+
+    assert str(caught.value) == (
+        "These are not the arguments workflows.get takes at workflow: Extra inputs are not "
+        "permitted."
+    )
+
+
+@pytest.mark.parametrize("reversed_", [False, True], ids=["missing-first", "unknown-first"])
+def test_an_unknown_argument_is_named_whatever_order_pydantic_gives_its_errors(
+    reversed_: bool,
+) -> None:
+    errors = [
+        {"type": "missing", "loc": ("workflow_id",), "input": {}},
+        {"type": "extra_forbidden", "loc": ("workflow",), "input": "c1060000"},
+    ]
+    error = ValidationError.from_exception_data(
+        "arguments",
+        list(reversed(errors)) if reversed_ else errors,  # type: ignore[arg-type]
+        input_type="json",
+    )
+
+    assert str(arguments_refused("workflows.get", error)) == (
+        "These are not the arguments workflows.get takes at workflow: Extra inputs are not "
+        "permitted."
+    )
+
+
+def test_without_an_unknown_argument_the_first_error_is_named() -> None:
+    with pytest.raises(CallArgumentsError) as caught:
+        call_signature("runs.list").read_arguments(b'{"workflow_id": "lost", "limit": "five"}')
+
+    assert str(caught.value).startswith(
+        "These are not the arguments runs.list takes at workflow_id: Input should be a valid UUID"
+    )
 
 
 def test_a_client_writes_only_the_arguments_it_gives_and_not_as_their_defaults() -> None:
