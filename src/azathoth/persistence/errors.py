@@ -30,6 +30,38 @@ class ReadOnlyTransactionError(PersistenceError):
     """
 
 
+class NestedTransactionError(PersistenceError):
+    """A transaction was begun inside another one, on the same thread.
+
+    Each transaction holds a connection of its own, so the inner one would
+    not see the outer one's writes, and could wait forever on its locks.
+    """
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__(
+            "A transaction was begun inside another on the same thread; "
+            "finish the first before beginning the next."
+        )
+
+
+class DatabaseBusyError(PersistenceError):
+    """Every pooled connection stayed in use for as long as a transaction waits for one."""
+
+    def __init__(
+        self,
+        location: DatabaseLocation,
+        *,
+        pool_size: int,
+        waited_seconds: float,
+    ) -> None:
+        super().__init__(
+            f"Database {location.display()} had none of its {pool_size} connections free "
+            f"within {waited_seconds:g} seconds."
+        )
+
+
 class DatabaseUnavailableError(PersistenceError):
     """The database cannot be used here: PostgreSQL without the `postgres` extra."""
 
@@ -87,12 +119,14 @@ class DatabaseSchemaTooNewError(DatabaseSchemaError):
 
 __all__ = [
     "MISSING_DRIVER_MESSAGE",
+    "DatabaseBusyError",
     "DatabaseNotInitializedError",
     "DatabaseSchemaError",
     "DatabaseSchemaOutdatedError",
     "DatabaseSchemaTooNewError",
     "DatabaseUnavailableError",
     "IntegrityError",
+    "NestedTransactionError",
     "PersistenceError",
     "ReadOnlyTransactionError",
 ]

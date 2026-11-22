@@ -16,7 +16,11 @@ from azathoth.persistence.database import (
     run_backfills,
 )
 from azathoth.persistence.dialect import Dialect, identifier, render
-from azathoth.persistence.errors import IntegrityError, ReadOnlyTransactionError
+from azathoth.persistence.errors import (
+    IntegrityError,
+    NestedTransactionError,
+    ReadOnlyTransactionError,
+)
 from azathoth.persistence.location import SQLiteLocation
 
 BUSY_TIMEOUT_SECONDS: Final = 30.0
@@ -113,6 +117,9 @@ class SQLiteDatabase:
     A read-only transaction begins deferred, under `PRAGMA query_only`, and
     takes no write lock, so it never waits for a writer and a writer never
     waits for it.
+
+    A transaction begun inside another on the same thread is refused: it
+    would open a second connection, which waits for the first's write lock.
     """
 
     def __init__(
@@ -122,6 +129,7 @@ class SQLiteDatabase:
         self._location = SQLiteLocation(path=Path(path))
         self._journal_set = False
         self._journal_lock = threading.Lock()
+        self._inside = threading.local()
 
     @property
     def dialect(
@@ -156,6 +164,8 @@ class SQLiteDatabase:
         only to check it. A read-only transaction takes `BEGIN`, deferred.
 
         Raises:
+            NestedTransactionError: A transaction of this database is
+                already in progress on this thread.
             ValueError: Both `lock` and `read_only` were given.
         """
 
@@ -169,6 +179,23 @@ class SQLiteDatabase:
 
     @contextmanager
     def _transaction(
+        self,
+        *,
+        read_only: bool,
+    ) -> Iterator[SQLiteSession]:
+        if getattr(self._inside, "active", False):
+            raise NestedTransactionError()
+
+        self._inside.active = True
+
+        try:
+            with self._connected(read_only=read_only) as session:
+                yield session
+        finally:
+            self._inside.active = False
+
+    @contextmanager
+    def _connected(
         self,
         *,
         read_only: bool,

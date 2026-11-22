@@ -138,8 +138,14 @@ class Database(Protocol):
         alongside a writer, each seeing what was committed when it began
         reading. A read-only transaction takes no `lock`.
 
+        A transaction is never begun inside another on the same thread: each
+        holds a connection of its own, so an inner one would not see the
+        outer one's writes, and could wait on its locks forever.
+
         Raises:
             IntegrityError: A statement in the block broke a constraint.
+            NestedTransactionError: A transaction of this database is
+                already in progress on this thread.
             ReadOnlyTransactionError: A statement in a read-only
                 transaction tried to write.
             ValueError: Both `lock` and `read_only` were given.

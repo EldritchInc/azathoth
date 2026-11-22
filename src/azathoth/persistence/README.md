@@ -201,17 +201,31 @@ to lock a table and to only read is refused with a `ValueError`.
 
 # Connections
 
-A PostgreSQL database keeps one connection for the life of the process,
-opened when it is first used. A connection found closed or broken, such as
-one the server dropped while it sat idle, is opened again before the next
-transaction begins. Every repository over the same URL shares it.
+A PostgreSQL database keeps a pool of connections, shared by every
+repository over the same URL and every thread of the process. Each
+transaction borrows a connection of its own and gives it back when it
+commits or rolls back, so transactions on different threads, such as a
+remote's requests or a run's lease renewal (ADR 0105), run together.
 
-Transactions on the connection take turns: one begun in another thread, such
-as a run's lease renewal (ADR 0105), waits until the one in progress commits
-or rolls back.
+| Setting | Default | What it bounds |
+| --- | --- | --- |
+| `pool_size` | 8 | the connections open at once |
+| `wait_seconds` | 30 | how long a transaction waits for one to be given back |
 
-There is no pool. The queue worker runs one job at a time, so one connection
-serves it, and a deployment scales by running more workers (ADR 0107).
+Connections are opened as they are first needed, and idle ones are kept
+for the next transaction. A connection found closed or broken, such as one
+the server dropped while it sat idle, is replaced before a transaction
+begins on it, and one whose commit or rollback failed is closed. A
+transaction that waits `wait_seconds` and still finds every connection in
+use raises `DatabaseBusyError`.
+
+A transaction is never begun inside another on the same thread, on either
+database: it raises `NestedTransactionError`. The inner one would hold a
+connection of its own, so it would not see the outer one's writes, and
+could wait on its locks forever.
+
+`close` closes the idle connections at once, and each one in use when it is
+given back; the next transaction opens a connection afresh.
 
 # Opening the Repositories
 

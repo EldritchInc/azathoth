@@ -23,9 +23,9 @@ def repositories(
     """Return the repositories of the configured database.
 
     Each is opened the first time it is used. Every PostgreSQL repository of
-    the process shares one connection. Resolved content is kept in the S3
-    store the configuration names, when it names one, and otherwise in the
-    database.
+    the process shares one pool of connections. Resolved content is kept in
+    the S3 store the configuration names, when it names one, and otherwise
+    in the database.
 
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
