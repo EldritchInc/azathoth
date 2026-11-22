@@ -6,6 +6,51 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
+## Unreleased
+
+Azathoth 1.6 makes a remote an Azathoth people work on, not only one they
+push to. This first part names, in code, what a remote will ask its policy
+and tell its audit for every call of the service API, and what a remote's
+plugins may build on. Nothing a remote does changes yet: its owner may
+still do everything, and the routes that ask come later.
+
+### The Action Catalog
+
+- `Action` names all 27 actions of the catalog, the protocol's six keeping
+  their values, and `HIGH_PRIVILEGE_ACTIONS` the five that let a caller run
+  code on the remote, read what should not spread, or let others in
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- `AuditEventKind` gains a kind for each outcome of an action that changes
+  something or reads restricted data, so promoting and rolling back are
+  told apart; each kind names the action it records
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- `azathoth.api.calls` lists every call of the service API once, with the
+  actions it always asks, the resource it acts on, what more it asks and
+  when, and what it tells the audit; the calls that name an instance's own
+  remotes are never served. Every call's docstring, and a new Actions table
+  in the service API's README, say the same, and tests hold all three
+  together
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- `PermissionDeniedError`, `permission_denied`, is what a call will raise
+  when a remote's policy refuses it, its message the policy's reason; it is
+  never a `NotFoundError`
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+
+### Plugins
+
+- The remote's README names, under Writing a Plugin, everything a plugin
+  may rely on within 1.x, and a test fails if any of it goes missing
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- `azathoth.persistence.database_location` finds the database
+  `AZATHOTH_DATABASE` names, or `azathoth.db`, as the command line does, so a
+  plugin finds the database `azathoth remote serve` does; `run_backfills` is
+  exported beside it
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- A policy may say more of its edition with an `edition_detail`, such as who
+  it is licensed to. Nothing in Azathoth acts on an edition or its detail,
+  and a test reads every shipped module to keep it so
+  ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+
 ## 1.5.0
 
 Azathoth 1.5 brings everything the command line does to the service API.

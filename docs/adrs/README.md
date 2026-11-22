@@ -156,3 +156,4 @@ requests that made it:
 - [ADR 0131: Optimization Through the Service API](0131-optimization-through-the-service-api.md)
 - [ADR 0132: Spend and Reports](0132-spend-and-reports.md)
 - [ADR 0133: The Catalog Through the Service API](0133-the-catalog-through-the-service-api.md)
+- [ADR 0134: The Action Catalog in Code](0134-the-action-catalog-in-code.md)
