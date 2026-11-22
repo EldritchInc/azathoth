@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from azathoth import __version__
 from azathoth.persistence.database import SCHEMA_VERSION
 from azathoth.remote import (
+    HIGH_PRIVILEGE_ACTIONS,
     REMOTE_PLUGIN_GROUP,
     SEAMS,
     Action,
@@ -20,8 +21,10 @@ from azathoth.remote import (
     Decision,
     NoAuditSink,
     OwnerOnlyPolicy,
+    Policy,
     Principal,
     RemotePluginError,
+    Seams,
     load_seams,
 )
 
@@ -59,6 +62,22 @@ class TeamPolicy:
             return Decision(allowed=True)
 
         return Decision(allowed=False, reason="Only pulls.")
+
+
+class DetailedPolicy(TeamPolicy):
+    """A plugin policy that says more of its edition, and may change what it says."""
+
+    def __init__(
+        self,
+        detail: object,
+    ) -> None:
+        self.detail = detail
+
+    @property
+    def edition_detail(
+        self,
+    ) -> object:
+        return self.detail
 
 
 class ListAudit:
@@ -125,6 +144,10 @@ def test_only_the_owner_may_do_anything() -> None:
 
     for action in Action:
         assert policy.decide(OWNER, action, "workflow 1") == Decision(allowed=True)
+        assert policy.decide(GUEST, action, "workflow 1") == Decision(
+            allowed=False,
+            reason=f"guest may not {action.description} on this remote: only its owner may.",
+        )
 
     assert policy.decide(GUEST, Action.READ_CONTENT, None) == Decision(
         allowed=False,
@@ -132,14 +155,98 @@ def test_only_the_owner_may_do_anything() -> None:
     )
 
 
-def test_actions_are_named_as_messages_name_them() -> None:
-    assert [action.description for action in Action] == [
-        "read capabilities",
+def test_the_catalog_is_every_action_of_adrs_0127_and_0133_in_their_order() -> None:
+    assert [action.value for action in Action] == [
+        "read_capabilities",
         "push",
         "pull",
-        "read content",
-        "manage tokens",
-        "read portfolio",
+        "read_content",
+        "read_portfolio",
+        "read_catalog",
+        "read_runs",
+        "read_restricted",
+        "import_workflow",
+        "import_benchmark",
+        "import_goal",
+        "import_tool",
+        "import_process_tool",
+        "tool_from_mcp",
+        "install_standard_tools",
+        "run_workflow",
+        "invoke",
+        "promote",
+        "authorize_model",
+        "declare_policy",
+        "manage_judges",
+        "annotate_run",
+        "edit_benchmark",
+        "run_benchmark",
+        "optimize",
+        "read_spend",
+        "manage_tokens",
+    ]
+
+
+def test_the_protocols_actions_keep_their_values() -> None:
+    assert Action.READ_CAPABILITIES.value == "read_capabilities"
+    assert Action.PUSH.value == "push"
+    assert Action.PULL.value == "pull"
+    assert Action.READ_CONTENT.value == "read_content"
+    assert Action.MANAGE_TOKENS.value == "manage_tokens"
+    assert Action.READ_PORTFOLIO.value == "read_portfolio"
+
+
+def test_actions_are_named_as_messages_name_them() -> None:
+    assert {action: action.description for action in Action} == {
+        Action.READ_CAPABILITIES: "read capabilities",
+        Action.PUSH: "push",
+        Action.PULL: "pull",
+        Action.READ_CONTENT: "read content",
+        Action.READ_PORTFOLIO: "read portfolio",
+        Action.READ_CATALOG: "read the catalog",
+        Action.READ_RUNS: "read runs",
+        Action.READ_RESTRICTED: "read restricted data",
+        Action.IMPORT_WORKFLOW: "import workflow",
+        Action.IMPORT_BENCHMARK: "import benchmark",
+        Action.IMPORT_GOAL: "import goal",
+        Action.IMPORT_TOOL: "import tool",
+        Action.IMPORT_PROCESS_TOOL: "import process tool",
+        Action.TOOL_FROM_MCP: "make a tool from an MCP server",
+        Action.INSTALL_STANDARD_TOOLS: "install standard tools",
+        Action.RUN_WORKFLOW: "run workflow",
+        Action.INVOKE: "invoke",
+        Action.PROMOTE: "promote",
+        Action.AUTHORIZE_MODEL: "authorize model",
+        Action.DECLARE_POLICY: "declare policy",
+        Action.MANAGE_JUDGES: "manage judges",
+        Action.ANNOTATE_RUN: "annotate run",
+        Action.EDIT_BENCHMARK: "edit benchmark",
+        Action.RUN_BENCHMARK: "run benchmark",
+        Action.OPTIMIZE: "optimize",
+        Action.READ_SPEND: "read spend",
+        Action.MANAGE_TOKENS: "manage tokens",
+    }
+
+
+def test_five_actions_are_high_privilege() -> None:
+    assert (
+        frozenset(
+            {
+                Action.IMPORT_PROCESS_TOOL,
+                Action.TOOL_FROM_MCP,
+                Action.INSTALL_STANDARD_TOOLS,
+                Action.READ_RESTRICTED,
+                Action.MANAGE_TOKENS,
+            }
+        )
+        == HIGH_PRIVILEGE_ACTIONS
+    )
+    assert [action for action in Action if action.high_privilege] == [
+        Action.READ_RESTRICTED,
+        Action.IMPORT_PROCESS_TOOL,
+        Action.TOOL_FROM_MCP,
+        Action.INSTALL_STANDARD_TOOLS,
+        Action.MANAGE_TOKENS,
     ]
 
 
@@ -157,7 +264,7 @@ def test_the_core_audits_nothing() -> None:
     )
 
 
-def test_audit_events_are_the_eight_a_remote_records() -> None:
+def test_audit_kinds_are_the_protocols_eight_then_the_catalogs_outcomes() -> None:
     assert [kind.value for kind in AuditEventKind] == [
         "push",
         "pull",
@@ -167,10 +274,85 @@ def test_audit_events_are_the_eight_a_remote_records() -> None:
         "request_denied",
         "capabilities_read",
         "portfolio_read",
+        "workflow_imported",
+        "benchmark_imported",
+        "goal_imported",
+        "tool_imported",
+        "process_tool_imported",
+        "tool_made_from_mcp",
+        "standard_tools_installed",
+        "workflow_run",
+        "step_tried",
+        "workflow_invoked",
+        "workflow_promoted",
+        "workflow_rolled_back",
+        "model_authorized",
+        "model_removed",
+        "data_policy_declared",
+        "judge_added",
+        "judge_removed",
+        "run_annotated",
+        "run_resumed",
+        "benchmark_created",
+        "benchmark_case_added",
+        "benchmark_case_changed",
+        "benchmark_case_removed",
+        "benchmark_run",
+        "workflow_optimized",
+        "restricted_read",
     ]
 
     with pytest.raises(ValidationError):
         AuditEvent(kind=AuditEventKind.PULL, occurred_at=datetime(2026, 11, 10))
+
+
+def test_each_audit_kind_records_one_action_and_a_refusal_records_none() -> None:
+    assert AuditEventKind.REQUEST_DENIED.action is None
+    assert {kind: kind.action for kind in AuditEventKind if kind.action is not None} == {
+        AuditEventKind.PUSH: Action.PUSH,
+        AuditEventKind.PULL: Action.PULL,
+        AuditEventKind.CONTENT_READ: Action.READ_CONTENT,
+        AuditEventKind.TOKEN_CREATED: Action.MANAGE_TOKENS,
+        AuditEventKind.TOKEN_REVOKED: Action.MANAGE_TOKENS,
+        AuditEventKind.CAPABILITIES_READ: Action.READ_CAPABILITIES,
+        AuditEventKind.PORTFOLIO_READ: Action.READ_PORTFOLIO,
+        AuditEventKind.WORKFLOW_IMPORTED: Action.IMPORT_WORKFLOW,
+        AuditEventKind.BENCHMARK_IMPORTED: Action.IMPORT_BENCHMARK,
+        AuditEventKind.GOAL_IMPORTED: Action.IMPORT_GOAL,
+        AuditEventKind.TOOL_IMPORTED: Action.IMPORT_TOOL,
+        AuditEventKind.PROCESS_TOOL_IMPORTED: Action.IMPORT_PROCESS_TOOL,
+        AuditEventKind.TOOL_MADE_FROM_MCP: Action.TOOL_FROM_MCP,
+        AuditEventKind.STANDARD_TOOLS_INSTALLED: Action.INSTALL_STANDARD_TOOLS,
+        AuditEventKind.WORKFLOW_RUN: Action.RUN_WORKFLOW,
+        AuditEventKind.STEP_TRIED: Action.RUN_WORKFLOW,
+        AuditEventKind.WORKFLOW_INVOKED: Action.INVOKE,
+        AuditEventKind.WORKFLOW_PROMOTED: Action.PROMOTE,
+        AuditEventKind.WORKFLOW_ROLLED_BACK: Action.PROMOTE,
+        AuditEventKind.MODEL_AUTHORIZED: Action.AUTHORIZE_MODEL,
+        AuditEventKind.MODEL_REMOVED: Action.AUTHORIZE_MODEL,
+        AuditEventKind.DATA_POLICY_DECLARED: Action.DECLARE_POLICY,
+        AuditEventKind.JUDGE_ADDED: Action.MANAGE_JUDGES,
+        AuditEventKind.JUDGE_REMOVED: Action.MANAGE_JUDGES,
+        AuditEventKind.RUN_ANNOTATED: Action.ANNOTATE_RUN,
+        AuditEventKind.RUN_RESUMED: Action.ANNOTATE_RUN,
+        AuditEventKind.BENCHMARK_CREATED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_ADDED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_CHANGED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_CASE_REMOVED: Action.EDIT_BENCHMARK,
+        AuditEventKind.BENCHMARK_RUN: Action.RUN_BENCHMARK,
+        AuditEventKind.WORKFLOW_OPTIMIZED: Action.OPTIMIZE,
+        AuditEventKind.RESTRICTED_READ: Action.READ_RESTRICTED,
+    }
+
+
+def test_only_reading_what_is_not_restricted_goes_unaudited() -> None:
+    audited = {kind.action for kind in AuditEventKind}
+
+    assert {action for action in Action if action not in audited} == {
+        Action.READ_CATALOG,
+        Action.READ_RUNS,
+        Action.READ_SPEND,
+    }
 
 
 # Plugins
@@ -251,3 +433,59 @@ def test_seams_tell_the_capabilities_of_their_remote() -> None:
         accepts_restricted=True,
     )
     assert default().capabilities(accepts_restricted=False).edition == "community"
+
+
+# What a policy says of its edition
+
+
+def seams_of(
+    policy: Any,
+) -> Seams:
+    return Seams(authenticator=TokenAuthenticator(), policy=policy, audit=NoAuditSink())
+
+
+def test_the_core_says_nothing_more_of_its_edition() -> None:
+    assert seams_of(OwnerOnlyPolicy()).edition_detail is None
+
+
+def test_a_policy_written_before_edition_detail_is_still_a_policy_and_says_nothing_more() -> None:
+    assert isinstance(TeamPolicy(), Policy)
+    assert seams_of(TeamPolicy()).edition_detail is None
+
+
+def test_a_policy_may_say_more_of_its_edition_and_change_what_it_says() -> None:
+    policy = DetailedPolicy("Licensed to Acme, 10 seats")
+    seams = seams_of(policy)
+
+    assert isinstance(policy, Policy)
+    assert seams.edition_detail == "Licensed to Acme, 10 seats"
+
+    policy.detail = "Licence expired on 2027-11-21; owner-only until renewed"
+
+    assert seams.edition_detail == "Licence expired on 2027-11-21; owner-only until renewed"
+
+    policy.detail = None
+
+    assert seams.edition_detail is None
+
+
+@pytest.mark.parametrize("detail", ["", "   ", "two\nlines", "tab\there", "a" * 201, 10, b"bytes"])
+def test_an_edition_detail_is_one_printable_line_of_at_most_200_characters(
+    detail: object,
+) -> None:
+    with pytest.raises(RemotePluginError) as caught:
+        _ = seams_of(DetailedPolicy(detail)).edition_detail
+
+    assert str(caught.value).startswith("The remote's policy gave an edition detail of ")
+    assert str(caught.value).endswith(
+        "; an edition detail is one printable line of at most 200 characters."
+    )
+
+
+def test_the_capabilities_do_not_change() -> None:
+    capabilities = seams_of(DetailedPolicy("Licensed to Acme")).capabilities(
+        accepts_restricted=False
+    )
+
+    assert "edition_detail" not in capabilities.model_dump()
+    assert capabilities.edition == "team"

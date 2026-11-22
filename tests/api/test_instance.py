@@ -193,6 +193,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "ModelNotAuthorizedError": "model_not_authorized",
         "NotFoundError": "not_found",
         "NothingToRollBackToError": "nothing_to_roll_back_to",
+        "PermissionDeniedError": "permission_denied",
         "ProviderConfigurationError": "provider_configuration",
         "ProviderUnavailableError": "provider_unavailable",
         "RemoteDivergedError": "remote_diverged",
@@ -210,6 +211,16 @@ def test_every_error_carries_a_distinct_code() -> None:
 
 def test_an_errors_code_is_part_of_the_instance_too() -> None:
     assert api.InstanceClosedError().code == "instance_closed"
+
+
+def test_a_refusal_by_the_policy_says_its_reason_and_is_its_own_kind() -> None:
+    reason = "alice may not promote on this remote: she is not a promoter."
+    refused = api.PermissionDeniedError(reason)
+
+    assert refused.code == "permission_denied"
+    assert str(refused) == reason
+    assert isinstance(refused, api.ApiError)
+    assert not isinstance(refused, api.NotFoundError | api.ConflictError | api.InvalidArgumentError)
 
 
 def test_api_models_are_frozen_and_refuse_unknown_fields() -> None:

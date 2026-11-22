@@ -81,6 +81,8 @@ class Invocations:
     ) -> tuple[InvocationSummary, ...]:
         """Return a workflow's invocations, newest first, as `workflow invocations` lists them.
 
+        It is the `read_runs` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -135,6 +137,8 @@ class Invocations:
         It resumes from the production state it started from, and its run
         from its journal under the same run ID. Events report the run as
         `runs.invoke` reports one, and `invocation_finished` ends the call.
+
+        It is the `annotate_run` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -214,6 +218,8 @@ class Invocations:
 
         They are its run's, as `runs.annotations` returns them (ADR 0129).
 
+        It is the `read_runs` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: The invocation is unknown, or has no run yet.
@@ -230,6 +236,9 @@ class Invocations:
 
         An invocation with no outcome yet is `incomplete`; its run, when its
         journal records one, is named without its steps.
+
+        It is the `read_runs` action, and for a run of restricted input the
+        `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

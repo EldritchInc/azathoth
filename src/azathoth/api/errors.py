@@ -97,6 +97,17 @@ class ModelInUseError(ConflictError):
         self.dependents = dependents
 
 
+class PermissionDeniedError(ApiError):
+    """A remote's policy refused the caller what a call asks (ADR 0127).
+
+    Its message is the policy's reason, which says who may not do what, and
+    why. A remote answers it with 403. It is never a `NotFoundError`, so a
+    caller told no is never told that the thing it asked for is missing.
+    """
+
+    code: ClassVar[str] = "permission_denied"
+
+
 class ProviderConfigurationError(ApiError):
     """A provider is turned on in a way that cannot be used, such as Bedrock without boto3."""
 
@@ -266,6 +277,7 @@ __all__ = [
     "ModelNotAuthorizedError",
     "NotFoundError",
     "NothingToRollBackToError",
+    "PermissionDeniedError",
     "ProviderConfigurationError",
     "ProviderUnavailableError",
     "RemoteDivergedError",

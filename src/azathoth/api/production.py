@@ -141,6 +141,8 @@ class Production:
 
         Only durable state is read, so no provider is reached.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: The workflow is neither configured nor has production history.
@@ -174,6 +176,8 @@ class Production:
     ) -> tuple[ProductionRevisionSummary, ...]:
         """Return a workflow's production revisions, newest first, the active one marked.
 
+        It is the `read_catalog` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: The limit is below 1.
@@ -206,6 +210,9 @@ class Production:
         With one, the experiment's winner is rebuilt from the latest revision
         and promoted instead (ADR 0092). Every prompt step is pinned to the
         model chosen, and the new revision records who promoted.
+
+        It is the `promote` action, and when promoted from an experiment the
+        `read_runs` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -254,6 +261,8 @@ class Production:
         Without `to`, the newest revision before the active one with another
         state is restored. Only durable state is read, so no provider is
         reached; the portfolio decides whether its models may still run.
+
+        It is the `promote` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

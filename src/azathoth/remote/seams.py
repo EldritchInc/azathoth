@@ -41,6 +41,9 @@ AUDIT_SEAM: Final = "audit"
 SEAMS: Final = (AUTH_SEAM, POLICY_SEAM, AUDIT_SEAM)
 """Every seam a plugin may fill, in the order messages name them."""
 
+MAX_EDITION_DETAIL_LENGTH: Final = 200
+"""The longest a policy's edition detail may be."""
+
 
 class RemotePluginError(RuntimeError):
     """The plugins installed for a remote cannot serve it."""
@@ -66,22 +69,86 @@ class Principal(BaseModel):
 
 
 class Action(StrEnum):
-    """What a caller asks a remote to do."""
+    """What a caller asks a remote to do: the action catalog (ADRs 0127 and 0133).
+
+    Every route of a remote asks its policy for one of these, and for the
+    resource it acts on when it names one. The catalog is stable within
+    1.x: it grows only by additions, and no value changes. It names what can
+    be done; a policy decides who may.
+    """
 
     READ_CAPABILITIES = "read_capabilities"
     PUSH = "push"
     PULL = "pull"
     READ_CONTENT = "read_content"
-    MANAGE_TOKENS = "manage_tokens"
     READ_PORTFOLIO = "read_portfolio"
+    READ_CATALOG = "read_catalog"
+    READ_RUNS = "read_runs"
+    READ_RESTRICTED = "read_restricted"
+    IMPORT_WORKFLOW = "import_workflow"
+    IMPORT_BENCHMARK = "import_benchmark"
+    IMPORT_GOAL = "import_goal"
+    IMPORT_TOOL = "import_tool"
+    IMPORT_PROCESS_TOOL = "import_process_tool"
+    TOOL_FROM_MCP = "tool_from_mcp"
+    INSTALL_STANDARD_TOOLS = "install_standard_tools"
+    RUN_WORKFLOW = "run_workflow"
+    INVOKE = "invoke"
+    PROMOTE = "promote"
+    AUTHORIZE_MODEL = "authorize_model"
+    DECLARE_POLICY = "declare_policy"
+    MANAGE_JUDGES = "manage_judges"
+    ANNOTATE_RUN = "annotate_run"
+    EDIT_BENCHMARK = "edit_benchmark"
+    RUN_BENCHMARK = "run_benchmark"
+    OPTIMIZE = "optimize"
+    READ_SPEND = "read_spend"
+    MANAGE_TOKENS = "manage_tokens"
 
     @property
     def description(
         self,
     ) -> str:
-        """Return the action as a message names it, such as `read content`."""
+        """Return the action as a message names it, such as `read content`.
 
-        return self.value.replace("_", " ")
+        A refusal says that its caller "may not" do this, so the few whose
+        value would not read as a phrase are worded.
+        """
+
+        return _DESCRIPTIONS.get(self, self.value.replace("_", " "))
+
+    @property
+    def high_privilege(
+        self,
+    ) -> bool:
+        """Return whether the action is one of the five of high privilege (ADR 0127)."""
+
+        return self in HIGH_PRIVILEGE_ACTIONS
+
+
+_DESCRIPTIONS: Final[Mapping[Action, str]] = {
+    Action.READ_CATALOG: "read the catalog",
+    Action.READ_RESTRICTED: "read restricted data",
+    Action.TOOL_FROM_MCP: "make a tool from an MCP server",
+}
+"""The actions whose description is worded rather than read from their value."""
+
+HIGH_PRIVILEGE_ACTIONS: Final = frozenset(
+    {
+        Action.IMPORT_PROCESS_TOOL,
+        Action.TOOL_FROM_MCP,
+        Action.INSTALL_STANDARD_TOOLS,
+        Action.READ_RESTRICTED,
+        Action.MANAGE_TOKENS,
+    }
+)
+"""The five actions of high privilege (ADR 0127).
+
+Each lets a caller run code on the remote, read what should not spread, or
+let others in: a process tool runs a command; making a tool from an MCP
+server starts one; the standard tools are installed for everyone;
+restricted data is not to spread; and tokens let others in.
+"""
 
 
 class Decision(BaseModel):
@@ -115,7 +182,14 @@ class Decision(BaseModel):
 
 
 class AuditEventKind(StrEnum):
-    """What a remote tells its audit it did, or refused."""
+    """What a remote tells its audit it did, or refused (ADRs 0124 and 0127).
+
+    The protocol's eight come first. After them is one kind for each
+    outcome of an action that changes something or reads restricted data,
+    so promoting and rolling back, both the `promote` action, are told
+    apart. Reading what is not restricted is not audited. Kinds grow only
+    by additions within 1.x, and no value changes.
+    """
 
     PUSH = "push"
     PULL = "pull"
@@ -125,6 +199,78 @@ class AuditEventKind(StrEnum):
     REQUEST_DENIED = "request_denied"
     CAPABILITIES_READ = "capabilities_read"
     PORTFOLIO_READ = "portfolio_read"
+    WORKFLOW_IMPORTED = "workflow_imported"
+    BENCHMARK_IMPORTED = "benchmark_imported"
+    GOAL_IMPORTED = "goal_imported"
+    TOOL_IMPORTED = "tool_imported"
+    PROCESS_TOOL_IMPORTED = "process_tool_imported"
+    TOOL_MADE_FROM_MCP = "tool_made_from_mcp"
+    STANDARD_TOOLS_INSTALLED = "standard_tools_installed"
+    WORKFLOW_RUN = "workflow_run"
+    STEP_TRIED = "step_tried"
+    WORKFLOW_INVOKED = "workflow_invoked"
+    WORKFLOW_PROMOTED = "workflow_promoted"
+    WORKFLOW_ROLLED_BACK = "workflow_rolled_back"
+    MODEL_AUTHORIZED = "model_authorized"
+    MODEL_REMOVED = "model_removed"
+    DATA_POLICY_DECLARED = "data_policy_declared"
+    JUDGE_ADDED = "judge_added"
+    JUDGE_REMOVED = "judge_removed"
+    RUN_ANNOTATED = "run_annotated"
+    RUN_RESUMED = "run_resumed"
+    BENCHMARK_CREATED = "benchmark_created"
+    BENCHMARK_CASE_ADDED = "benchmark_case_added"
+    BENCHMARK_CASE_CHANGED = "benchmark_case_changed"
+    BENCHMARK_CASE_REMOVED = "benchmark_case_removed"
+    BENCHMARK_RUN = "benchmark_run"
+    WORKFLOW_OPTIMIZED = "workflow_optimized"
+    RESTRICTED_READ = "restricted_read"
+
+    @property
+    def action(
+        self,
+    ) -> Action | None:
+        """Return the action this kind records, or None for a refusal, which records none."""
+
+        return _KIND_ACTIONS.get(self)
+
+
+_KIND_ACTIONS: Final[Mapping[AuditEventKind, Action]] = {
+    AuditEventKind.PUSH: Action.PUSH,
+    AuditEventKind.PULL: Action.PULL,
+    AuditEventKind.CONTENT_READ: Action.READ_CONTENT,
+    AuditEventKind.TOKEN_CREATED: Action.MANAGE_TOKENS,
+    AuditEventKind.TOKEN_REVOKED: Action.MANAGE_TOKENS,
+    AuditEventKind.CAPABILITIES_READ: Action.READ_CAPABILITIES,
+    AuditEventKind.PORTFOLIO_READ: Action.READ_PORTFOLIO,
+    AuditEventKind.WORKFLOW_IMPORTED: Action.IMPORT_WORKFLOW,
+    AuditEventKind.BENCHMARK_IMPORTED: Action.IMPORT_BENCHMARK,
+    AuditEventKind.GOAL_IMPORTED: Action.IMPORT_GOAL,
+    AuditEventKind.TOOL_IMPORTED: Action.IMPORT_TOOL,
+    AuditEventKind.PROCESS_TOOL_IMPORTED: Action.IMPORT_PROCESS_TOOL,
+    AuditEventKind.TOOL_MADE_FROM_MCP: Action.TOOL_FROM_MCP,
+    AuditEventKind.STANDARD_TOOLS_INSTALLED: Action.INSTALL_STANDARD_TOOLS,
+    AuditEventKind.WORKFLOW_RUN: Action.RUN_WORKFLOW,
+    AuditEventKind.STEP_TRIED: Action.RUN_WORKFLOW,
+    AuditEventKind.WORKFLOW_INVOKED: Action.INVOKE,
+    AuditEventKind.WORKFLOW_PROMOTED: Action.PROMOTE,
+    AuditEventKind.WORKFLOW_ROLLED_BACK: Action.PROMOTE,
+    AuditEventKind.MODEL_AUTHORIZED: Action.AUTHORIZE_MODEL,
+    AuditEventKind.MODEL_REMOVED: Action.AUTHORIZE_MODEL,
+    AuditEventKind.DATA_POLICY_DECLARED: Action.DECLARE_POLICY,
+    AuditEventKind.JUDGE_ADDED: Action.MANAGE_JUDGES,
+    AuditEventKind.JUDGE_REMOVED: Action.MANAGE_JUDGES,
+    AuditEventKind.RUN_ANNOTATED: Action.ANNOTATE_RUN,
+    AuditEventKind.RUN_RESUMED: Action.ANNOTATE_RUN,
+    AuditEventKind.BENCHMARK_CREATED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_ADDED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_CHANGED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_CASE_REMOVED: Action.EDIT_BENCHMARK,
+    AuditEventKind.BENCHMARK_RUN: Action.RUN_BENCHMARK,
+    AuditEventKind.WORKFLOW_OPTIMIZED: Action.OPTIMIZE,
+    AuditEventKind.RESTRICTED_READ: Action.READ_RESTRICTED,
+}
+"""The action each kind records; a refusal, `request_denied`, records none."""
 
 
 class AuditEvent(BaseModel):
@@ -164,7 +310,15 @@ class Authenticator(Protocol):
 
 @runtime_checkable
 class Policy(Protocol):
-    """Says whether a caller may do what they ask, and which edition the remote is."""
+    """Says whether a caller may do what they ask, and which edition the remote is.
+
+    A policy may also have an `edition_detail` property: one printable line
+    of at most `MAX_EDITION_DETAIL_LENGTH` characters saying more of its
+    edition, such as who it is licensed to, or None. It is not one of the
+    protocol's members, so a policy without it is still a `Policy`. A
+    remote shows the edition and its detail, and never acts on either
+    (ADR 0134).
+    """
 
     @property
     def edition(
@@ -273,6 +427,42 @@ class Seams:
     policy: Policy
     audit: AuditSink
     plugins: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def edition_detail(
+        self,
+    ) -> str | None:
+        """Return what the policy says of its edition beside its name, or None.
+
+        It is read from the policy each time, so a policy may change what it
+        says, as a licence nears its end. A policy without it says nothing
+        more.
+
+        Raises:
+            RemotePluginError: The policy's detail is not one printable line
+                of at most `MAX_EDITION_DETAIL_LENGTH` characters.
+        """
+
+        detail: object = getattr(self.policy, "edition_detail", None)
+
+        if detail is None:
+            return None
+
+        if (
+            not isinstance(detail, str)
+            or not detail.strip()
+            or not detail.isprintable()
+            or len(detail) > MAX_EDITION_DETAIL_LENGTH
+        ):
+            shown = repr(detail)
+
+            raise RemotePluginError(
+                f"The remote's policy gave an edition detail of "
+                f"{shown if len(shown) <= 80 else shown[:77] + '...'}; an edition detail is one "
+                f"printable line of at most {MAX_EDITION_DETAIL_LENGTH} characters."
+            )
+
+        return detail
 
     def capabilities(
         self,
@@ -390,6 +580,8 @@ def load_seams(
 __all__ = [
     "AUDIT_SEAM",
     "AUTH_SEAM",
+    "HIGH_PRIVILEGE_ACTIONS",
+    "MAX_EDITION_DETAIL_LENGTH",
     "POLICY_SEAM",
     "REMOTE_PLUGIN_GROUP",
     "SEAMS",

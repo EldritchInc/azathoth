@@ -234,6 +234,8 @@ class Models:
     ) -> tuple[ModelSummary, ...]:
         """Return every model the configured providers serve now, provider by provider.
 
+        It is the `read_portfolio` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             ProviderConfigurationError: A provider is configured in a way
@@ -254,6 +256,8 @@ class Models:
         identifier: str,
     ) -> ModelSummary:
         """Return one model a configured provider serves now.
+
+        It is the `read_portfolio` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -322,6 +326,8 @@ class Models:
         unless it says otherwise. A model matches as a run matches it, by
         `ModelQuery.matches`.
 
+        It is the `read_portfolio` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             InvalidArgumentError: A requirement is unknown, or not valid, or
@@ -374,6 +380,8 @@ class Portfolio:
 
         No provider is asked.
 
+        It is the `read_portfolio` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
         """
@@ -400,6 +408,8 @@ class Portfolio:
         `data_policy` declares what its provider does with data it is sent,
         as `azathoth model authorize --no-retention --no-training` does;
         unknown unless declared (ADR 0123).
+
+        It is the `authorize_model` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -447,6 +457,8 @@ class Portfolio:
         and no provider is asked. Who declares it, as the author the
         instance records, and when, are recorded.
 
+        It is the `declare_policy` action (ADR 0134).
+
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: It is not authorized.
@@ -476,6 +488,8 @@ class Portfolio:
         it is removed and the workflows that use it are returned. A semantic
         judge is always kept: it must leave the judge rotation first. No
         provider is asked.
+
+        It is the `authorize_model` action (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.

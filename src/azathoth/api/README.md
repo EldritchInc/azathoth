@@ -630,6 +630,106 @@ line, and the S3 location that keeps resolved content, as
 `AZATHOTH_CONTENT_STORE` does. Without them, nothing is traced and content
 is kept in the database.
 
+## Actions
+
+A remote asks its policy whether a caller may make each call, by the action
+catalog's actions (ADRs 0127 and 0133), and tells its audit what the call
+did. `azathoth.api.calls` lists each call once, as a `ServiceCall`, and each
+call's docstring and this table say the same (ADR 0134):
+
+- **Actions** are asked every time, for the resource the call names, such as
+  a workflow by its `workflow_id`. A listing asks once, then for each
+  resource it returns, and leaves out those refused.
+- **Also** are asked only when what is written holds, such as
+  `read_restricted` for a restricted case.
+- **Audit** is what the call may tell the audit it did. Reading what is not
+  restricted is not audited; reading restricted data always is.
+
+A local instance asks nothing: its owner may do everything. The calls that
+name this instance's own remotes are never served, since remotes never hold
+each other's tokens.
+
+| Call | Actions | Also | Audit |
+| --- | --- | --- | --- |
+| `describe` | `read_capabilities` |  |  |
+| `remote` | never served |  |  |
+| `workflows.list` | `read_catalog` |  |  |
+| `workflows.get` | `read_catalog` |  |  |
+| `workflows.history` | `read_catalog` |  |  |
+| `workflows.check` | `read_catalog` |  |  |
+| `workflows.export` | `read_catalog` |  |  |
+| `workflows.compare_revisions` | `read_catalog` |  |  |
+| `workflows.import_document` | `import_workflow` |  | `workflow_imported` |
+| `tools.list` | `read_catalog` |  |  |
+| `tools.versions` | `read_catalog` |  |  |
+| `tools.get` | `read_catalog` |  |  |
+| `tools.history` | `read_catalog` |  |  |
+| `tools.export` | `read_catalog` |  |  |
+| `tools.compare_revisions` | `read_catalog` |  |  |
+| `tools.usage` | `read_catalog`, `read_runs` |  |  |
+| `tools.import_document` | `import_tool` | `import_process_tool` for a process tool | `tool_imported`, `process_tool_imported` |
+| `tools.from_mcp` | `tool_from_mcp` |  | `tool_made_from_mcp` |
+| `benchmarks.list` | `read_catalog` |  |  |
+| `benchmarks.get` | `read_catalog` | `read_restricted` for a restricted benchmark | `restricted_read` |
+| `benchmarks.history` | `read_catalog` |  |  |
+| `benchmarks.export` | `read_catalog` | `read_restricted` for a restricted benchmark | `restricted_read` |
+| `benchmarks.compare_revisions` | `read_catalog` | `read_restricted` for a restricted case | `restricted_read` |
+| `benchmarks.cases` | `read_catalog` |  |  |
+| `benchmarks.case` | `read_catalog` | `read_restricted` for a restricted case | `restricted_read` |
+| `benchmarks.import_document` | `import_benchmark` |  | `benchmark_imported` |
+| `benchmarks.create` | `edit_benchmark` |  | `benchmark_created` |
+| `benchmarks.add_case` | `edit_benchmark` | `read_runs` when the case is made from a run; `read_restricted` when the case is made from a run of restricted input | `benchmark_case_added`, `restricted_read` |
+| `benchmarks.update_case` | `edit_benchmark` |  | `benchmark_case_changed` |
+| `benchmarks.remove_case` | `edit_benchmark` |  | `benchmark_case_removed` |
+| `benchmarks.executions` | `read_runs` |  |  |
+| `benchmarks.execution` | `read_runs` |  |  |
+| `benchmarks.run` | `run_benchmark` |  | `benchmark_run` |
+| `benchmarks.compare` | `run_benchmark` |  | `benchmark_run` |
+| `goals.list` | `read_catalog` |  |  |
+| `goals.get` | `read_catalog` |  |  |
+| `goals.import_document` | `import_goal` |  | `goal_imported` |
+| `models.list` | `read_portfolio` |  |  |
+| `models.get` | `read_portfolio` |  |  |
+| `models.matching` | `read_portfolio` |  |  |
+| `models.usage` | `read_catalog`, `read_runs` |  |  |
+| `portfolio.list` | `read_portfolio` |  |  |
+| `portfolio.add` | `authorize_model` |  | `model_authorized` |
+| `portfolio.set_data_policy` | `declare_policy` |  | `data_policy_declared` |
+| `portfolio.remove` | `authorize_model` |  | `model_removed` |
+| `judges.list` | `read_portfolio` |  |  |
+| `judges.add` | `manage_judges` |  | `judge_added` |
+| `judges.remove` | `manage_judges` |  | `judge_removed` |
+| `runs.list` | `read_runs` |  |  |
+| `runs.get` | `read_runs` | `read_restricted` for a run of restricted input | `restricted_read` |
+| `runs.annotations` | `read_runs` |  |  |
+| `runs.feedback` | `read_runs` |  |  |
+| `runs.children` | `read_runs` |  |  |
+| `runs.interrupted` | `read_runs` |  |  |
+| `runs.readiness` | `read_catalog` |  |  |
+| `runs.run` | `run_workflow` |  | `workflow_run` |
+| `runs.try_step` | `run_workflow` |  | `step_tried` |
+| `runs.invoke` | `invoke` |  | `workflow_invoked` |
+| `runs.record_feedback` | `annotate_run` |  | `run_annotated` |
+| `runs.resume` | `annotate_run` |  | `run_resumed` |
+| `invocations.list` | `read_runs` |  |  |
+| `invocations.get` | `read_runs` | `read_restricted` for a run of restricted input | `restricted_read` |
+| `invocations.annotations` | `read_runs` |  |  |
+| `invocations.resume` | `annotate_run` |  | `run_resumed` |
+| `production.get` | `read_catalog` |  |  |
+| `production.revisions` | `read_catalog` |  |  |
+| `production.promote` | `promote` | `read_runs` when promoted from an experiment | `workflow_promoted` |
+| `production.roll_back` | `promote` |  | `workflow_rolled_back` |
+| `experiments.list` | `read_runs` |  |  |
+| `experiments.get` | `read_runs` |  |  |
+| `experiments.compare` | `read_runs` |  |  |
+| `experiments.promotable` | `read_runs` |  |  |
+| `optimization.optimize` | `optimize` |  | `workflow_optimized` |
+| `spend.report` | `read_spend` |  |  |
+| `remotes.list` | never served |  |  |
+| `remotes.get` | never served |  |  |
+| `remotes.add` | never served |  |  |
+| `remotes.remove` | never served |  |  |
+
 ## Errors
 
 Every error the API raises on purpose is an `ApiError` with a stable `code`:
@@ -664,6 +764,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |
 | `RemoteDivergedError` | `remote_diverged` | A pushed lineage diverged at the remote; a `ConflictError` too. |
 | `McpUnavailableError` | `mcp_unavailable` | An MCP server to make a tool from could not be reached or listed, or needs an authorization variable that is not set. |
+| `PermissionDeniedError` | `permission_denied` | A remote's policy refused the caller the call's action; its message is the policy's reason (ADR 0127). A local instance never raises it. |
 
 ```text
 Database <PATH> does not exist; run azathoth init.
