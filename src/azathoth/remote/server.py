@@ -3,16 +3,22 @@
 This module needs the `remote` extra, Starlette, so the core never imports
 it. Every route but `/health` needs a bearer token its authenticator knows,
 and a policy that allows what it asks; each refusal says why, and is
-audited.
+audited. The service routes (ADR 0127) refuse with a code as well. A push
+carrying a process tool asks for importing a process tool as well, for each
+such tool.
 
 | Route | Action | Answers |
 | --- | --- | --- |
 | `GET /health` | | `{"status": "ok"}`, with no token |
+| `GET /v1/service` | read capabilities | the `ServiceDescription` |
+| `GET /v1/permissions` | | the caller's `PermissionsResponse` |
+| `POST /v1/permissions` | | the `ResourcePermissionsResponse` to a `PermissionsRequest` |
+| `POST /v1/calls/{name}` | the call's own | the call's result, given its arguments by name |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
 | `GET /v1/content/{digest}` | read content | the content's bytes |
-| `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
+| `POST /v1/push` | push; import process tool too | the `ReceiveReport` of a `PushBundle` |
 | `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
 | `POST /v1/heads` | pull | the `HeadsResponse` to a `HeadsRequest` |
 | `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
@@ -25,10 +31,12 @@ policy or a long push never holds up another request; at most
 pool holds connections, and the rest wait their turn.
 """
 
+import logging
 import os
 import re
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
+from functools import partial
 from http import HTTPStatus
 from typing import Final, TypeVar
 
@@ -40,12 +48,22 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from azathoth.api.calls import ServiceCall, service_call
+from azathoth.api.errors import ApiError
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
 from azathoth.providers import ModelPortfolioRepository
+from azathoth.remote.calling import (
+    CALLS_ROUTE,
+    CallerInstances,
+    CallSignature,
+    call_signature,
+)
 from azathoth.remote.closure import lineage_records
+from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
+from azathoth.remote.listings import visible
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
     MAX_PUSH_BYTES,
@@ -58,6 +76,7 @@ from azathoth.remote.receiving import (
     DivergedError,
     ReceiveRefusedError,
     RestrictedReceiveRefusedError,
+    process_tool_lineages,
     receive,
     receive_content,
 )
@@ -74,7 +93,18 @@ from azathoth.remote.seams import (
     AuditEventKind,
     Decision,
     Principal,
+    RemotePluginError,
     Seams,
+)
+from azathoth.remote.service import (
+    PERMISSIONS_ROUTE,
+    SERVICE_ROUTE,
+    PermissionsRequest,
+    api_error_status,
+    permissions,
+    refusal_code,
+    resource_permissions,
+    service_description,
 )
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
@@ -106,27 +136,58 @@ Handler = Callable[[Request, Principal], Awaitable[Answer]]
 DIGEST_PATTERN: Final = re.compile(CONTENT_DIGEST_PATTERN)
 """What a content route's digest must be."""
 
+PLUGIN_ERROR_CODE: Final = "plugin_error"
+"""The code of a service route's answer when a plugin of the remote's failed it."""
+
+AUDIT_UNAVAILABLE_CODE: Final = "audit_unavailable"
+"""The code of a request refused because the remote's audit could not be told of it."""
+
+AUDIT_UNAVAILABLE_MESSAGE: Final = (
+    "This remote could not tell its audit what was asked, so it did nothing; its log says why."
+)
+"""What a request is told when the remote's audit could not be told of it."""
+
+JOB_CODE: Final = "job"
+"""The code a call that runs as a job is answered with until the remote runs jobs."""
+
+JSON_MEDIA_TYPE: Final = "application/json"
+"""The media type a call's result is answered with."""
+
+_LOG = logging.getLogger(__name__)
+
 
 class _Refused(Exception):
-    """A request refused, with the status and message to answer it with."""
+    """A request refused, with the status and message to answer it with, and its code."""
 
     def __init__(
         self,
         status: HTTPStatus,
         message: str,
+        code: str | None = None,
+        *,
+        told: bool = False,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
+        self.code = code
+        self.told = told
 
 
 def error_response(
     status: HTTPStatus,
     message: str,
+    code: str | None = None,
 ) -> JSONResponse:
-    """Return the JSON a remote refuses a request with: `{"error": message}`."""
+    """Return the JSON a remote refuses a request with.
 
-    return JSONResponse({"error": message}, status_code=status)
+    A protocol route answers `{"error": message}`, as remote protocol 1
+    always has; a service route adds the refusal's `code` (ADR 0127).
+    """
+
+    body = {"error": message} if code is None else {"error": message, "code": code}
+
+    return JSONResponse(body, status_code=status)
 
 
 class RemoteServer:
@@ -146,11 +207,14 @@ class RemoteServer:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         environ: Mapping[str, str] | None = None,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        instances: CallerInstances | None = None,
     ) -> None:
         """Serve the given repositories; `environ` defaults to the process's own environment.
 
         At most `max_concurrent` calls to the seams and repositories run at
-        once.
+        once. With `instances`, the remote serves the service API, answering
+        each caller with an instance of their own; without, it serves only
+        the protocol.
 
         Raises:
             ValueError: `max_concurrent` is below 1.
@@ -170,6 +234,7 @@ class RemoteServer:
         self.accepts_restricted = accepts_restricted
         self._clock = clock
         self.max_concurrent = max_concurrent
+        self.instances = instances
         #
         # A limiter belongs to the event loop it is first used on, so each
         # loop that serves this remote gets one of its own.
@@ -205,6 +270,9 @@ class RemoteServer:
         return Starlette(
             routes=[
                 Route("/health", self.health, methods=["GET"]),
+                Route(SERVICE_ROUTE, self.service, methods=["GET"]),
+                Route(PERMISSIONS_ROUTE, self.permissions_route, methods=["GET", "POST"]),
+                Route(CALLS_ROUTE, self.call_route, methods=["POST"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -229,6 +297,40 @@ class RemoteServer:
         """Answer that the remote is up, to anyone."""
 
         return JSONResponse({"status": "ok"})
+
+    async def service(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the service API this remote serves, and its edition."""
+
+        return await self._serve(
+            request,
+            Action.READ_CAPABILITIES,
+            None,
+            self._service,
+            service=True,
+        )
+
+    async def permissions_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer what the caller may do, on the remote or on each resource asked about.
+
+        Any caller the remote knows may ask, since the answer is only about
+        them.
+        """
+
+        return await self._serve(request, None, None, self._permissions, service=True)
+
+    async def call_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer one call of the service API with its result, for a caller the policy allows."""
+
+        return await self._serve(request, None, None, self._call, service=True)
 
     async def capabilities(
         self,
@@ -278,7 +380,7 @@ class RemoteServer:
     ) -> Response:
         """Receive a pushed bundle, fast-forward only."""
 
-        return await self._serve(request, Action.PUSH, AuditEventKind.PUSH, self._push)
+        return await self._serve(request, Action.PUSH, None, self._push)
 
     async def pull(
         self,
@@ -318,6 +420,115 @@ class RemoteServer:
         return await self._serve(request, Action.PUSH, None, self._credentials)
 
     # Handlers, each answering for an allowed principal
+
+    async def _service(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        described = await self._blocking(lambda: service_description(self.seams))
+
+        return JSONResponse(described.model_dump(mode="json")), None, None
+
+    async def _call(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        signature = _served_signature(request.path_params["name"], served=self.instances)
+        arguments = signature.read_arguments(await _body(request, MAX_PUSH_BYTES))
+        resource = call_resource(signature.call, arguments)
+        await self._decide_call(principal, signature.call, arguments)
+        instances = self.instances
+        assert instances is not None
+        instance = instances.instance(principal.name)
+        checks = condition_checks(signature.name)
+        call = signature.call
+
+        try:
+            asked = list(call.actions)
+
+            for check in checks:
+                if check.before is None:
+                    continue
+
+                if await self._blocking(partial(check.before, instance, arguments)):
+                    await self._decide(principal, check.condition.action, resource)
+                    asked.append(check.condition.action)
+
+            told = audit_kinds(call, asked)
+
+            for kind in told:
+                await self._tell(kind, principal, resource, call.name)
+
+            method = signature.bound(instance)
+
+            try:
+                result = await self._blocking(lambda: method(**arguments))
+            except BaseException as error:
+                if told:
+                    await self._failed(principal, resource, call.name, error)
+
+                raise
+
+            read = []
+
+            for check in checks:
+                if check.after is not None and check.after(arguments, result):
+                    await self._decide(principal, check.condition.action, resource)
+                    read.append(check.condition.action)
+
+            for kind in audit_kinds(call, read):
+                await self._tell(kind, principal, resource, call.name)
+
+            if signature.call.lists is not None:
+                listed = result
+                result = await self._blocking(
+                    lambda: visible(signature.call, listed, self.seams.policy, principal)
+                )
+
+            body = await self._blocking(lambda: signature.write_result(result))
+        except (ApiError, _Refused):
+            raise
+        except Exception:
+            _LOG.exception("The remote failed to answer %s.", signature.name)
+
+            raise _Refused(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                f"This remote failed to answer {signature.name}; its log says why.",
+            ) from None
+
+        return Response(body, media_type=JSON_MEDIA_TYPE), None, None
+
+    async def _decide_call(
+        self,
+        principal: Principal,
+        call: ServiceCall,
+        arguments: Mapping[str, object],
+    ) -> None:
+        """Refuse a call any of whose actions the policy does not allow, on what it names."""
+
+        resource = call_resource(call, arguments)
+
+        for action in call.actions:
+            await self._decide(principal, action, resource)
+
+    async def _permissions(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        if request.method == "GET":
+            answer: BaseModel = await self._blocking(
+                lambda: permissions(self.seams.policy, principal)
+            )
+        else:
+            asked = _parse(PermissionsRequest, await _body(request, MAX_PUSH_BYTES))
+            answer = await self._blocking(
+                lambda: resource_permissions(self.seams.policy, principal, asked.resources)
+            )
+
+        return JSONResponse(answer.model_dump(mode="json")), None, None
 
     async def _capabilities(
         self,
@@ -399,30 +610,52 @@ class RemoteServer:
         lineages = list(dict.fromkeys(record.lineage for record in bundle.revisions))
 
         await self._decide(principal, Action.PUSH, *(str(lineage) for lineage in lineages))
+        processes = process_tool_lineages(bundle)
+        await self._decide(
+            principal,
+            Action.IMPORT_PROCESS_TOOL,
+            *(str(lineage) for lineage in processes),
+        )
+        pushed = ", ".join(str(lineage) for lineage in lineages) or None
+        await self._tell(
+            AuditEventKind.PUSH,
+            principal,
+            pushed,
+            f"Offered {len(bundle.revisions)} revisions.",
+        )
+
+        if processes:
+            await self._tell(
+                AuditEventKind.PROCESS_TOOL_IMPORTED,
+                principal,
+                ", ".join(str(lineage) for lineage in processes),
+                "push",
+            )
 
         try:
-            report = await self._blocking(
-                lambda: receive(
-                    bundle,
-                    workflows=self.workflows,
-                    tools=self.tools,
-                    benchmarks=self.benchmarks,
-                    content=self.content,
-                    accepts_restricted=self.accepts_restricted,
+            try:
+                report = await self._blocking(
+                    lambda: receive(
+                        bundle,
+                        workflows=self.workflows,
+                        tools=self.tools,
+                        benchmarks=self.benchmarks,
+                        content=self.content,
+                        accepts_restricted=self.accepts_restricted,
+                    )
                 )
-            )
-        except RestrictedReceiveRefusedError as exc:
-            raise _Refused(HTTPStatus.FORBIDDEN, str(exc)) from exc
-        except DivergedError as exc:
-            raise _Refused(HTTPStatus.CONFLICT, str(exc)) from exc
-        except ReceiveRefusedError as exc:
-            raise _Refused(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from exc
+            except RestrictedReceiveRefusedError as exc:
+                raise _Refused(HTTPStatus.FORBIDDEN, str(exc), told=True) from exc
+            except DivergedError as exc:
+                raise _Refused(HTTPStatus.CONFLICT, str(exc)) from exc
+            except ReceiveRefusedError as exc:
+                raise _Refused(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from exc
+        except BaseException as error:
+            await self._failed(principal, pushed, "push", error)
 
-        return (
-            JSONResponse(report.model_dump(mode="json")),
-            ", ".join(str(lineage) for lineage in lineages) or None,
-            f"Received {len(report.received)} revisions; {report.already_held} already held.",
-        )
+            raise
+
+        return JSONResponse(report.model_dump(mode="json")), None, None
 
     async def _pull(
         self,
@@ -495,11 +728,19 @@ class RemoteServer:
     async def _serve(
         self,
         request: Request,
-        action: Action,
+        action: Action | None,
         audited: AuditEventKind | None,
         handler: Handler,
+        *,
+        service: bool = False,
     ) -> Response:
-        """Answer one request for an authenticated principal, refusing and auditing as needed."""
+        """Answer one request for an authenticated principal, refusing and auditing as needed.
+
+        A request with no `action` needs only a caller the remote knows. A
+        service route's refusals carry a code: an `ApiError`'s own, with
+        the status its kind is answered with, or the code of the status the
+        remote refuses with itself.
+        """
 
         principal: Principal | None = None
 
@@ -512,21 +753,37 @@ class RemoteServer:
             if principal is None:
                 raise _Refused(HTTPStatus.UNAUTHORIZED, UNKNOWN_TOKEN_MESSAGE)
 
-            await self._decide(principal, action, None)
+            if action is not None:
+                await self._decide(principal, action, None)
+
             response, resource, detail = await handler(request, principal)
+
+            if audited is not None:
+                await self._tell(audited, principal, resource, detail)
+        except ApiError as error:
+            if not service:
+                raise
+
+            return error_response(api_error_status(error), str(error), error.code)
+        except RemotePluginError as error:
+            if not service:
+                raise
+
+            return error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(error), PLUGIN_ERROR_CODE)
         except _Refused as refused:
-            if refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-                await self._audit(
+            denied = refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
+
+            if denied and not refused.told:
+                await self._tell_quietly(
                     AuditEventKind.REQUEST_DENIED,
                     principal,
                     f"{request.method} {request.url.path}",
                     refused.message,
                 )
 
-            return error_response(refused.status, refused.message)
+            code = (refused.code or refusal_code(refused.status)) if service else None
 
-        if audited is not None:
-            await self._audit(audited, principal, resource, detail)
+            return error_response(refused.status, refused.message, code)
 
         return response
 
@@ -558,6 +815,75 @@ class RemoteServer:
 
         if refused is not None:
             raise _Refused(HTTPStatus.FORBIDDEN, refused.reason or "Refused.")
+
+    async def _tell(
+        self,
+        kind: AuditEventKind,
+        principal: Principal | None,
+        resource: str | None,
+        detail: str | None,
+    ) -> None:
+        """Tell the audit what the remote is about to do, or to send, or refuse the request.
+
+        A remote tells its audit before it acts, and before it sends what
+        it read, so an audit that cannot be told stops the request: nothing
+        is changed and nothing is sent.
+
+        Raises:
+            _Refused: The audit could not be told.
+        """
+
+        try:
+            await self._audit(kind, principal, resource, detail)
+        except Exception:
+            _LOG.exception("The remote's audit could not be told of %s.", kind.value)
+
+            raise _Refused(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                AUDIT_UNAVAILABLE_MESSAGE,
+                AUDIT_UNAVAILABLE_CODE,
+            ) from None
+
+    async def _tell_quietly(
+        self,
+        kind: AuditEventKind,
+        principal: Principal | None,
+        resource: str | None,
+        detail: str | None,
+    ) -> None:
+        """Tell the audit of a refusal or a failure, logging rather than raising when it cannot.
+
+        The request is answered either way, since nothing was done.
+        """
+
+        try:
+            await self._audit(kind, principal, resource, detail)
+        except Exception:
+            _LOG.exception("The remote's audit could not be told of %s.", kind.value)
+
+    async def _failed(
+        self,
+        principal: Principal,
+        resource: str | None,
+        what: str,
+        error: BaseException,
+    ) -> None:
+        """Tell the audit that something it was told the remote would do was not done."""
+
+        reason = (
+            error.code
+            if isinstance(error, ApiError)
+            else error.message
+            if isinstance(error, _Refused)
+            else type(error).__name__
+        )
+
+        await self._tell_quietly(
+            AuditEventKind.REQUEST_FAILED,
+            principal,
+            resource,
+            f"{what}: {reason}",
+        )
 
     async def _audit(
         self,
@@ -648,6 +974,78 @@ def _parse(
         ) from None
 
 
+def audit_kinds(
+    call: ServiceCall,
+    asked: Sequence[Action],
+) -> tuple[AuditEventKind, ...]:
+    """Return each kind a call may record whose action it asked, in the catalog's order.
+
+    A process tool's import asks both import actions, so it records both
+    `tool_imported` and `process_tool_imported`; a restricted read records
+    `restricted_read` beside what the call did.
+    """
+
+    return tuple(kind for kind in call.audit if kind.action in asked)
+
+
+def call_resource(
+    call: ServiceCall,
+    arguments: Mapping[str, object],
+) -> str | None:
+    """Return what a call acts on, as the policy is asked about it: its kind and its ID.
+
+    A call that names no resource, or whose resource argument was not
+    given, acts on none.
+    """
+
+    if call.resource is None:
+        return None
+
+    value = arguments.get(call.resource.parameter)
+
+    return None if value is None else f"{call.resource.kind} {value}"
+
+
+def _served_signature(
+    name: str,
+    *,
+    served: CallerInstances | None,
+) -> CallSignature:
+    """Return how a call a remote answers travels, or refuse it, saying why.
+
+    Raises:
+        _Refused: The remote serves no service API, the service API has no
+            such call, the remote never serves it, or it runs as a job.
+    """
+
+    if served is None:
+        raise _Refused(
+            HTTPStatus.NOT_FOUND,
+            "This remote serves only push, pull and status, not the service API.",
+        )
+
+    try:
+        call = service_call(name)
+    except LookupError:
+        raise _Refused(HTTPStatus.NOT_FOUND, f"The service API has no call named {name}.") from None
+
+    if not call.served:
+        raise _Refused(
+            HTTPStatus.NOT_FOUND,
+            f"A remote never serves {name}: it names this instance's own remotes, which a "
+            "remote never holds.",
+        )
+
+    if call.job:
+        raise _Refused(
+            HTTPStatus.NOT_IMPLEMENTED,
+            f"{name} runs on the remote's workers, which this remote does not run jobs on yet.",
+            JOB_CODE,
+        )
+
+    return call_signature(name)
+
+
 def _require_protocol(
     protocol: int,
 ) -> None:
@@ -702,10 +1100,17 @@ def _sensitivity(
 
 
 __all__ = [
+    "AUDIT_UNAVAILABLE_CODE",
+    "AUDIT_UNAVAILABLE_MESSAGE",
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
+    "JOB_CODE",
+    "JSON_MEDIA_TYPE",
+    "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
+    "audit_kinds",
+    "call_resource",
     "RemoteServer",
     "error_response",
 ]

@@ -10,8 +10,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Final, Literal
 
-from azathoth.api.errors import ConflictError, InstanceSchemaError, InstanceUnavailableError
-from azathoth.api.models import Initialization, StandardTool
+from azathoth.api.errors import InstanceSchemaError, InstanceUnavailableError
+from azathoth.api.models import Initialization
+from azathoth.api.standard_tools import install_standard_tools
 from azathoth.persistence import (
     DatabaseLocation,
     DatabaseSchemaError,
@@ -23,11 +24,8 @@ from azathoth.persistence import (
 )
 from azathoth.persistence.repositories import (
     SCHEMA_TABLES,
-    Repositories,
     open_repositories,
 )
-from azathoth.revisions import content_digest
-from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 
 OUTCOMES: Final[Mapping[InitializationOutcome, Literal["created", "upgraded", "current"]]] = {
     InitializationOutcome.CREATED: "created",
@@ -92,7 +90,7 @@ def initialize(
         shown = str(path)
 
     try:
-        tools = _install_standard_tools(repositories)
+        tools = install_standard_tools(repositories.tools)
     finally:
         repositories.database.close()
 
@@ -101,47 +99,6 @@ def initialize(
         outcome=OUTCOMES[outcome],
         tools=tools,
     )
-
-
-def _install_standard_tools(
-    repositories: Repositories,
-) -> tuple[StandardTool, ...]:
-    """Install each standard tool whose current revision is not the standard document."""
-
-    repository = repositories.tools
-    tools: list[StandardTool] = []
-
-    for document in standard_tool_documents():
-        definition = document.definition
-        latest = repository.latest_document_revision(definition.id, definition.version)
-
-        if latest is not None and latest.content_digest == content_digest(document):
-            tools.append(
-                StandardTool(
-                    name=definition.name,
-                    version=definition.version,
-                    revision=latest.number,
-                    installed=False,
-                )
-            )
-
-            continue
-
-        try:
-            revision = repository.save_document(document, author=STANDARD_TOOL_AUTHOR)
-        except ValueError as exc:
-            raise ConflictError(str(exc)) from exc
-
-        tools.append(
-            StandardTool(
-                name=definition.name,
-                version=definition.version,
-                revision=revision.number,
-                installed=True,
-            )
-        )
-
-    return tuple(tools)
 
 
 __all__ = [

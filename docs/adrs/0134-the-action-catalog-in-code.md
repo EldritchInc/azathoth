@@ -1,6 +1,6 @@
 # ADR 0134: The Action Catalog in Code
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0136
 - Date: 2026-11-21
 
 ## Context

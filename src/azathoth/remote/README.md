@@ -176,9 +176,10 @@ Azathoth; each grows only by additions (ADR 0134):
   which say, for every call of the service API, what a remote asks its
   policy and tells its audit.
 - `azathoth.persistence`: `Database`, `Session`, `Table`, `Dialect`, `Row`,
-  `Parameter`, `InitializationOutcome`, `IntegrityError`, `open_database`,
-  `run_backfills`, `database_location`, `require_text` and
-  `require_integer`.
+  `Parameter`, `InitializationOutcome`, `PersistenceError`, `IntegrityError`,
+  `open_database`, `run_backfills`, `database_location`, `require_text` and
+  `require_integer`. Every error the database raises is a
+  `PersistenceError`.
 - `azathoth.persistence.repositories`: `open_repositories` and
   `postgres_database`, which shares the process's pool of connections to a
   PostgreSQL database with the core.
@@ -214,14 +215,18 @@ change, since clients before 1.6 refuse a field they do not know.
 
 ## The Server
 
-`azathoth.remote.server` serves the protocol over HTTP with Starlette,
-the `remote` extra, so nothing else in Azathoth imports it.
+`azathoth.remote.server` serves the protocol and the service API over HTTP
+with Starlette, the `remote` extra, so nothing else in Azathoth imports it.
 `RemoteServer(...).app()` is the application `azathoth remote serve` runs
 with uvicorn:
 
 | Route | Action | Answers |
 | --- | --- | --- |
 | `GET /health` | | `{"status": "ok"}`, with no token |
+| `GET /v1/service` | read capabilities | the `ServiceDescription` |
+| `GET /v1/permissions` | | the caller's `PermissionsResponse` on the remote |
+| `POST /v1/permissions` | | the `ResourcePermissionsResponse` to a `PermissionsRequest` |
+| `POST /v1/calls/{name}` | the call's own | the call's result |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
@@ -236,25 +241,86 @@ A content upload names its label in `X-Azathoth-Sensitivity`, internal
 when absent. Every route but `/health` asks the authenticator who the
 caller is, and the policy whether they may do the route's action; a push
 asks again for each lineage it carries, a pull for each it asks for, and a
-content route for its digest. A refusal is JSON, `{"error": "<MESSAGE>"}`:
+content route for its digest; a push carrying a process tool asks
+`import_process_tool` for each, as importing one does. A refusal is JSON,
+`{"error": "<MESSAGE>"}`, and a service route's adds a code, `{"error":
+"<MESSAGE>", "code": "<CODE>"}`:
 
 | Status | Refusal |
 | --- | --- |
-| 400 | A malformed request, another protocol, or a path naming no digest |
+| 400 | A malformed request, another protocol, a path naming no digest, or arguments that are not the call's |
 | 401 | No token the remote knows |
 | 403 | The policy refuses it, or restricted data the remote does not accept |
-| 404 | Content the remote does not hold |
-| 409 | A push whose lineage has diverged |
+| 404 | Content the remote does not hold, a call it does not serve, or what a call names that is not there |
+| 409 | A push whose lineage has diverged, or a call that clashes with what is held |
 | 413 | A body larger than the remote accepts |
-| 422 | A push or content the receiving checks refuse |
+| 422 | A push or content the receiving checks refuse, or a document a call refuses |
+| 500 | A plugin that failed, `plugin_error` |
+| 501 | A job, `job`, which a remote does not run yet |
+| 502 | A provider, an MCP server or another remote a call needs that failed |
+| 503 | An audit that could not be told, `audit_unavailable`, or the remote's own database or configuration |
 
 ```text
 This remote does not know the token given. Send one its owner created with `azathoth remote token create`, as `Authorization: Bearer <TOKEN>`.
 ```
 
-Each request is audited as it is answered: a capabilities read, a push, a
-pull, a content read or a portfolio read once it is served, and a refusal for want of a
-token or permission as `request_denied`.
+### Calls
+
+Every call of the service API but those that name an instance's own
+remotes is `POST /v1/calls/<NAME>`, such as `POST
+/v1/calls/workflows.get` (ADR 0136). The body is a JSON object of the
+call's arguments by name, empty for none, and the answer is its result as
+JSON; `azathoth.remote.calling` reads both from the call's method on
+`Azathoth`, so `call_signature(name)` says how any call travels. A value
+of bytes, a run's file, travels in base64. A client writes neither the
+arguments it does not give nor those it gives as their default, so a
+remote's defaults are always the call's own. An `ApiError` is answered
+with its own code and the status its kind is given, `API_ERROR_STATUSES`
+in `azathoth.remote.service`.
+
+Each caller is answered by an instance of their own, `CallerInstances`,
+whose author is their principal's name, so what they import, create or
+authorize is recorded as theirs. A call asks the policy its actions about
+the resource it names, as `<KIND> <ID>`, and each condition it names,
+from its arguments before it runs or from its result before that is sent
+(`azathoth.remote.conditions`): a change is never made, and restricted
+data never sent, to a caller the policy refuses. A listing leaves out
+what the policy refuses, so it may answer empty, never refused.
+
+The eight calls that take a callback for their events, such as `runs.run`
+and `benchmarks.run`, are jobs a remote will run on its workers, and are
+not run while a request waits. A remote serving only the protocol serves
+no call:
+
+```text
+<NAME> runs on the remote's workers, which this remote does not run jobs on yet.
+This remote serves only push, pull and status, not the service API.
+```
+
+`GET /v1/service` says which Azathoth serves the remote, the service API's
+stability, the protocol, and its policy's edition and detail. `GET
+/v1/permissions` says, for every action, whether the policy allows the
+caller it, and why not; `POST /v1/permissions` asks the same of up to 100
+resources at once. Any caller the remote knows may ask either, since the
+answer is only about them.
+
+### The Audit
+
+A remote tells its audit before it acts, and before it sends what it read
+(ADR 0136): a push, with how many revisions it offers, before anything is
+received; each change a call makes, naming the call, before it is made;
+and a capabilities read, a pull, a content read, a portfolio read or a
+restricted read before it is sent. Reading what is not restricted through
+a call tells nothing. A change or a push that then fails is followed by
+`request_failed`, naming why, and a refusal for want of a token or
+permission is told as `request_denied`. An audit that cannot be told stops
+the request, so nothing is changed and nothing sent:
+
+```text
+This remote could not tell its audit what was asked, so it did nothing; its log says why.
+```
+
+A refusal is answered whether or not the audit can be told of it.
 
 A remote answers requests together (ADR 0135). Every call to a seam or a
 repository runs off the event loop, in a thread, so a slow policy or a
@@ -399,3 +465,9 @@ when it was revoked, and names no one.
 `SqlRemoteTokenRepository` keeps tokens in either database, and
 `SQLiteRemoteTokenRepository` in an SQLite file; `Repositories.remote_tokens`
 opens the one a database needs.
+
+`azathoth remote token create` and `revoke` tell the audit the remote
+serves with, its installed plugin's or the core's, before the token
+changes (ADR 0136). The event names its principal `operator:<AUTHOR>`,
+whoever ran the command, since a token command is never a request; a
+command whose audit cannot be told changes nothing.

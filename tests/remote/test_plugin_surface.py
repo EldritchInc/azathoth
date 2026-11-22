@@ -47,6 +47,7 @@ SURFACE = {
         "InitializationOutcome",
         "IntegrityError",
         "Parameter",
+        "PersistenceError",
         "Row",
         "Session",
         "Table",

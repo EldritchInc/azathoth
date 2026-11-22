@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 import azathoth.cli.application as application
+import azathoth.remote.seams as seams_module
 from azathoth.cli import build_parser, main
 from azathoth.cli.remote import TOKEN_POWER_WARNING, TOKEN_SHOWN_ONCE_NOTE, token_line
 from azathoth.remote import RemoteToken, SQLiteRemoteTokenRepository, TokenAuthenticator
@@ -34,10 +35,11 @@ def database(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> Path:
-    """Point the CLI at an empty database, as Eris, with no runtime to load."""
+    """Point the CLI at an empty database, as Eris, with no runtime and no plugins to load."""
 
     database = configure_database(monkeypatch, tmp_path)
     monkeypatch.setenv(AUTHOR_VARIABLE, str(ERIS))
+    monkeypatch.setattr(seams_module, "entry_points", lambda group: ())
     forbid_runtime(monkeypatch)
 
     return database

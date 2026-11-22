@@ -16,6 +16,7 @@ from azathoth.api.calls import (
     service_call,
 )
 from azathoth.api.instance import Azathoth
+from azathoth.api.models import ExperimentComparison
 from azathoth.remote import HIGH_PRIVILEGE_ACTIONS, Action, AuditEventKind
 
 LIFECYCLE = frozenset({"close"})
@@ -212,14 +213,17 @@ def test_restricted_data_is_only_ever_asked_for_when_a_call_would_show_some() ->
         assert Action.READ_RESTRICTED not in call.actions, call.name
 
 
-def test_no_call_but_making_a_tool_from_mcp_asks_a_high_privilege_action_every_time() -> None:
+def test_only_mcp_tools_and_installing_standard_tools_always_ask_high_privilege() -> None:
     always = {
         call.name: set(call.actions) & HIGH_PRIVILEGE_ACTIONS
         for call in SERVICE_CALLS
         if set(call.actions) & HIGH_PRIVILEGE_ACTIONS
     }
 
-    assert always == {"tools.from_mcp": {Action.TOOL_FROM_MCP}}
+    assert always == {
+        "tools.from_mcp": {Action.TOOL_FROM_MCP},
+        "tools.install_standard": {Action.INSTALL_STANDARD_TOOLS},
+    }
 
 
 def test_importing_a_process_tool_asks_for_both_import_actions() -> None:
@@ -230,7 +234,7 @@ def test_importing_a_process_tool_asks_for_both_import_actions() -> None:
     assert call.audit == (AuditEventKind.TOOL_IMPORTED, AuditEventKind.PROCESS_TOOL_IMPORTED)
 
 
-def test_every_action_but_the_protocols_and_installing_standard_tools_has_a_call() -> None:
+def test_every_action_but_the_protocols_and_managing_tokens_has_a_call() -> None:
     asked = set().union(*(every_action_asked(call) for call in SERVICE_CALLS))
 
     assert {action for action in Action if action not in asked} == {
@@ -238,7 +242,6 @@ def test_every_action_but_the_protocols_and_installing_standard_tools_has_a_call
         Action.PULL,
         Action.READ_CONTENT,
         Action.MANAGE_TOKENS,
-        Action.INSTALL_STANDARD_TOOLS,
     }
 
 
@@ -299,3 +302,14 @@ def test_the_readme_lists_every_call_once_with_what_the_list_says() -> None:
 
     for call in SERVICE_CALLS:
         assert rows[call.name] == readme_cells(call), call.name
+
+
+def test_an_experiments_own_cost_is_read_with_its_runs_and_only_spend_reports_read_spend() -> None:
+    reads_spend = [
+        call.name for call in SERVICE_CALLS if Action.READ_SPEND in every_action_asked(call)
+    ]
+
+    assert service_call("experiments.get").actions == (Action.READ_RUNS,)
+    assert service_call("experiments.compare").actions == (Action.READ_RUNS,)
+    assert {"winner_runs", "baseline_runs", "savings"} <= set(ExperimentComparison.model_fields)
+    assert reads_spend == ["spend.report"]

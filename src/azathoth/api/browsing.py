@@ -71,6 +71,7 @@ from azathoth.api.models import (
     RevisionComparison,
     RunFile,
     RunInput,
+    StandardTool,
     ToolDetail,
     ToolImport,
     ToolSummary,
@@ -80,6 +81,7 @@ from azathoth.api.models import (
     WorkflowImport,
     WorkflowSummary,
 )
+from azathoth.api.standard_tools import install_standard_tools
 from azathoth.api.usage import tool_usage_of
 from azathoth.evaluation import (
     BenchmarkCase,
@@ -1166,6 +1168,27 @@ class Tools:
             created=saved.created,
             tool=self.get(revision.tool_id, revision.tool_version, revision=revision.number),
         )
+
+    def install_standard(
+        self,
+    ) -> tuple[StandardTool, ...]:
+        """Install the standard tool library, as `tool install-standard` does (ADR 0095).
+
+        A standard tool version not here is imported as its first revision,
+        one whose latest revision is the standard document is left alone,
+        and one whose latest differs gets the standard document as its next
+        revision. Installing again is always safe. The standard tools are
+        recorded as written by Azathoth, not by whoever installs them.
+
+        It is the `install_standard_tools` action (ADR 0127).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            ConflictError: A standard tool's artifact belongs to another
+                tool or version here.
+        """
+
+        return install_standard_tools(self._repositories().tools)
 
     def _version_history(
         self,

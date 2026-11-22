@@ -9,11 +9,11 @@ release dates are on the
 ## Unreleased
 
 Azathoth 1.6 makes a remote an Azathoth people work on, not only one they
-push to. So far it names, in code, what a remote will ask its policy and
-tell its audit for every call of the service API, and what a remote's
-plugins may build on, and a remote answers its requests together rather
-than one at a time. Its owner may still do everything, and the routes that
-ask come later.
+push to. So far it names, in code, what a remote asks its policy and tells
+its audit for every call of the service API, and what a remote's plugins
+may build on; a remote answers its requests together rather than one at a
+time, and serves every call of the service API but its jobs, asking and
+telling as named. A client for those routes, and the jobs, come later.
 
 ### The Action Catalog
 
@@ -67,6 +67,50 @@ ask come later.
   machine, and PostgreSQL serves more
   ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
 
+### The Service API on a Remote
+
+- A remote serves every call of the service API at `POST /v1/calls/<NAME>`,
+  its arguments a JSON object by name and its answer the call's result as
+  JSON, read from the call's method so no route is written by hand; bytes
+  travel in base64. `azathoth.remote.calling` says how each call travels
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- What a caller changes through a remote is recorded as theirs, under
+  their principal's name
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- A call asks the policy its actions about what it names, and each
+  condition it names before a change is made or restricted data is sent; a
+  listing leaves out what is refused
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- The eight calls that take a callback for their events, such as `runs.run`,
+  are answered 501 `job` until a remote runs them on its workers
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- `GET /v1/service` says what a remote serves and its edition, and `GET`
+  and `POST /v1/permissions` what the caller may do on it and on each
+  resource asked about
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- A service route refuses with `{"error", "code"}`, the code an
+  `ApiError`'s own, and the status its kind is given
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- A remote tells its audit before it acts or sends what it read, the push
+  route too, and follows a change that fails with `request_failed`, a new
+  kind; an audit that cannot be told stops the request, answered 503
+  `audit_unavailable`. A push's audit says how many revisions it offered
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- A push carrying a process tool asks `import_process_tool` for it, and is
+  told as one, as importing one is
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- `tools.install_standard` installs the standard tool library through the
+  service API, and `init`, `tool install-standard` and `api.initialize`
+  install it the same way
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- `azathoth remote token create` and `revoke` tell the remote's audit before
+  the token changes, as `operator:<AUTHOR>`, and `revoke` now needs an
+  author as `create` does
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+- A remote reads which providers are on, and their keys, when `remote
+  serve` starts
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+
 ### Plugins
 
 - A remote calls a plugin's seams from several threads at once; Writing a
@@ -80,6 +124,9 @@ ask come later.
   plugin finds the database `azathoth remote serve` does; `run_backfills` is
   exported beside it
   ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+- `PersistenceError` is among what a plugin may rely on, so a plugin may
+  catch every error the database raises
+  ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
 - A policy may say more of its edition with an `edition_detail`, such as who
   it is licensed to. Nothing in Azathoth acts on an edition or its detail,
   and a test reads every shipped module to keep it so

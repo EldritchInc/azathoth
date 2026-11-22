@@ -409,7 +409,7 @@ def test_a_push_is_received_reported_and_audited(
 
     assert event.kind is AuditEventKind.PUSH
     assert event.principal == "laptop"
-    assert event.detail == "Received 5 revisions; 0 already held."
+    assert event.detail == "Offered 5 revisions."
     assert event.resource is not None
     assert event.resource.startswith("tool ")
 
@@ -432,7 +432,9 @@ def test_a_diverged_push_conflicts(
     assert status == 409
     assert str(answer["error"]).startswith(f"Workflow {PARENT_ID} has diverged: ")
     assert str(answer["error"]).endswith(" Pull first, then push again.")
-    assert remote.audit.events == []
+    assert remote.audit.kinds() == [AuditEventKind.PUSH, AuditEventKind.REQUEST_FAILED]
+    assert remote.audit.events[1].detail == f"push: {answer['error']}"
+    assert remote.audit.events[1].resource == remote.audit.events[0].resource
 
 
 def test_a_push_of_restricted_data_is_refused_unless_the_remote_accepts_it(
@@ -445,6 +447,7 @@ def test_a_push_of_restricted_data_is_refused_unless_the_remote_accepts_it(
         403,
         {"error": restricted_refusal("This push carries restricted data")},
     )
+    assert refusing.audit.kinds() == [AuditEventKind.PUSH, AuditEventKind.REQUEST_FAILED]
 
     (tmp_path / "accepting").mkdir()
     accepting = Remote(tmp_path / "accepting", accepts_restricted=True)

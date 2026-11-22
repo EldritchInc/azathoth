@@ -1030,7 +1030,16 @@ class RunFile(ApiModel):
     is not its media type is refused before anything runs or is kept.
     """
 
-    content: bytes
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
+
+    content: bytes = Field(
+        description="The file's bytes; as JSON, in base64.",
+    )
 
     media_type: str = Field(
         description="The content's media type, such as application/pdf or text/plain.",
@@ -1622,7 +1631,7 @@ class InvocationDetail(ApiModel):
 
 
 class StandardTool(ApiModel):
-    """One tool of the standard library, as initializing a database left it."""
+    """One tool of the standard library, as initializing a database, or installing it, left it."""
 
     name: str
 
@@ -1634,7 +1643,13 @@ class StandardTool(ApiModel):
     )
 
     installed: bool = Field(
-        description="Whether initializing imported it, rather than finding it already there.",
+        description="Whether installing imported it, rather than finding it already there.",
+    )
+
+    identical_to: int | None = Field(
+        default=None,
+        ge=1,
+        description="An earlier revision with the same content as the one installed, if any.",
     )
 
 
