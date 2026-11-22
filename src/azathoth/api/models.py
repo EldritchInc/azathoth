@@ -1030,7 +1030,16 @@ class RunFile(ApiModel):
     is not its media type is refused before anything runs or is kept.
     """
 
-    content: bytes
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
+
+    content: bytes = Field(
+        description="The file's bytes; as JSON, in base64.",
+    )
 
     media_type: str = Field(
         description="The content's media type, such as application/pdf or text/plain.",

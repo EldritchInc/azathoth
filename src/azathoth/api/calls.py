@@ -7,6 +7,10 @@ when a condition holds, what it tells the audit, and whether a remote
 serves it at all. A remote's routes are built from this list, and a test
 keeps it, each call's docstring and the service API's README in step.
 
+A call that runs a workflow, a benchmark or an optimization is a job: a
+remote runs it on its workers, as ADR 0107 runs a queued job, rather than
+while the request that starts it waits (ADR 0127).
+
 The list names what each call does; a policy decides who may. A call that
 needs another action's data asks for both, such as a restricted case, which
 asks `read_restricted` as well as `read_catalog`. The calls that name an
@@ -48,6 +52,8 @@ class ServiceCall:
     also: tuple[Condition, ...] = ()
     audit: tuple[AuditEventKind, ...] = ()
     served: bool = True
+    job: bool = False
+    """Whether a remote runs the call as a job on its workers, not while the request waits."""
 
 
 def _workflow(
@@ -212,12 +218,14 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.RUN_BENCHMARK,),
         _benchmark(),
         audit=(AuditEventKind.BENCHMARK_RUN,),
+        job=True,
     ),
     ServiceCall(
         "benchmarks.compare",
         (Action.RUN_BENCHMARK,),
         _benchmark(),
         audit=(AuditEventKind.BENCHMARK_RUN,),
+        job=True,
     ),
     # Goals
     ServiceCall("goals.list", READ_CATALOG, lists="goal"),
@@ -284,17 +292,20 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.RUN_WORKFLOW,),
         _workflow(),
         audit=(AuditEventKind.WORKFLOW_RUN,),
+        job=True,
     ),
     ServiceCall(
         "runs.try_step",
         (Action.RUN_WORKFLOW,),
         audit=(AuditEventKind.STEP_TRIED,),
+        job=True,
     ),
     ServiceCall(
         "runs.invoke",
         (Action.INVOKE,),
         _workflow(),
         audit=(AuditEventKind.WORKFLOW_INVOKED,),
+        job=True,
     ),
     ServiceCall(
         "runs.record_feedback",
@@ -307,6 +318,7 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.ANNOTATE_RUN,),
         _run(),
         audit=(AuditEventKind.RUN_RESUMED,),
+        job=True,
     ),
     # Invocations
     ServiceCall("invocations.list", READ_RUNS, _workflow(), lists="invocation"),
@@ -323,6 +335,7 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.ANNOTATE_RUN,),
         _invocation(),
         audit=(AuditEventKind.RUN_RESUMED,),
+        job=True,
     ),
     # Production
     ServiceCall("production.get", READ_CATALOG, _workflow()),
@@ -350,6 +363,7 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.OPTIMIZE,),
         _workflow(),
         audit=(AuditEventKind.WORKFLOW_OPTIMIZED,),
+        job=True,
     ),
     # Spend
     ServiceCall("spend.report", (Action.READ_SPEND,)),
