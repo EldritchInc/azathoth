@@ -333,7 +333,11 @@ class SQLiteRemoteTokenRepository(SqlRemoteTokenRepository):
 
 
 class TokenAuthenticator:
-    """The core's authenticator: an active token the remote issued is its owner."""
+    """The core's authenticator: an active token the remote issued is its owner.
+
+    It keeps no state of its own: each call reads the token in a read-only
+    transaction of its own, so any number of threads may call it at once.
+    """
 
     def __init__(
         self,

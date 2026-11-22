@@ -297,7 +297,11 @@ class AuditEvent(BaseModel):
 
 @runtime_checkable
 class Authenticator(Protocol):
-    """Says who a request's caller is, from its `Authorization` header."""
+    """Says who a request's caller is, from its `Authorization` header.
+
+    A remote calls it from several threads at once (ADR 0135), so it must be
+    safe to call concurrently.
+    """
 
     def authenticate(
         self,
@@ -318,6 +322,9 @@ class Policy(Protocol):
     protocol's members, so a policy without it is still a `Policy`. A
     remote shows the edition and its detail, and never acts on either
     (ADR 0134).
+
+    A remote calls it from several threads at once (ADR 0135), so it must be
+    safe to call concurrently.
     """
 
     @property
@@ -341,7 +348,12 @@ class Policy(Protocol):
 
 @runtime_checkable
 class AuditSink(Protocol):
-    """Is told what a remote did, and what it refused."""
+    """Is told what a remote did, and what it refused.
+
+    A remote tells it from several threads at once (ADR 0135), so it must be
+    safe to call concurrently, and must keep every event it is told even
+    when two arrive together.
+    """
 
     def record(
         self,
@@ -353,7 +365,10 @@ class AuditSink(Protocol):
 
 
 class OwnerOnlyPolicy:
-    """The core's policy: the owner may do anything, and no one else may do anything."""
+    """The core's policy: the owner may do anything, and no one else may do anything.
+
+    It keeps no state, so any number of threads may ask it at once.
+    """
 
     @property
     def edition(
@@ -383,7 +398,7 @@ class OwnerOnlyPolicy:
 
 
 class NoAuditSink:
-    """The core's audit, which records nothing."""
+    """The core's audit, which records nothing, from any number of threads at once."""
 
     def record(
         self,

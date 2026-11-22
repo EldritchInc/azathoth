@@ -180,7 +180,7 @@ Azathoth; each grows only by additions (ADR 0134):
   `run_backfills`, `database_location`, `require_text` and
   `require_integer`.
 - `azathoth.persistence.repositories`: `open_repositories` and
-  `postgres_database`, which shares the process's one connection to a
+  `postgres_database`, which shares the process's pool of connections to a
   PostgreSQL database with the core.
 - `azathoth.remote.tokens`: `TOKEN_PREFIX`, `RemoteToken` and
   `RemoteTokenRepository`, the owner's tokens.
@@ -195,9 +195,15 @@ called it could mark a database the core never initialized as initialized.
 A factory that cannot serve raises `RemotePluginError`, whose message the
 remote prints before it stops.
 
-A remote calls its seams from the threads it answers requests on, so each
-must be safe to call from several at once. An authenticator returns `None`
-for a header that names no one it knows, rather than raising.
+A remote answers requests together, and calls its seams from the threads
+it answers them on, up to eight at once (ADR 0135), so each seam must be
+safe to call from several threads at once: keep no state between calls
+that two threads could change together, or guard it with a lock. A factory
+runs once, when the remote starts, and what it makes serves every request.
+The core's own fillers keep no state, and each of their reads is a
+read-only transaction of its own. An audit must keep every event, even when
+two arrive together. An authenticator returns `None` for a header that
+names no one it knows, rather than raising.
 
 A policy names its `edition`, and may say more of it with an
 `edition_detail` property: one printable line of at most 200 characters,
