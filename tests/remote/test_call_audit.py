@@ -253,6 +253,8 @@ def test_a_refusal_is_answered_even_when_the_audit_cannot_be_told_of_it(
 
 def protocol(
     audit: ListAudit,
+    *,
+    policy: Refusing | None = None,
 ) -> tuple[object, Bare]:
     held = Bare()
     app = RemoteServer(
@@ -262,7 +264,11 @@ def protocol(
         content=held.content,
         production_states=held.production_states,
         portfolio=held.portfolio,
-        seams=Seams(authenticator=Named(OWNER), policy=Refusing(), audit=audit),
+        seams=Seams(
+            authenticator=Named(OWNER),
+            policy=policy if policy is not None else Refusing(),
+            audit=audit,
+        ),
         accepts_restricted=False,
         environ={},
     ).app()

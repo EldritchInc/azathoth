@@ -3,7 +3,9 @@
 This module needs the `remote` extra, Starlette, so the core never imports
 it. Every route but `/health` needs a bearer token its authenticator knows,
 and a policy that allows what it asks; each refusal says why, and is
-audited. The service routes (ADR 0127) refuse with a code as well.
+audited. The service routes (ADR 0127) refuse with a code as well. A push
+carrying a process tool asks for importing a process tool as well, for each
+such tool.
 
 | Route | Action | Answers |
 | --- | --- | --- |
@@ -16,7 +18,7 @@ audited. The service routes (ADR 0127) refuse with a code as well.
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
 | `GET /v1/content/{digest}` | read content | the content's bytes |
-| `POST /v1/push` | push | the `ReceiveReport` of a `PushBundle` |
+| `POST /v1/push` | push; import process tool too | the `ReceiveReport` of a `PushBundle` |
 | `POST /v1/pull` | pull | the `PullResponse` to a `PullRequest` |
 | `POST /v1/heads` | pull | the `HeadsResponse` to a `HeadsRequest` |
 | `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
@@ -74,6 +76,7 @@ from azathoth.remote.receiving import (
     DivergedError,
     ReceiveRefusedError,
     RestrictedReceiveRefusedError,
+    process_tool_lineages,
     receive,
     receive_content,
 )
@@ -607,6 +610,12 @@ class RemoteServer:
         lineages = list(dict.fromkeys(record.lineage for record in bundle.revisions))
 
         await self._decide(principal, Action.PUSH, *(str(lineage) for lineage in lineages))
+        processes = process_tool_lineages(bundle)
+        await self._decide(
+            principal,
+            Action.IMPORT_PROCESS_TOOL,
+            *(str(lineage) for lineage in processes),
+        )
         pushed = ", ".join(str(lineage) for lineage in lineages) or None
         await self._tell(
             AuditEventKind.PUSH,
@@ -614,6 +623,14 @@ class RemoteServer:
             pushed,
             f"Offered {len(bundle.revisions)} revisions.",
         )
+
+        if processes:
+            await self._tell(
+                AuditEventKind.PROCESS_TOOL_IMPORTED,
+                principal,
+                ", ".join(str(lineage) for lineage in processes),
+                "push",
+            )
 
         try:
             try:

@@ -36,7 +36,7 @@ from azathoth.revisions import (
     content_digest,
 )
 from azathoth.sensitivity import Sensitivity
-from azathoth.tools import ToolDocument, ToolRepository
+from azathoth.tools import PROCESS_TOOL_RUNTIME, ToolDocument, ToolRepository
 from azathoth.workflows import WorkflowRepository, WorkflowSpecification
 
 ACCEPT_RESTRICTED_HINT: Final = (
@@ -195,6 +195,34 @@ def _read(
         )
 
     return document
+
+
+def process_tool_lineages(
+    bundle: PushBundle,
+) -> tuple[Lineage, ...]:
+    """Return each tool version a bundle carries a process tool's revision of, in bundle order.
+
+    A process tool runs a command wherever it is used, so a push carrying
+    one asks for `import_process_tool` as well as `push` (ADR 0127). A
+    revision this Azathoth cannot read as a tool document is none: receiving
+    refuses it.
+    """
+
+    found: list[Lineage] = []
+
+    for record in bundle.revisions:
+        if record.lineage.kind is not RevisionKind.TOOL or record.lineage in found:
+            continue
+
+        try:
+            document = ToolDocument.model_validate(record.document)
+        except ValidationError:
+            continue
+
+        if any(each.runtime == PROCESS_TOOL_RUNTIME for each in document.implementations):
+            found.append(record.lineage)
+
+    return tuple(found)
 
 
 def _plan_lineage(
@@ -425,6 +453,7 @@ __all__ = [
     "ACCEPT_RESTRICTED_HINT",
     "READERS",
     "DivergedError",
+    "process_tool_lineages",
     "ReceiveRefusedError",
     "ReceiveReport",
     "ReceivedRevision",
