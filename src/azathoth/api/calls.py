@@ -140,6 +140,11 @@ SERVICE_CALLS: Final[tuple[ServiceCall, ...]] = (
         (Action.TOOL_FROM_MCP,),
         audit=(AuditEventKind.TOOL_MADE_FROM_MCP,),
     ),
+    ServiceCall(
+        "tools.install_standard",
+        (Action.INSTALL_STANDARD_TOOLS,),
+        audit=(AuditEventKind.STANDARD_TOOLS_INSTALLED,),
+    ),
     # Benchmarks
     ServiceCall("benchmarks.list", READ_CATALOG, lists="benchmark"),
     ServiceCall(

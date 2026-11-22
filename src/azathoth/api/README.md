@@ -69,6 +69,7 @@ with api.open("azathoth.db") as instance:
 | `tools.export(id, version, revision=None)` | A `DocumentExport` of one revision of one exact version. |
 | `tools.compare_revisions(id, version, before, after)` | A `RevisionComparison` of two revisions of one exact version. |
 | `tools.from_mcp(tool, url=None, command=(), authorization=None, grants=(), timeout_seconds=None)` | A `DocumentExport` of the tool an MCP server serves, pinned as it serves it now, as `tool from-mcp` prints it; nothing is imported. |
+| `tools.install_standard()` | Each `StandardTool` of the standard library, installed as `tool install-standard` installs it; installing again changes nothing. |
 | `benchmarks.list()` | Every benchmark dataset at its latest revision. |
 | `benchmarks.get(id, revision=None)` | One revision with its document, the latest by default. |
 | `benchmarks.history(id, limit=None)` | Its revisions, newest first. |
@@ -669,6 +670,7 @@ each other's tokens.
 | `tools.usage` | `read_catalog`, `read_runs` |  |  |
 | `tools.import_document` | `import_tool` | `import_process_tool` for a process tool | `tool_imported`, `process_tool_imported` |
 | `tools.from_mcp` | `tool_from_mcp` |  | `tool_made_from_mcp` |
+| `tools.install_standard` | `install_standard_tools` |  | `standard_tools_installed` |
 | `benchmarks.list` | `read_catalog` |  |  |
 | `benchmarks.get` | `read_catalog` | `read_restricted` for a restricted benchmark | `restricted_read` |
 | `benchmarks.history` | `read_catalog` |  |  |

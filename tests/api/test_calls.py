@@ -212,14 +212,17 @@ def test_restricted_data_is_only_ever_asked_for_when_a_call_would_show_some() ->
         assert Action.READ_RESTRICTED not in call.actions, call.name
 
 
-def test_no_call_but_making_a_tool_from_mcp_asks_a_high_privilege_action_every_time() -> None:
+def test_only_mcp_tools_and_installing_standard_tools_always_ask_high_privilege() -> None:
     always = {
         call.name: set(call.actions) & HIGH_PRIVILEGE_ACTIONS
         for call in SERVICE_CALLS
         if set(call.actions) & HIGH_PRIVILEGE_ACTIONS
     }
 
-    assert always == {"tools.from_mcp": {Action.TOOL_FROM_MCP}}
+    assert always == {
+        "tools.from_mcp": {Action.TOOL_FROM_MCP},
+        "tools.install_standard": {Action.INSTALL_STANDARD_TOOLS},
+    }
 
 
 def test_importing_a_process_tool_asks_for_both_import_actions() -> None:
@@ -230,7 +233,7 @@ def test_importing_a_process_tool_asks_for_both_import_actions() -> None:
     assert call.audit == (AuditEventKind.TOOL_IMPORTED, AuditEventKind.PROCESS_TOOL_IMPORTED)
 
 
-def test_every_action_but_the_protocols_and_installing_standard_tools_has_a_call() -> None:
+def test_every_action_but_the_protocols_and_managing_tokens_has_a_call() -> None:
     asked = set().union(*(every_action_asked(call) for call in SERVICE_CALLS))
 
     assert {action for action in Action if action not in asked} == {
@@ -238,7 +241,6 @@ def test_every_action_but_the_protocols_and_installing_standard_tools_has_a_call
         Action.PULL,
         Action.READ_CONTENT,
         Action.MANAGE_TOKENS,
-        Action.INSTALL_STANDARD_TOOLS,
     }
 
 

@@ -7,6 +7,9 @@ from pathlib import Path
 from uuid import UUID
 
 from azathoth import api
+from azathoth.api.errors import ConflictError
+from azathoth.api.models import StandardTool
+from azathoth.api.standard_tools import install_standard_tools as api_install_standard_tools
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.cli.service import (
@@ -16,13 +19,10 @@ from azathoth.cli.service import (
     import_note,
     service_instance,
 )
-from azathoth.revisions import content_digest
-from azathoth.standard import STANDARD_TOOL_AUTHOR, standard_tool_documents
 from azathoth.tools import (
     ToolDefinition,
     ToolImplementation,
     ToolTestCase,
-    earliest_identical_tool_revision,
 )
 
 
@@ -447,42 +447,34 @@ def install_standard_tools() -> int:
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    for document in standard_tool_documents():
-        definition = document.definition
-        name = f"{definition.name}@{definition.version}"
-
-        latest = repository.latest_document_revision(
-            definition.id,
-            definition.version,
+    try:
+        api_install_standard_tools(repositories(configuration).tools, each=print_standard_tool)
+    except ConflictError as exc:
+        print(
+            str(exc),
+            file=sys.stderr,
         )
 
-        if latest is not None and latest.content_digest == content_digest(document):
-            print(f"Tool {name} is already installed (revision {latest.number}).")
-
-            continue
-
-        try:
-            revision = repository.save_document(document, author=STANDARD_TOOL_AUTHOR)
-        except ValueError as exc:
-            print(
-                str(exc),
-                file=sys.stderr,
-            )
-
-            return 1
-
-        identical = earliest_identical_tool_revision(
-            repository.document_revisions(revision.tool_id),
-            revision,
-        )
-
-        note = f" (identical to revision {identical.number})" if identical is not None else ""
-
-        print(f"Installed tool {name} revision {revision.number}{note}.")
+        return 1
 
     return 0
+
+
+def print_standard_tool(
+    tool: StandardTool,
+) -> None:
+    """Print what installing one standard tool did, as `tool install-standard` reports it."""
+
+    name = f"{tool.name}@{tool.version}"
+
+    if not tool.installed:
+        print(f"Tool {name} is already installed (revision {tool.revision}).")
+
+        return
+
+    note = f" (identical to revision {tool.identical_to})" if tool.identical_to is not None else ""
+
+    print(f"Installed tool {name} revision {tool.revision}{note}.")
 
 
 __all__ = [
@@ -494,6 +486,7 @@ __all__ = [
     "list_tool_test_cases",
     "list_tool_versions",
     "list_tools",
+    "print_standard_tool",
     "show_tool",
     "show_tool_implementation",
     "show_tool_test_case",

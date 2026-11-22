@@ -1631,7 +1631,7 @@ class InvocationDetail(ApiModel):
 
 
 class StandardTool(ApiModel):
-    """One tool of the standard library, as initializing a database left it."""
+    """One tool of the standard library, as initializing a database, or installing it, left it."""
 
     name: str
 
@@ -1643,7 +1643,13 @@ class StandardTool(ApiModel):
     )
 
     installed: bool = Field(
-        description="Whether initializing imported it, rather than finding it already there.",
+        description="Whether installing imported it, rather than finding it already there.",
+    )
+
+    identical_to: int | None = Field(
+        default=None,
+        ge=1,
+        description="An earlier revision with the same content as the one installed, if any.",
     )
 
 

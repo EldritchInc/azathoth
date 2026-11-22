@@ -306,3 +306,30 @@ def test_a_read_the_audit_cannot_be_told_of_is_not_sent() -> None:
     answer = call(app, "GET", "/v1/capabilities")
 
     assert (answer.status, answer.json()) == (503, {"error": AUDIT_UNAVAILABLE_MESSAGE})
+
+
+# Installing the standard tools
+
+
+def test_the_standard_tools_are_installed_through_a_remote_asked_and_told_as_such(
+    tmp_path: Path,
+) -> None:
+    served = Served(tmp_path / "azathoth.db", principal=ERIS)
+    answer = served.call("tools.install_standard")
+
+    assert answer.status == 200
+    assert all(tool["installed"] for tool in answer.json())
+    assert served.policy.asked == [("Eris", Action.INSTALL_STANDARD_TOOLS, None)]
+    assert [(event.kind, event.detail) for event in served.audit.events] == [
+        (AuditEventKind.STANDARD_TOOLS_INSTALLED, "tools.install_standard")
+    ]
+
+
+def test_installing_the_standard_tools_is_refused_to_a_caller_the_policy_refuses(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "azathoth.db"
+    answer = Served(path, principal=GUEST).call("tools.install_standard")
+
+    assert (answer.status, answer.json()["code"]) == (403, "permission_denied")
+    assert Served(path, principal=ERIS).call("tools.list").json() == []
