@@ -26,6 +26,7 @@ from azathoth.persistence.errors import (
     DatabaseUnavailableError,
     IntegrityError,
     PersistenceError,
+    ReadOnlyTransactionError,
 )
 from azathoth.persistence.location import (
     DATABASE_VARIABLE,
@@ -64,6 +65,7 @@ __all__ = [
     "PersistenceError",
     "PostgresDatabase",
     "PostgresLocation",
+    "ReadOnlyTransactionError",
     "Row",
     "SQLiteDatabase",
     "SQLiteLocation",

@@ -22,6 +22,14 @@ class IntegrityError(PersistenceError):
     """
 
 
+class ReadOnlyTransactionError(PersistenceError):
+    """A statement in a read-only transaction tried to write.
+
+    Both databases raise it, so a repository that reads in a read-only
+    transaction learns of a stray write the same way on either.
+    """
+
+
 class DatabaseUnavailableError(PersistenceError):
     """The database cannot be used here: PostgreSQL without the `postgres` extra."""
 
@@ -86,4 +94,5 @@ __all__ = [
     "DatabaseUnavailableError",
     "IntegrityError",
     "PersistenceError",
+    "ReadOnlyTransactionError",
 ]

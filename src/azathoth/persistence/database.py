@@ -12,6 +12,9 @@ from azathoth.persistence.location import DatabaseLocation
 SCHEMA_TABLE: Final = "azathoth_schema"
 """The table in which a PostgreSQL database records its schema version."""
 
+READ_ONLY_LOCK_MESSAGE: Final = "A read-only transaction takes no lock, since it writes nothing."
+"""Why a transaction asked both to lock a table and to only read is refused."""
+
 SCHEMA_VERSION: Final = 7
 """The schema version this Azathoth uses.
 
@@ -122,6 +125,7 @@ class Database(Protocol):
         self,
         *,
         lock: str | None = None,
+        read_only: bool = False,
     ) -> AbstractContextManager[Session]:
         """Run a block as one transaction.
 
@@ -129,8 +133,16 @@ class Database(Protocol):
         that table, so writers serialize while readers carry on: numbering
         a new revision reads the latest and writes the next.
 
+        With `read_only`, the transaction only reads. It takes no write
+        lock, so read-only transactions run alongside each other and
+        alongside a writer, each seeing what was committed when it began
+        reading. A read-only transaction takes no `lock`.
+
         Raises:
             IntegrityError: A statement in the block broke a constraint.
+            ReadOnlyTransactionError: A statement in a read-only
+                transaction tried to write.
+            ValueError: Both `lock` and `read_only` were given.
         """
 
         ...
@@ -189,6 +201,7 @@ def run_backfills(
 
 
 __all__ = [
+    "READ_ONLY_LOCK_MESSAGE",
     "SCHEMA_TABLE",
     "SCHEMA_VERSION",
     "Database",

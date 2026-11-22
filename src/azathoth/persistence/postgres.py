@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Final, Protocol
 
 from azathoth.persistence.database import (
+    READ_ONLY_LOCK_MESSAGE,
     SCHEMA_TABLE,
     SCHEMA_VERSION,
     InitializationOutcome,
@@ -27,6 +28,7 @@ from azathoth.persistence.errors import (
     DatabaseSchemaTooNewError,
     DatabaseUnavailableError,
     IntegrityError,
+    ReadOnlyTransactionError,
 )
 from azathoth.persistence.location import PostgresLocation
 from azathoth.persistence.sqlite import bound
@@ -95,6 +97,7 @@ class PostgresDriver:
     connect: Callable[[str], PostgresConnection]
     integrity_error: type[Exception]
     operational_error: type[Exception]
+    read_only_error: type[Exception]
 
 
 def psycopg_driver() -> PostgresDriver:
@@ -106,6 +109,7 @@ def psycopg_driver() -> PostgresDriver:
 
     try:
         import psycopg
+        import psycopg.errors
     except ImportError as exc:
         raise DatabaseUnavailableError() from exc
 
@@ -120,6 +124,7 @@ def psycopg_driver() -> PostgresDriver:
         connect=connect,
         integrity_error=psycopg.IntegrityError,
         operational_error=psycopg.OperationalError,
+        read_only_error=psycopg.errors.ReadOnlySqlTransaction,
     )
 
 
@@ -173,6 +178,8 @@ class PostgresSession:
             )
         except self._driver.integrity_error as exc:
             raise IntegrityError(str(exc)) from exc
+        except self._driver.read_only_error as exc:
+            raise ReadOnlyTransactionError(str(exc)) from exc
 
 
 class PostgresDatabase:
@@ -217,22 +224,35 @@ class PostgresDatabase:
         self,
         *,
         lock: str | None = None,
+        read_only: bool = False,
     ) -> AbstractContextManager[PostgresSession]:
         """Run a block as one transaction.
 
         A lock takes `LOCK TABLE … IN EXCLUSIVE MODE` on the table, which
-        serializes writers to it and never blocks its readers.
+        serializes writers to it and never blocks its readers. A read-only
+        transaction begins `READ ONLY`, and the server refuses its writes.
+
+        Raises:
+            ValueError: Both `lock` and `read_only` were given.
         """
 
-        return self._transaction(None if lock is None else identifier(lock))
+        if lock is not None and read_only:
+            raise ValueError(READ_ONLY_LOCK_MESSAGE)
+
+        return self._transaction(
+            None if lock is None else identifier(lock),
+            begin="BEGIN READ ONLY" if read_only else "BEGIN",
+        )
 
     @contextmanager
     def _transaction(
         self,
         lock: str | None,
+        *,
+        begin: str,
     ) -> Iterator[PostgresSession]:
         with self._turns:
-            connection = self._begin()
+            connection = self._begin(begin)
 
             try:
                 session = PostgresSession(connection, self._driver)
@@ -252,17 +272,18 @@ class PostgresDatabase:
 
     def _begin(
         self,
+        begin: str,
     ) -> PostgresConnection:
         """Begin a transaction, opening the connection again once if it was dropped."""
 
         connection = self._open()
 
         try:
-            connection.execute("BEGIN", ())
+            connection.execute(begin, ())
         except self._driver.operational_error:
             self._discard()
             connection = self._open()
-            connection.execute("BEGIN", ())
+            connection.execute(begin, ())
 
         return connection
 

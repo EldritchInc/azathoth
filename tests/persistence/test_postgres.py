@@ -22,8 +22,10 @@ from azathoth.persistence import (
     Parameter,
     PostgresDatabase,
     PostgresLocation,
+    ReadOnlyTransactionError,
     open_database,
 )
+from azathoth.persistence.database import READ_ONLY_LOCK_MESSAGE
 from azathoth.persistence.postgres import (
     INITIALIZATION_LOCK,
     PostgresConnection,
@@ -80,6 +82,13 @@ class DuplicateError(Exception):
     """The scripted driver's integrity error."""
 
 
+class RefusedWriteError(Exception):
+    """The scripted driver's error for a write in a read-only transaction."""
+
+
+WRITES = ("INSERT", "UPDATE", "DELETE")
+
+
 class ScriptedCursor:
     def __init__(
         self,
@@ -119,6 +128,7 @@ class ScriptedConnection:
         self.broken = False
         self._fail_begin = fail_begin
         self._fail_on = fail_on
+        self._read_only = False
 
     def execute(
         self,
@@ -127,10 +137,16 @@ class ScriptedConnection:
     ) -> PostgresCursor:
         self.log.append(query.strip())
 
-        if query == "BEGIN" and self._fail_begin:
+        if query.startswith("BEGIN") and self._fail_begin:
             self._fail_begin = False
             self.broken = True
             raise DroppedError("server closed the connection unexpectedly")
+
+        if query.startswith("BEGIN"):
+            self._read_only = query == "BEGIN READ ONLY"
+
+        if self._read_only and query.strip().startswith(WRITES):
+            raise RefusedWriteError("cannot execute INSERT in a read-only transaction")
 
         if self._fail_on is not None and self._fail_on in query:
             raise DuplicateError("duplicate key value violates unique constraint")
@@ -173,6 +189,7 @@ class ScriptedDriver:
             connect=self.connect,
             integrity_error=DuplicateError,
             operational_error=DroppedError,
+            read_only_error=RefusedWriteError,
         )
 
 
@@ -218,6 +235,81 @@ def test_a_lock_takes_the_table_exclusively_after_beginning() -> None:
         "LOCK TABLE workflow_specification_revisions IN EXCLUSIVE MODE",
         "COMMIT",
     ]
+
+
+def test_a_read_only_transaction_begins_read_only() -> None:
+    database, script = scripted()
+
+    with database.transaction(read_only=True) as session:
+        session.fetchall("SELECT thing_id FROM things")
+
+    assert script.log[1:] == ["BEGIN READ ONLY", "SELECT thing_id FROM things", "COMMIT"]
+
+
+def test_a_write_in_a_read_only_transaction_becomes_azathoths_error_and_rolls_back() -> None:
+    database, script = scripted()
+
+    with (
+        pytest.raises(ReadOnlyTransactionError, match="read-only transaction"),
+        database.transaction(read_only=True) as session,
+    ):
+        session.execute("INSERT INTO t VALUES (?)", ("x",))
+
+    assert script.log[-1] == "ROLLBACK"
+
+
+def test_a_read_only_transaction_after_a_writing_one_on_the_same_connection_reads_only() -> None:
+    database, script = scripted()
+
+    with database.transaction() as session:
+        session.execute("INSERT INTO t VALUES (?)", ("x",))
+
+    with pytest.raises(ReadOnlyTransactionError), database.transaction(read_only=True) as session:
+        session.execute("INSERT INTO t VALUES (?)", ("y",))
+
+    with database.transaction() as session:
+        session.execute("INSERT INTO t VALUES (?)", ("z",))
+
+    assert script.log.count("<connect>") == 1
+
+
+def test_a_read_only_transaction_takes_no_lock() -> None:
+    database, script = scripted()
+
+    with (
+        pytest.raises(ValueError, match="takes no lock"),
+        database.transaction(lock="things", read_only=True),
+    ):
+        pass
+
+    assert script.log == []
+    assert READ_ONLY_LOCK_MESSAGE == (
+        "A read-only transaction takes no lock, since it writes nothing."
+    )
+
+
+def test_a_read_only_transaction_is_opened_again_when_its_connection_was_dropped() -> None:
+    database, script = scripted(ScriptedConnection([], fail_begin=True))
+
+    with database.transaction(read_only=True):
+        pass
+
+    assert script.log == [
+        "<connect>",
+        "BEGIN READ ONLY",
+        "<close>",
+        "<connect>",
+        "BEGIN READ ONLY",
+        "COMMIT",
+    ]
+
+
+def test_psycopg_names_its_read_only_error() -> None:
+    psycopg = pytest.importorskip("psycopg")
+
+    from azathoth.persistence.postgres import psycopg_driver
+
+    assert psycopg_driver().read_only_error is psycopg.errors.ReadOnlySqlTransaction
 
 
 def test_a_block_that_raises_rolls_back() -> None:

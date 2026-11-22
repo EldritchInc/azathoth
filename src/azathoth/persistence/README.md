@@ -169,20 +169,32 @@ does so in a new one.
 `Database.transaction()` runs a block as one transaction, committed when the
 block returns and rolled back when it raises. `transaction(lock=table)`
 also serializes the writers of one table, such as the revisions of one
-specification, which are numbered in order:
+specification, which are numbered in order. `transaction(read_only=True)`
+only reads, and takes no lock:
 
-| Database | A locked transaction |
-| --- | --- |
-| SQLite | `BEGIN IMMEDIATE`, as every SQLite transaction is |
-| PostgreSQL | `LOCK TABLE … IN EXCLUSIVE MODE`, which never blocks readers |
+| Database | A locked transaction | A read-only transaction |
+| --- | --- | --- |
+| SQLite | `BEGIN IMMEDIATE`, as every SQLite transaction that may write is | `BEGIN`, deferred, under `PRAGMA query_only` |
+| PostgreSQL | `LOCK TABLE … IN EXCLUSIVE MODE`, which never blocks readers | `BEGIN READ ONLY` |
 
-Every SQLite transaction begins immediately, taking the file's write lock,
-and waits up to 30 seconds for another process's transaction to commit. A
-transaction that began deferred and then wrote would be refused at once,
-without waiting, whenever another process was writing the file, so the
-processes that share one, such as the children `map_workflow` runs side by
-side (ADR 0106), would fail each other. Taking the lock first makes them
-take turns.
+Every SQLite transaction that may write begins immediately, taking the
+file's write lock, and waits up to 30 seconds for another process's
+transaction to commit. A transaction that began deferred and then wrote
+would be refused at once, without waiting, whenever another process was
+writing the file, so the processes that share one, such as the children
+`map_workflow` runs side by side (ADR 0106), would fail each other. Taking
+the lock first makes them take turns.
+
+An SQLite file is put in WAL mode the first time Azathoth opens it, and
+keeps it; the file gains `-wal` and `-shm` files beside it while it is open.
+In WAL mode a read-only transaction never waits for a writer, and a writer
+never waits for it: each reader sees what was committed when it began
+reading. WAL needs every process to be on the machine that holds the file,
+so an SQLite database is never kept on a network share.
+
+A write in a read-only transaction raises `ReadOnlyTransactionError` on
+either database, and the transaction rolls back. A transaction asked both
+to lock a table and to only read is refused with a `ValueError`.
 
 `Session.execute` returns the rows a statement changed; `fetchone` and
 `fetchall` return rows of plain values.
