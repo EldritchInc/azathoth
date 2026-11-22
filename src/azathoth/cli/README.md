@@ -3860,6 +3860,12 @@ Another azathoth remote serve is already serving <DATABASE>. SQLite serves one r
 Other commands, and the editor, go on working beside a running server.
 Several servers may serve one PostgreSQL database.
 
+A remote serves the service API too, at `/v1/calls/<NAME>`, to whoever
+its policy allows, recording what each caller changes under their name
+(ADR 0136). It reads which model providers are on, and their keys, when
+it starts, so a provider turned on or a key changed takes a restart; the
+models a provider serves are asked of it on every call that needs them.
+
 # Naming Remotes
 
 `remote add` gives a remote a name, so commands name it instead of its URL
@@ -4059,6 +4065,15 @@ Tokens are durable state of the database a remote serves, so these
 commands never load the runtime and need no provider credentials. With the
 core's policy, every token is its owner's: whoever holds one may do
 anything on the remote the owner may.
+
+Both commands need an author, `AZATHOTH_AUTHOR` or the operating system's
+username as for an import, and tell the remote's audit, the one its installed plugin fills or the core's, before
+the token changes, as `operator:<AUTHOR>` (ADR 0136). An audit that
+cannot be told changes nothing:
+
+```text
+The remote's audit could not be told of this, so nothing was changed: <REASON>
+```
 
 # Tool Commands
 

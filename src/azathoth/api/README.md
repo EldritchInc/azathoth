@@ -650,6 +650,13 @@ A local instance asks nothing: its owner may do everything. The calls that
 name this instance's own remotes are never served, since remotes never hold
 each other's tokens.
 
+A remote serves each other call at `POST /v1/calls/<NAME>`, its arguments
+a JSON object by name and its answer the call's result as JSON, and
+records what a caller changes as theirs (ADR 0136). The calls that take a
+callback for their events, such as `runs.run`, are jobs a remote will run
+on its workers; until it does, it answers them 501. The remote's README
+says how each call travels and is refused.
+
 | Call | Actions | Also | Audit |
 | --- | --- | --- | --- |
 | `describe` | `read_capabilities` |  |  |
