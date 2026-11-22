@@ -61,6 +61,7 @@ from azathoth.remote.calling import (
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
+from azathoth.remote.listings import visible
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
     MAX_PUSH_BYTES,
@@ -443,6 +444,12 @@ class RemoteServer:
             for check in checks:
                 if check.after is not None and check.after(arguments, result):
                     await self._decide(principal, check.condition.action, resource)
+
+            if signature.call.lists is not None:
+                listed = result
+                result = await self._blocking(
+                    lambda: visible(signature.call, listed, self.seams.policy, principal)
+                )
 
             body = await self._blocking(lambda: signature.write_result(result))
         except (ApiError, _Refused):
