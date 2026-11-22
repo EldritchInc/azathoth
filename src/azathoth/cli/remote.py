@@ -8,6 +8,9 @@ and no provider credentials are needed.
 
 import sys
 from collections.abc import Sequence
+from contextlib import suppress
+from datetime import UTC, datetime
+from typing import Final
 from uuid import UUID
 
 from azathoth import api
@@ -20,6 +23,9 @@ from azathoth.remote import (
     MISSING_REMOTE_EXTRA_MESSAGE,
     PROTOCOL_VERSION,
     REMOTE_TOKEN_VARIABLE,
+    AuditEvent,
+    AuditEventKind,
+    AuditSink,
     ComponentStatus,
     ModelStatus,
     NamedRemote,
@@ -32,7 +38,7 @@ from azathoth.remote import (
 )
 from azathoth.remote.calling import CallerInstances
 from azathoth.remote.serving import RemoteAlreadyServedError, serving_lock
-from azathoth.revisions import RevisionKind
+from azathoth.revisions import Author, RevisionKind
 
 TOKEN_SHOWN_ONCE_NOTE = (
     "Keep the token now: this remote keeps only its digest, and cannot show it again."
@@ -47,13 +53,88 @@ TOKEN_POWER_WARNING = (
 """What `remote token create` warns on standard error when it makes a token (ADR 0133)."""
 
 
+OPERATOR_PREFIX: Final = "operator:"
+"""How the audit names whoever changes a remote from its own command line."""
+
+AUDIT_UNTOLD_MESSAGE: Final = (
+    "The remote's audit could not be told of this, so nothing was changed: {reason}"
+)
+"""What a token command says when the remote's installed audit cannot be told of it."""
+
+
+def _audit_first(
+    configuration: CliRuntimeConfiguration,
+    kind: AuditEventKind,
+    *,
+    author: Author,
+    name: str,
+    detail: str,
+) -> AuditSink | None:
+    """Tell the remote's installed audit of a change to its tokens, before it is made.
+
+    The audit a remote serves with is told the same as when it serves, so a
+    plugin's audit sees every token come and go, not only the requests the
+    tokens make. When the seams cannot be loaded, or the audit cannot be
+    told, the reason is printed and None returned, and nothing is changed.
+    """
+
+    held = repositories(configuration)
+
+    try:
+        audit = load_seams(default_authenticator=TokenAuthenticator(held.remote_tokens)).audit
+    except RemotePluginError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return None
+
+    try:
+        audit.record(
+            AuditEvent(
+                kind=kind,
+                occurred_at=datetime.now(UTC),
+                principal=f"{OPERATOR_PREFIX}{author.name}",
+                resource=f"token {name}",
+                detail=detail,
+            )
+        )
+    except Exception as exc:
+        print(AUDIT_UNTOLD_MESSAGE.format(reason=exc), file=sys.stderr)
+
+        return None
+
+    return audit
+
+
+def _failed(
+    audit: AuditSink,
+    *,
+    author: Author,
+    name: str,
+    detail: str,
+) -> None:
+    """Tell the audit that a change it was told of was not made, if it can be told."""
+
+    with suppress(Exception):
+        audit.record(
+            AuditEvent(
+                kind=AuditEventKind.REQUEST_FAILED,
+                occurred_at=datetime.now(UTC),
+                principal=f"{OPERATOR_PREFIX}{author.name}",
+                resource=f"token {name}",
+                detail=detail,
+            )
+        )
+
+
 def create_remote_token(
     name: str,
 ) -> int:
     """Create a token under a name, recording who created it, and show it once.
 
     Making one warns on standard error what the token can do: everything
-    the owner can, as the core's policy grants (ADRs 0127 and 0133).
+    the owner can, as the core's policy grants (ADRs 0127 and 0133). The
+    remote's installed audit is told before the token is made, and nothing
+    is made when it cannot be (ADR 0136).
     """
 
     author = current_author()
@@ -62,10 +143,21 @@ def create_remote_token(
         return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
+    audit = _audit_first(
+        configuration,
+        AuditEventKind.TOKEN_CREATED,
+        author=author,
+        name=name,
+        detail="remote token create",
+    )
+
+    if audit is None:
+        return 1
 
     try:
         issued = repositories(configuration).remote_tokens.create(name, author=author)
     except RemoteTokenError as exc:
+        _failed(audit, author=author, name=name, detail=f"remote token create: {exc}")
         print(str(exc), file=sys.stderr)
 
         return 1
@@ -97,13 +189,33 @@ def list_remote_tokens(
 def revoke_remote_token(
     name: str,
 ) -> int:
-    """Revoke the active token of a name, so it no longer reaches this remote."""
+    """Revoke the active token of a name, so it no longer reaches this remote.
+
+    Who revokes it is told to the remote's installed audit first, as who
+    creates one is, and nothing is revoked when the audit cannot be told.
+    """
+
+    author = current_author()
+
+    if author is None:
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
+    audit = _audit_first(
+        configuration,
+        AuditEventKind.TOKEN_REVOKED,
+        author=author,
+        name=name,
+        detail="remote token revoke",
+    )
+
+    if audit is None:
+        return 1
 
     try:
         revoked = repositories(configuration).remote_tokens.revoke(name)
     except RemoteTokenError as exc:
+        _failed(audit, author=author, name=name, detail=f"remote token revoke: {exc}")
         print(str(exc), file=sys.stderr)
 
         return 1
@@ -544,6 +656,8 @@ def token_line(
 
 
 __all__ = [
+    "AUDIT_UNTOLD_MESSAGE",
+    "OPERATOR_PREFIX",
     "SHORT_DIGEST_LENGTH",
     "TOKEN_POWER_WARNING",
     "TOKEN_SHOWN_ONCE_NOTE",

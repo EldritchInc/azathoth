@@ -176,9 +176,10 @@ Azathoth; each grows only by additions (ADR 0134):
   which say, for every call of the service API, what a remote asks its
   policy and tells its audit.
 - `azathoth.persistence`: `Database`, `Session`, `Table`, `Dialect`, `Row`,
-  `Parameter`, `InitializationOutcome`, `IntegrityError`, `open_database`,
-  `run_backfills`, `database_location`, `require_text` and
-  `require_integer`.
+  `Parameter`, `InitializationOutcome`, `PersistenceError`, `IntegrityError`,
+  `open_database`, `run_backfills`, `database_location`, `require_text` and
+  `require_integer`. Every error the database raises is a
+  `PersistenceError`.
 - `azathoth.persistence.repositories`: `open_repositories` and
   `postgres_database`, which shares the process's pool of connections to a
   PostgreSQL database with the core.

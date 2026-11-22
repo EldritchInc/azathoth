@@ -16,6 +16,7 @@ from azathoth.api.calls import (
     service_call,
 )
 from azathoth.api.instance import Azathoth
+from azathoth.api.models import ExperimentComparison
 from azathoth.remote import HIGH_PRIVILEGE_ACTIONS, Action, AuditEventKind
 
 LIFECYCLE = frozenset({"close"})
@@ -301,3 +302,14 @@ def test_the_readme_lists_every_call_once_with_what_the_list_says() -> None:
 
     for call in SERVICE_CALLS:
         assert rows[call.name] == readme_cells(call), call.name
+
+
+def test_an_experiments_own_cost_is_read_with_its_runs_and_only_spend_reports_read_spend() -> None:
+    reads_spend = [
+        call.name for call in SERVICE_CALLS if Action.READ_SPEND in every_action_asked(call)
+    ]
+
+    assert service_call("experiments.get").actions == (Action.READ_RUNS,)
+    assert service_call("experiments.compare").actions == (Action.READ_RUNS,)
+    assert {"winner_runs", "baseline_runs", "savings"} <= set(ExperimentComparison.model_fields)
+    assert reads_spend == ["spend.report"]

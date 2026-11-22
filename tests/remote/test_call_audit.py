@@ -333,3 +333,22 @@ def test_installing_the_standard_tools_is_refused_to_a_caller_the_policy_refuses
 
     assert (answer.status, answer.json()["code"]) == (403, "permission_denied")
     assert Served(path, principal=ERIS).call("tools.list").json() == []
+
+
+# Spend
+
+
+def test_a_spend_report_is_answered_through_a_remote_to_who_may_read_spend(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "azathoth.db"
+    asked = {"since": "2026-11-01T00:00:00+00:00", "until": "2026-11-22T00:00:00+00:00"}
+    answer = Served(path, principal=ERIS).call("spend.report", asked)
+    refused = Served(path, principal=ERIS, policy=Refusing(Action.READ_SPEND)).call(
+        "spend.report",
+        asked,
+    )
+
+    assert answer.status == 200, answer.json()
+    assert answer.json()["totals"] is not None
+    assert (refused.status, refused.json()["code"]) == (403, "permission_denied")
