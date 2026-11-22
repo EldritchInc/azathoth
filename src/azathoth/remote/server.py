@@ -3,11 +3,14 @@
 This module needs the `remote` extra, Starlette, so the core never imports
 it. Every route but `/health` needs a bearer token its authenticator knows,
 and a policy that allows what it asks; each refusal says why, and is
-audited.
+audited. The service routes (ADR 0127) refuse with a code as well.
 
 | Route | Action | Answers |
 | --- | --- | --- |
 | `GET /health` | | `{"status": "ok"}`, with no token |
+| `GET /v1/service` | read capabilities | the `ServiceDescription` |
+| `GET /v1/permissions` | | the caller's `PermissionsResponse` |
+| `POST /v1/permissions` | | the `ResourcePermissionsResponse` to a `PermissionsRequest` |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
@@ -40,6 +43,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from azathoth.api.errors import ApiError
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
@@ -74,7 +78,18 @@ from azathoth.remote.seams import (
     AuditEventKind,
     Decision,
     Principal,
+    RemotePluginError,
     Seams,
+)
+from azathoth.remote.service import (
+    PERMISSIONS_ROUTE,
+    SERVICE_ROUTE,
+    PermissionsRequest,
+    api_error_status,
+    permissions,
+    refusal_code,
+    resource_permissions,
+    service_description,
 )
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
@@ -106,27 +121,39 @@ Handler = Callable[[Request, Principal], Awaitable[Answer]]
 DIGEST_PATTERN: Final = re.compile(CONTENT_DIGEST_PATTERN)
 """What a content route's digest must be."""
 
+PLUGIN_ERROR_CODE: Final = "plugin_error"
+"""The code of a service route's answer when a plugin of the remote's failed it."""
+
 
 class _Refused(Exception):
-    """A request refused, with the status and message to answer it with."""
+    """A request refused, with the status and message to answer it with, and its code."""
 
     def __init__(
         self,
         status: HTTPStatus,
         message: str,
+        code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
+        self.code = code
 
 
 def error_response(
     status: HTTPStatus,
     message: str,
+    code: str | None = None,
 ) -> JSONResponse:
-    """Return the JSON a remote refuses a request with: `{"error": message}`."""
+    """Return the JSON a remote refuses a request with.
 
-    return JSONResponse({"error": message}, status_code=status)
+    A protocol route answers `{"error": message}`, as remote protocol 1
+    always has; a service route adds the refusal's `code` (ADR 0127).
+    """
+
+    body = {"error": message} if code is None else {"error": message, "code": code}
+
+    return JSONResponse(body, status_code=status)
 
 
 class RemoteServer:
@@ -205,6 +232,8 @@ class RemoteServer:
         return Starlette(
             routes=[
                 Route("/health", self.health, methods=["GET"]),
+                Route(SERVICE_ROUTE, self.service, methods=["GET"]),
+                Route(PERMISSIONS_ROUTE, self.permissions_route, methods=["GET", "POST"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -229,6 +258,32 @@ class RemoteServer:
         """Answer that the remote is up, to anyone."""
 
         return JSONResponse({"status": "ok"})
+
+    async def service(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the service API this remote serves, and its edition."""
+
+        return await self._serve(
+            request,
+            Action.READ_CAPABILITIES,
+            None,
+            self._service,
+            service=True,
+        )
+
+    async def permissions_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer what the caller may do, on the remote or on each resource asked about.
+
+        Any caller the remote knows may ask, since the answer is only about
+        them.
+        """
+
+        return await self._serve(request, None, None, self._permissions, service=True)
 
     async def capabilities(
         self,
@@ -318,6 +373,32 @@ class RemoteServer:
         return await self._serve(request, Action.PUSH, None, self._credentials)
 
     # Handlers, each answering for an allowed principal
+
+    async def _service(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        described = await self._blocking(lambda: service_description(self.seams))
+
+        return JSONResponse(described.model_dump(mode="json")), None, None
+
+    async def _permissions(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        if request.method == "GET":
+            answer: BaseModel = await self._blocking(
+                lambda: permissions(self.seams.policy, principal)
+            )
+        else:
+            asked = _parse(PermissionsRequest, await _body(request, MAX_PUSH_BYTES))
+            answer = await self._blocking(
+                lambda: resource_permissions(self.seams.policy, principal, asked.resources)
+            )
+
+        return JSONResponse(answer.model_dump(mode="json")), None, None
 
     async def _capabilities(
         self,
@@ -495,11 +576,19 @@ class RemoteServer:
     async def _serve(
         self,
         request: Request,
-        action: Action,
+        action: Action | None,
         audited: AuditEventKind | None,
         handler: Handler,
+        *,
+        service: bool = False,
     ) -> Response:
-        """Answer one request for an authenticated principal, refusing and auditing as needed."""
+        """Answer one request for an authenticated principal, refusing and auditing as needed.
+
+        A request with no `action` needs only a caller the remote knows. A
+        service route's refusals carry a code: an `ApiError`'s own, with
+        the status its kind is answered with, or the code of the status the
+        remote refuses with itself.
+        """
 
         principal: Principal | None = None
 
@@ -512,8 +601,20 @@ class RemoteServer:
             if principal is None:
                 raise _Refused(HTTPStatus.UNAUTHORIZED, UNKNOWN_TOKEN_MESSAGE)
 
-            await self._decide(principal, action, None)
+            if action is not None:
+                await self._decide(principal, action, None)
+
             response, resource, detail = await handler(request, principal)
+        except ApiError as error:
+            if not service:
+                raise
+
+            return error_response(api_error_status(error), str(error), error.code)
+        except RemotePluginError as error:
+            if not service:
+                raise
+
+            return error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(error), PLUGIN_ERROR_CODE)
         except _Refused as refused:
             if refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                 await self._audit(
@@ -523,7 +624,9 @@ class RemoteServer:
                     refused.message,
                 )
 
-            return error_response(refused.status, refused.message)
+            code = (refused.code or refusal_code(refused.status)) if service else None
+
+            return error_response(refused.status, refused.message, code)
 
         if audited is not None:
             await self._audit(audited, principal, resource, detail)
@@ -705,6 +808,7 @@ __all__ = [
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
+    "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
     "RemoteServer",
     "error_response",
