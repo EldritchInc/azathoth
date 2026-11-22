@@ -14,6 +14,7 @@ import azathoth.cli.application as application
 import azathoth.remote.seams as seams
 from azathoth.cli import build_parser, main
 from azathoth.cli.remote import serving_line
+from azathoth.persistence import SQLiteLocation
 from azathoth.remote import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -21,6 +22,7 @@ from azathoth.remote import (
     REMOTE_PLUGIN_GROUP,
     SQLiteRemoteTokenRepository,
 )
+from azathoth.remote.serving import RemoteAlreadyServedError, serving_lock
 from azathoth.revisions import AUTHOR_VARIABLE
 from tests.cli.test_benchmark_add_case import forbid_runtime
 from tests.cli.test_remote_token_commands import ERIS, run
@@ -128,6 +130,52 @@ def test_serve_serves_the_configured_database_with_its_tokens(
     ).json()
 
     assert capabilities["accepts_restricted"] is accept
+
+
+def test_a_second_server_on_one_sqlite_database_is_refused_and_serves_nothing(
+    database: Path,
+    served: Served,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with serving_lock(SQLiteLocation(path=database)):
+        refused = run(capsys, "remote", "serve")
+
+    assert refused == (1, "", f"{RemoteAlreadyServedError(database)}\n")
+    assert served.calls == []
+
+
+def test_a_server_holds_the_lock_for_as_long_as_it_serves(
+    database: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    refusals: list[RemoteAlreadyServedError] = []
+
+    def serve(
+        app: Any,
+        **options: Any,
+    ) -> None:
+        try:
+            with serving_lock(SQLiteLocation(path=database)):
+                pass
+        except RemoteAlreadyServedError as refusal:
+            refusals.append(refusal)
+
+    monkeypatch.setattr(uvicorn, "run", serve)
+
+    assert run(capsys, "remote", "serve")[0] == 0
+    assert len(refusals) == 1
+
+    with serving_lock(SQLiteLocation(path=database)):
+        pass
+
+
+def test_other_commands_go_on_working_beside_a_server(
+    database: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with serving_lock(SQLiteLocation(path=database)):
+        assert run(capsys, "remote", "token", "list") == (0, "", "")
 
 
 def test_the_serving_line_says_whether_restricted_data_is_taken() -> None:

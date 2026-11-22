@@ -18,11 +18,13 @@ audited.
 | `GET /v1/portfolio` | read portfolio | the `PortfolioResponse` |
 | `POST /v1/credentials` | push | the `CredentialsResponse` to a `CredentialsRequest` |
 
-Repositories are read and written off the event loop, one request at a
-time, since a PostgreSQL database's repositories share one connection.
+Requests are answered together (ADR 0135). Every call to a seam or a
+repository runs off the event loop, in a thread of its own, so a slow
+policy or a long push never holds up another request; at most
+`max_concurrent` of them run at once, as many as a PostgreSQL database's
+pool holds connections, and the rest wait their turn.
 """
 
-import asyncio
 import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
@@ -30,15 +32,17 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Final, TypeVar
 
+from anyio import CapacityLimiter, to_thread
+from anyio.lowlevel import RunVar
 from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
+from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
 from azathoth.providers import ModelPortfolioRepository
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
@@ -64,11 +68,21 @@ from azathoth.remote.records import (
     PullRequest,
     PushBundle,
 )
-from azathoth.remote.seams import Action, AuditEvent, AuditEventKind, Principal, Seams
+from azathoth.remote.seams import (
+    Action,
+    AuditEvent,
+    AuditEventKind,
+    Decision,
+    Principal,
+    Seams,
+)
 from azathoth.revisions import CONTENT_DIGEST_PATTERN
 from azathoth.sensitivity import DEFAULT_SENSITIVITY, Sensitivity
 from azathoth.tools import ToolRepository
 from azathoth.workflows import WorkflowProductionStateRepository, WorkflowRepository
+
+DEFAULT_MAX_CONCURRENT: Final = DEFAULT_POOL_SIZE
+"""How many seam and repository calls a remote runs at once: one per pooled connection."""
 
 CONTENT_MEDIA_TYPE: Final = "application/octet-stream"
 """The media type content is served as; its handle names its own."""
@@ -131,8 +145,19 @@ class RemoteServer:
         accepts_restricted: bool,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         environ: Mapping[str, str] | None = None,
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
     ) -> None:
-        """Serve the given repositories; `environ` defaults to the process's own environment."""
+        """Serve the given repositories; `environ` defaults to the process's own environment.
+
+        At most `max_concurrent` calls to the seams and repositories run at
+        once.
+
+        Raises:
+            ValueError: `max_concurrent` is below 1.
+        """
+
+        if max_concurrent < 1:
+            raise ValueError(f"A remote runs at least one call at once, not {max_concurrent}.")
 
         self.workflows = workflows
         self.tools = tools
@@ -144,16 +169,33 @@ class RemoteServer:
         self.seams = seams
         self.accepts_restricted = accepts_restricted
         self._clock = clock
-        self._lock = asyncio.Lock()
+        self.max_concurrent = max_concurrent
+        #
+        # A limiter belongs to the event loop it is first used on, so each
+        # loop that serves this remote gets one of its own.
+        #
+        self._limiter: RunVar[CapacityLimiter] = RunVar(f"azathoth-remote-limiter-{id(self)}")
 
     async def _blocking(
         self,
         work: Callable[[], Result],
     ) -> Result:
-        """Run repository work off the event loop, one piece at a time."""
+        """Run seam or repository work in a thread, at most `max_concurrent` pieces at once."""
 
-        async with self._lock:
-            return await run_in_threadpool(work)
+        return await to_thread.run_sync(work, limiter=self._current_limiter())
+
+    def _current_limiter(
+        self,
+    ) -> CapacityLimiter:
+        """Return this event loop's limiter, making it the first time the loop needs it."""
+
+        try:
+            return self._limiter.get()
+        except LookupError:
+            limiter = CapacityLimiter(self.max_concurrent)
+            self._limiter.set(limiter)
+
+            return limiter
 
     def app(
         self,
@@ -282,7 +324,9 @@ class RemoteServer:
         request: Request,
         principal: Principal,
     ) -> Answer:
-        shown = self.seams.capabilities(accepts_restricted=self.accepts_restricted)
+        shown = await self._blocking(
+            lambda: self.seams.capabilities(accepts_restricted=self.accepts_restricted)
+        )
 
         return JSONResponse(shown.model_dump(mode="json")), None, None
 
@@ -312,7 +356,7 @@ class RemoteServer:
         digest = _digest(request)
         label = _sensitivity(request.headers.get(SENSITIVITY_HEADER))
         data = await _body(request, MAX_CONTENT_BYTES, subject=f"Content {digest}")
-        self._decide(principal, Action.PUSH, digest)
+        await self._decide(principal, Action.PUSH, digest)
 
         try:
             await self._blocking(
@@ -337,7 +381,7 @@ class RemoteServer:
         principal: Principal,
     ) -> Answer:
         digest = _digest(request)
-        self._decide(principal, Action.READ_CONTENT, digest)
+        await self._decide(principal, Action.READ_CONTENT, digest)
         data = await self._blocking(lambda: self.content.get(digest))
 
         if data is None:
@@ -354,8 +398,7 @@ class RemoteServer:
         _require_protocol(bundle.protocol)
         lineages = list(dict.fromkeys(record.lineage for record in bundle.revisions))
 
-        for lineage in lineages:
-            self._decide(principal, Action.PUSH, str(lineage))
+        await self._decide(principal, Action.PUSH, *(str(lineage) for lineage in lineages))
 
         try:
             report = await self._blocking(
@@ -389,8 +432,7 @@ class RemoteServer:
         asked = _parse(PullRequest, await _body(request, MAX_PUSH_BYTES, subject="This pull"))
         _require_protocol(asked.protocol)
 
-        for root in asked.roots:
-            self._decide(principal, Action.PULL, str(root))
+        await self._decide(principal, Action.PULL, *(str(root) for root in asked.roots))
 
         answer = await self._blocking(
             lambda: pull(
@@ -415,8 +457,7 @@ class RemoteServer:
         asked = _parse(HeadsRequest, await _body(request, MAX_PUSH_BYTES))
         _require_protocol(asked.protocol)
 
-        for lineage in asked.lineages:
-            self._decide(principal, Action.PULL, str(lineage))
+        await self._decide(principal, Action.PULL, *(str(lineage) for lineage in asked.lineages))
 
         answer = await self._blocking(
             lambda: heads(
@@ -471,11 +512,11 @@ class RemoteServer:
             if principal is None:
                 raise _Refused(HTTPStatus.UNAUTHORIZED, UNKNOWN_TOKEN_MESSAGE)
 
-            self._decide(principal, action, None)
+            await self._decide(principal, action, None)
             response, resource, detail = await handler(request, principal)
         except _Refused as refused:
             if refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-                self._audit(
+                await self._audit(
                     AuditEventKind.REQUEST_DENIED,
                     principal,
                     f"{request.method} {request.url.path}",
@@ -485,24 +526,40 @@ class RemoteServer:
             return error_response(refused.status, refused.message)
 
         if audited is not None:
-            self._audit(audited, principal, resource, detail)
+            await self._audit(audited, principal, resource, detail)
 
         return response
 
-    def _decide(
+    async def _decide(
         self,
         principal: Principal,
         action: Action,
-        resource: str | None,
+        *resources: str | None,
     ) -> None:
-        """Refuse what the policy does not allow a principal to do, saying why."""
+        """Refuse what the policy does not allow a principal to do, saying why.
 
-        decision = self.seams.policy.decide(principal, action, resource)
+        The policy decides each resource in turn, in one thread, and stops
+        at the first it refuses.
+        """
 
-        if not decision.allowed:
-            raise _Refused(HTTPStatus.FORBIDDEN, decision.reason or "Refused.")
+        if not resources:
+            return
 
-    def _audit(
+        def first_refusal() -> Decision | None:
+            for resource in resources:
+                decision = self.seams.policy.decide(principal, action, resource)
+
+                if not decision.allowed:
+                    return decision
+
+            return None
+
+        refused = await self._blocking(first_refusal)
+
+        if refused is not None:
+            raise _Refused(HTTPStatus.FORBIDDEN, refused.reason or "Refused.")
+
+    async def _audit(
         self,
         kind: AuditEventKind,
         principal: Principal | None,
@@ -511,15 +568,15 @@ class RemoteServer:
     ) -> None:
         """Tell the audit one thing the remote did, or refused."""
 
-        self.seams.audit.record(
-            AuditEvent(
-                kind=kind,
-                occurred_at=self._clock(),
-                principal=None if principal is None else principal.name,
-                resource=resource,
-                detail=detail,
-            )
+        event = AuditEvent(
+            kind=kind,
+            occurred_at=self._clock(),
+            principal=None if principal is None else principal.name,
+            resource=resource,
+            detail=detail,
         )
+
+        await self._blocking(lambda: self.seams.audit.record(event))
 
     def _held_revisions(
         self,
@@ -646,6 +703,7 @@ def _sensitivity(
 
 __all__ = [
     "CONTENT_MEDIA_TYPE",
+    "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
     "UNKNOWN_TOKEN_MESSAGE",
     "RemoteServer",
