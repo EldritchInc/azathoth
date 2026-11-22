@@ -157,7 +157,7 @@ class SqlToolRepository:
     ) -> ToolDefinition | None:
         """Return one exact tool definition version."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -181,7 +181,7 @@ class SqlToolRepository:
     def definitions(self) -> tuple[ToolDefinition, ...]:
         """Return all persisted tool definitions in insertion order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return tuple(
                 ToolDefinition.model_validate_json(payload)
                 for payload in payloads(session, "tool_definitions")
@@ -219,7 +219,7 @@ class SqlToolRepository:
     def implementations(self) -> tuple[ToolImplementation, ...]:
         """Return all persisted tool implementations in insertion order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return implementations(session)
 
     def save_test_case(
@@ -254,7 +254,7 @@ class SqlToolRepository:
     def test_cases(self) -> tuple[ToolTestCase, ...]:
         """Return all persisted tool test cases in insertion order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return test_cases(session)
 
     def save_document(
@@ -420,7 +420,7 @@ class SqlToolRepository:
     ) -> tuple[LineageRecord, ...]:
         """Return the lineage record of every revision of one exact tool version, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return lineage_records(
                 session,
                 Lineage(kind=RevisionKind.TOOL, id=tool_id, version=version),
@@ -433,7 +433,7 @@ class SqlToolRepository:
     ) -> ToolDocumentRevision | None:
         """Return the latest revision of one exact tool version."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return latest_revision(
                 session,
                 tool_id,
@@ -448,7 +448,7 @@ class SqlToolRepository:
     ) -> ToolDocumentRevision | None:
         """Return one numbered revision of one exact tool version."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -473,7 +473,7 @@ class SqlToolRepository:
     ) -> tuple[ToolDocumentRevision, ...]:
         """Return every revision of every version of one tool, in import order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload
@@ -526,7 +526,7 @@ class SqlToolRepository:
     ) -> str | None:
         """Return one serialized UUID-identified artifact."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 f"""
                 SELECT payload

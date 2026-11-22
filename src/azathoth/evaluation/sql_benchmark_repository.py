@@ -142,7 +142,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[LineageRecord, ...]:
         """Return the lineage record of every revision of a benchmark, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return lineage_records(
                 session,
                 Lineage(kind=RevisionKind.BENCHMARK, id=dataset_id),
@@ -163,7 +163,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[BenchmarkDataset, ...]:
         """Return every benchmark's latest dataset in first-import order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT latest.payload
@@ -190,7 +190,7 @@ class SqlBenchmarkRepository:
     ) -> BenchmarkDatasetRevision | None:
         """Return a benchmark's latest revision."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -214,7 +214,7 @@ class SqlBenchmarkRepository:
     ) -> BenchmarkDatasetRevision | None:
         """Return one numbered revision of a benchmark."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -238,7 +238,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[BenchmarkDatasetRevision, ...]:
         """Return every revision of a benchmark, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload

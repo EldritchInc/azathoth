@@ -153,7 +153,7 @@ class SqlContentStore:
     ) -> bytes | None:
         """Return the content with one digest, or None when it is not stored."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 "SELECT content FROM content_blobs WHERE digest = ?",
                 (digest,),
@@ -175,7 +175,7 @@ class SqlContentStore:
     ) -> bool:
         """Return whether content with one digest is stored."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 "SELECT 1 FROM content_blobs WHERE digest = ?",
                 (digest,),

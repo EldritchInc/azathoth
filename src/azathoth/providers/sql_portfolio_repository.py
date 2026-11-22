@@ -201,7 +201,7 @@ class SqlModelPortfolioRepository:
     ) -> ModelPortfolioEntry | None:
         """Return one portfolio entry by identifier."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -259,7 +259,7 @@ class SqlModelPortfolioRepository:
     ) -> tuple[ModelPortfolioEntry, ...]:
         """Return all portfolio entries in insertion order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload
@@ -326,7 +326,7 @@ class SqlModelPortfolioRepository:
     ) -> PolicyDeclaration | None:
         """Return who declared one entry's data policy and when, if it was declared."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT identifier, author_name, author_email, declared_at
@@ -344,7 +344,7 @@ class SqlModelPortfolioRepository:
     ) -> PortfolioProvenance | None:
         """Return the provenance of one portfolio entry, if it is in the portfolio."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT identifier, content_digest, author_name, author_email, added_at

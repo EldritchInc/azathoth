@@ -256,7 +256,7 @@ class SqlRemoteTokenRepository:
     ) -> tuple[RemoteToken, ...]:
         """Return the active tokens, or every token, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 f"""
                 SELECT {_COLUMNS}
@@ -306,7 +306,7 @@ class SqlRemoteTokenRepository:
     ) -> RemoteToken | None:
         """Return the active token a secret is, or None, looking it up by its digest."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 f"""
                 SELECT {_COLUMNS}

@@ -143,7 +143,7 @@ class SqlWorkflowRepository:
     ) -> tuple[LineageRecord, ...]:
         """Return the lineage record of every revision of a workflow, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return lineage_records(
                 session,
                 Lineage(kind=RevisionKind.WORKFLOW, id=workflow_id),
@@ -164,7 +164,7 @@ class SqlWorkflowRepository:
     ) -> tuple[WorkflowSpecification, ...]:
         """Return every workflow's latest specification in first-import order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT latest.payload
@@ -191,7 +191,7 @@ class SqlWorkflowRepository:
     ) -> WorkflowSpecificationRevision | None:
         """Return a workflow's latest revision."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -215,7 +215,7 @@ class SqlWorkflowRepository:
     ) -> WorkflowSpecificationRevision | None:
         """Return one numbered revision of a workflow."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -239,7 +239,7 @@ class SqlWorkflowRepository:
     ) -> tuple[WorkflowSpecificationRevision, ...]:
         """Return every revision of a workflow, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload
