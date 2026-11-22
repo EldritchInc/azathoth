@@ -34,6 +34,7 @@ import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
+from functools import partial
 from http import HTTPStatus
 from typing import Final, TypeVar
 
@@ -58,6 +59,7 @@ from azathoth.remote.calling import (
     call_signature,
 )
 from azathoth.remote.closure import lineage_records
+from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
@@ -420,18 +422,30 @@ class RemoteServer:
     ) -> Answer:
         signature = _served_signature(request.path_params["name"], served=self.instances)
         arguments = signature.read_arguments(await _body(request, MAX_PUSH_BYTES))
+        resource = call_resource(signature.call, arguments)
         await self._decide_call(principal, signature.call, arguments)
         instances = self.instances
         assert instances is not None
-
-        def answer() -> bytes:
-            method = signature.bound(instances.instance(principal.name))
-
-            return signature.write_result(method(**arguments))
+        instance = instances.instance(principal.name)
+        checks = condition_checks(signature.name)
 
         try:
-            body = await self._blocking(answer)
-        except ApiError:
+            for check in checks:
+                if check.before is None:
+                    continue
+
+                if await self._blocking(partial(check.before, instance, arguments)):
+                    await self._decide(principal, check.condition.action, resource)
+
+            method = signature.bound(instance)
+            result = await self._blocking(lambda: method(**arguments))
+
+            for check in checks:
+                if check.after is not None and check.after(arguments, result):
+                    await self._decide(principal, check.condition.action, resource)
+
+            body = await self._blocking(lambda: signature.write_result(result))
+        except (ApiError, _Refused):
             raise
         except Exception:
             _LOG.exception("The remote failed to answer %s.", signature.name)

@@ -53,10 +53,11 @@ class Served:
         *,
         principal: Principal | None = OWNER,
         serves_calls: bool = True,
+        policy: Asking | None = None,
     ) -> None:
         sqlite3.connect(path).close()
         held = open_repositories(path)
-        self.policy = Asking()
+        self.policy = policy if policy is not None else Asking()
         self.audit = ListAudit()
         self.app = RemoteServer(
             workflows=held.workflows,
