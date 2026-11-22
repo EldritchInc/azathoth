@@ -9,10 +9,11 @@ release dates are on the
 ## Unreleased
 
 Azathoth 1.6 makes a remote an Azathoth people work on, not only one they
-push to. This first part names, in code, what a remote will ask its policy
-and tell its audit for every call of the service API, and what a remote's
-plugins may build on. Nothing a remote does changes yet: its owner may
-still do everything, and the routes that ask come later.
+push to. So far it names, in code, what a remote will ask its policy and
+tell its audit for every call of the service API, and what a remote's
+plugins may build on, and a remote answers its requests together rather
+than one at a time. Its owner may still do everything, and the routes that
+ask come later.
 
 ### The Action Catalog
 
@@ -36,8 +37,41 @@ still do everything, and the routes that ask come later.
   never a `NotFoundError`
   ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
 
+### A Remote Serves Requests Together
+
+- A remote answers requests together. Every call to its seams and
+  repositories runs off the event loop, at most eight at once, so a slow
+  policy or a long push holds up no other request, `/health` included
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+- A transaction may be read-only, `transaction(read_only=True)`, taking no
+  write lock; a write in one raises `ReadOnlyTransactionError`. Everything
+  a remote reads, it reads so
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+- An SQLite file is put in WAL mode the first time it is opened, so readers
+  never wait for a writer; it gains `-wal` and `-shm` files beside it while
+  it is open
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+- A PostgreSQL database keeps a pool of up to eight connections rather than
+  one; a transaction that finds none free for thirty seconds raises
+  `DatabaseBusyError`. A transaction begun inside another on the same
+  thread raises `NestedTransactionError`, on either database
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+- Of two pushes of one lineage built on its latest revision, the second is
+  told the lineage diverged, never saved as a fork, between the threads of
+  one server and between servers on one PostgreSQL database. A save with
+  `fast_forward` raises `NotFastForwardError` when it would not build on the
+  latest
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+- `azathoth remote serve` refuses to serve an SQLite database another
+  server is already serving: SQLite serves one remote process on one
+  machine, and PostgreSQL serves more
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
+
 ### Plugins
 
+- A remote calls a plugin's seams from several threads at once; Writing a
+  Plugin says what that asks of one
+  ([ADR 0135](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0135-a-remote-serves-requests-concurrently.md)).
 - The remote's README names, under Writing a Plugin, everything a plugin
   may rely on within 1.x, and a test fails if any of it goes missing
   ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).

@@ -96,3 +96,11 @@ def test_a_postgresql_database_takes_no_lock(
         pass
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_refusal_is_quoted_where_serving_is_documented() -> None:
+    root = Path(__file__).parents[2]
+    refusal = f"\n{RemoteAlreadyServedError(Path('<DATABASE>'))}\n"
+
+    for guide in ("src/azathoth/remote/README.md", "src/azathoth/cli/README.md"):
+        assert refusal in (root / guide).read_text(encoding="utf-8"), guide

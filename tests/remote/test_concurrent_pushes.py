@@ -7,6 +7,7 @@ repository checks again, in the transaction that saves it.
 """
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -235,3 +236,21 @@ def test_saving_without_fast_forward_still_forks() -> None:
 
     assert [record.number for record in history] == [1, 2, 3]
     assert history[2].parent_digest == first.revision_digest
+
+
+def test_the_revisions_readme_quotes_the_refusal_of_a_save_that_is_not_a_fast_forward() -> None:
+    readme = Path(__file__).parents[2] / "src" / "azathoth" / "revisions" / "README.md"
+    refusal = str(
+        NotFastForwardError(
+            Lineage(kind=RevisionKind.WORKFLOW, id=PARENT_ID),
+            latest="b" * 64,
+            based_on="a" * 64,
+        )
+    )
+    template = (
+        refusal.replace(str(PARENT_ID), "<WORKFLOW_ID>")
+        .replace("a" * 64, "<DIGEST>")
+        .replace("b" * 64, "<LATEST>")
+    )
+
+    assert f"\n{template}\n" in readme.read_text(encoding="utf-8")
