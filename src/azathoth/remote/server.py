@@ -32,7 +32,7 @@ pool holds connections, and the rest wait their turn.
 import logging
 import os
 import re
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import partial
 from http import HTTPStatus
@@ -136,6 +136,14 @@ DIGEST_PATTERN: Final = re.compile(CONTENT_DIGEST_PATTERN)
 PLUGIN_ERROR_CODE: Final = "plugin_error"
 """The code of a service route's answer when a plugin of the remote's failed it."""
 
+AUDIT_UNAVAILABLE_CODE: Final = "audit_unavailable"
+"""The code of a request refused because the remote's audit could not be told of it."""
+
+AUDIT_UNAVAILABLE_MESSAGE: Final = (
+    "This remote could not tell its audit what was asked, so it did nothing; its log says why."
+)
+"""What a request is told when the remote's audit could not be told of it."""
+
 JOB_CODE: Final = "job"
 """The code a call that runs as a job is answered with until the remote runs jobs."""
 
@@ -153,11 +161,14 @@ class _Refused(Exception):
         status: HTTPStatus,
         message: str,
         code: str | None = None,
+        *,
+        told: bool = False,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
         self.code = code
+        self.told = told
 
 
 def error_response(
@@ -366,7 +377,7 @@ class RemoteServer:
     ) -> Response:
         """Receive a pushed bundle, fast-forward only."""
 
-        return await self._serve(request, Action.PUSH, AuditEventKind.PUSH, self._push)
+        return await self._serve(request, Action.PUSH, None, self._push)
 
     async def pull(
         self,
@@ -429,21 +440,43 @@ class RemoteServer:
         assert instances is not None
         instance = instances.instance(principal.name)
         checks = condition_checks(signature.name)
+        call = signature.call
 
         try:
+            asked = list(call.actions)
+
             for check in checks:
                 if check.before is None:
                     continue
 
                 if await self._blocking(partial(check.before, instance, arguments)):
                     await self._decide(principal, check.condition.action, resource)
+                    asked.append(check.condition.action)
+
+            told = audit_kinds(call, asked)
+
+            for kind in told:
+                await self._tell(kind, principal, resource, call.name)
 
             method = signature.bound(instance)
-            result = await self._blocking(lambda: method(**arguments))
+
+            try:
+                result = await self._blocking(lambda: method(**arguments))
+            except BaseException as error:
+                if told:
+                    await self._failed(principal, resource, call.name, error)
+
+                raise
+
+            read = []
 
             for check in checks:
                 if check.after is not None and check.after(arguments, result):
                     await self._decide(principal, check.condition.action, resource)
+                    read.append(check.condition.action)
+
+            for kind in audit_kinds(call, read):
+                await self._tell(kind, principal, resource, call.name)
 
             if signature.call.lists is not None:
                 listed = result
@@ -574,30 +607,38 @@ class RemoteServer:
         lineages = list(dict.fromkeys(record.lineage for record in bundle.revisions))
 
         await self._decide(principal, Action.PUSH, *(str(lineage) for lineage in lineages))
+        pushed = ", ".join(str(lineage) for lineage in lineages) or None
+        await self._tell(
+            AuditEventKind.PUSH,
+            principal,
+            pushed,
+            f"Offered {len(bundle.revisions)} revisions.",
+        )
 
         try:
-            report = await self._blocking(
-                lambda: receive(
-                    bundle,
-                    workflows=self.workflows,
-                    tools=self.tools,
-                    benchmarks=self.benchmarks,
-                    content=self.content,
-                    accepts_restricted=self.accepts_restricted,
+            try:
+                report = await self._blocking(
+                    lambda: receive(
+                        bundle,
+                        workflows=self.workflows,
+                        tools=self.tools,
+                        benchmarks=self.benchmarks,
+                        content=self.content,
+                        accepts_restricted=self.accepts_restricted,
+                    )
                 )
-            )
-        except RestrictedReceiveRefusedError as exc:
-            raise _Refused(HTTPStatus.FORBIDDEN, str(exc)) from exc
-        except DivergedError as exc:
-            raise _Refused(HTTPStatus.CONFLICT, str(exc)) from exc
-        except ReceiveRefusedError as exc:
-            raise _Refused(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from exc
+            except RestrictedReceiveRefusedError as exc:
+                raise _Refused(HTTPStatus.FORBIDDEN, str(exc), told=True) from exc
+            except DivergedError as exc:
+                raise _Refused(HTTPStatus.CONFLICT, str(exc)) from exc
+            except ReceiveRefusedError as exc:
+                raise _Refused(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from exc
+        except BaseException as error:
+            await self._failed(principal, pushed, "push", error)
 
-        return (
-            JSONResponse(report.model_dump(mode="json")),
-            ", ".join(str(lineage) for lineage in lineages) or None,
-            f"Received {len(report.received)} revisions; {report.already_held} already held.",
-        )
+            raise
+
+        return JSONResponse(report.model_dump(mode="json")), None, None
 
     async def _pull(
         self,
@@ -699,6 +740,9 @@ class RemoteServer:
                 await self._decide(principal, action, None)
 
             response, resource, detail = await handler(request, principal)
+
+            if audited is not None:
+                await self._tell(audited, principal, resource, detail)
         except ApiError as error:
             if not service:
                 raise
@@ -710,8 +754,10 @@ class RemoteServer:
 
             return error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(error), PLUGIN_ERROR_CODE)
         except _Refused as refused:
-            if refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-                await self._audit(
+            denied = refused.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
+
+            if denied and not refused.told:
+                await self._tell_quietly(
                     AuditEventKind.REQUEST_DENIED,
                     principal,
                     f"{request.method} {request.url.path}",
@@ -721,9 +767,6 @@ class RemoteServer:
             code = (refused.code or refusal_code(refused.status)) if service else None
 
             return error_response(refused.status, refused.message, code)
-
-        if audited is not None:
-            await self._audit(audited, principal, resource, detail)
 
         return response
 
@@ -755,6 +798,75 @@ class RemoteServer:
 
         if refused is not None:
             raise _Refused(HTTPStatus.FORBIDDEN, refused.reason or "Refused.")
+
+    async def _tell(
+        self,
+        kind: AuditEventKind,
+        principal: Principal | None,
+        resource: str | None,
+        detail: str | None,
+    ) -> None:
+        """Tell the audit what the remote is about to do, or to send, or refuse the request.
+
+        A remote tells its audit before it acts, and before it sends what
+        it read, so an audit that cannot be told stops the request: nothing
+        is changed and nothing is sent.
+
+        Raises:
+            _Refused: The audit could not be told.
+        """
+
+        try:
+            await self._audit(kind, principal, resource, detail)
+        except Exception:
+            _LOG.exception("The remote's audit could not be told of %s.", kind.value)
+
+            raise _Refused(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                AUDIT_UNAVAILABLE_MESSAGE,
+                AUDIT_UNAVAILABLE_CODE,
+            ) from None
+
+    async def _tell_quietly(
+        self,
+        kind: AuditEventKind,
+        principal: Principal | None,
+        resource: str | None,
+        detail: str | None,
+    ) -> None:
+        """Tell the audit of a refusal or a failure, logging rather than raising when it cannot.
+
+        The request is answered either way, since nothing was done.
+        """
+
+        try:
+            await self._audit(kind, principal, resource, detail)
+        except Exception:
+            _LOG.exception("The remote's audit could not be told of %s.", kind.value)
+
+    async def _failed(
+        self,
+        principal: Principal,
+        resource: str | None,
+        what: str,
+        error: BaseException,
+    ) -> None:
+        """Tell the audit that something it was told the remote would do was not done."""
+
+        reason = (
+            error.code
+            if isinstance(error, ApiError)
+            else error.message
+            if isinstance(error, _Refused)
+            else type(error).__name__
+        )
+
+        await self._tell_quietly(
+            AuditEventKind.REQUEST_FAILED,
+            principal,
+            resource,
+            f"{what}: {reason}",
+        )
 
     async def _audit(
         self,
@@ -843,6 +955,20 @@ def _parse(
             HTTPStatus.BAD_REQUEST,
             f"This request is not a {model.__name__}{where}: {first['msg']}.",
         ) from None
+
+
+def audit_kinds(
+    call: ServiceCall,
+    asked: Sequence[Action],
+) -> tuple[AuditEventKind, ...]:
+    """Return each kind a call may record whose action it asked, in the catalog's order.
+
+    A process tool's import asks both import actions, so it records both
+    `tool_imported` and `process_tool_imported`; a restricted read records
+    `restricted_read` beside what the call did.
+    """
+
+    return tuple(kind for kind in call.audit if kind.action in asked)
 
 
 def call_resource(
@@ -957,6 +1083,8 @@ def _sensitivity(
 
 
 __all__ = [
+    "AUDIT_UNAVAILABLE_CODE",
+    "AUDIT_UNAVAILABLE_MESSAGE",
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
@@ -964,6 +1092,7 @@ __all__ = [
     "JSON_MEDIA_TYPE",
     "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
+    "audit_kinds",
     "call_resource",
     "RemoteServer",
     "error_response",
