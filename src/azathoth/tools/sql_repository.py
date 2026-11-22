@@ -263,6 +263,7 @@ class SqlToolRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> ToolDocumentRevision:
         """Append one document as the next revision of its tool version, and return it.
 
@@ -273,6 +274,7 @@ class SqlToolRepository:
             document,
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         ).revision
 
     def save_document_revision(
@@ -281,6 +283,7 @@ class SqlToolRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[ToolDocumentRevision]:
         """Append one document as the next revision of its tool version, built on another.
 
@@ -293,7 +296,9 @@ class SqlToolRepository:
 
         The revision and the change to current artifacts are written in one
         transaction holding the revision table's write lock, so concurrent
-        imports never receive the same number. Versions of the tool saved
+        imports never receive the same number, and with `fast_forward` the
+        latest is checked in that transaction too, so of two saves built on
+        one latest revision, the second is refused. Versions of the tool saved
         artifact by artifact are first recorded as revision 1 of their own.
         Retired implementations and test cases are removed, and the
         document's artifacts are added or replaced in place.
@@ -330,7 +335,12 @@ class SqlToolRepository:
                 version=definition.version,
             )
 
-            parent = base_record(lineage_records(session, lineage), lineage, based_on)
+            parent = base_record(
+                lineage_records(session, lineage),
+                lineage,
+                based_on,
+                fast_forward=fast_forward,
+            )
 
             if parent is not None:
                 built_on = _revision_in(session, definition.id, definition.version, parent.number)

@@ -91,6 +91,7 @@ class ToolRepository(Protocol):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> ToolDocumentRevision:
         """Append one document as the next revision of its tool version, and return it.
 
@@ -107,17 +108,24 @@ class ToolRepository(Protocol):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[ToolDocumentRevision]:
         """Append one document on the revision it builds on, unless it is identical to it.
 
         It builds on the revision of its tool version whose revision digest
         is `based_on`, or on the latest without one (ADR 0122).
 
+        With `fast_forward`, it must build on the latest revision, and
+        raises `NotFastForwardError`, saving nothing, when another was saved
+        since (ADR 0135).
+
         Raises:
             ValueError: An artifact ID in the document belongs to another
                 tool, or an implementation ID to another version.
             BaseRevisionError: No revision of the tool version has that
                 digest.
+            NotFastForwardError: `fast_forward` is set, and it would not
+                build on the latest revision.
         """
 
         ...

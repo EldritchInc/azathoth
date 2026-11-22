@@ -106,6 +106,32 @@ class BaseRevisionError(ValueError):
     """A revision to build on is not a revision of the lineage being appended to."""
 
 
+class NotFastForwardError(Exception):
+    """A revision saved fast-forward only does not build on its lineage's latest revision.
+
+    Another revision was saved on the lineage since the one this builds on
+    was read as its latest, as when two pushes of one lineage arrive
+    together (ADR 0135). Nothing is saved.
+    """
+
+    def __init__(
+        self,
+        lineage: Lineage,
+        *,
+        latest: str | None,
+        based_on: str | None,
+    ) -> None:
+        self.lineage = lineage
+        self.latest = latest
+        self.based_on = based_on
+        built_on = "nothing" if based_on is None else f"revision {based_on}"
+        held = "no revision" if latest is None else f"revision {latest}"
+
+        super().__init__(
+            f"A revision of {lineage} builds on {built_on}, but its latest is now {held}."
+        )
+
+
 @dataclass(frozen=True)
 class SavedRevision(Generic[Revision]):
     """What saving a document did: the revision it is now, where it sits, and whether it is new.
@@ -157,17 +183,36 @@ def base_record(
     records: Iterable[LineageRecord],
     lineage: Lineage,
     based_on: str | None,
+    *,
+    fast_forward: bool = False,
 ) -> LineageRecord | None:
     """Return the revision a new one builds on, from a lineage's records.
 
     Without `based_on` it is the latest revision, or none for a lineage's
     first. With it, it is the revision whose revision digest it is.
 
+    With `fast_forward`, the new revision must build on the latest: on the
+    revision `based_on` names when it is the latest, or on none when there
+    is none. A repository reads the records in the transaction that saves
+    the revision, holding its write lock, so no other revision is saved on
+    the lineage between this check and the save.
+
     Raises:
         BaseRevisionError: No revision of the lineage has that digest.
+        NotFastForwardError: `fast_forward` is set, and the revision would
+            not build on the latest.
     """
 
     history = tuple(records)
+
+    if fast_forward:
+        latest = max(history, key=lambda record: record.number, default=None)
+        latest_digest = None if latest is None else latest.revision_digest
+
+        if latest_digest != based_on:
+            raise NotFastForwardError(lineage, latest=latest_digest, based_on=based_on)
+
+        return latest
 
     if based_on is None:
         return max(history, key=lambda record: record.number, default=None)
@@ -472,6 +517,7 @@ __all__ = [
     "WORKFLOW_REVISION_TABLE",
     "BaseRevisionError",
     "LineageRecord",
+    "NotFastForwardError",
     "ParentChoice",
     "RevisionTable",
     "SavedRevision",

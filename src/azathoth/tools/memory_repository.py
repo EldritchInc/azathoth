@@ -141,6 +141,7 @@ class InMemoryToolRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> ToolDocumentRevision:
         """Append one document as the next revision of its tool version, and return it."""
 
@@ -148,6 +149,7 @@ class InMemoryToolRepository:
             document,
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         ).revision
 
     def save_document_revision(
@@ -156,6 +158,7 @@ class InMemoryToolRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[ToolDocumentRevision]:
         """Append one document on the revision it builds on, unless it is identical to it.
 
@@ -198,6 +201,7 @@ class InMemoryToolRepository:
             self._lineage.get((definition.id, definition.version), ()),
             lineage,
             based_on,
+            fast_forward=fast_forward,
         )
 
         history = self._version_history(definition.id, definition.version)

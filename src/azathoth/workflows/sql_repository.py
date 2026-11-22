@@ -61,6 +61,7 @@ class SqlWorkflowRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> WorkflowSpecificationRevision:
         """Append one specification as its workflow's next revision, and return it.
 
@@ -71,6 +72,7 @@ class SqlWorkflowRepository:
             specification,
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         ).revision
 
     def save_revision(
@@ -79,6 +81,7 @@ class SqlWorkflowRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[WorkflowSpecificationRevision]:
         """Append one specification as its workflow's next revision, built on another.
 
@@ -90,18 +93,27 @@ class SqlWorkflowRepository:
 
         The next number is read and written in one transaction holding the
         revision table's write lock, so concurrent imports of the same
-        workflow never receive the same number.
+        workflow never receive the same number. With `fast_forward`, the
+        latest is checked in that transaction too, so of two saves built on
+        one latest revision, the second is refused rather than forked.
 
         Raises:
             BaseRevisionError: No revision of the workflow has the digest
                 `based_on`.
+            NotFastForwardError: `fast_forward` is set, and it would not
+                build on the latest revision.
         """
 
         workflow_id = specification.metadata.id
         lineage = Lineage(kind=RevisionKind.WORKFLOW, id=workflow_id)
 
         with self._database.transaction(lock=WORKFLOW_SPECIFICATION_REVISIONS) as session:
-            parent = base_record(lineage_records(session, lineage), lineage, based_on)
+            parent = base_record(
+                lineage_records(session, lineage),
+                lineage,
+                based_on,
+                fast_forward=fast_forward,
+            )
 
             if parent is not None:
                 built_on = _revision_in(session, workflow_id, parent.number)

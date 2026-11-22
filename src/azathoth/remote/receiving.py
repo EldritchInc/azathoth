@@ -28,7 +28,13 @@ from azathoth.inputs import ContentStore, content_bytes_digest
 from azathoth.remote.closure import content_refs, lineage_records
 from azathoth.remote.protocol import MAX_CONTENT_BYTES
 from azathoth.remote.records import PushBundle, RevisionRecord
-from azathoth.revisions import Lineage, LineageRecord, RevisionKind, content_digest
+from azathoth.revisions import (
+    Lineage,
+    LineageRecord,
+    NotFastForwardError,
+    RevisionKind,
+    content_digest,
+)
 from azathoth.sensitivity import Sensitivity
 from azathoth.tools import ToolDocument, ToolRepository
 from azathoth.workflows import WorkflowRepository, WorkflowSpecification
@@ -136,11 +142,16 @@ def receive_content(
 
 @dataclass(frozen=True)
 class _Planned:
-    """One revision to save: its record, its document as this Azathoth reads it, and its base."""
+    """One revision to save: its record, its document as this Azathoth reads it, and its base.
+
+    `first` marks the first new revision of its lineage, the one checked to
+    build on the latest held; saving it checks that again (ADR 0135).
+    """
 
     record: RevisionRecord
     document: BaseModel
     forks: bool
+    first: bool = False
 
 
 def _capitalized(
@@ -238,7 +249,10 @@ def _plan_lineage(
             "on. Pull first, then push again."
         )
 
-    return [_Planned(record=record, document=_read(record), forks=forks) for record in new], skipped
+    return [
+        _Planned(record=record, document=_read(record), forks=forks, first=index == 0)
+        for index, record in enumerate(new)
+    ], skipped
 
 
 def receive(
@@ -293,7 +307,8 @@ def receive(
                         )
 
     received = tuple(
-        _save(step, workflows=workflows, tools=tools, benchmarks=benchmarks) for step in planned
+        _save(step, workflows=workflows, tools=tools, benchmarks=benchmarks, fork=fork)
+        for step in planned
     )
     forked: list[Lineage] = []
 
@@ -310,10 +325,20 @@ def _save(
     workflows: WorkflowRepository,
     tools: ToolRepository,
     benchmarks: BenchmarkRepository,
+    fork: bool = False,
 ) -> ReceivedRevision:
     """Save one checked revision on its parent, and return it as numbered here.
 
+    Unless the bundle is one to fork on, a lineage's first new revision is
+    saved fast-forward only: the repository checks, in the transaction that
+    saves it, that it still builds on the latest revision held. Another
+    push of the same lineage may have saved one since it was checked; then
+    nothing is saved and the push is told it diverged, unless that push
+    saved this very revision, which is then held (ADR 0135).
+
     Raises:
+        DivergedError: Another revision of the lineage was saved since this
+            push was checked.
         ReceiveRefusedError: The repository refused it, as a tool document
             whose artifact IDs belong to another tool, or saving it made a
             revision of another digest.
@@ -322,20 +347,66 @@ def _save(
     record = step.record
     document = step.document
     based_on = record.parent_digest
+    fast_forward = step.first and not fork
 
     try:
         if isinstance(document, WorkflowSpecification):
-            workflows.save(document, author=record.author, based_on=based_on)
+            workflows.save(
+                document,
+                author=record.author,
+                based_on=based_on,
+                fast_forward=fast_forward,
+            )
         elif isinstance(document, ToolDocument):
-            tools.save_document(document, author=record.author, based_on=based_on)
+            tools.save_document(
+                document,
+                author=record.author,
+                based_on=based_on,
+                fast_forward=fast_forward,
+            )
         elif isinstance(document, BenchmarkDataset):
-            benchmarks.save(document, author=record.author, based_on=based_on)
+            benchmarks.save(
+                document,
+                author=record.author,
+                based_on=based_on,
+                fast_forward=fast_forward,
+            )
+    except NotFastForwardError as exc:
+        if _held(record, workflows=workflows, tools=tools, benchmarks=benchmarks) is None:
+            raise DivergedError(
+                f"{_capitalized(record.lineage)} has diverged: its latest revision here, "
+                f"{exc.latest}, is not the one revision {record.revision_digest} builds on. "
+                "Pull first, then push again."
+            ) from exc
     except ValueError as exc:
         raise ReceiveRefusedError(
             f"Revision {record.revision_digest} of {record.lineage} cannot be saved here: {exc}"
         ) from exc
 
-    saved = next(
+    saved = _held(record, workflows=workflows, tools=tools, benchmarks=benchmarks)
+
+    if saved is None:
+        raise ReceiveRefusedError(
+            f"Revision {record.revision_digest} of {record.lineage} was saved as another revision."
+        )
+
+    return ReceivedRevision(
+        lineage=record.lineage,
+        revision_digest=record.revision_digest,
+        number=saved.number,
+    )
+
+
+def _held(
+    record: RevisionRecord,
+    *,
+    workflows: WorkflowRepository,
+    tools: ToolRepository,
+    benchmarks: BenchmarkRepository,
+) -> LineageRecord | None:
+    """Return the lineage record of a revision held here with the record's digest, or None."""
+
+    return next(
         (
             held
             for held in lineage_records(
@@ -347,17 +418,6 @@ def _save(
             if held.revision_digest == record.revision_digest
         ),
         None,
-    )
-
-    if saved is None:
-        raise ReceiveRefusedError(
-            f"Revision {record.revision_digest} of {record.lineage} was saved as another revision."
-        )
-
-    return ReceivedRevision(
-        lineage=record.lineage,
-        revision_digest=record.revision_digest,
-        number=saved.number,
     )
 
 
