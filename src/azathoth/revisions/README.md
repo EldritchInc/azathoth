@@ -78,6 +78,17 @@ it, and refuses a digest that is not a revision of the lineage with
 Revision <DIGEST> is not a revision of workflow <WORKFLOW_ID>.
 ```
 
+A save with `fast_forward` must build on the latest revision, or on none
+when the lineage has none, and otherwise raises `NotFastForwardError` and
+saves nothing (ADR 0135). The SQL repositories check it in the transaction
+that holds the revision table's write lock to number the revision, so no
+other revision is saved in between; a push saves each lineage's first new
+revision so, and is told it diverged when another push saved one first:
+
+```text
+A revision of workflow <WORKFLOW_ID> builds on revision <DIGEST>, but its latest is now revision <LATEST>.
+```
+
 Content identical to the revision a save builds on appends nothing. A
 repository's `save_revision` returns a `SavedRevision`: the revision, its
 lineage record, and `created`, false when nothing was appended. A revert to

@@ -23,6 +23,7 @@ class BenchmarkRepository(Protocol):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> BenchmarkDatasetRevision:
         """Append one dataset as its benchmark's next revision, and return it."""
 
@@ -34,14 +35,21 @@ class BenchmarkRepository(Protocol):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[BenchmarkDatasetRevision]:
         """Append one dataset on the revision it builds on, unless it is identical to it.
 
         It builds on the revision whose revision digest is `based_on`, or on
         the latest without one (ADR 0122).
 
+        With `fast_forward`, it must build on the latest revision, and
+        raises `NotFastForwardError`, saving nothing, when another was saved
+        since (ADR 0135).
+
         Raises:
             BaseRevisionError: No revision of the benchmark has that digest.
+            NotFastForwardError: `fast_forward` is set, and it would not
+                build on the latest revision.
         """
 
         ...

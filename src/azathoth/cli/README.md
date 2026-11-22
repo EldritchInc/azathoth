@@ -3849,6 +3849,17 @@ azathoth remote serve needs starlette and uvicorn, which are not installed; inst
 Two plugins fill the remote's <SEAM> seam, <FIRST> and <SECOND>; uninstall one of them.
 ```
 
+A remote answers requests together (ADR 0135). SQLite serves one remote
+process on one machine, so a second `remote serve` on the same SQLite
+database is refused, and serves nothing:
+
+```text
+Another azathoth remote serve is already serving <DATABASE>. SQLite serves one remote process on one machine. For more than one process, or a database another machine reaches, use PostgreSQL.
+```
+
+Other commands, and the editor, go on working beside a running server.
+Several servers may serve one PostgreSQL database.
+
 # Naming Remotes
 
 `remote add` gives a remote a name, so commands name it instead of its URL

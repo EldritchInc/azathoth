@@ -19,13 +19,16 @@ from azathoth.persistence.database import (
 from azathoth.persistence.dialect import Dialect
 from azathoth.persistence.errors import (
     MISSING_DRIVER_MESSAGE,
+    DatabaseBusyError,
     DatabaseNotInitializedError,
     DatabaseSchemaError,
     DatabaseSchemaOutdatedError,
     DatabaseSchemaTooNewError,
     DatabaseUnavailableError,
     IntegrityError,
+    NestedTransactionError,
     PersistenceError,
+    ReadOnlyTransactionError,
 )
 from azathoth.persistence.location import (
     DATABASE_VARIABLE,
@@ -51,6 +54,7 @@ __all__ = [
     "SCHEMA_TABLE",
     "SCHEMA_VERSION",
     "Database",
+    "DatabaseBusyError",
     "DatabaseLocation",
     "DatabaseNotInitializedError",
     "DatabaseSchemaError",
@@ -60,10 +64,12 @@ __all__ = [
     "Dialect",
     "InitializationOutcome",
     "IntegrityError",
+    "NestedTransactionError",
     "Parameter",
     "PersistenceError",
     "PostgresDatabase",
     "PostgresLocation",
+    "ReadOnlyTransactionError",
     "Row",
     "SQLiteDatabase",
     "SQLiteLocation",

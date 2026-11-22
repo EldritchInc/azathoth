@@ -180,7 +180,7 @@ Azathoth; each grows only by additions (ADR 0134):
   `run_backfills`, `database_location`, `require_text` and
   `require_integer`.
 - `azathoth.persistence.repositories`: `open_repositories` and
-  `postgres_database`, which shares the process's one connection to a
+  `postgres_database`, which shares the process's pool of connections to a
   PostgreSQL database with the core.
 - `azathoth.remote.tokens`: `TOKEN_PREFIX`, `RemoteToken` and
   `RemoteTokenRepository`, the owner's tokens.
@@ -195,9 +195,15 @@ called it could mark a database the core never initialized as initialized.
 A factory that cannot serve raises `RemotePluginError`, whose message the
 remote prints before it stops.
 
-A remote calls its seams from the threads it answers requests on, so each
-must be safe to call from several at once. An authenticator returns `None`
-for a header that names no one it knows, rather than raising.
+A remote answers requests together, and calls its seams from the threads
+it answers them on, up to eight at once (ADR 0135), so each seam must be
+safe to call from several threads at once: keep no state between calls
+that two threads could change together, or guard it with a lock. A factory
+runs once, when the remote starts, and what it makes serves every request.
+The core's own fillers keep no state, and each of their reads is a
+read-only transaction of its own. An audit must keep every event, even when
+two arrive together. An authenticator returns `None` for a header that
+names no one it knows, rather than raising.
 
 A policy names its `edition`, and may say more of it with an
 `edition_detail` property: one printable line of at most 200 characters,
@@ -248,9 +254,35 @@ This remote does not know the token given. Send one its owner created with `azat
 
 Each request is audited as it is answered: a capabilities read, a push, a
 pull, a content read or a portfolio read once it is served, and a refusal for want of a
-token or permission as `request_denied`. Repositories are read and
-written off the event loop, one request at a time, since a PostgreSQL
-database's repositories share one connection.
+token or permission as `request_denied`.
+
+A remote answers requests together (ADR 0135). Every call to a seam or a
+repository runs off the event loop, in a thread, so a slow policy or a
+long push holds up no other request; at most `max_concurrent` such calls
+run at once, eight by default, as many as a PostgreSQL database's pool
+holds connections. Its reads are read-only transactions, so they run side
+by side and alongside a push.
+
+Two pushes of one lineage may arrive together, both built on its latest
+revision. Each lineage's first new revision is saved fast-forward only,
+checked in the transaction that saves it, so the second is answered 409
+as a diverged lineage, and told to pull first, rather than forking it;
+one that loses the race to the identical revision finds it held. This
+holds between the threads of one server and between servers on one
+PostgreSQL database.
+
+SQLite serves one remote process on one machine, so `azathoth remote
+serve` holds an exclusive lock on `<DATABASE>.serve-lock`, beside an
+SQLite database, while it serves (`azathoth.remote.serving`). A second
+server on the same file is refused before it serves anything:
+
+```text
+Another azathoth remote serve is already serving <DATABASE>. SQLite serves one remote process on one machine. For more than one process, or a database another machine reaches, use PostgreSQL.
+```
+
+The operating system releases the lock when the server's process ends,
+however it ends; the file stays. Other commands never take it, and a
+PostgreSQL database takes none, so several servers may serve one.
 
 `pull(request, ...)` gathers a pull at the remote: the closure of what it
 asks for, without the revisions the client holds. A benchmark with a

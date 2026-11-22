@@ -256,7 +256,7 @@ class SqlRemoteTokenRepository:
     ) -> tuple[RemoteToken, ...]:
         """Return the active tokens, or every token, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 f"""
                 SELECT {_COLUMNS}
@@ -306,7 +306,7 @@ class SqlRemoteTokenRepository:
     ) -> RemoteToken | None:
         """Return the active token a secret is, or None, looking it up by its digest."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 f"""
                 SELECT {_COLUMNS}
@@ -333,7 +333,11 @@ class SQLiteRemoteTokenRepository(SqlRemoteTokenRepository):
 
 
 class TokenAuthenticator:
-    """The core's authenticator: an active token the remote issued is its owner."""
+    """The core's authenticator: an active token the remote issued is its owner.
+
+    It keeps no state of its own: each call reads the token in a read-only
+    transaction of its own, so any number of threads may call it at once.
+    """
 
     def __init__(
         self,

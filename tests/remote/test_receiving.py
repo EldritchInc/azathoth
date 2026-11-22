@@ -344,6 +344,7 @@ class RefusingTools(InMemoryToolRepository):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> ToolDocumentRevision:
         raise ValueError("Artifact 1 belongs to another tool.")
 
@@ -536,6 +537,7 @@ class RewritingWorkflows(InMemoryWorkflowRepository):
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> WorkflowSpecificationRevision:
         return super().save(
             specification.model_copy(
@@ -547,6 +549,7 @@ class RewritingWorkflows(InMemoryWorkflowRepository):
             ),
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         )
 
 

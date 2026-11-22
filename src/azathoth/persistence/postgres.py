@@ -5,6 +5,7 @@ the `postgres` extra installed.
 """
 
 import threading
+import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager, suppress
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Final, Protocol
 
 from azathoth.persistence.database import (
+    READ_ONLY_LOCK_MESSAGE,
     SCHEMA_TABLE,
     SCHEMA_VERSION,
     InitializationOutcome,
@@ -22,14 +24,23 @@ from azathoth.persistence.database import (
 )
 from azathoth.persistence.dialect import Dialect, identifier, render
 from azathoth.persistence.errors import (
+    DatabaseBusyError,
     DatabaseNotInitializedError,
     DatabaseSchemaOutdatedError,
     DatabaseSchemaTooNewError,
     DatabaseUnavailableError,
     IntegrityError,
+    NestedTransactionError,
+    ReadOnlyTransactionError,
 )
 from azathoth.persistence.location import PostgresLocation
 from azathoth.persistence.sqlite import bound
+
+DEFAULT_POOL_SIZE: Final = 8
+"""How many connections a PostgreSQL database holds open at most, unless told otherwise."""
+
+POOL_WAIT_SECONDS: Final = 30.0
+"""How long a transaction waits for a pooled connection before it gives up."""
 
 INITIALIZATION_LOCK: Final = 0x417A6174686F7468 & 0x7FFFFFFFFFFFFFFF
 """The advisory lock that serializes initialization: "Azathoth", as a bigint."""
@@ -95,6 +106,7 @@ class PostgresDriver:
     connect: Callable[[str], PostgresConnection]
     integrity_error: type[Exception]
     operational_error: type[Exception]
+    read_only_error: type[Exception]
 
 
 def psycopg_driver() -> PostgresDriver:
@@ -106,6 +118,7 @@ def psycopg_driver() -> PostgresDriver:
 
     try:
         import psycopg
+        import psycopg.errors
     except ImportError as exc:
         raise DatabaseUnavailableError() from exc
 
@@ -120,6 +133,7 @@ def psycopg_driver() -> PostgresDriver:
         connect=connect,
         integrity_error=psycopg.IntegrityError,
         operational_error=psycopg.OperationalError,
+        read_only_error=psycopg.errors.ReadOnlySqlTransaction,
     )
 
 
@@ -173,18 +187,23 @@ class PostgresSession:
             )
         except self._driver.integrity_error as exc:
             raise IntegrityError(str(exc)) from exc
+        except self._driver.read_only_error as exc:
+            raise ReadOnlyTransactionError(str(exc)) from exc
 
 
 class PostgresDatabase:
-    """A PostgreSQL database, over one connection kept for the life of the process.
+    """A PostgreSQL database, over a pool of connections shared by the process's threads.
 
-    The connection is opened when the database is first used. A connection
-    found closed or broken, such as one the server dropped while it sat
-    idle, is opened again before the next transaction begins.
+    Each transaction borrows a connection of its own and gives it back when
+    it commits or rolls back, so transactions on different threads run
+    together. At most `pool_size` connections are open at once; a
+    transaction that finds every one in use waits up to `wait_seconds` for
+    one to be given back, then raises `DatabaseBusyError`.
 
-    Transactions on the one connection take turns: one begun in another
-    thread, such as a lease renewal (ADR 0105), waits for the one in
-    progress to commit or roll back.
+    Connections are opened as they are first needed, and idle ones are
+    kept for the next transaction. A connection found closed or broken,
+    such as one the server dropped while it sat idle, is replaced before a
+    transaction begins on it.
     """
 
     def __init__(
@@ -192,14 +211,34 @@ class PostgresDatabase:
         location: PostgresLocation | str,
         *,
         driver: PostgresDriver | None = None,
+        pool_size: int = DEFAULT_POOL_SIZE,
+        wait_seconds: float = POOL_WAIT_SECONDS,
     ) -> None:
+        """Pool connections to one database.
+
+        Raises:
+            ValueError: `pool_size` is below 1, or `wait_seconds` is negative.
+        """
+
+        if pool_size < 1:
+            raise ValueError(f"A pool holds at least one connection, not {pool_size}.")
+
+        if wait_seconds < 0:
+            raise ValueError(f"A transaction cannot wait {wait_seconds:g} seconds.")
+
         self._location = (
             location if isinstance(location, PostgresLocation) else PostgresLocation(location)
         )
         self._driver = driver if driver is not None else psycopg_driver()
-        self._connection: PostgresConnection | None = None
+        self._pool_size = pool_size
+        self._wait_seconds = wait_seconds
+        self._idle: list[PostgresConnection] = []
+        self._open = 0
+        self._generation = 0
+        self._available = threading.Condition(threading.Lock())
+        self._inside = threading.local()
         self._checked = False
-        self._turns = threading.RLock()
+        self._checking = threading.Lock()
 
     @property
     def dialect(
@@ -213,82 +252,190 @@ class PostgresDatabase:
     ) -> PostgresLocation:
         return self._location
 
+    @property
+    def pool_size(
+        self,
+    ) -> int:
+        """Return how many connections the pool may hold open at once."""
+
+        return self._pool_size
+
     def transaction(
         self,
         *,
         lock: str | None = None,
+        read_only: bool = False,
     ) -> AbstractContextManager[PostgresSession]:
-        """Run a block as one transaction.
+        """Run a block as one transaction, on a connection borrowed from the pool.
 
         A lock takes `LOCK TABLE … IN EXCLUSIVE MODE` on the table, which
-        serializes writers to it and never blocks its readers.
+        serializes writers to it and never blocks its readers. A read-only
+        transaction begins `READ ONLY`, and the server refuses its writes.
+
+        Raises:
+            DatabaseBusyError: No connection was free within `wait_seconds`.
+            NestedTransactionError: A transaction of this database is
+                already in progress on this thread.
+            ValueError: Both `lock` and `read_only` were given.
         """
 
-        return self._transaction(None if lock is None else identifier(lock))
+        if lock is not None and read_only:
+            raise ValueError(READ_ONLY_LOCK_MESSAGE)
+
+        return self._transaction(
+            None if lock is None else identifier(lock),
+            begin="BEGIN READ ONLY" if read_only else "BEGIN",
+        )
 
     @contextmanager
     def _transaction(
         self,
         lock: str | None,
+        *,
+        begin: str,
     ) -> Iterator[PostgresSession]:
-        with self._turns:
-            connection = self._begin()
+        if getattr(self._inside, "active", False):
+            raise NestedTransactionError()
+
+        self._inside.active = True
+
+        try:
+            borrowed, generation = self._borrow()
+
+            try:
+                connection = self._begin(borrowed, begin)
+            except BaseException:
+                self._give_back(None, generation, keep=False)
+                raise
+
+            keep = False
 
             try:
                 session = PostgresSession(connection, self._driver)
 
-                if lock is not None:
-                    session.execute(f"LOCK TABLE {lock} IN EXCLUSIVE MODE")
+                try:
+                    if lock is not None:
+                        session.execute(f"LOCK TABLE {lock} IN EXCLUSIVE MODE")
 
-                yield session
-            except BaseException:
-                if not connection.closed and not connection.broken:
-                    with suppress(Exception):
-                        connection.execute("ROLLBACK", ())
+                    yield session
+                except BaseException:
+                    #
+                    # A connection rolled back cleanly is kept; one that is
+                    # broken, or that could not roll back, is closed.
+                    #
+                    if _usable(connection):
+                        with suppress(Exception):
+                            connection.execute("ROLLBACK", ())
+                            keep = _usable(connection)
 
-                raise
+                    raise
 
-            connection.execute("COMMIT", ())
+                connection.execute("COMMIT", ())
+                keep = True
+            finally:
+                self._give_back(connection, generation, keep=keep)
+        finally:
+            self._inside.active = False
+
+    def _borrow(
+        self,
+    ) -> tuple[PostgresConnection | None, int]:
+        """Take an idle connection, or room to open one, waiting while every one is in use.
+
+        Returns None in place of a connection when there is room to open
+        one, so that it is opened outside the pool's lock.
+
+        Raises:
+            DatabaseBusyError: None was free within `wait_seconds`.
+        """
+
+        deadline = time.monotonic() + self._wait_seconds
+
+        with self._available:
+            while not self._idle and self._open >= self._pool_size:
+                remaining = deadline - time.monotonic()
+
+                if remaining <= 0 or not self._available.wait(remaining):
+                    if self._idle or self._open < self._pool_size:
+                        break
+
+                    raise DatabaseBusyError(
+                        self._location,
+                        pool_size=self._pool_size,
+                        waited_seconds=self._wait_seconds,
+                    )
+
+            if self._idle:
+                return self._idle.pop(), self._generation
+
+            self._open += 1
+
+            return None, self._generation
 
     def _begin(
         self,
+        connection: PostgresConnection | None,
+        begin: str,
     ) -> PostgresConnection:
-        """Begin a transaction, opening the connection again once if it was dropped."""
+        """Begin a transaction, opening a connection if there is none or it is unusable.
 
-        connection = self._open()
+        A connection the server dropped is replaced once. When beginning
+        fails, whatever connection it holds is closed, so its place in the
+        pool can be given back.
+        """
 
         try:
-            connection.execute("BEGIN", ())
-        except self._driver.operational_error:
-            self._discard()
-            connection = self._open()
-            connection.execute("BEGIN", ())
+            if connection is not None and not _usable(connection):
+                _close(connection)
+                connection = None
 
-        return connection
+            if connection is None:
+                connection = self._driver.connect(self._location.url)
 
-    def _open(
+            try:
+                connection.execute(begin, ())
+            except self._driver.operational_error:
+                _close(connection)
+                connection = None
+                connection = self._driver.connect(self._location.url)
+                connection.execute(begin, ())
+
+            return connection
+        except BaseException:
+            if connection is not None:
+                _close(connection)
+
+            raise
+
+    def _give_back(
         self,
-    ) -> PostgresConnection:
-        """Return the connection, opening it when there is none, or it is unusable."""
-
-        if self._connection is not None and (self._connection.closed or self._connection.broken):
-            self._discard()
-
-        if self._connection is None:
-            self._connection = self._driver.connect(self._location.url)
-
-        return self._connection
-
-    def _discard(
-        self,
+        connection: PostgresConnection | None,
+        generation: int,
+        *,
+        keep: bool,
     ) -> None:
-        """Close and forget the connection."""
+        """Return a connection to the pool, or close it and free its place.
 
-        if self._connection is not None:
-            with suppress(Exception):
-                self._connection.close()
+        A connection is kept for the next transaction only when its own
+        committed, it is usable, and the pool was not closed while it was
+        borrowed. None frees the place of a connection never opened.
+        """
 
-        self._connection = None
+        with self._available:
+            if (
+                keep
+                and connection is not None
+                and _usable(connection)
+                and generation == self._generation
+            ):
+                self._idle.append(connection)
+            else:
+                if connection is not None:
+                    _close(connection)
+
+                self._open -= 1
+
+            self._available.notify()
 
     def prepare(
         self,
@@ -296,7 +443,8 @@ class PostgresDatabase:
     ) -> None:
         """Check, once per process, that the database holds this Azathoth's schema.
 
-        It never runs DDL: `initialize` creates the schema.
+        It never runs DDL: `initialize` creates the schema. Threads that
+        prepare at once check it once between them.
 
         Raises:
             DatabaseNotInitializedError: The database holds no schema yet.
@@ -304,30 +452,31 @@ class PostgresDatabase:
             DatabaseSchemaTooNewError: Its schema is newer than this Azathoth's.
         """
 
-        if self._checked:
-            return
+        with self._checking:
+            if self._checked:
+                return
 
-        with self.transaction() as session:
-            version = _recorded_version(session)
+            with self.transaction(read_only=True) as session:
+                version = _recorded_version(session)
 
-        if version is None:
-            raise DatabaseNotInitializedError(self._location)
+            if version is None:
+                raise DatabaseNotInitializedError(self._location)
 
-        if version < SCHEMA_VERSION:
-            raise DatabaseSchemaOutdatedError(
-                self._location,
-                found=version,
-                expected=SCHEMA_VERSION,
-            )
+            if version < SCHEMA_VERSION:
+                raise DatabaseSchemaOutdatedError(
+                    self._location,
+                    found=version,
+                    expected=SCHEMA_VERSION,
+                )
 
-        if version > SCHEMA_VERSION:
-            raise DatabaseSchemaTooNewError(
-                self._location,
-                found=version,
-                expected=SCHEMA_VERSION,
-            )
+            if version > SCHEMA_VERSION:
+                raise DatabaseSchemaTooNewError(
+                    self._location,
+                    found=version,
+                    expected=SCHEMA_VERSION,
+                )
 
-        self._checked = True
+            self._checked = True
 
     def initialize(
         self,
@@ -397,10 +546,37 @@ class PostgresDatabase:
     def close(
         self,
     ) -> None:
-        """Close the connection, if one is open, once no transaction is in progress."""
+        """Close every idle connection now, and each one in use when it is given back.
 
-        with self._turns:
-            self._discard()
+        The database may be used again afterwards: the next transaction
+        opens a connection afresh.
+        """
+
+        with self._available:
+            idle, self._idle = self._idle, []
+            self._open -= len(idle)
+            self._generation += 1
+            self._available.notify_all()
+
+        for connection in idle:
+            _close(connection)
+
+
+def _usable(
+    connection: PostgresConnection,
+) -> bool:
+    """Return whether a connection is neither closed nor broken."""
+
+    return not connection.closed and not connection.broken
+
+
+def _close(
+    connection: PostgresConnection,
+) -> None:
+    """Close a connection, ignoring any error closing it raises."""
+
+    with suppress(Exception):
+        connection.close()
 
 
 def _exists(
@@ -436,7 +612,9 @@ def _recorded_version(
 
 
 __all__ = [
+    "DEFAULT_POOL_SIZE",
     "INITIALIZATION_LOCK",
+    "POOL_WAIT_SECONDS",
     "SCHEMA_STATEMENTS",
     "PostgresConnection",
     "PostgresCursor",

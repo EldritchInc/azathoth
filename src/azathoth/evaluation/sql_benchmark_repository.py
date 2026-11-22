@@ -61,6 +61,7 @@ class SqlBenchmarkRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> BenchmarkDatasetRevision:
         """Append one dataset as its benchmark's next revision, and return it.
 
@@ -71,6 +72,7 @@ class SqlBenchmarkRepository:
             dataset,
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         ).revision
 
     def save_revision(
@@ -79,6 +81,7 @@ class SqlBenchmarkRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[BenchmarkDatasetRevision]:
         """Append one dataset as its benchmark's next revision, built on another.
 
@@ -90,17 +93,26 @@ class SqlBenchmarkRepository:
 
         The next number is read and written in one transaction holding the
         revision table's write lock, so concurrent imports of the same
-        benchmark never receive the same number.
+        benchmark never receive the same number. With `fast_forward`, the
+        latest is checked in that transaction too, so of two saves built on
+        one latest revision, the second is refused rather than forked.
 
         Raises:
             BaseRevisionError: No revision of the benchmark has the digest
                 `based_on`.
+            NotFastForwardError: `fast_forward` is set, and it would not
+                build on the latest revision.
         """
 
         lineage = Lineage(kind=RevisionKind.BENCHMARK, id=dataset.id)
 
         with self._database.transaction(lock=BENCHMARK_DATASET_REVISIONS) as session:
-            parent = base_record(lineage_records(session, lineage), lineage, based_on)
+            parent = base_record(
+                lineage_records(session, lineage),
+                lineage,
+                based_on,
+                fast_forward=fast_forward,
+            )
 
             if parent is not None:
                 built_on = _revision_in(session, dataset.id, parent.number)
@@ -142,7 +154,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[LineageRecord, ...]:
         """Return the lineage record of every revision of a benchmark, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             return lineage_records(
                 session,
                 Lineage(kind=RevisionKind.BENCHMARK, id=dataset_id),
@@ -163,7 +175,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[BenchmarkDataset, ...]:
         """Return every benchmark's latest dataset in first-import order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT latest.payload
@@ -190,7 +202,7 @@ class SqlBenchmarkRepository:
     ) -> BenchmarkDatasetRevision | None:
         """Return a benchmark's latest revision."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -214,7 +226,7 @@ class SqlBenchmarkRepository:
     ) -> BenchmarkDatasetRevision | None:
         """Return one numbered revision of a benchmark."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -238,7 +250,7 @@ class SqlBenchmarkRepository:
     ) -> tuple[BenchmarkDatasetRevision, ...]:
         """Return every revision of a benchmark, oldest first."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload

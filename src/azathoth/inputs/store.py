@@ -25,6 +25,11 @@ class ContentStore(Protocol):
 
     Content is immutable: a digest always names the same bytes, so storing
     the same content again changes nothing.
+
+    A remote calls its store from several threads at once (ADR 0135), so a
+    store is safe to call concurrently: two threads storing the same content
+    store it once, and a thread reading content another is storing finds it
+    whole or not at all.
     """
 
     def put(
@@ -50,7 +55,11 @@ class ContentStore(Protocol):
 
 
 class InMemoryContentStore:
-    """Keep content in process memory."""
+    """Keep content in process memory.
+
+    Each call is one operation on one dictionary, which is atomic, so any
+    number of threads may call it at once.
+    """
 
     def __init__(self) -> None:
         self._content: dict[str, bytes] = {}
@@ -153,7 +162,7 @@ class SqlContentStore:
     ) -> bytes | None:
         """Return the content with one digest, or None when it is not stored."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 "SELECT content FROM content_blobs WHERE digest = ?",
                 (digest,),
@@ -175,7 +184,7 @@ class SqlContentStore:
     ) -> bool:
         """Return whether content with one digest is stored."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 "SELECT 1 FROM content_blobs WHERE digest = ?",
                 (digest,),

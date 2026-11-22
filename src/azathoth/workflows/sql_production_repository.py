@@ -67,7 +67,7 @@ class SqlWorkflowProductionStateRepository:
     ) -> WorkflowProductionState | None:
         """Return the active production state for one workflow."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             row = session.fetchone(
                 """
                 SELECT payload
@@ -92,7 +92,7 @@ class SqlWorkflowProductionStateRepository:
     ) -> tuple[WorkflowProductionState, ...]:
         """Return all active production states in deterministic order."""
 
-        with self._database.transaction() as session:
+        with self._database.transaction(read_only=True) as session:
             rows = session.fetchall(
                 """
                 SELECT payload

@@ -39,6 +39,7 @@ class InMemoryBenchmarkRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> BenchmarkDatasetRevision:
         """Append one dataset as its benchmark's next revision, and return it."""
 
@@ -46,6 +47,7 @@ class InMemoryBenchmarkRepository:
             dataset,
             author=author,
             based_on=based_on,
+            fast_forward=fast_forward,
         ).revision
 
     def save_revision(
@@ -54,6 +56,7 @@ class InMemoryBenchmarkRepository:
         *,
         author: Author | None = None,
         based_on: str | None = None,
+        fast_forward: bool = False,
     ) -> SavedRevision[BenchmarkDatasetRevision]:
         """Append one dataset on the revision it builds on, unless it is identical to it.
 
@@ -67,7 +70,7 @@ class InMemoryBenchmarkRepository:
         records = self._lineage.setdefault(dataset.id, [])
         history = self._revisions.setdefault(dataset.id, [])
 
-        parent = base_record(records, lineage, based_on)
+        parent = base_record(records, lineage, based_on, fast_forward=fast_forward)
 
         if parent is not None:
             built_on = history[parent.number - 1]

@@ -30,6 +30,7 @@ from azathoth.remote import (
     TokenAuthenticator,
     load_seams,
 )
+from azathoth.remote.serving import RemoteAlreadyServedError, serving_lock
 from azathoth.revisions import RevisionKind
 
 TOKEN_SHOWN_ONCE_NOTE = (
@@ -133,7 +134,8 @@ def serve_remote(
 
     The `remote` extra must be installed, and the plugins installed for the
     remote's seams must be ones it can use; otherwise nothing is served,
-    and the reason is printed.
+    and the reason is printed. An SQLite database is served by one process
+    at a time: a second server on the same file is refused (ADR 0135).
     """
 
     try:
@@ -166,11 +168,17 @@ def serve_remote(
         accepts_restricted=accept_restricted,
     )
 
-    print(
-        serving_line(f"http://{host}:{port}", accept_restricted=accept_restricted),
-        file=sys.stderr,
-    )
-    run_uvicorn(server.app(), host=host, port=port, log_level="info")
+    try:
+        with serving_lock(configuration.location):
+            print(
+                serving_line(f"http://{host}:{port}", accept_restricted=accept_restricted),
+                file=sys.stderr,
+            )
+            run_uvicorn(server.app(), host=host, port=port, log_level="info")
+    except RemoteAlreadyServedError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
 
     return 0
 
