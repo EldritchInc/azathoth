@@ -18,6 +18,7 @@ from azathoth.remote import (
     Seams,
 )
 from azathoth.remote.calling import CallerInstances
+from azathoth.remote.jobs import ServiceJobRepository
 from azathoth.remote.server import JOB_CODE, RemoteServer, call_resource
 from tests.remote.asgi import BEARER, Answer, call
 from tests.remote.test_service_routes import GUEST, OWNER, ListAudit, Named
@@ -55,9 +56,12 @@ class Served:
         serves_calls: bool = True,
         policy: Asking | None = None,
         audit: ListAudit | None = None,
+        runs_jobs: bool = True,
+        jobs: ServiceJobRepository | None = None,
     ) -> None:
         sqlite3.connect(path).close()
         held = open_repositories(path)
+        self.jobs = jobs if jobs is not None else held.service_jobs
         self.policy = policy if policy is not None else Asking()
         self.audit = audit if audit is not None else ListAudit()
         self.app = RemoteServer(
@@ -71,6 +75,7 @@ class Served:
             accepts_restricted=False,
             environ={},
             instances=CallerInstances(held) if serves_calls else None,
+            jobs=self.jobs if runs_jobs else None,
         ).app()
 
     def call(
@@ -204,16 +209,15 @@ def test_a_call_a_remote_never_serves_is_not_found(
     "name",
     [call.name for call in SERVICE_CALLS if call.job],
 )
-def test_a_job_is_not_run_while_the_request_waits(
-    served: Served,
+def test_a_job_is_refused_by_a_remote_that_runs_none(
+    tmp_path: Path,
     name: str,
 ) -> None:
-    answer = served.call(name)
+    answer = Served(tmp_path / "azathoth.db", principal=ERIS, runs_jobs=False).call(name)
 
     assert answer.status == 501
     assert answer.json() == {
-        "error": f"{name} runs on the remote's workers, which this remote does not run jobs on "
-        "yet.",
+        "error": f"{name} runs as a job on a remote's runners, and this remote runs none.",
         "code": JOB_CODE,
     }
 

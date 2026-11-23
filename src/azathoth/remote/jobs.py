@@ -272,6 +272,67 @@ class ServiceJobSummary(BaseModel):
     )
 
 
+JOBS_ROUTE: Final = "/v1/jobs"
+"""Where a remote answers about the jobs it runs."""
+
+
+def job_path(
+    job_id: UUID,
+) -> str:
+    """Return where a remote answers about one job."""
+
+    return f"{JOBS_ROUTE}/{job_id}"
+
+
+def events_path(
+    job_id: UUID,
+) -> str:
+    """Return where a remote streams one job's events."""
+
+    return f"{job_path(job_id)}/events"
+
+
+class JobAccepted(BaseModel):
+    """What a remote answers a job submitted with: where to follow it (ADR 0138)."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    job_id: UUID
+
+    call: str
+
+    status: ServiceJobStatus
+
+    submitted_at: AwareDatetime
+
+    job: str = Field(
+        description="Where the remote answers about the job: its status, and its result.",
+    )
+
+    events: str = Field(
+        description="Where the remote streams the job's events, as they are told.",
+    )
+
+    @classmethod
+    def of(
+        cls,
+        job: ServiceJob,
+    ) -> "JobAccepted":
+        """Return what a remote answers the submission of a job with."""
+
+        return cls(
+            job_id=job.job_id,
+            call=job.call,
+            status=job.status,
+            submitted_at=job.submitted_at,
+            job=job_path(job.job_id),
+            events=events_path(job.job_id),
+        )
+
+
 class ServiceJobRepository(Protocol):
     """The jobs of one remote, their events, and its runners."""
 
@@ -1094,8 +1155,10 @@ def _job(
 
 __all__ = [
     "FINISHED_STATUSES",
+    "JOBS_ROUTE",
     "SERVICE_JOB_TABLES",
     "STAMP_FORMAT",
+    "JobAccepted",
     "ServiceJob",
     "ServiceJobEvent",
     "ServiceJobRepository",
@@ -1103,4 +1166,6 @@ __all__ = [
     "ServiceJobStatus",
     "ServiceJobSummary",
     "SqlServiceJobRepository",
+    "events_path",
+    "job_path",
 ]

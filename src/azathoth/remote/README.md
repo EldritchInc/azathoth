@@ -304,12 +304,13 @@ data never sent, to a caller the policy refuses. A listing leaves out
 what the policy refuses, so it may answer empty, never refused.
 
 The eight calls that take a callback for their events, such as `runs.run`
-and `benchmarks.run`, are jobs a remote will run on its workers, and are
-not run while a request waits. A remote serving only the protocol serves
-no call:
+and `benchmarks.run`, are jobs: a remote queues each for its runners, as
+its caller, and answers `202` at once with where to follow it (ADR 0138).
+A remote that runs no jobs refuses them, and one serving only the
+protocol serves no call:
 
 ```text
-<NAME> runs on the remote's workers, which this remote does not run jobs on yet.
+<NAME> runs as a job on a remote's runners, and this remote runs none.
 This remote serves only push, pull and status, not the service API.
 ```
 

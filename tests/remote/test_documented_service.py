@@ -80,7 +80,7 @@ def test_the_refusal_table_names_every_status_a_service_route_answers() -> None:
 def test_a_jobs_refusal_is_documented(
     tmp_path: Path,
 ) -> None:
-    served = Served(tmp_path / "azathoth.db", principal=ERIS)
+    served = Served(tmp_path / "azathoth.db", principal=ERIS, runs_jobs=False)
     (job, *_) = [call.name for call in SERVICE_CALLS if call.job]
     answer = served.call(job)
 

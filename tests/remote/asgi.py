@@ -13,15 +13,17 @@ BEARER = "Bearer azr_test"
 
 
 class Answer:
-    """What the application answered: its status, its body, and the body as JSON."""
+    """What the application answered: its status, its headers, its body, and the body as JSON."""
 
     def __init__(
         self,
         status: int,
         body: bytes,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.status = status
         self.body = body
+        self.headers = {} if headers is None else headers
 
     def json(self) -> Any:
         return json.loads(self.body)
@@ -84,7 +86,9 @@ async def send(
         message.get("body", b"") for message in sent if message["type"] == "http.response.body"
     )
 
-    return Answer(start["status"], content)
+    answered = {name.decode().lower(): value.decode() for name, value in start.get("headers", [])}
+
+    return Answer(start["status"], content, answered)
 
 
 def call(

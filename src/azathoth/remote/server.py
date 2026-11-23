@@ -34,6 +34,7 @@ pool holds connections, and the rest wait their turn.
 import logging
 import os
 import re
+import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import partial
@@ -58,11 +59,14 @@ from azathoth.remote.calling import (
     CALLS_ROUTE,
     CallerInstances,
     CallSignature,
+    JobSignature,
     call_signature,
+    job_signature,
 )
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
+from azathoth.remote.jobs import JobAccepted, ServiceJobRepository
 from azathoth.remote.listings import visible
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
@@ -149,7 +153,13 @@ AUDIT_UNAVAILABLE_MESSAGE: Final = (
 """What a request is told when the remote's audit could not be told of it."""
 
 JOB_CODE: Final = "job"
-"""The code a call that runs as a job is answered with until the remote runs jobs."""
+"""The code a call that runs as a job is answered with by a remote that runs none."""
+
+INVOKE_CALL: Final = "runs.invoke"
+"""The job that is given a key when submitted without one, so running it again resumes it."""
+
+JOB_KEY_PREFIX: Final = "job-"
+"""What the key an invocation is given when submitted without one starts with."""
 
 JSON_MEDIA_TYPE: Final = "application/json"
 """The media type a call's result is answered with."""
@@ -209,13 +219,16 @@ class RemoteServer:
         environ: Mapping[str, str] | None = None,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         instances: CallerInstances | None = None,
+        jobs: ServiceJobRepository | None = None,
     ) -> None:
         """Serve the given repositories; `environ` defaults to the process's own environment.
 
         At most `max_concurrent` calls to the seams and repositories run at
         once. With `instances`, the remote serves the service API, answering
         each caller with an instance of their own; without, it serves only
-        the protocol.
+        the protocol. With `jobs` too, a call that runs as a job is queued
+        there, for the remote's runners, and answered at once (ADR 0138);
+        without, it is refused.
 
         Raises:
             ValueError: `max_concurrent` is below 1.
@@ -236,6 +249,7 @@ class RemoteServer:
         self._clock = clock
         self.max_concurrent = max_concurrent
         self.instances = instances
+        self.jobs = jobs
         #
         # A limiter belongs to the event loop it is first used on, so each
         # loop that serves this remote gets one of its own.
@@ -436,7 +450,11 @@ class RemoteServer:
         request: Request,
         principal: Principal,
     ) -> Answer:
-        signature = _served_signature(request.path_params["name"], served=self.instances)
+        signature = _served_signature(
+            request.path_params["name"],
+            served=self.instances,
+            jobs=self.jobs,
+        )
         arguments = signature.read_arguments(await _body(request, MAX_PUSH_BYTES))
         resource = call_resource(signature.call, arguments)
         await self._decide_call(principal, signature.call, arguments)
@@ -461,6 +479,27 @@ class RemoteServer:
 
             for kind in told:
                 await self._tell(kind, principal, resource, call.name)
+
+            if isinstance(signature, JobSignature):
+                try:
+                    accepted = await self._blocking(
+                        lambda: self._submitted(signature, principal, arguments, resource)
+                    )
+                except BaseException as error:
+                    if told:
+                        await self._failed(principal, resource, call.name, error)
+
+                    raise
+
+                return (
+                    JSONResponse(
+                        accepted.model_dump(mode="json"),
+                        status_code=HTTPStatus.ACCEPTED,
+                        headers={"Location": accepted.job},
+                    ),
+                    None,
+                    None,
+                )
 
             method = signature.bound(instance)
 
@@ -500,6 +539,37 @@ class RemoteServer:
             ) from None
 
         return Response(body, media_type=JSON_MEDIA_TYPE), None, None
+
+    def _submitted(
+        self,
+        signature: JobSignature,
+        principal: Principal,
+        arguments: Mapping[str, object],
+        resource: str | None,
+    ) -> JobAccepted:
+        """Queue a job for the remote's runners, as its caller, and return where to follow it.
+
+        An invocation submitted without a key is given one, so that a runner
+        recovering it invokes it again under the key, which resumes it.
+        """
+
+        jobs = self.jobs
+        assert jobs is not None, "A remote that queues jobs keeps them."
+        job_id = uuid.uuid4()
+        given = dict(arguments)
+
+        if signature.name == INVOKE_CALL and given.get("idempotency_key") is None:
+            given["idempotency_key"] = f"{JOB_KEY_PREFIX}{job_id}"
+
+        job = jobs.submit(
+            job_id,
+            call=signature.name,
+            principal=principal.name,
+            arguments=signature.write_arguments(**given).decode(),
+            resource=resource,
+        )
+
+        return JobAccepted.of(job)
 
     async def _decide_call(
         self,
@@ -1011,12 +1081,16 @@ def _served_signature(
     name: str,
     *,
     served: CallerInstances | None,
+    jobs: ServiceJobRepository | None,
 ) -> CallSignature:
     """Return how a call a remote answers travels, or refuse it, saying why.
 
+    A job's is a `JobSignature`, when the remote runs jobs.
+
     Raises:
         _Refused: The remote serves no service API, the service API has no
-            such call, the remote never serves it, or it runs as a job.
+            such call, the remote never serves it, or it is a job and the
+            remote runs none.
     """
 
     if served is None:
@@ -1038,11 +1112,14 @@ def _served_signature(
         )
 
     if call.job:
-        raise _Refused(
-            HTTPStatus.NOT_IMPLEMENTED,
-            f"{name} runs on the remote's workers, which this remote does not run jobs on yet.",
-            JOB_CODE,
-        )
+        if jobs is None:
+            raise _Refused(
+                HTTPStatus.NOT_IMPLEMENTED,
+                f"{name} runs as a job on a remote's runners, and this remote runs none.",
+                JOB_CODE,
+            )
+
+        return job_signature(name)
 
     return call_signature(name)
 
@@ -1106,7 +1183,9 @@ __all__ = [
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
+    "INVOKE_CALL",
     "JOB_CODE",
+    "JOB_KEY_PREFIX",
     "JSON_MEDIA_TYPE",
     "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
