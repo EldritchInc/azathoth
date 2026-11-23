@@ -225,9 +225,38 @@ class RemoteProtocolError(ApiError):
 
 
 class RemoteRefusedError(ApiError):
-    """A remote refused a push or pull, or what it sent cannot be kept here, as the message says."""
+    """A remote refused a request, or what it sent cannot be kept here, as the message says.
+
+    When a remote refuses a call of the service API with a refusal that is
+    no `ApiError` of this Azathoth's, such as `unauthenticated` (ADR 0137),
+    `status` is the HTTP status it refused with and `refusal` its code, so a
+    caller tells a token it does not know from a job it does not run yet
+    without reading the message. Otherwise both are None.
+    """
 
     code: ClassVar[str] = "remote_refused"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        refusal: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.refusal = refusal
+
+
+class RemoteUnavailableError(RemoteRefusedError):
+    """A remote could not answer a call now, though it may later, as when its audit is down.
+
+    It is the 503 of a refusal that is no `ApiError` of this Azathoth's, such
+    as `audit_unavailable` (ADR 0137), so a caller that tries again later
+    catches it alone; it is a `RemoteRefusedError` too.
+    """
+
+    code: ClassVar[str] = "remote_unavailable"
 
 
 class RemoteDivergedError(ConflictError):
@@ -263,6 +292,7 @@ __all__ = [
     "CandidateRebuildError",
     "CandidateUnavailableError",
     "ConflictError",
+    "ContentUnavailableError",
     "ExperimentNotFoundError",
     "InstanceClosedError",
     "InstanceNotFoundError",
@@ -283,9 +313,11 @@ __all__ = [
     "RemoteDivergedError",
     "RemoteProtocolError",
     "RemoteRefusedError",
+    "RemoteUnavailableError",
     "RemoteUnreachableError",
     "RevisionNotFoundError",
     "RunCancelledError",
+    "RunNotResumableError",
     "RunNotStartedError",
     "WorkflowResultMissingError",
 ]

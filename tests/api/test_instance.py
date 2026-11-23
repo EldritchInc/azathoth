@@ -199,6 +199,7 @@ def test_every_error_carries_a_distinct_code() -> None:
         "RemoteDivergedError": "remote_diverged",
         "RemoteProtocolError": "remote_protocol",
         "RemoteRefusedError": "remote_refused",
+        "RemoteUnavailableError": "remote_unavailable",
         "RemoteUnreachableError": "remote_unreachable",
         "RevisionNotFoundError": "revision_not_found",
         "RunCancelledError": "run_cancelled",

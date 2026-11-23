@@ -159,3 +159,4 @@ requests that made it:
 - [ADR 0134: The Action Catalog in Code](0134-the-action-catalog-in-code.md)
 - [ADR 0135: A Remote Serves Requests Concurrently](0135-a-remote-serves-requests-concurrently.md)
 - [ADR 0136: The Service API Over HTTP](0136-the-service-api-over-http.md)
+- [ADR 0137: A Client for the Service API](0137-a-client-for-the-service-api.md)

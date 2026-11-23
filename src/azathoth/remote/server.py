@@ -87,6 +87,7 @@ from azathoth.remote.records import (
     PullRequest,
     PushBundle,
 )
+from azathoth.remote.refusals import refusal_body
 from azathoth.remote.seams import (
     Action,
     AuditEvent,
@@ -764,7 +765,7 @@ class RemoteServer:
             if not service:
                 raise
 
-            return error_response(api_error_status(error), str(error), error.code)
+            return JSONResponse(refusal_body(error), status_code=api_error_status(error))
         except RemotePluginError as error:
             if not service:
                 raise

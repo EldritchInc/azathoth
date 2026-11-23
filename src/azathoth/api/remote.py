@@ -7,6 +7,10 @@ unless the name says another. A push sends the
 latest revision of each document named, the revisions it was reached by,
 and what it needs at the remote; a pull brings the same back, forking a
 lineage that diverged here; a status compares the two sides (ADR 0125).
+
+`connect(url)`, or `instance.remote(name).connect()` for a remote this
+instance named, reaches the service API a remote serves, as an `Instance`
+whose every call is sent to it (ADR 0137).
 """
 
 import os
@@ -15,6 +19,7 @@ from contextlib import contextmanager
 from uuid import UUID
 
 from azathoth.api.browsing import RepositoriesAccess
+from azathoth.api.connected import CallTransport, ConnectedInstance
 from azathoth.api.errors import (
     ConflictError,
     InvalidArgumentError,
@@ -25,6 +30,7 @@ from azathoth.api.errors import (
     RemoteUnreachableError,
 )
 from azathoth.remote import (
+    DEFAULT_TIMEOUT_SECONDS,
     REMOTE_TOKEN_VARIABLE,
     Capabilities,
     HttpClient,
@@ -167,6 +173,28 @@ class Remote:
         """Return the name this instance gave the remote, or None when it was reached by URL."""
 
         return self._name
+
+    def connect(
+        self,
+        *,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> ConnectedInstance:
+        """Connect to the service API this remote serves, with the token it is reached with.
+
+        Every call of the instance returned is sent to the remote (ADR
+        0137), each of which may take `timeout` seconds; nothing is sent
+        until a call is made. A remote reached by its name is called with
+        the token its own variable holds, as for a push. The instance does
+        not need this instance kept open. Close it when done, best as a
+        context manager.
+        """
+
+        return connected(
+            self._url,
+            token=self._token,
+            http=None if self._http is None else self._http(),
+            timeout=timeout,
+        )
 
     def capabilities(
         self,
@@ -421,6 +449,57 @@ class Remotes:
         return removed
 
 
+def connect(
+    url: str,
+    *,
+    token: str | None = None,
+    http: HttpClient | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> ConnectedInstance:
+    """Connect to the service API the remote at a URL serves (ADR 0137).
+
+    Every call of the instance returned is sent to the remote, with `token`,
+    or the one `AZATHOTH_REMOTE_TOKEN` holds; nothing is sent until a call
+    is made. `http`, when given, is the HTTP client calls are sent over, as
+    tests do; otherwise each may take `timeout` seconds. Close the instance
+    when done, best as a context manager.
+
+    Raises:
+        InvalidArgumentError: The URL is not an http or https URL, or no
+            token is given or set.
+    """
+
+    return connected(url, token=token, http=http, timeout=timeout)
+
+
+def connected(
+    url: str,
+    *,
+    token: str | None,
+    token_variable: str = REMOTE_TOKEN_VARIABLE,
+    http: HttpClient | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> ConnectedInstance:
+    """Return an instance calling a remote, with `token` or the one its variable holds.
+
+    Raises:
+        InvalidArgumentError: The URL is not an http or https URL, or no
+            token is given or set.
+    """
+
+    try:
+        require_remote_url(url)
+    except ValueError as exc:
+        raise InvalidArgumentError(str(exc)) from None
+
+    given = token if token is not None else os.environ.get(token_variable)
+
+    if not given:
+        raise InvalidArgumentError(no_token_message(token_variable))
+
+    return ConnectedInstance(CallTransport(url, given, http=http, timeout=timeout))
+
+
 def reach(
     target: str,
     repositories: RepositoriesAccess,
@@ -459,6 +538,8 @@ __all__ = [
     "NO_TOKEN_MESSAGE",
     "Remote",
     "Remotes",
+    "connect",
+    "connected",
     "is_remote_url",
     "lineages",
     "no_token_message",

@@ -13,7 +13,8 @@ push to. So far it names, in code, what a remote asks its policy and tells
 its audit for every call of the service API, and what a remote's plugins
 may build on; a remote answers its requests together rather than one at a
 time, and serves every call of the service API but its jobs, asking and
-telling as named. A client for those routes, and the jobs, come later.
+telling as named; and `api.connect` calls a remote as an instance of its
+own. The jobs come later.
 
 ### The Action Catalog
 
@@ -110,6 +111,31 @@ telling as named. A client for those routes, and the jobs, come later.
 - A remote reads which providers are on, and their keys, when `remote
   serve` starts
   ([ADR 0136](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0136-the-service-api-over-http.md)).
+
+### A Client for the Service API
+
+- `api.connect(url)` returns an instance whose every call is sent to the
+  remote, and `instance.remote(name).connect()` connects to a remote an
+  instance named, with the token its own variable holds
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
+- `api.Instance` is a Protocol that a local `Azathoth` and a
+  `ConnectedInstance` both satisfy, so code written for one runs against
+  either; a connected instance's collections are typed as a local
+  instance's and take the same arguments
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
+- A refusal through a remote raises the error the local call would have
+  raised, with the remote's message: a service route's refusal now names
+  the kinds its error descends from, in `kinds`, and a `ModelInUseError`'s
+  carries its `dependents`
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
+- `RemoteRefusedError` gains `status` and `refusal`, the status and code
+  of a refusal of no kind this Azathoth knows, and `RemoteUnavailableError`,
+  `remote_unavailable`, is such a refusal with 503, which may be tried
+  again later
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
+- A connected instance refuses the eight jobs before sending anything, as
+  a `RemoteRefusedError` with status 501 and refusal `job`
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
 
 ### Plugins
 

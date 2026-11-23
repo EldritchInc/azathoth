@@ -182,6 +182,21 @@ def _function(
     return collection, method, getattr(namespace, method)
 
 
+def call_function(
+    name: str,
+) -> Callable[..., Any]:
+    """Return the function a call of the service API is on `Azathoth` or its collection.
+
+    A client binds the arguments it is given to it, as Python binds them
+    locally; it is a job's or a call's never served too.
+
+    Raises:
+        LookupError: The service API has no call of that name.
+    """
+
+    return _function(service_call(name))[2]
+
+
 @cache
 def call_signature(
     name: str,
@@ -294,6 +309,7 @@ __all__ = [
     "CallerInstances",
     "NotServedError",
     "arguments_refused",
+    "call_function",
     "call_signature",
     "call_signatures",
 ]

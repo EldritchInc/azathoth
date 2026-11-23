@@ -167,6 +167,7 @@ def test_arguments_that_are_not_the_calls_are_refused_saying_where(
         "error": "These are not the arguments workflows.get takes at workflow: Extra inputs are "
         "not permitted.",
         "code": "invalid_argument",
+        "kinds": ["invalid_argument", "error"],
     }
 
 

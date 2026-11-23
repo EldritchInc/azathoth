@@ -278,6 +278,22 @@ remote's defaults are always the call's own. An `ApiError` is answered
 with its own code and the status its kind is given, `API_ERROR_STATUSES`
 in `azathoth.remote.service`.
 
+An `ApiError`'s refusal names, in `kinds`, the code of its kind and of
+each kind it descends from, nearest first, and a `ModelInUseError`'s
+carries its `dependents` (ADR 0137):
+
+```json
+{"error": "Workflow <ID> has no revision 3.", "code": "revision_not_found", "kinds": ["revision_not_found", "not_found", "error"]}
+```
+
+`azathoth.remote.refusals` reads a `Refusal` back as the error a local
+instance would have raised, of the nearest kind this Azathoth knows,
+`api_error(status, refusal)`; a refusal of none is a `RemoteRefusedError`
+with its status and code, or a `RemoteUnavailableError` for 503.
+`azathoth.api.connect` is the client: an instance whose every call is
+`POST /v1/calls/<NAME>` to the remote, read and written by the same
+signatures.
+
 Each caller is answered by an instance of their own, `CallerInstances`,
 whose author is their principal's name, so what they import, create or
 authorize is recorded as theirs. A call asks the policy its actions about

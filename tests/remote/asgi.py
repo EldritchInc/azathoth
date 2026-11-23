@@ -101,3 +101,61 @@ def call(
     payload = raw if raw is not None else b"" if body is None else json.dumps(body).encode()
 
     return asyncio.run(send(app, method, path, body=payload, authorization=authorization))
+
+
+class AsgiResponse:
+    """An application's answer, as an HTTP client's response reads."""
+
+    def __init__(
+        self,
+        answer: Answer,
+    ) -> None:
+        self.status_code = answer.status
+        self.content = answer.body
+
+    @property
+    def is_success(
+        self,
+    ) -> bool:
+        return 200 <= self.status_code < 300
+
+    def json(self) -> Any:
+        return json.loads(self.content)
+
+
+class AsgiHttp:
+    """An HTTP client that sends each request to an ASGI application in process.
+
+    It is what a client of a remote is given in tests, so the client speaks
+    to the remote's own server, not to a fake of it. It notes the requests
+    it sends, and the `Authorization` each was sent with.
+    """
+
+    def __init__(
+        self,
+        app: Any,
+    ) -> None:
+        self.app = app
+        self.sent: list[tuple[str, str, bytes]] = []
+        self.authorizations: list[str | None] = []
+        self.closed = False
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        content: str | bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> AsgiResponse:
+        body = content.encode() if isinstance(content, str) else content or b""
+        self.sent.append((method, url, body))
+        authorization = (headers or {}).get("Authorization")
+        self.authorizations.append(authorization)
+
+        return AsgiResponse(call(self.app, method, url, raw=body, authorization=authorization))
+
+    def close(
+        self,
+    ) -> None:
+        self.closed = True
