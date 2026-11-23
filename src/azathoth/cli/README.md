@@ -452,14 +452,14 @@ a newer schema version, every other command refuses the database until
 `init` runs once:
 
 ```text
-Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 7; run azathoth init.
+Database postgresql://azathoth@db.example.com:5432/azathoth has schema version 1, but this Azathoth uses version 8; run azathoth init.
 ```
 
 `init` then adds the tables the database lacks, fills in what they need for
 the rows it already holds, keeps everything it holds, and marks it upgraded:
 
 ```text
-Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 7)
+Database: postgresql://azathoth@db.example.com:5432/azathoth (upgraded to schema version 8)
 ```
 
 `init` stops at the database and its tools. It needs no provider key.
