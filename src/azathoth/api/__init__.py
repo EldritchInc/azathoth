@@ -20,6 +20,7 @@ from azathoth.api.catalog import (
     Models,
     Portfolio,
 )
+from azathoth.api.connected import ConnectedInstance, Instance
 from azathoth.api.errors import (
     CANCELLED_MESSAGE,
     CLOSED_MESSAGE,
@@ -196,7 +197,7 @@ from azathoth.api.providers import (
     OPENROUTER_API_KEY_VARIABLE,
     ProviderSettings,
 )
-from azathoth.api.remote import Remote, Remotes
+from azathoth.api.remote import Remote, Remotes, connect
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
     MAX_INPUT_FILE_BYTES,
@@ -283,6 +284,7 @@ __all__ = [
     "CitedSegmentSummary",
     "ComponentStatus",
     "ConflictError",
+    "ConnectedInstance",
     "ContentUnavailableError",
     "ExperimentNotFoundError",
     "FeedbackDisposition",
@@ -292,6 +294,7 @@ __all__ = [
     "DocumentProblem",
     "EventCallback",
     "Initialization",
+    "Instance",
     "InstanceClosedError",
     "InstanceDescription",
     "InstanceNotFoundError",
@@ -419,6 +422,7 @@ __all__ = [
     "WorkflowReadiness",
     "WorkflowSummary",
     "Workflows",
+    "connect",
     "initialize",
     "open",
     "parse_run_event",
