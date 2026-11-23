@@ -39,6 +39,8 @@ from azathoth.cli.promotion import (
     WorkflowExperimentNotFoundError,
     promote_configured_workflow,
 )
+from azathoth.cli.remote_choice import chosen_remote
+from azathoth.cli.remote_runs import child_run, invoke_on_remote, run_on_remote
 from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
@@ -124,7 +126,30 @@ def run_workflow(
 
     The input is labelled with `sensitivity` when it is given (ADR 0123);
     a run given a label needs input.
+
+    With `--remote`, the run is made on that remote and reported as it is
+    here (ADR 0140); a run another run's step started takes no remote.
     """
+
+    if chosen_remote() is not None:
+        if child_run():
+            return 2
+
+        if sensitivity is not None and workflow_input is None:
+            print(SENSITIVITY_WITHOUT_INPUT_MESSAGE, file=sys.stderr)
+
+            return 1
+
+        return run_on_remote(
+            workflow_id,
+            payload=(
+                workflow_input.payload if isinstance(workflow_input, WorkflowRunInput) else None
+            ),
+            given=isinstance(workflow_input, WorkflowRunInput),
+            workflow_file=workflow_input if isinstance(workflow_input, WorkflowInputFile) else None,
+            output=output,
+            sensitivity=sensitivity,
+        )
 
     return run_traced(
         lambda telemetry: _run_workflow(
@@ -386,7 +411,22 @@ def invoke_workflow(
 
     The input is labelled with `sensitivity` when it is given, and the label
     is part of a keyed request (ADR 0123).
+
+    With `--remote`, the invocation is made on that remote and reported as
+    it is here (ADR 0140); one another run's step started takes no remote.
     """
+
+    if chosen_remote() is not None:
+        if child_run():
+            return 2
+
+        return invoke_on_remote(
+            workflow_id,
+            payload=payload,
+            output=output,
+            idempotency_key=idempotency_key,
+            sensitivity=sensitivity,
+        )
 
     return run_traced(
         lambda telemetry: _invoke_workflow(

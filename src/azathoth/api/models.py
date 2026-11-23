@@ -1811,6 +1811,14 @@ class StepFinished(ApiModel):
 
     confidence: float | None
 
+    emits_values: bool = Field(
+        default=False,
+        description=(
+            "Whether the step declares that it emits its values, as `--output jsonl` shows "
+            "them (ADR 0140)."
+        ),
+    )
+
 
 class ContextChanged(ApiModel):
     """A step added values to the run's context: the names it declared, with their values."""

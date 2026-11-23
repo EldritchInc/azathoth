@@ -270,6 +270,7 @@ class _CallbackObserver:
                 status=step_status(event.status),
                 failure=_failure_message(event.failure),
                 confidence=event.confidence,
+                emits_values=event.step.emit_values,
             )
         )
 

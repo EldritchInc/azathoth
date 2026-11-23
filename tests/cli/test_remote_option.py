@@ -196,8 +196,8 @@ def test_a_command_not_yet_run_on_a_remote_says_so(
     database: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(("workflow", "run", str(UUID(int=1)), "--remote", "origin")) == 2
-    assert capsys.readouterr().err == f"{not_yet_message('workflow run')}\n"
+    assert main(("workflow", "production", str(UUID(int=1)), "--remote", "origin")) == 2
+    assert capsys.readouterr().err == f"{not_yet_message('workflow production')}\n"
     assert not_yet_message("workflow list") == (
         "workflow list does not run on a remote yet, so it takes no --remote."
     )

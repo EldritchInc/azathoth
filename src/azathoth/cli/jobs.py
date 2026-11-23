@@ -11,11 +11,14 @@ from azathoth.cli.inputs import CLI_INPUT_POLICY
 from azathoth.cli.lineage import parent_lineage
 from azathoth.cli.parsing.jobs import STANDARD_INPUT_REQUEST
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_choice import chosen_remote
+from azathoth.cli.remote_runs import child_run, run_job_on_remote
 from azathoth.cli.rendering.jobs import render_job_result
 from azathoth.cli.rendering.sensitivity import warn_if_restricted
 from azathoth.cli.reporting import invocation_sensitivity
 from azathoth.cli.tracing import run_traced
 from azathoth.jobs import (
+    InvokeJobRequest,
     JobError,
     JobErrorCode,
     JobRequestError,
@@ -63,7 +66,14 @@ def run_job_request(
     A request whose key names an incomplete invocation resumes it once no
     process holds its run (ADR 0105), and prints its result as if it had
     just run; one still running prints the `incomplete` envelope.
+
+    Given `--remote`, a request that decodes is invoked on that remote, and
+    its envelope printed as here (ADR 0140); one another run's step started
+    takes no remote.
     """
+
+    if chosen_remote() is not None:
+        return _run_on_remote(source, stdin=stdin if stdin is not None else sys.stdin.buffer)
 
     return run_traced(
         lambda telemetry: _run_traced_job(
@@ -104,13 +114,32 @@ def _run_traced_job(
     return 0 if result.status is JobStatus.SUCCEEDED else 1
 
 
-def _run(
+def _run_on_remote(
     source: str,
     *,
     stdin: BinaryIO,
-    telemetry: Telemetry,
-) -> JobResult:
-    """Read, decode and run one job request."""
+) -> int:
+    """Read and decode one job request, and run it on the remote `--remote` chose."""
+
+    request = _request(source, stdin=stdin)
+
+    if isinstance(request, JobResult):
+        print(render_job_result(request))
+
+        return 1
+
+    if child_run():
+        return 2
+
+    return run_job_on_remote(request)
+
+
+def _request(
+    source: str,
+    *,
+    stdin: BinaryIO,
+) -> InvokeJobRequest | JobResult:
+    """Return one job request read and decoded, or the rejected envelope of one that is not."""
 
     try:
         content = _read_request(
@@ -127,12 +156,26 @@ def _run(
         )
 
     try:
-        request = parse_job_request(content)
+        return parse_job_request(content)
     except JobRequestError as exc:
         return rejected_job_result(
             exc.error,
             idempotency_key=exc.idempotency_key,
         )
+
+
+def _run(
+    source: str,
+    *,
+    stdin: BinaryIO,
+    telemetry: Telemetry,
+) -> JobResult:
+    """Read, decode and run one job request."""
+
+    request = _request(source, stdin=stdin)
+
+    if isinstance(request, JobResult):
+        return request
 
     lineage = parent_lineage(request.workflow_id)
 
