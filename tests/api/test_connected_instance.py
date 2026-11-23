@@ -12,8 +12,6 @@ import pytest
 from azathoth import api
 from azathoth.api.calls import SERVICE_CALLS
 from azathoth.api.connected import (
-    JOB_REFUSAL,
-    NOT_IMPLEMENTED,
     CallTransport,
     ConnectedInstance,
     Instance,
@@ -23,11 +21,9 @@ from azathoth.api.errors import (
     InstanceClosedError,
     InvalidArgumentError,
     NotFoundError,
-    RemoteRefusedError,
 )
 from azathoth.api.instance import Azathoth
 from azathoth.api.remote import no_token_message
-from azathoth.remote.server import JOB_CODE
 from tests.api.test_calls import functions
 from tests.remote.asgi import AsgiHttp
 from tests.remote.test_call_routes import ERIS, Served
@@ -178,30 +174,6 @@ def test_a_result_is_what_the_local_call_returns(
     assert isinstance(created, api.BenchmarkImport)
     assert [summary.id for summary in listed] == [created.benchmark.id]
     assert connected.instance.describe().backend == "sqlite"
-
-
-@pytest.mark.parametrize(
-    "name",
-    [call.name for call in SERVICE_CALLS if call.job],
-)
-def test_a_job_is_refused_as_a_remote_refuses_one_and_nothing_is_sent(
-    connected: Connected,
-    name: str,
-) -> None:
-    collection, _, method = name.rpartition(".")
-
-    with pytest.raises(RemoteRefusedError) as caught:
-        getattr(getattr(connected.instance, collection), method)()
-
-    assert (caught.value.status, caught.value.refusal) == (NOT_IMPLEMENTED, JOB_REFUSAL)
-    assert str(caught.value) == (
-        f"{name} runs on a remote's workers, which a connected instance does not call yet."
-    )
-    assert connected.http.sent == []
-
-
-def test_a_job_is_refused_with_the_code_a_remote_refuses_one_with() -> None:
-    assert JOB_REFUSAL == JOB_CODE
 
 
 # Closing

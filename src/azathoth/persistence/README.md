@@ -89,6 +89,7 @@ imported before it existed: its backfill writes them, as part of the same
 | `5` | `remote_tokens`, which keeps the digests of the bearer tokens a remote issues (ADR 0124). |
 | `6` | `remote_portfolio_snapshots`, which keeps the last portfolio read from each remote, and when (ADR 0125). |
 | `7` | `remotes`, which keeps the remotes an instance names, each with its URL and the variable its token is read from (ADR 0126). |
+| `8` | `service_jobs`, `service_job_events` and `service_job_runners`, which keep the jobs a remote runs, the events each tells, and the runners that run them (ADR 0138). |
 
 An SQLite file needs no `init` to be used: each repository creates its
 tables when it opens the file, so a file of an earlier version gains the
@@ -135,6 +136,9 @@ upgraded in place, as it always has been. `init` still installs the standard too
 | `remote_tokens` | `azathoth.remote` |
 | `remote_portfolio_snapshots` | `azathoth.remote` |
 | `remotes` | `azathoth.remote` |
+| `service_jobs` | `azathoth.remote.jobs` |
+| `service_job_events` | `azathoth.remote.jobs` |
+| `service_job_runners` | `azathoth.remote.jobs` |
 
 Documents and evidence stay JSON text, never `JSONB`, so what Azathoth reads
 back is byte for byte what it wrote, and digests over it hold in either

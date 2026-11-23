@@ -34,22 +34,23 @@ pool holds connections, and the rest wait their turn.
 import logging
 import os
 import re
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import partial
 from http import HTTPStatus
 from typing import Final, TypeVar
 
-from anyio import CapacityLimiter, to_thread
+from anyio import CapacityLimiter, sleep, to_thread
 from anyio.lowlevel import RunVar
 from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from azathoth.api.calls import ServiceCall, service_call
-from azathoth.api.errors import ApiError
+from azathoth.api.errors import ApiError, InvalidArgumentError, NotFoundError
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
@@ -58,11 +59,22 @@ from azathoth.remote.calling import (
     CALLS_ROUTE,
     CallerInstances,
     CallSignature,
+    JobSignature,
     call_signature,
+    job_signature,
 )
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
+from azathoth.remote.job_reading import restricted
+from azathoth.remote.jobs import (
+    JOBS_ROUTE,
+    JobAccepted,
+    JobSummary,
+    JobView,
+    ServiceJob,
+    ServiceJobRepository,
+)
 from azathoth.remote.listings import visible
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
@@ -149,7 +161,37 @@ AUDIT_UNAVAILABLE_MESSAGE: Final = (
 """What a request is told when the remote's audit could not be told of it."""
 
 JOB_CODE: Final = "job"
-"""The code a call that runs as a job is answered with until the remote runs jobs."""
+"""The code a call that runs as a job is answered with by a remote that runs none."""
+
+INVOKE_CALL: Final = "runs.invoke"
+"""The job that is given a key when submitted without one, so running it again resumes it."""
+
+JOB_KEY_PREFIX: Final = "job-"
+"""What the key an invocation is given when submitted without one starts with."""
+
+NO_JOBS_MESSAGE: Final = "This remote runs no jobs."
+"""What a remote that runs no jobs answers a request about one with."""
+
+DEFAULT_JOBS_LISTED: Final = 100
+"""How many of a caller's jobs a listing answers with, newest first, unless asked for fewer."""
+
+MAX_JOBS_LISTED: Final = 1000
+"""The most of a caller's jobs one listing answers with."""
+
+EVENT_STREAM_MEDIA_TYPE: Final = "text/event-stream"
+"""The media type a job's events are streamed as."""
+
+EVENTS_POLL_SECONDS: Final = 0.25
+"""How often a stream of a job's events looks for more."""
+
+KEEP_ALIVE_SECONDS: Final = 15.0
+"""How long a stream of a job's events goes quiet before it says it is still there."""
+
+FINISHED_EVENT: Final = "finished"
+"""The name of the last event a stream of a job's events sends: the job, as it ended."""
+
+JOB_EVENT: Final = "event"
+"""The name of each event a job told, as its stream sends it."""
 
 JSON_MEDIA_TYPE: Final = "application/json"
 """The media type a call's result is answered with."""
@@ -209,13 +251,20 @@ class RemoteServer:
         environ: Mapping[str, str] | None = None,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         instances: CallerInstances | None = None,
+        jobs: ServiceJobRepository | None = None,
+        events_poll_seconds: float = EVENTS_POLL_SECONDS,
+        keep_alive_seconds: float = KEEP_ALIVE_SECONDS,
     ) -> None:
         """Serve the given repositories; `environ` defaults to the process's own environment.
 
         At most `max_concurrent` calls to the seams and repositories run at
         once. With `instances`, the remote serves the service API, answering
         each caller with an instance of their own; without, it serves only
-        the protocol.
+        the protocol. With `jobs` too, a call that runs as a job is queued
+        there, for the remote's runners, and answered at once (ADR 0138);
+        without, it is refused. A stream of a job's events looks for more
+        every `events_poll_seconds`, and says it is still there after
+        `keep_alive_seconds` of quiet.
 
         Raises:
             ValueError: `max_concurrent` is below 1.
@@ -236,6 +285,9 @@ class RemoteServer:
         self._clock = clock
         self.max_concurrent = max_concurrent
         self.instances = instances
+        self.jobs = jobs
+        self.events_poll_seconds = events_poll_seconds
+        self.keep_alive_seconds = keep_alive_seconds
         #
         # A limiter belongs to the event loop it is first used on, so each
         # loop that serves this remote gets one of its own.
@@ -274,6 +326,10 @@ class RemoteServer:
                 Route(SERVICE_ROUTE, self.service, methods=["GET"]),
                 Route(PERMISSIONS_ROUTE, self.permissions_route, methods=["GET", "POST"]),
                 Route(CALLS_ROUTE, self.call_route, methods=["POST"]),
+                Route(JOBS_ROUTE, self.jobs_route, methods=["GET"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}", self.job_route, methods=["GET"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}/cancel", self.cancel_route, methods=["POST"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}/events", self.events_route, methods=["GET"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -332,6 +388,38 @@ class RemoteServer:
         """Answer one call of the service API with its result, for a caller the policy allows."""
 
         return await self._serve(request, None, None, self._call, service=True)
+
+    async def jobs_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the caller's own jobs, newest first."""
+
+        return await self._serve(request, None, None, self._listed_jobs, service=True)
+
+    async def job_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with one job, and its result once it has one, for who may see it."""
+
+        return await self._serve(request, None, None, self._job, service=True)
+
+    async def events_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Stream one job's events as they are told, then the job as it ended, to who may see it."""
+
+        return await self._serve(request, None, None, self._events, service=True)
+
+    async def cancel_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Ask one job to stop, for who may stop it."""
+
+        return await self._serve(request, None, None, self._cancel, service=True)
 
     async def capabilities(
         self,
@@ -427,7 +515,9 @@ class RemoteServer:
         request: Request,
         principal: Principal,
     ) -> Answer:
-        described = await self._blocking(lambda: service_description(self.seams))
+        described = await self._blocking(
+            lambda: service_description(self.seams, self.jobs, now=self._clock())
+        )
 
         return JSONResponse(described.model_dump(mode="json")), None, None
 
@@ -436,7 +526,11 @@ class RemoteServer:
         request: Request,
         principal: Principal,
     ) -> Answer:
-        signature = _served_signature(request.path_params["name"], served=self.instances)
+        signature = _served_signature(
+            request.path_params["name"],
+            served=self.instances,
+            jobs=self.jobs,
+        )
         arguments = signature.read_arguments(await _body(request, MAX_PUSH_BYTES))
         resource = call_resource(signature.call, arguments)
         await self._decide_call(principal, signature.call, arguments)
@@ -461,6 +555,27 @@ class RemoteServer:
 
             for kind in told:
                 await self._tell(kind, principal, resource, call.name)
+
+            if isinstance(signature, JobSignature):
+                try:
+                    accepted = await self._blocking(
+                        lambda: self._submitted(signature, principal, arguments, resource)
+                    )
+                except BaseException as error:
+                    if told:
+                        await self._failed(principal, resource, call.name, error)
+
+                    raise
+
+                return (
+                    JSONResponse(
+                        accepted.model_dump(mode="json"),
+                        status_code=HTTPStatus.ACCEPTED,
+                        headers={"Location": accepted.job},
+                    ),
+                    None,
+                    None,
+                )
 
             method = signature.bound(instance)
 
@@ -500,6 +615,229 @@ class RemoteServer:
             ) from None
 
         return Response(body, media_type=JSON_MEDIA_TYPE), None, None
+
+    def _submitted(
+        self,
+        signature: JobSignature,
+        principal: Principal,
+        arguments: Mapping[str, object],
+        resource: str | None,
+    ) -> JobAccepted:
+        """Queue a job for the remote's runners, as its caller, and return where to follow it.
+
+        An invocation submitted without a key is given one, so that a runner
+        recovering it invokes it again under the key, which resumes it.
+        """
+
+        jobs = self.jobs
+        assert jobs is not None, "A remote that queues jobs keeps them."
+        job_id = uuid.uuid4()
+        given = dict(arguments)
+
+        if signature.name == INVOKE_CALL and given.get("idempotency_key") is None:
+            given["idempotency_key"] = f"{JOB_KEY_PREFIX}{job_id}"
+
+        job = jobs.submit(
+            job_id,
+            call=signature.name,
+            principal=principal.name,
+            arguments=signature.write_arguments(**given).decode(),
+            resource=resource,
+        )
+
+        return JobAccepted.of(job)
+
+    async def _listed_jobs(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        jobs = self._job_store()
+        limit = _listing_limit(request.query_params.get("limit"))
+        listed = await self._blocking(lambda: jobs.jobs(principal=principal.name, limit=limit))
+        body = [JobSummary.of(job).model_dump(mode="json") for job in listed]
+
+        return JSONResponse(body), None, None
+
+    async def _job(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        job = await self._seen_job(await self._found_job(request), principal, (Action.READ_RUNS,))
+
+        if job.result is not None:
+            await self._decide_restricted(principal, job)
+
+        return JSONResponse(JobView.viewed(job).model_dump(mode="json")), None, None
+
+    async def _events(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        after = _events_after(request)
+        job = await self._seen_job(await self._found_job(request), principal, (Action.READ_RUNS,))
+        await self._decide_restricted(principal, job)
+        stream = self._streamed(request, job.job_id, after)
+
+        return (
+            StreamingResponse(
+                stream,
+                media_type=EVENT_STREAM_MEDIA_TYPE,
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            ),
+            None,
+            None,
+        )
+
+    async def _streamed(
+        self,
+        request: Request,
+        job_id: uuid.UUID,
+        after: int,
+    ) -> AsyncIterator[str]:
+        """Yield a job's events after the one numbered `after`, until it ends, then the job.
+
+        Each is sent with its number as its ID, so a client that reconnects
+        with `Last-Event-ID` is sent only what it missed. A stream quiet for
+        `keep_alive_seconds` sends a comment, so neither side takes it for
+        lost.
+        """
+
+        jobs = self._job_store()
+        last = after
+        quiet = 0.0
+
+        while True:
+            told = await self._blocking(partial(jobs.events, job_id, after=last))
+
+            for event in told:
+                last = event.sequence
+                yield server_sent(JOB_EVENT, event.event, event_id=event.sequence)
+
+            if told:
+                quiet = 0.0
+                continue
+
+            job = await self._blocking(lambda: jobs.get(job_id))
+
+            if job is None or job.status.finished:
+                if job is not None:
+                    ended = JobView.viewed(job).model_dump_json()
+                    yield server_sent(FINISHED_EVENT, ended, event_id=last)
+
+                return
+
+            if await request.is_disconnected():
+                return
+
+            if quiet >= self.keep_alive_seconds:
+                quiet = 0.0
+                yield ": still running\n\n"
+
+            await sleep(self.events_poll_seconds)
+            quiet += self.events_poll_seconds
+
+    async def _cancel(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        found = await self._found_job(request)
+        job = await self._seen_job(found, principal, service_call(found.call).actions)
+        resource = _job_resource(job)
+        await self._tell(AuditEventKind.JOB_CANCELLED, principal, resource, job.call)
+        jobs = self._job_store()
+
+        try:
+            asked = await self._blocking(lambda: jobs.request_cancel(job.job_id, principal.name))
+        except BaseException as error:
+            await self._failed(principal, resource, job.call, error)
+
+            raise
+
+        cancelled = job if asked is None else asked
+
+        return JSONResponse(JobSummary.of(cancelled).model_dump(mode="json")), None, None
+
+    def _job_store(
+        self,
+    ) -> ServiceJobRepository:
+        """Return where this remote's jobs are kept, or refuse a remote that runs none.
+
+        Raises:
+            _Refused: The remote runs no jobs.
+        """
+
+        if self.jobs is None or self.instances is None:
+            raise _Refused(HTTPStatus.NOT_FOUND, NO_JOBS_MESSAGE)
+
+        return self.jobs
+
+    async def _found_job(
+        self,
+        request: Request,
+    ) -> ServiceJob:
+        """Return the job a request's path names.
+
+        Raises:
+            NotFoundError: The remote has no job of that ID.
+        """
+
+        jobs = self._job_store()
+        named = request.path_params["job_id"]
+
+        try:
+            job_id = uuid.UUID(named)
+        except ValueError:
+            raise NotFoundError(f"This remote has no job {named}.") from None
+
+        job = await self._blocking(lambda: jobs.get(job_id))
+
+        if job is None:
+            raise NotFoundError(f"This remote has no job {job_id}.")
+
+        return job
+
+    async def _seen_job(
+        self,
+        job: ServiceJob,
+        principal: Principal,
+        actions: Sequence[Action],
+    ) -> ServiceJob:
+        """Return a job for its submitter, or for another the policy allows.
+
+        Another caller is asked each action about the job, as `job <ID>`.
+        """
+
+        if job.principal != principal.name:
+            for action in actions:
+                await self._decide(principal, action, _job_resource(job))
+
+        return job
+
+    async def _decide_restricted(
+        self,
+        principal: Principal,
+        job: ServiceJob,
+    ) -> None:
+        """Refuse a restricted job's result to who may not read it, and tell the audit before.
+
+        Raises:
+            _Refused: The policy refuses `read_restricted`, or the audit could not be told.
+        """
+
+        instances = self.instances
+        assert instances is not None, "A remote that keeps jobs serves calls."
+        instance = await self._blocking(lambda: instances.instance(principal.name))
+
+        if not await self._blocking(lambda: restricted(instance, job)):
+            return
+
+        resource = _job_resource(job)
+        await self._decide(principal, Action.READ_RESTRICTED, resource)
+        await self._tell(AuditEventKind.RESTRICTED_READ, principal, resource, job.call)
 
     async def _decide_call(
         self,
@@ -1007,16 +1345,93 @@ def call_resource(
     return None if value is None else f"{call.resource.kind} {value}"
 
 
+def server_sent(
+    name: str,
+    data: str,
+    *,
+    event_id: int,
+) -> str:
+    """Return one server-sent event: its ID, its name, and its data on one line."""
+
+    flat = data.replace("\r", "").replace("\n", " ")
+
+    return f"id: {event_id}\nevent: {name}\ndata: {flat}\n\n"
+
+
+def _events_after(
+    request: Request,
+) -> int:
+    """Return the number of the last event a client was sent, from `Last-Event-ID` or `after`.
+
+    Raises:
+        InvalidArgumentError: It is not a number from 0.
+    """
+
+    given = request.headers.get("Last-Event-ID") or request.query_params.get("after")
+
+    if given is None:
+        return 0
+
+    try:
+        after = int(given)
+    except ValueError:
+        after = -1
+
+    if after < 0:
+        raise InvalidArgumentError(
+            f"The last event sent is numbered from 0, as Last-Event-ID or after, not {given}."
+        )
+
+    return after
+
+
+def _job_resource(
+    job: ServiceJob,
+) -> str:
+    """Return the resource the policy is asked about one job as."""
+
+    return f"job {job.job_id}"
+
+
+def _listing_limit(
+    given: str | None,
+) -> int:
+    """Return how many jobs a listing asks for.
+
+    Raises:
+        InvalidArgumentError: It asks for a number that is not one from 1 to the most listed.
+    """
+
+    if given is None:
+        return DEFAULT_JOBS_LISTED
+
+    try:
+        limit = int(given)
+    except ValueError:
+        limit = 0
+
+    if not 1 <= limit <= MAX_JOBS_LISTED:
+        raise InvalidArgumentError(
+            f"A listing of jobs asks for 1 to {MAX_JOBS_LISTED} of them, not {given}."
+        )
+
+    return limit
+
+
 def _served_signature(
     name: str,
     *,
     served: CallerInstances | None,
+    jobs: ServiceJobRepository | None,
 ) -> CallSignature:
     """Return how a call a remote answers travels, or refuse it, saying why.
 
+    A job's is a `JobSignature`, when the remote runs jobs.
+
     Raises:
         _Refused: The remote serves no service API, the service API has no
-            such call, the remote never serves it, or it runs as a job.
+            such call, the remote never serves it, or it is a job and the
+            remote runs none.
     """
 
     if served is None:
@@ -1038,11 +1453,14 @@ def _served_signature(
         )
 
     if call.job:
-        raise _Refused(
-            HTTPStatus.NOT_IMPLEMENTED,
-            f"{name} runs on the remote's workers, which this remote does not run jobs on yet.",
-            JOB_CODE,
-        )
+        if jobs is None:
+            raise _Refused(
+                HTTPStatus.NOT_IMPLEMENTED,
+                f"{name} runs as a job on a remote's runners, and this remote runs none.",
+                JOB_CODE,
+            )
+
+        return job_signature(name)
 
     return call_signature(name)
 
@@ -1104,14 +1522,25 @@ __all__ = [
     "AUDIT_UNAVAILABLE_CODE",
     "AUDIT_UNAVAILABLE_MESSAGE",
     "CONTENT_MEDIA_TYPE",
+    "DEFAULT_JOBS_LISTED",
     "DEFAULT_MAX_CONCURRENT",
+    "EVENTS_POLL_SECONDS",
+    "EVENT_STREAM_MEDIA_TYPE",
+    "FINISHED_EVENT",
     "DIGEST_PATTERN",
+    "INVOKE_CALL",
     "JOB_CODE",
+    "JOB_EVENT",
+    "JOB_KEY_PREFIX",
     "JSON_MEDIA_TYPE",
+    "KEEP_ALIVE_SECONDS",
+    "MAX_JOBS_LISTED",
+    "NO_JOBS_MESSAGE",
     "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
     "audit_kinds",
     "call_resource",
     "RemoteServer",
     "error_response",
+    "server_sent",
 ]

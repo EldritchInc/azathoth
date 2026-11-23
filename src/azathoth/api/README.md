@@ -670,17 +670,36 @@ nearest kind this Azathoth knows, with the remote's message: a
   answers as no remote serving the service API does.
 
 The eight calls that take a callback for their events, such as `runs.run`,
-run on a remote's workers, which a connected instance does not call yet:
-each is refused before anything is sent, as a `RemoteRefusedError` with
-status 501 and refusal `job`. Each call is one request, and once the
-instance is closed every call raises `InstanceClosedError`.
+are jobs a remote runs on its runners (ADR 0138): a connected instance
+submits one, hands each event the remote streams to its `on_event`, asks
+the remote to stop it once its `cancel` is cancelled, and returns its
+result or raises its refusal, as the local call does. A callback that
+raises is told no more, and the job goes on; a token cancelled before the
+call sends nothing. A stream that drops is followed again from the last
+event seen, up to 5 more times, and then given up while the job goes on.
+A job of a remote that runs none is a `RemoteRefusedError`, 501 `job`, and
+one a stopped server could not resume is a `RemoteRefusedError`, 409
+`interrupted`, saying how to go on. Each other call is one request, and
+once the instance is closed every call raises `InstanceClosedError`.
+
+A connected instance's `jobs` reaches a remote's jobs apart from their calls. `submit`
+queues one and returns its `JobAccepted` without waiting, `follow` waits
+for one, handing on its events, and returns its result, `get` returns its
+`JobView`, `list` the caller's own jobs, and `cancel` asks one to stop. A
+local instance has no `jobs`:
+
+```python
+with api.connect("https://azathoth.example.com") as remote:
+    accepted = remote.jobs.submit("benchmarks.run", benchmark_id, workflow_id)
+    result = remote.jobs.follow(accepted.job_id)
+```
 
 ```text
-<CALL> runs on a remote's workers, which a connected instance does not call yet.
 The remote at <URL> could not be reached: <REASON>
 The remote at <URL> does not serve <CALL>; it may not serve the service API, which a remote does from Azathoth 1.6.
 The remote at <URL> answered <CALL> with <STATUS> without saying why; it may not be an Azathoth remote.
 The remote at <URL> answered <CALL> with something other than its result; it may serve another version of the service API.
+The remote at <URL> dropped the events of job <JOB_ID> 6 times, so they are no longer followed; the job goes on there, and jobs.get finds it.
 ```
 
 ## Tracing and Content
@@ -713,9 +732,10 @@ each other's tokens.
 A remote serves each other call at `POST /v1/calls/<NAME>`, its arguments
 a JSON object by name and its answer the call's result as JSON, and
 records what a caller changes as theirs (ADR 0136). The calls that take a
-callback for their events, such as `runs.run`, are jobs a remote will run
-on its workers; until it does, it answers them 501. The remote's README
-says how each call travels and is refused.
+callback for their events, such as `runs.run`, are jobs a remote runs on
+its runners, asking and telling as their calls do when they are submitted
+(ADR 0138). The remote's README says how each call travels and is
+refused.
 
 | Call | Actions | Also | Audit |
 | --- | --- | --- | --- |

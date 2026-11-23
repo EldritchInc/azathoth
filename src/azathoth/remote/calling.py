@@ -45,6 +45,9 @@ SERVER_ONLY_PARAMETERS: Final[frozenset[tuple[str, str]]] = frozenset(
 )
 """Parameters a call takes only from the code that holds the instance, never from a request."""
 
+JOB_PARAMETERS: Final = frozenset({"on_event", "cancel"})
+"""What a job takes from the runner that runs it: where its events go, and what stops it."""
+
 
 class CallArgumentsError(InvalidArgumentError):
     """A request's body is not the arguments its call takes."""
@@ -197,6 +200,62 @@ def call_function(
     return _function(service_call(name))[2]
 
 
+@dataclass(frozen=True)
+class JobSignature(CallSignature):
+    """What one job takes, returns and tells, as it travels over HTTP and waits in the database.
+
+    Its arguments are the call's but those a runner gives it, `on_event`
+    and `cancel`; its events are of the type its `on_event` hears.
+    """
+
+    events: TypeAdapter[Any]
+
+    def write_event(
+        self,
+        event: object,
+    ) -> bytes:
+        """Return one event the job told, as the JSON its events are kept and sent as."""
+
+        return self.events.dump_json(event)
+
+    def read_event(
+        self,
+        body: bytes,
+    ) -> Any:
+        """Return the event one JSON document holds, as the job's callback hears it."""
+
+        return self.events.validate_json(body)
+
+
+def _built(
+    call: ServiceCall,
+    skipped: Callable[[str], bool],
+) -> tuple[str | None, str, dict[str, Any], type[BaseModel], TypeAdapter[Any]]:
+    """Return a call's collection, method, type hints, arguments model and result.
+
+    Each parameter is a field of the arguments, but those `skipped` names.
+    """
+
+    collection, method, function = _function(call)
+    hints = typing.get_type_hints(function)
+    fields: dict[str, Any] = {}
+
+    for parameter in list(inspect.signature(function).parameters.values())[1:]:
+        if skipped(parameter.name):
+            continue
+
+        default = ... if parameter.default is inspect.Parameter.empty else parameter.default
+        fields[parameter.name] = (hints[parameter.name], default)
+
+    arguments = create_model(
+        f"Arguments of {call.name}",
+        __config__=ConfigDict(extra="forbid", ser_json_bytes="base64", val_json_bytes="base64"),
+        **fields,
+    )
+
+    return collection, method, hints, arguments, TypeAdapter(hints["return"])
+
+
 @cache
 def call_signature(
     name: str,
@@ -216,21 +275,9 @@ def call_signature(
     if call.job:
         raise NotServedError(f"A remote runs {name} as a job on its workers.")
 
-    collection, method, function = _function(call)
-    hints = typing.get_type_hints(function)
-    fields: dict[str, Any] = {}
-
-    for parameter in list(inspect.signature(function).parameters.values())[1:]:
-        if (name, parameter.name) in SERVER_ONLY_PARAMETERS:
-            continue
-
-        default = ... if parameter.default is inspect.Parameter.empty else parameter.default
-        fields[parameter.name] = (hints[parameter.name], default)
-
-    arguments = create_model(
-        f"Arguments of {name}",
-        __config__=ConfigDict(extra="forbid", ser_json_bytes="base64", val_json_bytes="base64"),
-        **fields,
+    collection, method, _, arguments, result = _built(
+        call,
+        lambda parameter: (name, parameter) in SERVER_ONLY_PARAMETERS,
     )
 
     return CallSignature(
@@ -238,8 +285,54 @@ def call_signature(
         collection=collection,
         method=method,
         arguments=arguments,
-        result=TypeAdapter(hints["return"]),
+        result=result,
     )
+
+
+@cache
+def job_signature(
+    name: str,
+) -> JobSignature:
+    """Return how the job of a name travels, and what its events are.
+
+    Raises:
+        LookupError: The service API has no call of that name.
+        NotServedError: The call is not a job.
+    """
+
+    call = service_call(name)
+
+    if not call.job:
+        raise NotServedError(f"{name} is not a job; a remote answers it while the request waits.")
+
+    collection, method, hints, arguments, result = _built(
+        call,
+        lambda parameter: parameter in JOB_PARAMETERS,
+    )
+
+    return JobSignature(
+        call=call,
+        collection=collection,
+        method=method,
+        arguments=arguments,
+        result=result,
+        events=TypeAdapter(_event_type(hints["on_event"])),
+    )
+
+
+def _event_type(
+    hint: object,
+) -> Any:
+    """Return the type of event an `on_event` callback hears, from its hint.
+
+    The hint is a callback of one event, or None: `EventCallback | None`.
+    """
+
+    (callback,) = (each for each in typing.get_args(hint) if each is not type(None))
+    (heard, _) = typing.get_args(callback)
+    (event,) = heard
+
+    return event
 
 
 class CallerInstances:
@@ -290,6 +383,12 @@ class CallerInstances:
             return instance
 
 
+def job_signatures() -> Mapping[str, JobSignature]:
+    """Return how every job travels, and what its events are, by name."""
+
+    return {call.name: job_signature(call.name) for call in SERVICE_CALLS if call.job}
+
+
 def call_signatures() -> Mapping[str, CallSignature]:
     """Return how every call a remote answers while the request waits travels, by name."""
 
@@ -302,14 +401,18 @@ def call_signatures() -> Mapping[str, CallSignature]:
 
 __all__ = [
     "CALLS_ROUTE",
+    "JOB_PARAMETERS",
     "SERVER_ONLY_PARAMETERS",
     "UNKNOWN_ARGUMENT",
     "CallArgumentsError",
     "CallSignature",
     "CallerInstances",
+    "JobSignature",
     "NotServedError",
     "arguments_refused",
     "call_function",
     "call_signature",
     "call_signatures",
+    "job_signature",
+    "job_signatures",
 ]

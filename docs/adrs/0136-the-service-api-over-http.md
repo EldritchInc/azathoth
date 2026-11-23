@@ -1,6 +1,6 @@
 # ADR 0136: The Service API Over HTTP
 
-- Status: Accepted; amended by ADR 0137
+- Status: Accepted; amended by ADR 0137, ADR 0138
 - Date: 2026-11-22
 
 ## Context

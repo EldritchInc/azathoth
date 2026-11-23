@@ -37,6 +37,7 @@ from azathoth.remote import (
     load_seams,
 )
 from azathoth.remote.calling import CallerInstances
+from azathoth.remote.jobs import DEFAULT_RUNNERS
 from azathoth.remote.serving import RemoteAlreadyServedError, serving_lock
 from azathoth.revisions import Author, RevisionKind
 
@@ -237,17 +238,31 @@ def serving_line(
     return f"Serving remote protocol {PROTOCOL_VERSION} at {url}; it {restricted}."
 
 
+def runners_line(
+    jobs: int,
+) -> str:
+    """Return the line `remote serve` says how many jobs it runs at once with."""
+
+    if jobs == 0:
+        return "It runs no jobs; it queues them for another server over its database to run."
+
+    return f"It runs {jobs} {'job' if jobs == 1 else 'jobs'} at once."
+
+
 def serve_remote(
     *,
     host: str,
     port: int,
     accept_restricted: bool = False,
+    jobs: int = DEFAULT_RUNNERS,
 ) -> int:
     """Serve this instance as a remote with uvicorn, until stopped.
 
     It serves the remote protocol and the service API, answering each
     caller with an instance that records them as author, over the
-    providers the environment turns on. The `remote` extra must be
+    providers the environment turns on. It queues each job a caller
+    submits, and runs `jobs` of them at once, as their callers, until it
+    stops, when it hands back those it was running (ADR 0138). The `remote` extra must be
     installed, and the plugins installed for the remote's seams must be
     ones it can use; otherwise nothing is served, and the reason is
     printed. An SQLite database is served by one process at a time: a
@@ -257,6 +272,7 @@ def serve_remote(
     try:
         from uvicorn import run as run_uvicorn
 
+        from azathoth.remote.runners import JobRunners
         from azathoth.remote.server import RemoteServer
     except ImportError:
         print(MISSING_REMOTE_EXTRA_MESSAGE, file=sys.stderr)
@@ -273,6 +289,7 @@ def serve_remote(
 
         return 1
 
+    instances = CallerInstances(held, providers=api.ProviderSettings.from_environment())
     server = RemoteServer(
         workflows=held.workflows,
         tools=held.tools,
@@ -282,7 +299,8 @@ def serve_remote(
         portfolio=held.portfolio,
         seams=seams,
         accepts_restricted=accept_restricted,
-        instances=CallerInstances(held, providers=api.ProviderSettings.from_environment()),
+        instances=instances,
+        jobs=held.service_jobs,
     )
 
     try:
@@ -291,7 +309,17 @@ def serve_remote(
                 serving_line(f"http://{host}:{port}", accept_restricted=accept_restricted),
                 file=sys.stderr,
             )
-            run_uvicorn(server.app(), host=host, port=port, log_level="info")
+            print(runners_line(jobs), file=sys.stderr)
+            runners = JobRunners(held.service_jobs, instances, count=jobs) if jobs else None
+
+            if runners is not None:
+                runners.start()
+
+            try:
+                run_uvicorn(server.app(), host=host, port=port, log_level="info")
+            finally:
+                if runners is not None:
+                    runners.stop()
     except RemoteAlreadyServedError as exc:
         print(str(exc), file=sys.stderr)
 
@@ -673,6 +701,7 @@ __all__ = [
     "remote_status",
     "remove_remote",
     "revoke_remote_token",
+    "runners_line",
     "serve_remote",
     "serving_line",
     "status_lines",

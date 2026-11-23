@@ -61,6 +61,7 @@ from azathoth.remote import (
     SqlRemoteRepository,
     SqlRemoteTokenRepository,
 )
+from azathoth.remote.jobs import SERVICE_JOB_TABLES, ServiceJobRepository, SqlServiceJobRepository
 from azathoth.revisions import REVISION_LINEAGE_TABLES
 from azathoth.tools import (
     TOOL_TABLES,
@@ -147,6 +148,7 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *REMOTE_TOKEN_TABLES,
     *REMOTE_PORTFOLIO_SNAPSHOT_TABLES,
     *REMOTE_TABLES,
+    *SERVICE_JOB_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 
@@ -451,6 +453,18 @@ class Repositories:
             if path is not None
             else SqlRemoteRepository(self._database)
         )
+
+    @cached_property
+    def service_jobs(
+        self,
+    ) -> ServiceJobRepository:
+        """Return the jobs a remote runs, their events, and its runners (ADR 0138).
+
+        Its tables are new in schema version 8, so one repository serves
+        either database: an SQLite file gains them when it is first opened.
+        """
+
+        return SqlServiceJobRepository(self._database)
 
     @cached_property
     def provider_observations(

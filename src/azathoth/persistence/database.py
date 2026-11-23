@@ -15,7 +15,7 @@ SCHEMA_TABLE: Final = "azathoth_schema"
 READ_ONLY_LOCK_MESSAGE: Final = "A read-only transaction takes no lock, since it writes nothing."
 """Why a transaction asked both to lock a table and to only read is refused."""
 
-SCHEMA_VERSION: Final = 7
+SCHEMA_VERSION: Final = 8
 """The schema version this Azathoth uses.
 
 Version 2 adds the tables that record a run while it executes (ADR 0105).
@@ -24,7 +24,8 @@ provenance (ADR 0122). Version 4 adds the table that records who declared
 each portfolio entry's data policy (ADR 0123). Version 5 adds the table of
 the bearer tokens a remote issues (ADR 0124). Version 6 adds the table of
 the last portfolio read from each remote (ADR 0125). Version 7 adds the
-table of the remotes an instance names (ADR 0126).
+table of the remotes an instance names (ADR 0126). Version 8 adds the
+tables of a remote's jobs, their events and its runners (ADR 0138).
 """
 
 Parameter = str | int | float | bytes | None

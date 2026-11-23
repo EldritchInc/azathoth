@@ -100,6 +100,7 @@ azathoth remote serve
 
 ```text
 Serving remote protocol 1 at http://127.0.0.1:8470; it refuses restricted data.
+It runs 2 jobs at once.
 ```
 
 It listens on this machine only, on port 8470, until Ctrl-C stops it;
@@ -270,6 +271,7 @@ azathoth remote serve --accept-restricted
 
 ```text
 Serving remote protocol 1 at http://127.0.0.1:8470; it accepts restricted data.
+It runs 2 jobs at once.
 ```
 
 A pull leaves out restricted benchmarks unless it asks for them with

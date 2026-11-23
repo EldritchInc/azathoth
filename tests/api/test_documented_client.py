@@ -3,7 +3,6 @@
 import json
 import re
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -53,16 +52,6 @@ def test_the_errors_table_names_every_error_with_its_code() -> None:
     section = API.read_text(encoding="utf-8").split("\n## Errors\n", 1)[1].split("\n## ")[0]
 
     assert dict(ERROR_ROW.findall(section)) == errors
-
-
-def test_a_jobs_refusal_is_documented() -> None:
-    with api.connect(URL, token=TOKEN, http=Fixed(200, b"{}")) as instance:
-        run: Any = instance.runs.run
-
-        with pytest.raises(api.RemoteRefusedError) as caught:
-            run()
-
-    documented(API, str(caught.value).replace("runs.run", "<CALL>"))
 
 
 def test_a_remote_not_reached_is_documented() -> None:

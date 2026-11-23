@@ -227,6 +227,10 @@ with uvicorn:
 | `GET /v1/permissions` | | the caller's `PermissionsResponse` on the remote |
 | `POST /v1/permissions` | | the `ResourcePermissionsResponse` to a `PermissionsRequest` |
 | `POST /v1/calls/{name}` | the call's own | the call's result |
+| `GET /v1/jobs` | | the caller's own jobs, newest first, each a `JobSummary` |
+| `GET /v1/jobs/{job_id}` | `read_runs`, for another's | the `JobView`: the job, and its result or refusal |
+| `POST /v1/jobs/{job_id}/cancel` | the job's call's, for another's | the `JobSummary`, once the job is asked to stop |
+| `GET /v1/jobs/{job_id}/events` | `read_runs`, for another's | the job's events as server-sent events, then the `JobView` it ended as |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |
@@ -252,11 +256,11 @@ content route for its digest; a push carrying a process tool asks
 | 401 | No token the remote knows |
 | 403 | The policy refuses it, or restricted data the remote does not accept |
 | 404 | Content the remote does not hold, a call it does not serve, or what a call names that is not there |
-| 409 | A push whose lineage has diverged, or a call that clashes with what is held |
+| 409 | A push whose lineage has diverged, a call that clashes with what is held, or a job a stopped server left, `interrupted` |
 | 413 | A body larger than the remote accepts |
 | 422 | A push or content the receiving checks refuse, or a document a call refuses |
 | 500 | A plugin that failed, `plugin_error` |
-| 501 | A job, `job`, which a remote does not run yet |
+| 501 | A job, `job`, of a remote that runs none |
 | 502 | A provider, an MCP server or another remote a call needs that failed |
 | 503 | An audit that could not be told, `audit_unavailable`, or the remote's own database or configuration |
 
@@ -304,21 +308,95 @@ data never sent, to a caller the policy refuses. A listing leaves out
 what the policy refuses, so it may answer empty, never refused.
 
 The eight calls that take a callback for their events, such as `runs.run`
-and `benchmarks.run`, are jobs a remote will run on its workers, and are
-not run while a request waits. A remote serving only the protocol serves
-no call:
+and `benchmarks.run`, are jobs: a remote queues each for its runners, as
+its caller, and answers `202` at once with where to follow it (ADR 0138).
+A remote that runs no jobs refuses them, and one serving only the
+protocol serves no call:
 
 ```text
-<NAME> runs on the remote's workers, which this remote does not run jobs on yet.
+<NAME> runs as a job on a remote's runners, and this remote runs none.
 This remote serves only push, pull and status, not the service API.
 ```
 
 `GET /v1/service` says which Azathoth serves the remote, the service API's
-stability, the protocol, and its policy's edition and detail. `GET
+stability, the protocol, its policy's edition and detail, and how its jobs
+stand. `GET
 /v1/permissions` says, for every action, whether the policy allows the
 caller it, and why not; `POST /v1/permissions` asks the same of up to 100
 resources at once. Any caller the remote knows may ask either, since the
 answer is only about them.
+
+### Jobs
+
+A remote keeps its jobs in its database, in `service_jobs`,
+`service_job_events` and `service_job_runners` (schema version 8), and
+runs them on its runners, threads of `azathoth remote serve` (ADR 0138).
+`SqlServiceJobRepository` keeps them, and `Repositories.service_jobs`
+opens the repository a database needs. A job is submitted as its call is
+made, asked of the policy and told to the audit as the call would be, and
+answered `202` with a `JobAccepted`, the job's path also in `Location`.
+An invocation submitted without an idempotency key is given
+`job-<JOB_ID>`.
+
+`JobRunners` runs a number of runners. Each takes the job waiting longest,
+under `service_jobs`' write lock, so no two runners take one job, and runs
+its call through its caller's own instance, keeping each event it tells
+and then its result, or its refusal as a route would answer it. A failure
+that is no `ApiError` is kept as one the remote's log explains:
+
+```text
+<CALL> failed at the remote; its log says why.
+```
+
+A thread beside them asks a running job to stop once that is asked of it,
+and beats for every runner every 10 seconds. A runner that has not beaten
+in 60 seconds has stopped, and any server over the database recovers its
+jobs: a resume, or an invocation, which is invoked again under its key, is
+queued again; any other is refused 409 `interrupted`. A server that stops
+hands its jobs back the same way, at once:
+
+```text
+The server running this job stopped before it finished, and nothing resumes <CALL>; submit it again.
+The server running this job stopped before it finished. A run it started is named by runs.interrupted, and runs.resume resumes it from its journal.
+```
+
+The second is a `runs.run` job's, whose run's ID is known only once it
+returns. `GET /v1/jobs` lists the caller's own jobs, newest first, 100 by
+default and up to 1000 with `?limit=`. The caller who submitted a job may
+read, follow and stop it; another is asked `read_runs` to read or follow
+it, and the actions of its call to stop it, about `job <JOB_ID>`. A
+restricted job's result and events are sent only to a caller the policy
+allows `read_restricted`, once the audit is told `restricted_read`; a
+run, a step tried or an invocation is restricted by its label, a resume by
+what it resumes, and a benchmark's job by its benchmark
+(`azathoth.remote.job_reading`). A queued job is cancelled at once, and a
+running one asked to stop.
+
+`GET /v1/jobs/{job_id}/events` streams the job's events as server-sent
+events, each named `event`, with its number as its ID and the event as
+JSON as its data, then one named `finished` whose data is the `JobView`:
+
+```text
+id: 1
+event: event
+data: {"type":"run_started",...}
+
+id: 5
+event: finished
+data: {"job_id":"...","status":"succeeded",...,"has_result":true,"result":...}
+```
+
+A client that reconnects with `Last-Event-ID`, or `?after=<NUMBER>`, is
+sent only the events after it, and a stream quiet for 15 seconds sends the
+comment `: still running`. `azathoth.remote.sse.read_server_sent` reads a
+stream's events. `GET /v1/service` says, in `jobs`, how many jobs wait and
+run, when the oldest waiting was submitted, and how many runners beat in
+the last 60 seconds. A remote built with nowhere to keep jobs gives none,
+and its job routes answer 404:
+
+```text
+This remote runs no jobs.
+```
 
 ### The Audit
 
@@ -327,7 +405,9 @@ A remote tells its audit before it acts, and before it sends what it read
 received; each change a call makes, naming the call, before it is made;
 and a capabilities read, a pull, a content read, a portfolio read or a
 restricted read before it is sent. Reading what is not restricted through
-a call tells nothing. A change or a push that then fails is followed by
+a call tells nothing. A job is told as its call when it is submitted, and
+stopping one is told as `job_cancelled`, naming its call, before it is
+asked to stop. A change or a push that then fails is followed by
 `request_failed`, naming why, and a refusal for want of a token or
 permission is told as `request_denied`. An audit that cannot be told stops
 the request, so nothing is changed and nothing sent:

@@ -189,8 +189,9 @@ class AuditEventKind(StrEnum):
     so promoting and rolling back, both the `promote` action, are told
     apart. Reading what is not restricted is not audited. A remote tells
     its audit before it acts, so `request_failed` follows an event whose
-    act then failed (ADR 0136). Kinds grow only by additions within 1.x,
-    and no value changes.
+    act then failed (ADR 0136). A caller asking a job to stop is
+    `job_cancelled`, which needs no action of the job's own caller (ADR
+    0138). Kinds grow only by additions within 1.x, and no value changes.
     """
 
     PUSH = "push"
@@ -228,12 +229,13 @@ class AuditEventKind(StrEnum):
     WORKFLOW_OPTIMIZED = "workflow_optimized"
     RESTRICTED_READ = "restricted_read"
     REQUEST_FAILED = "request_failed"
+    JOB_CANCELLED = "job_cancelled"
 
     @property
     def action(
         self,
     ) -> Action | None:
-        """Return the action this kind records, or None for a refusal or a failure."""
+        """Return the action this kind records, or None for a refusal, a failure or a cancel."""
 
         return _KIND_ACTIONS.get(self)
 
@@ -273,8 +275,8 @@ _KIND_ACTIONS: Final[Mapping[AuditEventKind, Action]] = {
     AuditEventKind.WORKFLOW_OPTIMIZED: Action.OPTIMIZE,
     AuditEventKind.RESTRICTED_READ: Action.READ_RESTRICTED,
 }
-"""The action each kind records; a refusal, `request_denied`, and a failure, `request_failed`,
-record none."""
+"""The action each kind records; a refusal, `request_denied`, a failure, `request_failed`,
+and a job asked to stop, `job_cancelled`, record none."""
 
 
 class AuditEvent(BaseModel):
