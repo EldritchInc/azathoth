@@ -1,4 +1,4 @@
-"""The runners that run a remote's jobs, on threads of the server that serves it (ADR 0138).
+"""The runners that run a remote's jobs, on threads of the server that serves it (ADR 0138, 0139).
 
 `JobRunners` starts a number of runners, each a thread that claims the job
 waiting longest and runs it through its caller's own instance, so what it
@@ -8,12 +8,13 @@ cancellation is asked for, beats for every runner, and recovers the jobs of
 runners that stopped beating, on this server or on another over the same
 PostgreSQL database.
 
-A stalled job that can go on from where it was is queued again: a resumed
-run or invocation resumes again, and an invocation is invoked again under
-its idempotency key, which resumes it. Any other is interrupted, since
-nothing resumes a benchmark, an optimization, a step tried or a run whose
-ID was not yet known. A server that stops hands its running jobs back the
-same way, at once.
+A stalled job that can go on from where it was is queued again: a run
+resumes the run it named as it started, or runs as submitted when it
+never journaled one; a resumed run or invocation resumes again; and an
+invocation is invoked again under its idempotency key, which resumes it.
+Any other is interrupted, since nothing resumes a benchmark, a
+comparison, an optimization or a step tried. A server that stops hands
+its running jobs back the same way, at once.
 """
 
 import json
@@ -30,18 +31,19 @@ from types import TracebackType
 from typing import Final
 from uuid import UUID
 
-from azathoth.api.errors import ApiError, RunCancelledError
+from azathoth.api.errors import ApiError, NotFoundError, RunCancelledError
+from azathoth.api.models import RunStarted
 from azathoth.api.running import CancellationToken
 from azathoth.remote.calling import CallerInstances, job_signature
 from azathoth.remote.jobs import (
     DEFAULT_RUNNERS,
-    RUNNER_ALIVE_SECONDS,
     ServiceJob,
     ServiceJobRepository,
     ServiceJobStatus,
 )
 from azathoth.remote.refusals import refusal_body
 from azathoth.remote.service import api_error_status
+from azathoth.workflows.run_lease import LEASE_DURATION
 
 LOGGER: Final = logging.getLogger(__name__)
 
@@ -51,8 +53,19 @@ POLL_SECONDS: Final = 1.0
 BEAT_SECONDS: Final = 10.0
 """How often every runner beats."""
 
-STALL_SECONDS: Final = RUNNER_ALIVE_SECONDS
-"""How long a runner may go without beating before its jobs are recovered."""
+STALL_SECONDS: Final = LEASE_DURATION.total_seconds() + 3 * BEAT_SECONDS
+"""How long a runner may go without beating before its jobs are recovered.
+
+It outlasts a run's lease by three beats, so a run its runner held has been
+let go before another resumes it, and a runner is never taken for stopped
+while `/v1/service` counts it alive, within `RUNNER_ALIVE_SECONDS`.
+"""
+
+RUN_CALL: Final = "runs.run"
+"""The job that names its run as it starts, so it is resumed by it."""
+
+RESUME_CALL: Final = "runs.resume"
+"""The call a run job left by a server that stopped goes on with."""
 
 INTERRUPTED_CODE: Final = "interrupted"
 """The code a job interrupted by a server that stopped is refused with."""
@@ -67,17 +80,18 @@ A resume continues its run's journal. An invocation is keyed, so invoking it
 again under its key resumes it rather than starting anew.
 """
 
+REQUEUED: Final = RESUMED_AS_SUBMITTED | {RUN_CALL}
+"""The jobs a runner that stopped leaves to be queued again rather than interrupted.
+
+A run is resumed by the run it named as it started (ADR 0139), or runs as
+submitted when it named none, since then nothing of it ran.
+"""
+
 
 def interrupted_message(
     call: str,
 ) -> str:
     """Return what a job interrupted by a server that stopped says, by its call."""
-
-    if call == "runs.run":
-        return (
-            "The server running this job stopped before it finished. A run it started is "
-            "named by runs.interrupted, and runs.resume resumes it from its journal."
-        )
 
     return (
         f"The server running this job stopped before it finished, and nothing resumes "
@@ -300,12 +314,13 @@ class JobRunners:
         def told(
             event: object,
         ) -> None:
+            if job.call == RUN_CALL and isinstance(event, RunStarted) and event.run_id is not None:
+                self._jobs.record_run(job.job_id, event.run_id)
+
             self._jobs.append_event(job.job_id, signature.write_event(event).decode())
 
         try:
-            instance = self._instances.instance(job.principal)
-            arguments = signature.read_arguments(job.arguments.encode())
-            result = signature.bound(instance)(**arguments, on_event=told, cancel=held.token)
+            result = self._called(job, told, held.token)
         except RunCancelledError as error:
             if held.stopping and not self._cancel_asked(job.job_id):
                 current = self._jobs.get(job.job_id)
@@ -334,6 +349,35 @@ class JobRunners:
                 ServiceJobStatus.SUCCEEDED,
                 result=signature.write_result(result).decode(),
             )
+
+    def _called(
+        self,
+        job: ServiceJob,
+        told: Callable[[object], None],
+        token: CancellationToken,
+    ) -> object:
+        """Make a job's call as its caller, and return what it returned.
+
+        A run that named its run before a server that stopped left it is
+        resumed by it, from its journal. One that journaled nothing of it,
+        stopped as it started, runs as submitted, since nothing of it ran.
+        """
+
+        signature = job_signature(job.call)
+        instance = self._instances.instance(job.principal)
+        arguments = signature.read_arguments(job.arguments.encode())
+
+        if job.call == RUN_CALL and job.run_id is not None:
+            try:
+                return job_signature(RESUME_CALL).bound(instance)(
+                    run_id=job.run_id,
+                    on_event=told,
+                    cancel=token,
+                )
+            except NotFoundError:
+                LOGGER.info("Job %s's run %s never journaled; runs anew.", job.job_id, job.run_id)
+
+        return signature.bound(instance)(**arguments, on_event=told, cancel=token)
 
     def _finish(
         self,
@@ -369,7 +413,7 @@ class JobRunners:
     ) -> bool:
         """Queue a job again to go on from where it was, or interrupt it; return whether it was."""
 
-        if stalled.call in RESUMED_AS_SUBMITTED:
+        if stalled.call in REQUEUED:
             return self._jobs.requeue(stalled, call=stalled.call, arguments=stalled.arguments)
 
         refusal = {"error": interrupted_message(stalled.call), "code": INTERRUPTED_CODE}
@@ -420,7 +464,10 @@ __all__ = [
     "FAILED_CODE",
     "INTERRUPTED_CODE",
     "POLL_SECONDS",
+    "REQUEUED",
     "RESUMED_AS_SUBMITTED",
+    "RESUME_CALL",
+    "RUN_CALL",
     "STALL_SECONDS",
     "JobRunners",
     "failed_message",

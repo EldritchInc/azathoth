@@ -1670,6 +1670,15 @@ class RunStarted(ApiModel):
 
     workflow_id: UUID
 
+    run_id: UUID | None = Field(
+        default=None,
+        description=(
+            "The run, named before it starts: the new run of `runs.run`, or the run a resume "
+            "goes on with. An invocation's run is named through its invocation, so it is None "
+            "for one (ADR 0139)."
+        ),
+    )
+
 
 class StepStarted(ApiModel):
     """A step began its first attempt; retries never start it again."""

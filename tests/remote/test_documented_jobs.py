@@ -11,10 +11,11 @@ from azathoth.api.calls import SERVICE_CALLS
 from azathoth.cli.remote import runners_line
 from azathoth.persistence.repositories import open_repositories
 from azathoth.remote.calling import CallerInstances
-from azathoth.remote.jobs import DEFAULT_RUNNERS, RUNNER_ALIVE_SECONDS
+from azathoth.remote.jobs import DEFAULT_RUNNERS
 from azathoth.remote.runners import (
     BEAT_SECONDS,
     INTERRUPTED_CODE,
+    STALL_SECONDS,
     JobRunners,
     failed_message,
     interrupted_message,
@@ -111,7 +112,6 @@ def test_the_adr_quotes_what_a_job_says_exactly(
     for message in (
         failed_message("<CALL>"),
         interrupted_message("<CALL>"),
-        interrupted_message("runs.run"),
         refused.json()["error"].replace(job, "<NAME>", 1),
         NO_JOBS_MESSAGE,
         dropped_message(tmp_path, monkeypatch),
@@ -123,7 +123,6 @@ def test_the_remote_readme_quotes_what_a_job_says_exactly() -> None:
     for message in (
         failed_message("<CALL>"),
         interrupted_message("<CALL>"),
-        interrupted_message("runs.run"),
         NO_JOBS_MESSAGE,
         f"event: {JOB_EVENT}",
         f"event: {FINISHED_EVENT}",
@@ -153,7 +152,8 @@ def test_the_numbers_the_documents_give_are_the_remotes() -> None:
     assert f"quiet for {KEEP_ALIVE_SECONDS:g} seconds" in remote
     assert f"quiet for {KEEP_ALIVE_SECONDS:g} seconds" in adr
     assert f"every {BEAT_SECONDS:g} seconds" in remote
-    assert f"in {RUNNER_ALIVE_SECONDS:g} seconds" in remote
+    assert f"in {STALL_SECONDS:g} seconds" in remote
+    assert f"after {STALL_SECONDS:g} seconds" in flat(CLI)
     assert f"`{JOB_KEY_PREFIX}<JOB_ID>`" in remote
     assert f"`{JOB_KEY_PREFIX}<JOB_ID>`" in adr
     assert f"up to {connected_module.RECONNECTS} more times" in flat(API)

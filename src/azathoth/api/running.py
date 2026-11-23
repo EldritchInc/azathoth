@@ -373,13 +373,15 @@ class Runs:
             content=repositories.tool_content,
         )
 
-        observer.emit(RunStarted(workflow_id=workflow_id))
+        run_id = uuid4()
+        observer.emit(RunStarted(workflow_id=workflow_id, run_id=run_id))
 
         run = asyncio.run(
             _until_cancelled(
                 runner.run_recording_failures(
                     candidate,
                     _context(source, repositories.content, sensitivity),
+                    run_id=run_id,
                 ),
                 cancel,
             )
@@ -760,7 +762,7 @@ class Runs:
             content=repositories.tool_content,
         )
 
-        observer.emit(RunStarted(workflow_id=entries[0].workflow_id))
+        observer.emit(RunStarted(workflow_id=entries[0].workflow_id, run_id=run_id))
 
         try:
             run, specification = asyncio.run(

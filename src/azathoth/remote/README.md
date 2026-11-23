@@ -350,18 +350,18 @@ that is no `ApiError` is kept as one the remote's log explains:
 
 A thread beside them asks a running job to stop once that is asked of it,
 and beats for every runner every 10 seconds. A runner that has not beaten
-in 60 seconds has stopped, and any server over the database recovers its
-jobs: a resume, or an invocation, which is invoked again under its key, is
-queued again; any other is refused 409 `interrupted`. A server that stops
-hands its jobs back the same way, at once:
+in 90 seconds, longer than a run's lease lasts, has stopped, and any
+server over the database recovers its jobs. A run, a resume, or an
+invocation, which is invoked again under its key, is queued again: a run
+is resumed by the run its `run_started` named, or runs as submitted when
+it named none (ADR 0139). Any other is refused 409 `interrupted`. A
+server that stops hands its jobs back the same way, at once:
 
 ```text
 The server running this job stopped before it finished, and nothing resumes <CALL>; submit it again.
-The server running this job stopped before it finished. A run it started is named by runs.interrupted, and runs.resume resumes it from its journal.
 ```
 
-The second is a `runs.run` job's, whose run's ID is known only once it
-returns. `GET /v1/jobs` lists the caller's own jobs, newest first, 100 by
+`GET /v1/jobs` lists the caller's own jobs, newest first, 100 by
 default and up to 1000 with `?limit=`. The caller who submitted a job may
 read, follow and stop it; another is asked `read_runs` to read or follow
 it, and the actions of its call to stop it, about `job <JOB_ID>`. A

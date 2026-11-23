@@ -9,8 +9,9 @@ from azathoth.remote.jobs import (
     ServiceJobSummary,
     SqlServiceJobRepository,
 )
-from azathoth.remote.runners import DEFAULT_RUNNERS, STALL_SECONDS
+from azathoth.remote.runners import BEAT_SECONDS, DEFAULT_RUNNERS, STALL_SECONDS
 from azathoth.remote.service import ServiceDescription
+from azathoth.workflows.run_lease import LEASE_DURATION
 from tests.remote.asgi import call
 from tests.remote.test_call_routes import ERIS, Served
 from tests.remote.test_job_routes import submitted
@@ -60,7 +61,9 @@ def test_a_remote_counts_only_the_runners_that_beat_lately(
     assert described(served).jobs == ServiceJobSummary(queued=0, running=0, runners=1)
 
 
-def test_a_runner_is_alive_for_as_long_as_its_jobs_are_left_to_it() -> None:
-    assert STALL_SECONDS == RUNNER_ALIVE_SECONDS == 60.0
+def test_a_runner_counted_alive_is_never_taken_for_stopped_nor_its_runs_lease_held() -> None:
+    assert RUNNER_ALIVE_SECONDS == 60.0
+    assert STALL_SECONDS == LEASE_DURATION.total_seconds() + 3 * BEAT_SECONDS == 90.0
+    assert STALL_SECONDS > RUNNER_ALIVE_SECONDS
+    assert timedelta(seconds=STALL_SECONDS) > LEASE_DURATION
     assert DEFAULT_RUNNERS == 2
-    assert timedelta(seconds=RUNNER_ALIVE_SECONDS) == timedelta(minutes=1)

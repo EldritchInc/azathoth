@@ -3879,9 +3879,9 @@ It runs no jobs; it queues them for another server over its database to run.
 
 When the server stops, it hands back the jobs it is running. A server
 that stops without doing so, or whose machine does, leaves its jobs for
-another to take after 60 seconds. A resumed run and an invocation go on
-from their journals; any other job is ended as interrupted, to be
-submitted again.
+another to take after 90 seconds. A run, a resumed run and an
+invocation go on from their journals; any other job is ended as
+interrupted, to be submitted again.
 
 # Naming Remotes
 

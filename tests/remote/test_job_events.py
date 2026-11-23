@@ -10,8 +10,14 @@ from uuid import UUID
 
 import pytest
 
+from azathoth.persistence.repositories import open_repositories
 from azathoth.remote import Action, AuditEventKind, Principal
-from azathoth.remote.jobs import JobView, ServiceJobStatus
+from azathoth.remote.jobs import (
+    JobView,
+    ServiceJobEvent,
+    ServiceJobStatus,
+    SqlServiceJobRepository,
+)
 from azathoth.remote.server import (
     EVENT_STREAM_MEDIA_TYPE,
     FINISHED_EVENT,
@@ -190,6 +196,48 @@ def test_a_stream_follows_a_job_as_it_runs_and_ends_when_it_ends(
 
     assert [frame.event for frame in frames(answer)] == [JOB_EVENT] * 3 + [FINISHED_EVENT]
     assert JobView.model_validate(frames(answer)[-1].json()).status is ServiceJobStatus.FAILED
+
+
+class Racing(SqlServiceJobRepository):
+    """Jobs whose runner tells its last event and ends the job just after a stream read none."""
+
+    def events(
+        self,
+        job_id: UUID,
+        *,
+        after: int = 0,
+    ) -> tuple[ServiceJobEvent, ...]:
+        read = super().events(job_id, after=after)
+        held = self.get(job_id)
+
+        if not read and held is not None and held.status is ServiceJobStatus.RUNNING:
+            self.append_event(job_id, TOLD[-1])
+            self.finish(job_id, "runner-test", ServiceJobStatus.SUCCEEDED, result="{}")
+
+        return read
+
+
+def test_an_event_told_just_before_its_job_ended_is_sent_before_the_end(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "azathoth.db"
+    path.touch()
+    served = Served(path, principal=ERIS, jobs=Racing(open_repositories(path).database))
+    job_id = submitted(served)
+    served.jobs.claim("runner-test")
+
+    for event in TOLD[:-1]:
+        served.jobs.append_event(job_id, event)
+
+    sent = frames(events(served, job_id))
+
+    assert [(frame.id, frame.event) for frame in sent] == [
+        ("1", JOB_EVENT),
+        ("2", JOB_EVENT),
+        ("3", JOB_EVENT),
+        ("3", FINISHED_EVENT),
+    ]
+    assert sent[2].json() == {"type": "run_finished"}
 
 
 def test_a_quiet_stream_says_it_is_still_there(

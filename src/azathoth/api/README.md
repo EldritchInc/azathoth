@@ -312,7 +312,7 @@ run makes them:
 
 | Event | `type` | Carries |
 | --- | --- | --- |
-| `RunStarted` | `run_started` | The workflow. |
+| `RunStarted` | `run_started` | The workflow, and the run it starts or resumes; None for an invocation's, named through its invocation. |
 | `StepStarted` | `step_started` | The step, its dependency layer, and its message. |
 | `StepFinished` | `step_finished` | Its status, its final failure's message, its confidence. |
 | `ContextChanged` | `context_changed` | The values the step declared, by name. |
