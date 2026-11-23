@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-import azathoth.cli.workflow_configuration as workflow_configuration
+import azathoth.cli.bootstrap as bootstrap
 from azathoth.cli import (
     DATABASE_ENVIRONMENT_VARIABLE,
     build_parser,
@@ -60,7 +60,11 @@ def configure_database(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> Path:
-    """Point the CLI at one isolated database and forbid runtime bootstrap."""
+    """Point the CLI at one isolated database and forbid runtime bootstrap.
+
+    The revision commands read the service API, which needs no runtime, so
+    a bootstrap anywhere they reach fails the test.
+    """
 
     database = tmp_path / "azathoth.db"
 
@@ -75,7 +79,7 @@ def configure_database(
         raise AssertionError("workflow revision commands must not bootstrap the runtime")
 
     monkeypatch.setattr(
-        workflow_configuration,
+        bootstrap,
         "load_runtime",
         fail_load_runtime,
     )

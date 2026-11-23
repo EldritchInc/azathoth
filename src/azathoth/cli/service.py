@@ -218,6 +218,35 @@ def lineage_lines(
     )
 
 
+def revision_lineage_lines(
+    revision: api.Revision,
+) -> tuple[str, ...]:
+    """Return the lines `show` names a revision's digest, parent and author with (ADR 0122).
+
+    They are the lines `lineage_lines` gives, read from the service API's
+    view of the revision, so a revision a remote holds is shown the same
+    (ADR 0140).
+    """
+
+    if revision.parent_number is not None:
+        parent_line = f"Parent: revision {revision.parent_number}"
+    elif revision.parent_digest is not None:
+        parent_line = f"Parent: {revision.parent_digest}"
+    else:
+        parent_line = "Parent: none"
+
+    author = revision.author
+
+    if author is None:
+        author_line = "Author: unknown"
+    elif author.email is None:
+        author_line = f"Author: {author.name}"
+    else:
+        author_line = f"Author: {author.name} <{author.email}>"
+
+    return (f"Revision Digest: {revision.revision_digest}", parent_line, author_line)
+
+
 def current_author() -> Author | None:
     """Return who a command records as the author, or say why it cannot tell (ADR 0122).
 
@@ -238,6 +267,7 @@ __all__ = [
     "current_author",
     "history_line",
     "lineage_lines",
+    "revision_lineage_lines",
     "identical_note",
     "import_note",
     "CatalogDirectory",

@@ -1448,6 +1448,10 @@ class RunFeedback(ApiModel):
     )
 
 
+RunSource = Literal["configured", "benchmark", "experiment", "production"]
+"""What made a kept run: a run asked for, a benchmark's case, an optimization's, or production."""
+
+
 class RunSummary(ApiModel):
     """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
 
@@ -1493,6 +1497,15 @@ class RunSummary(ApiModel):
         description="The run's latest judgment, or None when it was never judged (ADR 0129).",
     )
 
+    source: RunSource = Field(
+        default="configured",
+        description=(
+            "What made the run: `production` for an invocation's, `experiment` for an "
+            "optimization's, `benchmark` for a benchmark case's, and otherwise `configured` "
+            "(ADR 0140)."
+        ),
+    )
+
 
 class StepMetrics(ApiModel):
     """What a step's strategy measured as it ran; what it did not measure is None."""
@@ -1522,6 +1535,19 @@ class StepFailure(ApiModel):
     exception_type: str
 
     message: str
+
+
+class StepResource(ApiModel):
+    """One resource an executed step's strategy used, such as a model it called (ADR 0140)."""
+
+    kind: str
+
+    identifier: str
+
+    attributes: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="What the strategy recorded of the resource, by name.",
+    )
 
 
 class RunStepDetail(RunStep):
@@ -1559,6 +1585,67 @@ class RunStepDetail(RunStep):
         description="Each attempt that failed, in order; a failed step's last is its failure.",
     )
 
+    resources: tuple[StepResource, ...] = Field(
+        default=(),
+        description="The resources an executed step's strategy used, in the order it named them.",
+    )
+
+
+class RunLineage(ApiModel):
+    """Where a run a step of another run started came from (ADRs 0104 and 0140)."""
+
+    depth: int = Field(
+        ge=0,
+        description="How far below its root run it is: 1 for a run its root's step started.",
+    )
+
+    parent_workflow_id: UUID
+
+    parent_run_id: UUID
+
+    parent_step_id: UUID
+
+    parent_attempt: int = Field(
+        ge=1,
+        description="The attempt of the parent step that started it.",
+    )
+
+    root_workflow_id: UUID
+
+    root_run_id: UUID
+
+
+class EvaluationEvidence(ApiModel):
+    """One piece of what an evaluator judged by."""
+
+    label: str
+
+    value: JsonValue
+
+
+class RunEvaluation(ApiModel):
+    """One evaluator's judgment of a kept run, as it was recorded (ADR 0140)."""
+
+    evaluation_id: UUID
+
+    evaluated_at: datetime
+
+    evaluator_name: str
+
+    evaluator_version: str
+
+    status: str = Field(
+        description="What the evaluator concluded, such as `passed` or `failed`.",
+    )
+
+    score: float
+
+    threshold: float
+
+    reason: str
+
+    evidence: tuple[EvaluationEvidence, ...]
+
 
 class RunDetail(RunSummary):
     """One kept run with its input, its result and each of its steps."""
@@ -1582,6 +1669,16 @@ class RunDetail(RunSummary):
 
     steps: tuple[RunStepDetail, ...] = Field(
         description="Every step, in the order the run recorded them.",
+    )
+
+    lineage: RunLineage | None = Field(
+        default=None,
+        description="Where a run another run's step started came from; None for any other run.",
+    )
+
+    evaluations: tuple[RunEvaluation, ...] = Field(
+        default=(),
+        description="Every evaluator judgment of the run, in the order they were recorded.",
     )
 
 
@@ -2372,6 +2469,7 @@ __all__ = [
     "BenchmarkSummary",
     "ContextChanged",
     "DocumentProblem",
+    "EvaluationEvidence",
     "Initialization",
     "InstanceDescription",
     "InvocationDetail",
@@ -2387,11 +2485,14 @@ __all__ = [
     "Revision",
     "RunDetail",
     "RunError",
+    "RunEvaluation",
     "RunEvent",
     "RunFile",
     "RunFinished",
     "RunInput",
+    "RunLineage",
     "RunResult",
+    "RunSource",
     "RunStarted",
     "RunStep",
     "RunStepDetail",
@@ -2402,6 +2503,7 @@ __all__ = [
     "StepKind",
     "StepMetrics",
     "StepReadiness",
+    "StepResource",
     "StepStarted",
     "StepTrial",
     "ToolDetail",
