@@ -670,13 +670,14 @@ nearest kind this Azathoth knows, with the remote's message: a
   answers as no remote serving the service API does.
 
 The eight calls that take a callback for their events, such as `runs.run`,
-run on a remote's workers, which a connected instance does not call yet:
-each is refused before anything is sent, as a `RemoteRefusedError` with
-status 501 and refusal `job`. Each call is one request, and once the
-instance is closed every call raises `InstanceClosedError`.
+are jobs a remote runs on its runners (ADR 0138): a connected instance
+submits one, hands each event the remote streams to its `on_event`, asks
+the remote to stop it once its `cancel` is cancelled, and returns its
+result or raises its refusal, as the local call does. Each other call is
+one request, and once the instance is closed every call raises
+`InstanceClosedError`.
 
 ```text
-<CALL> runs on a remote's workers, which a connected instance does not call yet.
 The remote at <URL> could not be reached: <REASON>
 The remote at <URL> does not serve <CALL>; it may not serve the service API, which a remote does from Azathoth 1.6.
 The remote at <URL> answered <CALL> with <STATUS> without saying why; it may not be an Azathoth remote.
