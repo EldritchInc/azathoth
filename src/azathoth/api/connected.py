@@ -399,13 +399,14 @@ class CallTransport:
 
         headers = {**self._headers(), "Last-Event-ID": str(after), "Accept": "text/event-stream"}
         last = after
+        refused: Exception | None = None
 
         try:
             with self._http.stream("GET", events_path(job_id), headers=headers) as response:
                 if not response.is_success:
-                    raise self._refused(what, response.status_code, response.read())
+                    refused = self._refused(what, response.status_code, response.read())
 
-                for sent in read_server_sent(response.iter_lines()):
+                for sent in () if refused is not None else read_server_sent(response.iter_lines()):
                     if sent.name == "finished":
                         view = self._model(sent.data.encode(), what, JobView.model_validate_json)
 
@@ -418,6 +419,9 @@ class CallTransport:
                     heard(event)
         except httpx.HTTPError:
             LOGGER.info("The stream of %s dropped after event %s.", what, last)
+
+        if refused is not None:
+            raise refused
 
         return last, None
 
