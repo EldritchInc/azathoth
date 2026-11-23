@@ -526,3 +526,31 @@ def test_the_commands_that_run_workflows_now_run_on_a_remote() -> None:
         }
         & NOT_YET_ON_A_REMOTE
     )
+
+
+def test_a_job_request_naming_s3_is_refused_alike_here_and_on_a_remote(
+    database: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    envelopes = []
+
+    for where, remote in (("here", ()), ("there", ("--remote", "origin"))):
+        request = tmp_path / f"s3-{where}.json"
+        request.write_text(
+            json.dumps(
+                {
+                    "kind": "invoke",
+                    "version": 1,
+                    "idempotency_key": f"s3-{where}",
+                    "workflow_id": str(COUNT_WORKFLOW_ID),
+                    "input": {"uri": "s3://bucket/words.txt", "media_type": "text/plain"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        status, out, err = said(capsys, "job", "run", str(request), *remote)
+        envelopes.append((status, out.replace(f"s3-{where}", "<KEY>"), err))
+
+    assert envelopes[1] == envelopes[0]
+    assert '"code": "invalid_input"' in envelopes[0][1]

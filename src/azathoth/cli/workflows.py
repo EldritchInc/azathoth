@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.cli.benchmark_checks import (
     benchmark_has_cases,
     comparisons_supported,
@@ -40,7 +41,12 @@ from azathoth.cli.promotion import (
     promote_configured_workflow,
 )
 from azathoth.cli.remote_choice import chosen_remote
-from azathoth.cli.remote_runs import child_run, invoke_on_remote, run_on_remote
+from azathoth.cli.remote_runs import (
+    child_run,
+    deploy_on_remote,
+    invoke_on_remote,
+    run_on_remote,
+)
 from azathoth.cli.rendering import (
     render_workflow_optimization_session,
     render_workflow_promotion,
@@ -287,7 +293,16 @@ def promote_workflow(
     With an experiment ID, the experiment's winner is promoted instead of the
     configured candidate (ADR 0092). Who promotes is told as for an import,
     before the runtime is loaded, and recorded with the revision (ADR 0128).
+
+    Given `--remote`, the remote promotes, as the caller its token names
+    (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return deploy_on_remote(
+            lambda instance: instance.production.promote(workflow_id, experiment_id=experiment_id),
+            status="promoted",
+        )
 
     author = current_author()
 
@@ -342,7 +357,16 @@ def rollback_workflow(
     Only durable state is read, so the runtime is never loaded and no
     provider credentials are needed; the portfolio decides whether the
     restored state's models may still run.
+
+    Given `--remote`, the remote rolls back, as the caller its token names
+    (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return deploy_on_remote(
+            lambda instance: _roll_back_on(instance, workflow_id, to=to),
+            status="rolled back",
+        )
 
     author = current_author()
 
@@ -377,6 +401,29 @@ def rollback_workflow(
     )
 
     return 0
+
+
+def _roll_back_on(
+    instance: api.Instance,
+    workflow_id: UUID,
+    *,
+    to: UUID | None,
+) -> api.ProductionRevisionSummary:
+    """Roll a remote workflow back, refusing one the remote knows nothing of as not in production.
+
+    Here, a workflow with no production is not in production, whether or
+    not it is configured, so it is refused the same way there.
+
+    Raises:
+        ApiError: The remote refused the rollback.
+    """
+
+    try:
+        instance.production.get(workflow_id)
+    except api.NotFoundError as exc:
+        raise api.NothingToRollBackToError(f"Workflow {workflow_id} is not in production.") from exc
+
+    return instance.production.roll_back(workflow_id, to=to)
 
 
 def invoke_workflow(

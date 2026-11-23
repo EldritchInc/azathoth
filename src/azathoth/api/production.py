@@ -22,6 +22,7 @@ from azathoth.api.errors import (
     WorkflowResultMissingError,
 )
 from azathoth.api.models import (
+    ProductionEmission,
     ProductionRevisionSummary,
     ProductionState,
     ProductionStepModels,
@@ -44,6 +45,7 @@ from azathoth.workflows import (
     WorkflowResultError,
     WorkflowSpecification,
     active_production_revision,
+    describe_value_reference,
     promote_workflow_candidate,
     rebuild_workflow_candidate,
     roll_back_workflow_production,
@@ -166,6 +168,13 @@ class Production:
             input_schema=state.specification.input_schema,
             output_schema=state.specification.output_schema,
             command=f"azathoth workflow production {workflow_id}",
+            emissions=tuple(
+                ProductionEmission(
+                    name=emission.name,
+                    source=describe_value_reference(emission.source),
+                )
+                for emission in state.emissions
+            ),
         )
 
     def revisions(

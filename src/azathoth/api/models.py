@@ -1190,6 +1190,11 @@ class InvocationSummary(ApiModel):
         description="The `azathoth` command that shows it.",
     )
 
+    error_code: str | None = Field(
+        default=None,
+        description="The production code of a failed one's error, such as `timeout` (ADR 0140).",
+    )
+
 
 class ProductionStepModels(ApiModel):
     """The models production runs one prompt step on, in the order it tries them (ADR 0063)."""
@@ -1239,6 +1244,16 @@ class ProductionRevisionSummary(ApiModel):
     )
 
 
+class ProductionEmission(ApiModel):
+    """One value a workflow's production returns, and where in its run it is read (ADR 0140)."""
+
+    name: str
+
+    source: str = Field(
+        description="Where the value is read, as `azathoth workflow production` describes it.",
+    )
+
+
 class ProductionState(ApiModel):
     """What a workflow's production runs now, as `azathoth workflow production` shows it."""
 
@@ -1271,6 +1286,11 @@ class ProductionState(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows it.",
+    )
+
+    emissions: tuple[ProductionEmission, ...] = Field(
+        default=(),
+        description="What every invocation returns, in the order it is declared (ADR 0140).",
     )
 
 
@@ -1692,6 +1712,20 @@ class StepTrial(ApiModel):
     )
 
 
+class CitationRecord(ApiModel):
+    """The checks one cited step of a run kept, in the content store (ADRs 0116 and 0140)."""
+
+    step_id: UUID
+
+    record: str = Field(
+        description="The digest the record is kept under.",
+    )
+
+    checks: tuple[dict[str, JsonValue], ...] | None = Field(
+        description="Each check, in the order the step's reply held them; None when not kept.",
+    )
+
+
 class InvocationDetail(ApiModel):
     """One invocation as it was recorded: its input, who made it, its outcome and its run."""
 
@@ -1724,6 +1758,26 @@ class InvocationDetail(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows the invocation.",
+    )
+
+    request_digest: str | None = Field(
+        default=None,
+        description="The digest of the request a keyed invocation was made under (ADR 0097).",
+    )
+
+    lineage: RunLineage | None = Field(
+        default=None,
+        description="Where one a step of another run made came from; None for any other.",
+    )
+
+    input_provenance: dict[str, JsonValue] | None = Field(
+        default=None,
+        description="Where its input was read from, when it was read (ADR 0112).",
+    )
+
+    citations: tuple[CitationRecord, ...] = Field(
+        default=(),
+        description="The checks each cited step of its run kept, in the order it kept them.",
     )
 
 

@@ -42,6 +42,7 @@ from azathoth.cli.rendering import (
 )
 from azathoth.cli.rendering._json import render_json_value
 from azathoth.cli.rendering.jobs import render_job_result
+from azathoth.cli.rendering.production_views import render_deployment
 from azathoth.cli.rendering.run_details import render_run_detail, run_halted
 from azathoth.cli.rendering.sensitivity import warn_if_restricted
 from azathoth.cli.reporting import write_terminal_record
@@ -579,6 +580,31 @@ def _kept(
     return content
 
 
+def deploy_on_remote(
+    deploy: Callable[[api.Instance], api.ProductionRevisionSummary],
+    *,
+    status: str,
+) -> int:
+    """Promote or roll back on a remote, and report the new revision as here.
+
+    The workflow's name is the one its production now runs.
+    """
+
+    try:
+        instance = _instance()
+        revision = deploy(instance)
+        state = instance.production.get(revision.workflow_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    name = state.workflow_name if state is not None else str(revision.workflow_id)
+    print(render_deployment(revision, workflow_name=name, status=status))
+
+    return 0
+
+
 def _request_input(
     source: InlineInput | ReferenceInput,
 ) -> JsonValue | api.RunFile:
@@ -696,6 +722,7 @@ __all__ = [
     "CHILD_RUN_MESSAGE",
     "LiveOutput",
     "child_run",
+    "deploy_on_remote",
     "input_file",
     "invocation_record",
     "invoke_on_remote",

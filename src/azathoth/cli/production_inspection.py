@@ -1,4 +1,8 @@
-"""Production deployment and invocation inspection commands for the Azathoth CLI."""
+"""Production deployment and invocation inspection commands for the Azathoth CLI.
+
+Given `--remote`, each reads the service API of that remote instead, and
+prints what it prints here (ADR 0140).
+"""
 
 import sys
 from collections.abc import Callable, Mapping
@@ -6,6 +10,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.citations import (
     VERIFIED_STATUSES,
     LinkResolutionError,
@@ -16,6 +21,7 @@ from azathoth.citations import (
 )
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_choice import chosen_remote
 from azathoth.cli.rendering import (
     RecordedCitations,
     render_production_invocation,
@@ -23,7 +29,14 @@ from azathoth.cli.rendering import (
     render_workflow_production,
     render_workflow_revision_summaries,
 )
+from azathoth.cli.rendering.production_views import (
+    render_invocation_detail,
+    render_invocation_summaries,
+    render_production_state,
+    render_revision_summaries,
+)
 from azathoth.cli.rendering.sensitivity import warn_if_restricted
+from azathoth.cli.service import service_instance
 from azathoth.context import context_sensitivity
 from azathoth.persistence.repositories import Repositories
 from azathoth.prompting import CitationCheckError, stored_citation_checks
@@ -44,6 +57,9 @@ def show_workflow_production(
     workflow has since been removed from configuration. The matching revision
     supplies deployment identity and time when one was recorded.
     """
+
+    if chosen_remote() is not None:
+        return _remote(lambda instance: _show_remote_production(instance, workflow_id))
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -86,6 +102,13 @@ def list_workflow_revisions(
     revision history. An identifier with neither fails so mistyped identifiers
     are not mistaken for workflows never promoted.
     """
+
+    if chosen_remote() is not None:
+        return _remote(
+            lambda instance: _print_nonempty(
+                render_revision_summaries(instance.production.revisions(workflow_id, limit=limit))
+            )
+        )
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -140,6 +163,13 @@ def list_workflow_invocations(
     invocation history. An identifier with neither fails so mistyped
     identifiers are not mistaken for workflows never invoked.
     """
+
+    if chosen_remote() is not None:
+        return _remote(
+            lambda instance: _print_nonempty(
+                render_invocation_summaries(instance.invocations.list(workflow_id, limit=limit))
+            )
+        )
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -204,8 +234,12 @@ def show_invocation(
     (ADR 0116). With `links`, each verified check is followed by a link to
     its place in its document, made by the resolver of its origin's scheme;
     an `s3://` link is presigned, and valid for `AZATHOTH_LINK_EXPIRY_SECONDS`
-    (ADR 0117).
+    (ADR 0117). Given `--remote`, the invocation and its checks are the
+    remote's, and each link is made here, with this machine's credentials.
     """
+
+    if chosen_remote() is not None:
+        return _remote(lambda instance: _show_remote_invocation(instance, invocation_id, links))
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -259,6 +293,75 @@ def show_invocation(
     warn_if_restricted(
         context_sensitivity(invocation.initial_context), f"Invocation {invocation_id}"
     )
+
+    return 0
+
+
+def _remote(
+    command: Callable[[api.Instance], int],
+) -> int:
+    """Run a command against the remote `--remote` chose, reporting what it refuses in a line."""
+
+    try:
+        return command(service_instance(CliRuntimeConfiguration.from_environment()))
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+
+def _print_nonempty(
+    rendered: str,
+) -> int:
+    """Print what a listing rendered, printing nothing for a listing of nothing."""
+
+    if rendered:
+        print(rendered)
+
+    return 0
+
+
+def _show_remote_production(
+    instance: api.Instance,
+    workflow_id: UUID,
+) -> int:
+    """Show a remote workflow's production, or say it is not in production."""
+
+    state = instance.production.get(workflow_id)
+
+    if state is None:
+        print(f"Workflow {workflow_id} is not in production.", file=sys.stderr)
+
+        return 1
+
+    print(render_production_state(state))
+
+    return 0
+
+
+def _show_remote_invocation(
+    instance: api.Instance,
+    invocation_id: UUID,
+    links: bool,
+) -> int:
+    """Show a remote invocation, linking each verified check from here when `links` asks."""
+
+    try:
+        invocation = instance.invocations.get(invocation_id)
+    except api.NotFoundError:
+        print(f"Invocation {invocation_id} was not found.", file=sys.stderr)
+
+        return 1
+
+    try:
+        rendered = render_invocation_detail(invocation, link=_check_link() if links else None)
+    except LinkResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+
+        return 1
+
+    print(rendered)
+    warn_if_restricted(invocation.sensitivity, f"Invocation {invocation_id}")
 
     return 0
 

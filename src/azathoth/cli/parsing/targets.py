@@ -57,7 +57,6 @@ NOT_YET_ON_A_REMOTE: Final = frozenset(
         "benchmark compare",
         "benchmark run",
         "benchmark show",
-        "invocation show",
         "model authorize",
         "model deauthorize",
         "model list",
@@ -70,12 +69,7 @@ NOT_YET_ON_A_REMOTE: Final = frozenset(
         "tool show",
         "tool test-case-show",
         "tool test-cases",
-        "workflow invocations",
         "workflow optimize",
-        "workflow production",
-        "workflow promote",
-        "workflow revisions",
-        "workflow rollback",
     }
 )
 """The commands that still read this machine's database themselves, so run on no remote yet."""
