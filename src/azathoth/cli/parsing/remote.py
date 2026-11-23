@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from argparse import ArgumentParser, _SubParsersAction
+from argparse import ArgumentParser, ArgumentTypeError, _SubParsersAction
 from uuid import UUID
 
 from azathoth.cli.output_format import StatusOutputFormat
 from azathoth.remote import DEFAULT_HOST, DEFAULT_PORT, REMOTE_TOKEN_VARIABLE
+from azathoth.remote.jobs import DEFAULT_RUNNERS
 
 REMOTE_COMMAND = "remote"
 
@@ -19,6 +20,8 @@ REMOTE_HOST_ATTRIBUTE = "remote_host"
 REMOTE_PORT_ATTRIBUTE = "remote_port"
 
 REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE = "remote_accept_restricted"
+
+REMOTE_JOBS_ATTRIBUTE = "remote_jobs"
 
 REMOTE_PUSH_ACTION = "push"
 
@@ -59,6 +62,26 @@ REMOTE_TOKEN_REVOKE_ACTION = "revoke"
 REMOTE_TOKEN_NAME_ATTRIBUTE = "remote_token_name"
 
 REMOTE_TOKEN_ALL_ATTRIBUTE = "remote_token_all"
+
+
+def job_count(
+    value: str,
+) -> int:
+    """Return how many jobs `--jobs` asks a server to run at once: a number from 0.
+
+    Raises:
+        ArgumentTypeError: It is not one.
+    """
+
+    try:
+        count = int(value)
+    except ValueError:
+        count = -1
+
+    if count < 0:
+        raise ArgumentTypeError(f"A server runs a number of jobs at once from 0, not {value}.")
+
+    return count
 
 
 def add_remote_parser(
@@ -103,6 +126,18 @@ def add_remote_parser(
         dest=REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE,
         action="store_true",
         help="Receive restricted data; declare it only for a remote that may hold it.",
+    )
+
+    serve_parser.add_argument(
+        "--jobs",
+        dest=REMOTE_JOBS_ATTRIBUTE,
+        type=job_count,
+        default=DEFAULT_RUNNERS,
+        metavar="N",
+        help=(
+            f"How many jobs to run at once; {DEFAULT_RUNNERS} by default. With 0, jobs are "
+            "queued for another server over the same database to run."
+        ),
     )
 
     for action, verb, help_text in (

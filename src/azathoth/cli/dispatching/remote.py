@@ -13,6 +13,7 @@ from azathoth.cli.parsing import (
     REMOTE_BENCHMARKS_ATTRIBUTE,
     REMOTE_HOST_ATTRIBUTE,
     REMOTE_INCLUDE_RESTRICTED_ATTRIBUTE,
+    REMOTE_JOBS_ATTRIBUTE,
     REMOTE_LIST_ACTION,
     REMOTE_NAME_ATTRIBUTE,
     REMOTE_OUTPUT_ATTRIBUTE,
@@ -68,6 +69,7 @@ def dispatch_remote_command(
             host=cast(str, getattr(arguments, REMOTE_HOST_ATTRIBUTE)),
             port=cast(int, getattr(arguments, REMOTE_PORT_ATTRIBUTE)),
             accept_restricted=cast(bool, getattr(arguments, REMOTE_ACCEPT_RESTRICTED_ATTRIBUTE)),
+            jobs=cast(int, getattr(arguments, REMOTE_JOBS_ATTRIBUTE)),
         )
 
     if action in (REMOTE_PUSH_ACTION, REMOTE_PULL_ACTION, REMOTE_STATUS_ACTION):

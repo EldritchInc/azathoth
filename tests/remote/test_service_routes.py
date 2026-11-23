@@ -149,6 +149,7 @@ def test_the_service_says_which_azathoth_serves_it_and_its_edition() -> None:
         "protocol": 1,
         "edition": "community",
         "edition_detail": None,
+        "jobs": None,
     }
 
 

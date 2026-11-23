@@ -31,6 +31,12 @@ from azathoth.persistence import (
     require_text,
 )
 
+DEFAULT_RUNNERS: Final = 2
+"""How many jobs a server runs at once unless told otherwise."""
+
+RUNNER_ALIVE_SECONDS: Final = 60.0
+"""How long a runner may go without beating and still be counted alive, and its jobs left to it."""
+
 SERVICE_JOB_TABLES: Final = (
     Table(
         name="service_jobs",
@@ -1256,8 +1262,10 @@ def _job(
 
 
 __all__ = [
+    "DEFAULT_RUNNERS",
     "FINISHED_STATUSES",
     "JOBS_ROUTE",
+    "RUNNER_ALIVE_SECONDS",
     "SERVICE_JOB_TABLES",
     "STAMP_FORMAT",
     "JobAccepted",

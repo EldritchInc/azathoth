@@ -515,7 +515,9 @@ class RemoteServer:
         request: Request,
         principal: Principal,
     ) -> Answer:
-        described = await self._blocking(lambda: service_description(self.seams))
+        described = await self._blocking(
+            lambda: service_description(self.seams, self.jobs, now=self._clock())
+        )
 
         return JSONResponse(described.model_dump(mode="json")), None, None
 

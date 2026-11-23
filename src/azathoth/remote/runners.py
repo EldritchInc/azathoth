@@ -33,14 +33,17 @@ from uuid import UUID
 from azathoth.api.errors import ApiError, RunCancelledError
 from azathoth.api.running import CancellationToken
 from azathoth.remote.calling import CallerInstances, job_signature
-from azathoth.remote.jobs import ServiceJob, ServiceJobRepository, ServiceJobStatus
+from azathoth.remote.jobs import (
+    DEFAULT_RUNNERS,
+    RUNNER_ALIVE_SECONDS,
+    ServiceJob,
+    ServiceJobRepository,
+    ServiceJobStatus,
+)
 from azathoth.remote.refusals import refusal_body
 from azathoth.remote.service import api_error_status
 
 LOGGER: Final = logging.getLogger(__name__)
-
-DEFAULT_RUNNERS: Final = 2
-"""How many jobs a server runs at once unless told otherwise."""
 
 POLL_SECONDS: Final = 1.0
 """How often an idle runner looks for a job, and a running job's cancellation is checked."""
@@ -48,7 +51,7 @@ POLL_SECONDS: Final = 1.0
 BEAT_SECONDS: Final = 10.0
 """How often every runner beats."""
 
-STALL_SECONDS: Final = 60.0
+STALL_SECONDS: Final = RUNNER_ALIVE_SECONDS
 """How long a runner may go without beating before its jobs are recovered."""
 
 INTERRUPTED_CODE: Final = "interrupted"

@@ -13,8 +13,9 @@ from starlette.testclient import TestClient
 import azathoth.cli.application as application
 import azathoth.remote.seams as seams
 from azathoth.cli import build_parser, main
-from azathoth.cli.remote import serving_line
+from azathoth.cli.remote import runners_line, serving_line
 from azathoth.persistence import SQLiteLocation
+from azathoth.persistence.repositories import open_repositories
 from azathoth.remote import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -102,7 +103,7 @@ def test_the_cli_dispatches_serve(
     monkeypatch.setattr(application, "serve_remote", serve)
 
     assert main(("remote", "serve", "--port", "9000")) == 0
-    assert calls == [{"host": "127.0.0.1", "port": 9000, "accept_restricted": False}]
+    assert calls == [{"host": "127.0.0.1", "port": 9000, "accept_restricted": False, "jobs": 2}]
 
 
 @pytest.mark.parametrize("accept", [False, True], ids=["refusing", "accepting"])
@@ -119,7 +120,9 @@ def test_serve_serves_the_configured_database_with_its_tokens(
     (call,) = served.calls
 
     assert (status, out) == (0, "")
-    assert err == f"{serving_line('http://127.0.0.1:9000', accept_restricted=accept)}\n"
+    assert err == (
+        f"{serving_line('http://127.0.0.1:9000', accept_restricted=accept)}\n{runners_line(2)}\n"
+    )
     assert (call["host"], call["port"], call["log_level"]) == ("127.0.0.1", 9000, "info")
     assert isinstance(call["app"], Starlette)
 
@@ -239,3 +242,95 @@ def test_the_guides_quote_serving_exactly() -> None:
 
     assert f"\n{MISSING_REMOTE_EXTRA_MESSAGE}\n" in readme
     assert f"\n{MISSING_REMOTE_EXTRA_MESSAGE}\n" in install
+
+
+# Running jobs
+
+
+def test_serve_runs_two_jobs_at_once_unless_told_otherwise() -> None:
+    assert build_parser().parse_args(("remote", "serve")).remote_jobs == 2
+    assert build_parser().parse_args(("remote", "serve", "--jobs", "5")).remote_jobs == 5
+    assert build_parser().parse_args(("remote", "serve", "--jobs", "0")).remote_jobs == 0
+
+
+@pytest.mark.parametrize("count", ["-1", "many"])
+def test_a_count_of_jobs_that_is_no_number_from_0_is_refused(
+    capsys: pytest.CaptureFixture[str],
+    count: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(("remote", "serve", "--jobs", count))
+
+    assert f"A server runs a number of jobs at once from 0, not {count}." in (
+        capsys.readouterr().err
+    )
+
+
+class Watching:
+    """A stand-in for uvicorn that asks the app it is handed how its jobs stand."""
+
+    def __init__(
+        self,
+        secret: str,
+    ) -> None:
+        self.secret = secret
+        self.service: dict[str, Any] = {}
+
+    def __call__(
+        self,
+        app: Any,
+        **options: Any,
+    ) -> None:
+        client = TestClient(app)
+        headers = {"Authorization": f"Bearer {self.secret}"}
+        self.service = client.get("/v1/service", headers=headers).json()
+        self.submitted = client.post(
+            "/v1/calls/runs.resume",
+            json={"run_id": "c13d0000-0000-4000-8000-000000000001"},
+            headers=headers,
+        ).status_code
+
+
+@pytest.mark.parametrize("jobs", [1, 3])
+def test_serve_runs_its_jobs_while_it_serves_and_forgets_its_runners_after(
+    database: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    jobs: int,
+) -> None:
+    secret = SQLiteRemoteTokenRepository(database).create("laptop").secret
+    watching = Watching(secret)
+    monkeypatch.setattr(uvicorn, "run", watching)
+
+    status, _, err = run(capsys, "remote", "serve", "--jobs", str(jobs))
+
+    assert status == 0
+    assert err.endswith(f"{runners_line(jobs)}\n")
+    assert watching.service["jobs"]["runners"] == jobs
+    assert watching.submitted == 202
+    assert open_repositories(database).service_jobs.runners() == ()
+
+
+def test_serve_with_no_jobs_queues_them_for_another_server(
+    database: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    secret = SQLiteRemoteTokenRepository(database).create("laptop").secret
+    watching = Watching(secret)
+    monkeypatch.setattr(uvicorn, "run", watching)
+
+    status, _, err = run(capsys, "remote", "serve", "--jobs", "0")
+    (queued,) = open_repositories(database).service_jobs.jobs()
+
+    assert status == 0
+    assert err.endswith(
+        "It runs no jobs; it queues them for another server over its database to run.\n"
+    )
+    assert (watching.service["jobs"]["runners"], watching.submitted) == (0, 202)
+    assert (queued.call, queued.status.value) == ("runs.resume", "queued")
+
+
+def test_the_runners_line_says_how_many_jobs_run_at_once() -> None:
+    assert runners_line(1) == "It runs 1 job at once."
+    assert runners_line(2) == "It runs 2 jobs at once."

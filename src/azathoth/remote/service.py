@@ -20,6 +20,7 @@ This module needs no web framework, so a client may read these shapes too.
 """
 
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from typing import Final
 
@@ -50,6 +51,7 @@ from azathoth.api.errors import (
     WorkflowResultMissingError,
 )
 from azathoth.api.models import API_STABILITY, ApiStability
+from azathoth.remote.jobs import RUNNER_ALIVE_SECONDS, ServiceJobRepository, ServiceJobSummary
 from azathoth.remote.protocol import PROTOCOL_VERSION
 from azathoth.remote.seams import Action, Policy, Principal, Seams
 
@@ -155,6 +157,14 @@ class ServiceDescription(BaseModel):
 
     edition_detail: str | None = None
 
+    jobs: ServiceJobSummary | None = Field(
+        default=None,
+        description=(
+            "How the remote's jobs stand: how many wait and run, and its runners alive; "
+            "absent when it runs no jobs (ADR 0138)."
+        ),
+    )
+
 
 class ActionPermission(BaseModel):
     """Whether a caller may take one action, and why not when they may not."""
@@ -230,12 +240,23 @@ class ResourcePermissionsResponse(BaseModel):
 
 def service_description(
     seams: Seams,
+    jobs: ServiceJobRepository | None = None,
+    *,
+    now: datetime | None = None,
 ) -> ServiceDescription:
     """Return what a remote served by these seams says of its service API.
+
+    With `jobs`, it says how they stand, counting as alive the runners
+    that beat within `RUNNER_ALIVE_SECONDS` of `now`.
 
     Raises:
         RemotePluginError: The policy's edition detail is not one it may give.
     """
+
+    moment = datetime.now(UTC) if now is None else now
+    summary = (
+        None if jobs is None else jobs.summary(moment - timedelta(seconds=RUNNER_ALIVE_SECONDS))
+    )
 
     return ServiceDescription(
         azathoth_version=__version__,
@@ -243,6 +264,7 @@ def service_description(
         protocol=PROTOCOL_VERSION,
         edition=seams.policy.edition,
         edition_detail=seams.edition_detail,
+        jobs=summary,
     )
 
 
