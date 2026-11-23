@@ -623,6 +623,66 @@ or not, so an operator can authorize one here; `MatchScope` names the two
 scopes. A model outside the portfolio has no declared data policy, so it
 never matches restricted input.
 
+## Connecting to a Remote
+
+`api.connect(url)` connects to the service API a remote serves (ADR 0137).
+What it returns is an `Instance`, as `api.open` returns, whose every call
+is sent to the remote and answered as the remote's policy allows; what it
+changes there is recorded as the caller's. It is reached with `token=`, or
+the token `AZATHOTH_REMOTE_TOKEN` holds, and `instance.remote(name).connect()`
+connects to a remote this instance named, with the token its own variable
+holds. Nothing is sent until a call is made:
+
+```python
+from azathoth import api
+
+
+def names(instance: api.Instance) -> list[str]:
+    return [workflow.name for workflow in instance.workflows.list()]
+
+
+with api.open("azathoth.db") as local:
+    here = names(local)
+
+with api.connect("https://azathoth.example.com") as remote:
+    there = names(remote)
+```
+
+`Instance` is a Protocol that `Azathoth` and `ConnectedInstance` both
+satisfy: every collection of calls, `describe`, `closed` and `close`, but
+`remote` and `remotes`, which no remote serves. A connected collection is
+typed as the local one, and takes the same arguments, bound as Python
+binds them; only those given are sent, so the rest take the call's
+defaults at the remote. It is not the local class, and only its calls are
+attributes.
+
+A refusal raises the error the local call would have raised, of the
+nearest kind this Azathoth knows, with the remote's message: a
+`PermissionDeniedError` with the policy's reason, a `NotFoundError`, a
+`ModelInUseError` with its `dependents`. Any call may also raise:
+
+- `RemoteRefusedError`, for a refusal of no kind this Azathoth knows, with
+  the `status` and the `refusal` code it was refused with, such as 401
+  `unauthenticated`;
+- `RemoteUnavailableError`, a `RemoteRefusedError` too, for such a refusal
+  with 503, such as `audit_unavailable`, which may be tried again later;
+- `RemoteUnreachableError`, for a remote not reached, or a server that
+  answers as no remote serving the service API does.
+
+The eight calls that take a callback for their events, such as `runs.run`,
+run on a remote's workers, which a connected instance does not call yet:
+each is refused before anything is sent, as a `RemoteRefusedError` with
+status 501 and refusal `job`. Each call is one request, and once the
+instance is closed every call raises `InstanceClosedError`.
+
+```text
+<CALL> runs on a remote's workers, which a connected instance does not call yet.
+The remote at <URL> could not be reached: <REASON>
+The remote at <URL> does not serve <CALL>; it may not serve the service API, which a remote does from Azathoth 1.6.
+The remote at <URL> answered <CALL> with <STATUS> without saying why; it may not be an Azathoth remote.
+The remote at <URL> answered <CALL> with something other than its result; it may serve another version of the service API.
+```
+
 ## Tracing and Content
 
 `api.open(database, telemetry=..., content=...)` takes the telemetry that
@@ -757,6 +817,7 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `ProviderConfigurationError` | `provider_configuration` | Bedrock is on without boto3, without a region, or with unusable prices. |
 | `ProviderUnavailableError` | `provider_unavailable` | A provider could not be asked what it serves. |
 | `InvalidDocumentError` | `invalid_document` | A document to import is refused; an `InvalidArgumentError` too. |
+| `InvalidAuthorError` | `invalid_author` | The author given, or `AZATHOTH_AUTHOR`, is not `Name <email>` or `Name`, or no author can be told; an `InvalidArgumentError` too. |
 | `RunNotStartedError` | `run_not_started` | No executable candidate could be made, such as for a missing tool. |
 | `WorkflowResultMissingError` | `workflow_result_missing` | A workflow to promote declares no result. |
 | `ExperimentNotFoundError` | `experiment_not_found` | No experiment has the ID named; a `NotFoundError` too. |
@@ -770,7 +831,8 @@ Every error the API raises on purpose is an `ApiError` with a stable `code`:
 | `JudgeUnavailableError` | `judge_unavailable` | A benchmark's semantic cases have no judge that may judge them, or a judge failed; a `ConflictError` too. |
 | `RemoteUnreachableError` | `remote_unreachable` | A remote was not reached, or answered as no remote does. |
 | `RemoteProtocolError` | `remote_protocol` | A remote speaks another protocol; nothing was sent. |
-| `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or what it sent cannot be kept here. |
+| `RemoteRefusedError` | `remote_refused` | A remote refused a push or pull, or a call of a connected instance with no kind this Azathoth knows, or what it sent cannot be kept here. |
+| `RemoteUnavailableError` | `remote_unavailable` | A remote refused a call with 503 and no kind this Azathoth knows, such as when its audit is down; it may answer later. A `RemoteRefusedError` too (ADR 0137). |
 | `RemoteDivergedError` | `remote_diverged` | A pushed lineage diverged at the remote; a `ConflictError` too. |
 | `McpUnavailableError` | `mcp_unavailable` | An MCP server to make a tool from could not be reached or listed, or needs an authorization variable that is not set. |
 | `PermissionDeniedError` | `permission_denied` | A remote's policy refused the caller the call's action; its message is the policy's reason (ADR 0127). A local instance never raises it. |
