@@ -301,6 +301,7 @@ def test_audit_kinds_are_the_protocols_eight_then_the_catalogs_outcomes() -> Non
         "workflow_optimized",
         "restricted_read",
         "request_failed",
+        "job_cancelled",
     ]
 
     with pytest.raises(ValidationError):
@@ -310,6 +311,7 @@ def test_audit_kinds_are_the_protocols_eight_then_the_catalogs_outcomes() -> Non
 def test_each_audit_kind_records_one_action_and_a_refusal_records_none() -> None:
     assert AuditEventKind.REQUEST_DENIED.action is None
     assert AuditEventKind.REQUEST_FAILED.action is None
+    assert AuditEventKind.JOB_CANCELLED.action is None
     assert {kind: kind.action for kind in AuditEventKind if kind.action is not None} == {
         AuditEventKind.PUSH: Action.PUSH,
         AuditEventKind.PULL: Action.PULL,

@@ -50,7 +50,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from azathoth.api.calls import ServiceCall, service_call
-from azathoth.api.errors import ApiError
+from azathoth.api.errors import ApiError, InvalidArgumentError, NotFoundError
 from azathoth.evaluation import BenchmarkRepository
 from azathoth.inputs import ContentStore
 from azathoth.persistence.postgres import DEFAULT_POOL_SIZE
@@ -66,7 +66,15 @@ from azathoth.remote.calling import (
 from azathoth.remote.closure import lineage_records
 from azathoth.remote.conditions import condition_checks
 from azathoth.remote.inspection import heads, missing_credentials, portfolio_records
-from azathoth.remote.jobs import JobAccepted, ServiceJobRepository
+from azathoth.remote.job_reading import restricted
+from azathoth.remote.jobs import (
+    JOBS_ROUTE,
+    JobAccepted,
+    JobSummary,
+    JobView,
+    ServiceJob,
+    ServiceJobRepository,
+)
 from azathoth.remote.listings import visible
 from azathoth.remote.protocol import (
     MAX_CONTENT_BYTES,
@@ -160,6 +168,15 @@ INVOKE_CALL: Final = "runs.invoke"
 
 JOB_KEY_PREFIX: Final = "job-"
 """What the key an invocation is given when submitted without one starts with."""
+
+NO_JOBS_MESSAGE: Final = "This remote runs no jobs."
+"""What a remote that runs no jobs answers a request about one with."""
+
+DEFAULT_JOBS_LISTED: Final = 100
+"""How many of a caller's jobs a listing answers with, newest first, unless asked for fewer."""
+
+MAX_JOBS_LISTED: Final = 1000
+"""The most of a caller's jobs one listing answers with."""
 
 JSON_MEDIA_TYPE: Final = "application/json"
 """The media type a call's result is answered with."""
@@ -288,6 +305,9 @@ class RemoteServer:
                 Route(SERVICE_ROUTE, self.service, methods=["GET"]),
                 Route(PERMISSIONS_ROUTE, self.permissions_route, methods=["GET", "POST"]),
                 Route(CALLS_ROUTE, self.call_route, methods=["POST"]),
+                Route(JOBS_ROUTE, self.jobs_route, methods=["GET"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}", self.job_route, methods=["GET"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}/cancel", self.cancel_route, methods=["POST"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -346,6 +366,30 @@ class RemoteServer:
         """Answer one call of the service API with its result, for a caller the policy allows."""
 
         return await self._serve(request, None, None, self._call, service=True)
+
+    async def jobs_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with the caller's own jobs, newest first."""
+
+        return await self._serve(request, None, None, self._listed_jobs, service=True)
+
+    async def job_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Answer with one job, and its result once it has one, for who may see it."""
+
+        return await self._serve(request, None, None, self._job, service=True)
+
+    async def cancel_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Ask one job to stop, for who may stop it."""
+
+        return await self._serve(request, None, None, self._cancel, service=True)
 
     async def capabilities(
         self,
@@ -570,6 +614,130 @@ class RemoteServer:
         )
 
         return JobAccepted.of(job)
+
+    async def _listed_jobs(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        jobs = self._job_store()
+        limit = _listing_limit(request.query_params.get("limit"))
+        listed = await self._blocking(lambda: jobs.jobs(principal=principal.name, limit=limit))
+        body = [JobSummary.of(job).model_dump(mode="json") for job in listed]
+
+        return JSONResponse(body), None, None
+
+    async def _job(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        job = await self._seen_job(await self._found_job(request), principal, (Action.READ_RUNS,))
+
+        if job.result is not None:
+            await self._decide_restricted(principal, job)
+
+        return JSONResponse(JobView.viewed(job).model_dump(mode="json")), None, None
+
+    async def _cancel(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        found = await self._found_job(request)
+        job = await self._seen_job(found, principal, service_call(found.call).actions)
+        resource = _job_resource(job)
+        await self._tell(AuditEventKind.JOB_CANCELLED, principal, resource, job.call)
+        jobs = self._job_store()
+
+        try:
+            asked = await self._blocking(lambda: jobs.request_cancel(job.job_id, principal.name))
+        except BaseException as error:
+            await self._failed(principal, resource, job.call, error)
+
+            raise
+
+        cancelled = job if asked is None else asked
+
+        return JSONResponse(JobSummary.of(cancelled).model_dump(mode="json")), None, None
+
+    def _job_store(
+        self,
+    ) -> ServiceJobRepository:
+        """Return where this remote's jobs are kept, or refuse a remote that runs none.
+
+        Raises:
+            _Refused: The remote runs no jobs.
+        """
+
+        if self.jobs is None or self.instances is None:
+            raise _Refused(HTTPStatus.NOT_FOUND, NO_JOBS_MESSAGE)
+
+        return self.jobs
+
+    async def _found_job(
+        self,
+        request: Request,
+    ) -> ServiceJob:
+        """Return the job a request's path names.
+
+        Raises:
+            NotFoundError: The remote has no job of that ID.
+        """
+
+        jobs = self._job_store()
+        named = request.path_params["job_id"]
+
+        try:
+            job_id = uuid.UUID(named)
+        except ValueError:
+            raise NotFoundError(f"This remote has no job {named}.") from None
+
+        job = await self._blocking(lambda: jobs.get(job_id))
+
+        if job is None:
+            raise NotFoundError(f"This remote has no job {job_id}.")
+
+        return job
+
+    async def _seen_job(
+        self,
+        job: ServiceJob,
+        principal: Principal,
+        actions: Sequence[Action],
+    ) -> ServiceJob:
+        """Return a job for its submitter, or for another the policy allows.
+
+        Another caller is asked each action about the job, as `job <ID>`.
+        """
+
+        if job.principal != principal.name:
+            for action in actions:
+                await self._decide(principal, action, _job_resource(job))
+
+        return job
+
+    async def _decide_restricted(
+        self,
+        principal: Principal,
+        job: ServiceJob,
+    ) -> None:
+        """Refuse a restricted job's result to who may not read it, and tell the audit before.
+
+        Raises:
+            _Refused: The policy refuses `read_restricted`, or the audit could not be told.
+        """
+
+        instances = self.instances
+        assert instances is not None, "A remote that keeps jobs serves calls."
+        instance = instances.instance(principal.name)
+
+        if not await self._blocking(lambda: restricted(instance, job)):
+            return
+
+        resource = _job_resource(job)
+        await self._decide(principal, Action.READ_RESTRICTED, resource)
+        await self._tell(AuditEventKind.RESTRICTED_READ, principal, resource, job.call)
 
     async def _decide_call(
         self,
@@ -1077,6 +1245,39 @@ def call_resource(
     return None if value is None else f"{call.resource.kind} {value}"
 
 
+def _job_resource(
+    job: ServiceJob,
+) -> str:
+    """Return the resource the policy is asked about one job as."""
+
+    return f"job {job.job_id}"
+
+
+def _listing_limit(
+    given: str | None,
+) -> int:
+    """Return how many jobs a listing asks for.
+
+    Raises:
+        InvalidArgumentError: It asks for a number that is not one from 1 to the most listed.
+    """
+
+    if given is None:
+        return DEFAULT_JOBS_LISTED
+
+    try:
+        limit = int(given)
+    except ValueError:
+        limit = 0
+
+    if not 1 <= limit <= MAX_JOBS_LISTED:
+        raise InvalidArgumentError(
+            f"A listing of jobs asks for 1 to {MAX_JOBS_LISTED} of them, not {given}."
+        )
+
+    return limit
+
+
 def _served_signature(
     name: str,
     *,
@@ -1181,12 +1382,15 @@ __all__ = [
     "AUDIT_UNAVAILABLE_CODE",
     "AUDIT_UNAVAILABLE_MESSAGE",
     "CONTENT_MEDIA_TYPE",
+    "DEFAULT_JOBS_LISTED",
     "DEFAULT_MAX_CONCURRENT",
     "DIGEST_PATTERN",
     "INVOKE_CALL",
     "JOB_CODE",
     "JOB_KEY_PREFIX",
     "JSON_MEDIA_TYPE",
+    "MAX_JOBS_LISTED",
+    "NO_JOBS_MESSAGE",
     "PLUGIN_ERROR_CODE",
     "UNKNOWN_TOKEN_MESSAGE",
     "audit_kinds",

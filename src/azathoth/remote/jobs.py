@@ -12,13 +12,14 @@ A job's arguments, its result and its refusal are kept as the JSON its call
 writes them as; this module reads none of them.
 """
 
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final, Protocol
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
 
 from azathoth.persistence import (
     Database,
@@ -330,6 +331,107 @@ class JobAccepted(BaseModel):
             submitted_at=job.submitted_at,
             job=job_path(job.job_id),
             events=events_path(job.job_id),
+        )
+
+
+class JobSummary(BaseModel):
+    """What a remote says of one job: what it calls, for whom, and how far it has got."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    job_id: UUID
+
+    call: str
+
+    principal: str = Field(
+        description="Who submitted it, as whom it runs.",
+    )
+
+    resource: str | None = None
+
+    status: ServiceJobStatus
+
+    submitted_at: AwareDatetime
+
+    started_at: AwareDatetime | None = None
+
+    finished_at: AwareDatetime | None = None
+
+    cancel_requested_at: AwareDatetime | None = None
+
+    cancelled_by: str | None = None
+
+    attempts: int = Field(
+        ge=0,
+    )
+
+    job: str = Field(
+        description="Where the remote answers about the job.",
+    )
+
+    events: str = Field(
+        description="Where the remote streams the job's events.",
+    )
+
+    @classmethod
+    def of(
+        cls,
+        job: ServiceJob,
+    ) -> "JobSummary":
+        """Return what a remote says of a job, but its result."""
+
+        return cls(
+            job_id=job.job_id,
+            call=job.call,
+            principal=job.principal,
+            resource=job.resource,
+            status=job.status,
+            submitted_at=job.submitted_at,
+            started_at=job.started_at,
+            finished_at=job.finished_at,
+            cancel_requested_at=job.cancel_requested_at,
+            cancelled_by=job.cancelled_by,
+            attempts=job.attempts,
+            job=job_path(job.job_id),
+            events=events_path(job.job_id),
+        )
+
+
+class JobView(JobSummary):
+    """One job, with its result once it succeeded, or its refusal once it did not.
+
+    The result is the JSON its call writes it as, read by the call's own
+    signature; the refusal is the one a remote answers a call that failed
+    so with, with its status.
+    """
+
+    has_result: bool = Field(
+        default=False,
+        description="Whether `result` holds the job's result, so a null result is not absence.",
+    )
+
+    result: JsonValue = None
+
+    refusal: JsonValue = None
+
+    refusal_status: int | None = None
+
+    @classmethod
+    def viewed(
+        cls,
+        job: ServiceJob,
+    ) -> "JobView":
+        """Return what a remote says of a job, with its result or its refusal."""
+
+        return cls(
+            **JobSummary.of(job).model_dump(),
+            has_result=job.result is not None,
+            result=None if job.result is None else json.loads(job.result),
+            refusal=None if job.refusal is None else json.loads(job.refusal),
+            refusal_status=job.refusal_status,
         )
 
 
@@ -1159,6 +1261,8 @@ __all__ = [
     "SERVICE_JOB_TABLES",
     "STAMP_FORMAT",
     "JobAccepted",
+    "JobSummary",
+    "JobView",
     "ServiceJob",
     "ServiceJobEvent",
     "ServiceJobRepository",

@@ -58,6 +58,7 @@ async def send(
         sent.append(message)
 
     headers = [(b"host", b"remote"), (b"content-type", b"application/json")]
+    route, _, query = path.partition("?")
 
     if authorization is not None:
         headers.append((b"authorization", authorization.encode()))
@@ -69,9 +70,9 @@ async def send(
             "http_version": "1.1",
             "method": method,
             "scheme": "http",
-            "path": path,
-            "raw_path": path.encode(),
-            "query_string": b"",
+            "path": route,
+            "raw_path": route.encode(),
+            "query_string": query.encode(),
             "root_path": "",
             "headers": headers,
             "client": ("127.0.0.1", 50000),
