@@ -230,6 +230,7 @@ with uvicorn:
 | `GET /v1/jobs` | | the caller's own jobs, newest first, each a `JobSummary` |
 | `GET /v1/jobs/{job_id}` | `read_runs`, for another's | the `JobView`: the job, and its result or refusal |
 | `POST /v1/jobs/{job_id}/cancel` | the job's call's, for another's | the `JobSummary`, once the job is asked to stop |
+| `GET /v1/jobs/{job_id}/events` | `read_runs`, for another's | the job's events as server-sent events, then the `JobView` it ended as |
 | `GET /v1/capabilities` | read capabilities | `Capabilities` |
 | `POST /v1/missing` | push | the `MissingResponse` to a `MissingRequest` |
 | `PUT /v1/content/{digest}` | push | the digest kept |

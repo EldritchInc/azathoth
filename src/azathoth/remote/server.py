@@ -35,18 +35,18 @@ import logging
 import os
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import partial
 from http import HTTPStatus
 from typing import Final, TypeVar
 
-from anyio import CapacityLimiter, to_thread
+from anyio import CapacityLimiter, sleep, to_thread
 from anyio.lowlevel import RunVar
 from pydantic import BaseModel, ValidationError
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from azathoth.api.calls import ServiceCall, service_call
@@ -178,6 +178,21 @@ DEFAULT_JOBS_LISTED: Final = 100
 MAX_JOBS_LISTED: Final = 1000
 """The most of a caller's jobs one listing answers with."""
 
+EVENT_STREAM_MEDIA_TYPE: Final = "text/event-stream"
+"""The media type a job's events are streamed as."""
+
+EVENTS_POLL_SECONDS: Final = 0.25
+"""How often a stream of a job's events looks for more."""
+
+KEEP_ALIVE_SECONDS: Final = 15.0
+"""How long a stream of a job's events goes quiet before it says it is still there."""
+
+FINISHED_EVENT: Final = "finished"
+"""The name of the last event a stream of a job's events sends: the job, as it ended."""
+
+JOB_EVENT: Final = "event"
+"""The name of each event a job told, as its stream sends it."""
+
 JSON_MEDIA_TYPE: Final = "application/json"
 """The media type a call's result is answered with."""
 
@@ -237,6 +252,8 @@ class RemoteServer:
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         instances: CallerInstances | None = None,
         jobs: ServiceJobRepository | None = None,
+        events_poll_seconds: float = EVENTS_POLL_SECONDS,
+        keep_alive_seconds: float = KEEP_ALIVE_SECONDS,
     ) -> None:
         """Serve the given repositories; `environ` defaults to the process's own environment.
 
@@ -245,7 +262,9 @@ class RemoteServer:
         each caller with an instance of their own; without, it serves only
         the protocol. With `jobs` too, a call that runs as a job is queued
         there, for the remote's runners, and answered at once (ADR 0138);
-        without, it is refused.
+        without, it is refused. A stream of a job's events looks for more
+        every `events_poll_seconds`, and says it is still there after
+        `keep_alive_seconds` of quiet.
 
         Raises:
             ValueError: `max_concurrent` is below 1.
@@ -267,6 +286,8 @@ class RemoteServer:
         self.max_concurrent = max_concurrent
         self.instances = instances
         self.jobs = jobs
+        self.events_poll_seconds = events_poll_seconds
+        self.keep_alive_seconds = keep_alive_seconds
         #
         # A limiter belongs to the event loop it is first used on, so each
         # loop that serves this remote gets one of its own.
@@ -308,6 +329,7 @@ class RemoteServer:
                 Route(JOBS_ROUTE, self.jobs_route, methods=["GET"]),
                 Route(f"{JOBS_ROUTE}/{{job_id}}", self.job_route, methods=["GET"]),
                 Route(f"{JOBS_ROUTE}/{{job_id}}/cancel", self.cancel_route, methods=["POST"]),
+                Route(f"{JOBS_ROUTE}/{{job_id}}/events", self.events_route, methods=["GET"]),
                 Route("/v1/capabilities", self.capabilities, methods=["GET"]),
                 Route("/v1/missing", self.missing, methods=["POST"]),
                 Route(
@@ -382,6 +404,14 @@ class RemoteServer:
         """Answer with one job, and its result once it has one, for who may see it."""
 
         return await self._serve(request, None, None, self._job, service=True)
+
+    async def events_route(
+        self,
+        request: Request,
+    ) -> Response:
+        """Stream one job's events as they are told, then the job as it ended, to who may see it."""
+
+        return await self._serve(request, None, None, self._events, service=True)
 
     async def cancel_route(
         self,
@@ -639,6 +669,74 @@ class RemoteServer:
 
         return JSONResponse(JobView.viewed(job).model_dump(mode="json")), None, None
 
+    async def _events(
+        self,
+        request: Request,
+        principal: Principal,
+    ) -> Answer:
+        after = _events_after(request)
+        job = await self._seen_job(await self._found_job(request), principal, (Action.READ_RUNS,))
+        await self._decide_restricted(principal, job)
+        stream = self._streamed(request, job.job_id, after)
+
+        return (
+            StreamingResponse(
+                stream,
+                media_type=EVENT_STREAM_MEDIA_TYPE,
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            ),
+            None,
+            None,
+        )
+
+    async def _streamed(
+        self,
+        request: Request,
+        job_id: uuid.UUID,
+        after: int,
+    ) -> AsyncIterator[str]:
+        """Yield a job's events after the one numbered `after`, until it ends, then the job.
+
+        Each is sent with its number as its ID, so a client that reconnects
+        with `Last-Event-ID` is sent only what it missed. A stream quiet for
+        `keep_alive_seconds` sends a comment, so neither side takes it for
+        lost.
+        """
+
+        jobs = self._job_store()
+        last = after
+        quiet = 0.0
+
+        while True:
+            told = await self._blocking(partial(jobs.events, job_id, after=last))
+
+            for event in told:
+                last = event.sequence
+                yield server_sent(JOB_EVENT, event.event, event_id=event.sequence)
+
+            if told:
+                quiet = 0.0
+                continue
+
+            job = await self._blocking(lambda: jobs.get(job_id))
+
+            if job is None or job.status.finished:
+                if job is not None:
+                    ended = JobView.viewed(job).model_dump_json()
+                    yield server_sent(FINISHED_EVENT, ended, event_id=last)
+
+                return
+
+            if await request.is_disconnected():
+                return
+
+            if quiet >= self.keep_alive_seconds:
+                quiet = 0.0
+                yield ": still running\n\n"
+
+            await sleep(self.events_poll_seconds)
+            quiet += self.events_poll_seconds
+
     async def _cancel(
         self,
         request: Request,
@@ -730,7 +828,7 @@ class RemoteServer:
 
         instances = self.instances
         assert instances is not None, "A remote that keeps jobs serves calls."
-        instance = instances.instance(principal.name)
+        instance = await self._blocking(lambda: instances.instance(principal.name))
 
         if not await self._blocking(lambda: restricted(instance, job)):
             return
@@ -1245,6 +1343,46 @@ def call_resource(
     return None if value is None else f"{call.resource.kind} {value}"
 
 
+def server_sent(
+    name: str,
+    data: str,
+    *,
+    event_id: int,
+) -> str:
+    """Return one server-sent event: its ID, its name, and its data on one line."""
+
+    flat = data.replace("\r", "").replace("\n", " ")
+
+    return f"id: {event_id}\nevent: {name}\ndata: {flat}\n\n"
+
+
+def _events_after(
+    request: Request,
+) -> int:
+    """Return the number of the last event a client was sent, from `Last-Event-ID` or `after`.
+
+    Raises:
+        InvalidArgumentError: It is not a number from 0.
+    """
+
+    given = request.headers.get("Last-Event-ID") or request.query_params.get("after")
+
+    if given is None:
+        return 0
+
+    try:
+        after = int(given)
+    except ValueError:
+        after = -1
+
+    if after < 0:
+        raise InvalidArgumentError(
+            f"The last event sent is numbered from 0, as Last-Event-ID or after, not {given}."
+        )
+
+    return after
+
+
 def _job_resource(
     job: ServiceJob,
 ) -> str:
@@ -1384,11 +1522,16 @@ __all__ = [
     "CONTENT_MEDIA_TYPE",
     "DEFAULT_JOBS_LISTED",
     "DEFAULT_MAX_CONCURRENT",
+    "EVENTS_POLL_SECONDS",
+    "EVENT_STREAM_MEDIA_TYPE",
+    "FINISHED_EVENT",
     "DIGEST_PATTERN",
     "INVOKE_CALL",
     "JOB_CODE",
+    "JOB_EVENT",
     "JOB_KEY_PREFIX",
     "JSON_MEDIA_TYPE",
+    "KEEP_ALIVE_SECONDS",
     "MAX_JOBS_LISTED",
     "NO_JOBS_MESSAGE",
     "PLUGIN_ERROR_CODE",
@@ -1397,4 +1540,5 @@ __all__ = [
     "call_resource",
     "RemoteServer",
     "error_response",
+    "server_sent",
 ]

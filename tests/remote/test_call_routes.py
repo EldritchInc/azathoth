@@ -58,6 +58,8 @@ class Served:
         audit: ListAudit | None = None,
         runs_jobs: bool = True,
         jobs: ServiceJobRepository | None = None,
+        events_poll_seconds: float = 0.01,
+        keep_alive_seconds: float = 15.0,
     ) -> None:
         sqlite3.connect(path).close()
         held = open_repositories(path)
@@ -76,6 +78,8 @@ class Served:
             environ={},
             instances=CallerInstances(held) if serves_calls else None,
             jobs=self.jobs if runs_jobs else None,
+            events_poll_seconds=events_poll_seconds,
+            keep_alive_seconds=keep_alive_seconds,
         ).app()
 
     def call(

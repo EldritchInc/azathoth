@@ -46,7 +46,12 @@ async def send(
         nonlocal delivered
 
         if delivered:
-            return {"type": "http.disconnect"}
+            #
+            # The client stays until the answer is sent whole, as one
+            # following a stream does; the application stops listening
+            # once it has answered.
+            #
+            await asyncio.Event().wait()
 
         delivered = True
 
