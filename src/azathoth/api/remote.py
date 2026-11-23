@@ -8,7 +8,8 @@ latest revision of each document named, the revisions it was reached by,
 and what it needs at the remote; a pull brings the same back, forking a
 lineage that diverged here; a status compares the two sides (ADR 0125).
 
-`connect(url)` reaches the service API a remote serves, as an `Instance`
+`connect(url)`, or `instance.remote(name).connect()` for a remote this
+instance named, reaches the service API a remote serves, as an `Instance`
 whose every call is sent to it (ADR 0137).
 """
 
@@ -172,6 +173,28 @@ class Remote:
         """Return the name this instance gave the remote, or None when it was reached by URL."""
 
         return self._name
+
+    def connect(
+        self,
+        *,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> ConnectedInstance:
+        """Connect to the service API this remote serves, with the token it is reached with.
+
+        Every call of the instance returned is sent to the remote (ADR
+        0137), each of which may take `timeout` seconds; nothing is sent
+        until a call is made. A remote reached by its name is called with
+        the token its own variable holds, as for a push. The instance does
+        not need this instance kept open. Close it when done, best as a
+        context manager.
+        """
+
+        return connected(
+            self._url,
+            token=self._token,
+            http=None if self._http is None else self._http(),
+            timeout=timeout,
+        )
 
     def capabilities(
         self,

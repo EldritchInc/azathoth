@@ -128,7 +128,7 @@ class AsgiHttp:
 
     It is what a client of a remote is given in tests, so the client speaks
     to the remote's own server, not to a fake of it. It notes the requests
-    it sends.
+    it sends, and the `Authorization` each was sent with.
     """
 
     def __init__(
@@ -137,6 +137,7 @@ class AsgiHttp:
     ) -> None:
         self.app = app
         self.sent: list[tuple[str, str, bytes]] = []
+        self.authorizations: list[str | None] = []
         self.closed = False
 
     def request(
@@ -150,6 +151,7 @@ class AsgiHttp:
         body = content.encode() if isinstance(content, str) else content or b""
         self.sent.append((method, url, body))
         authorization = (headers or {}).get("Authorization")
+        self.authorizations.append(authorization)
 
         return AsgiResponse(call(self.app, method, url, raw=body, authorization=authorization))
 
