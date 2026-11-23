@@ -1,6 +1,7 @@
 """The repositories the CLI keeps its durable state in (ADR 0102)."""
 
 from azathoth.cli.configuration import CliRuntimeConfiguration
+from azathoth.cli.remote_choice import refuse_local_database
 from azathoth.inputs import ContentStore, S3ContentLocation, S3ContentStore
 from azathoth.persistence.repositories import Repositories, open_repositories
 
@@ -27,6 +28,28 @@ def repositories(
     the S3 store the configuration names, when it names one, and otherwise
     in the database.
 
+    A command run on a remote is refused them, so it never reads or
+    changes here what it was asked to read or change there (ADR 0140).
+
+    Raises:
+        DatabaseUnavailableError: The database is PostgreSQL, and the
+            `postgres` extra is not installed.
+        RemoteChosenError: The command runs on a remote.
+    """
+
+    refuse_local_database()
+
+    return local_repositories(configuration)
+
+
+def local_repositories(
+    configuration: CliRuntimeConfiguration,
+) -> Repositories:
+    """Return the repositories of the configured database, even for a command run on a remote.
+
+    Only finding the remote a command runs on, among the ones this
+    database names, asks for them so.
+
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
             `postgres` extra is not installed.
@@ -41,6 +64,7 @@ def repositories(
 
 
 __all__ = [
+    "local_repositories",
     "open_content_store",
     "repositories",
 ]

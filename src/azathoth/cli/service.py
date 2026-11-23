@@ -2,7 +2,8 @@
 
 Commands the API covers call it through the instance this module opens over
 the configured database, so the command line, azathoth-mcp and the local
-editor share one way to read and change it.
+editor share one way to read and change it. A command run with `--remote`
+is given the instance connected to that remote instead (ADR 0140).
 """
 
 import sys
@@ -11,26 +12,44 @@ from collections.abc import Sequence
 from azathoth import api
 from azathoth.cli.bootstrap import current_models
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
+from azathoth.cli.persistence import local_repositories, repositories
+from azathoth.cli.remote_choice import connected_instance
 from azathoth.providers import ModelCatalog, ProviderModel
 from azathoth.revisions import Author, AuthorError, LineageRecord, resolve_author
 
 
 def service_instance(
     configuration: CliRuntimeConfiguration,
-) -> api.Azathoth:
+) -> api.Instance:
     """Return the service API over the configured database, reaching no provider.
 
     The instance is made over the command line's own repositories rather
     than opened, so a command treats a database that does not exist yet as
-    it always has: an SQLite file is created as it is first used.
+    it always has: an SQLite file is created as it is first used. A command
+    run with `--remote` is given the instance connected to that remote.
 
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
             `postgres` extra is not installed.
+        InvalidArgumentError: The remote's URL is not an http or https URL,
+            or its token is not set.
+        NotFoundError: No remote has the name `--remote` gave.
     """
 
+    connected = connected_instance(configuration, _local_instance)
+
+    if connected is not None:
+        return connected
+
     return api.Azathoth(repositories(configuration))
+
+
+def _local_instance(
+    configuration: CliRuntimeConfiguration,
+) -> api.Azathoth:
+    """Return the service API over the configured database, to find a remote it names."""
+
+    return api.Azathoth(local_repositories(configuration))
 
 
 class CatalogDirectory:
@@ -92,19 +111,28 @@ def catalog_directories(
 
 def provider_instance(
     configuration: CliRuntimeConfiguration,
-) -> api.Azathoth:
+) -> api.Instance:
     """Return the service API over the configured database, serving what the providers serve.
 
     A command that asks what the providers serve, such as adding a judge,
     calls this one. The models are the ones every other command discovers,
     asked once as the instance is made, so the API and the command line
-    never see different models.
+    never see different models. A command run with `--remote` is given the
+    instance connected to that remote, which asks its own providers.
 
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
             `postgres` extra is not installed.
+        InvalidArgumentError: The remote's URL is not an http or https URL,
+            or its token is not set.
         ModelDiscoveryError: A provider that is on could not be discovered.
+        NotFoundError: No remote has the name `--remote` gave.
     """
+
+    connected = connected_instance(configuration, _local_instance)
+
+    if connected is not None:
+        return connected
 
     return api.Azathoth(
         repositories(configuration),

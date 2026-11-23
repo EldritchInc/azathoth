@@ -171,6 +171,7 @@ from azathoth.cli.parsing.spend import (
     SPEND_WORKFLOW_ATTRIBUTE,
     add_spend_parser,
 )
+from azathoth.cli.parsing.targets import add_remote_options
 from azathoth.cli.parsing.tools import (
     TOOL_ACTION_ATTRIBUTE,
     TOOL_COMMAND,
@@ -305,6 +306,8 @@ def build_parser() -> ArgumentParser:
     add_init_parser(commands)
     add_job_parser(commands)
     add_worker_parser(commands)
+
+    add_remote_options(parser)
 
     return parser
 

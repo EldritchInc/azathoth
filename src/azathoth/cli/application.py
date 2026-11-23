@@ -89,6 +89,11 @@ from azathoth.cli.parsing import (
     WORKFLOW_COMMAND,
     build_parser,
 )
+from azathoth.cli.parsing.targets import (
+    COMMAND_PATH_ATTRIBUTE,
+    REMOTE_ATTRIBUTE,
+    remote_refusal,
+)
 from azathoth.cli.production_inspection import (
     list_workflow_invocations,
     list_workflow_revisions,
@@ -107,6 +112,7 @@ from azathoth.cli.remote import (
     revoke_remote_token,
     serve_remote,
 )
+from azathoth.cli.remote_choice import RemoteChosenError, choosing
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.revision_diffs import diff_benchmark, diff_tool, diff_workflow
 from azathoth.cli.runs import (
@@ -188,6 +194,10 @@ def main(
     `worker run` handles its own signals, and drains on the first of them
     (ADR 0107). A worker without its extra, whose queue cannot be used, or
     whose heartbeat cannot be written is reported in one line, with status 1.
+
+    A command given `--remote` runs on that remote (ADR 0140). One that
+    never runs on a remote, or does not yet, says why in one line and exits
+    with status 2, as a command given an option it does not take does.
     """
 
     use_utf8_streams(
@@ -199,8 +209,18 @@ def main(
 
     arguments = parser.parse_args(argv)
 
+    target = cast(str | None, getattr(arguments, REMOTE_ATTRIBUTE, None))
+
+    if target is not None:
+        refusal = remote_refusal(cast(str, getattr(arguments, COMMAND_PATH_ATTRIBUTE, "")))
+
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+
+            return 2
+
     try:
-        with terminating_on_sigterm():
+        with terminating_on_sigterm(), choosing(target):
             result = _dispatch(arguments)
     except KeyboardInterrupt:
         print(
@@ -230,6 +250,7 @@ def main(
         WorkerError,
         InputUnavailableError,
         ContentStoreError,
+        RemoteChosenError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -244,7 +265,9 @@ def main(
         # does a worker without its extra, whose queue cannot be used, or
         # whose heartbeat cannot be written (ADR 0107), or that cannot
         # reach S3 for an input it is allowed to read (ADR 0108). So does
-        # a content store that is misconfigured or refuses (ADR 0108).
+        # a content store that is misconfigured or refuses (ADR 0108). So
+        # does a command run on a remote that asks for this machine's
+        # database itself (ADR 0140).
         #
         print(
             str(exc),
