@@ -12,9 +12,10 @@ Azathoth 1.6 makes a remote an Azathoth people work on, not only one they
 push to. So far it names, in code, what a remote asks its policy and tells
 its audit for every call of the service API, and what a remote's plugins
 may build on; a remote answers its requests together rather than one at a
-time, and serves every call of the service API but its jobs, asking and
-telling as named; and `api.connect` calls a remote as an instance of its
-own. The jobs come later.
+time, and serves every call of the service API, asking and telling as
+named; it runs the calls that take minutes as jobs, kept in its database
+and followed as they go; and `api.connect` calls a remote as an instance
+of its own.
 
 ### The Action Catalog
 
@@ -133,9 +134,46 @@ own. The jobs come later.
   `remote_unavailable`, is such a refusal with 503, which may be tried
   again later
   ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
-- A connected instance refuses the eight jobs before sending anything, as
-  a `RemoteRefusedError` with status 501 and refusal `job`
-  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md)).
+- A connected instance calls the eight jobs as a local instance does: it
+  submits one, hands its events to `on_event`, asks the remote to stop it
+  when its `cancel` is cancelled, and returns its result or raises its
+  refusal. A stream that drops is followed again from the last event seen,
+  up to 5 more times
+  ([ADR 0137](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0137-a-client-for-the-service-api.md),
+  [ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- A connected instance's `jobs` submits a job without waiting, follows,
+  reads, lists and stops one
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+
+### Jobs on a Remote
+
+- A remote runs the eight calls that take a callback for their events,
+  such as `runs.run` and `benchmarks.run`, as jobs. Each is asked of the
+  policy and told to the audit as its call is, queued in the database, and
+  answered `202` with a `JobAccepted` and its path in `Location`
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- `azathoth remote serve` runs 2 jobs at once on its own threads, each as
+  its caller, and `--jobs` runs another number; `--jobs 0` runs none, and
+  queues them for another server over the same PostgreSQL database
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- A job outlives the request that submitted it. When its server stops, or
+  stops beating for 60 seconds, a resumed run or an invocation is queued
+  again and goes on from its journal; any other job is refused 409
+  `interrupted`, saying how to go on
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- `GET /v1/jobs` lists the caller's own jobs, `GET /v1/jobs/{job_id}`
+  returns one with its result, `POST /v1/jobs/{job_id}/cancel` stops one,
+  and `GET /v1/jobs/{job_id}/events` streams its events as server-sent
+  events, from `Last-Event-ID` when a client reconnects. Another caller's
+  job is read with `read_runs` and stopped with its call's actions, and a
+  restricted job's result is sent only with `read_restricted`
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- `AuditEventKind.JOB_CANCELLED`, `job_cancelled`, is told before a job is
+  asked to stop
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+- `GET /v1/service` says in `jobs` how many jobs wait and run, and how many
+  runners beat in the last 60 seconds
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
 
 ### Plugins
 
@@ -157,6 +195,31 @@ own. The jobs come later.
   it is licensed to. Nothing in Azathoth acts on an edition or its detail,
   and a test reads every shipped module to keep it so
   ([ADR 0134](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0134-the-action-catalog-in-code.md)).
+
+### Upgrading From 1.5
+
+Upgrade, and run `azathoth init` as after every upgrade:
+
+```bash
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+```powershell
+python -m pip install --upgrade azathoth-ai
+azathoth init
+```
+
+The database schema moves from version 7 to version 8, which adds the
+tables a remote keeps its jobs in
+([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+An SQLite file is upgraded the first time it is used. A PostgreSQL
+database refuses every command until `azathoth init` has run once, from
+any one machine, and 1.5 refuses it after that, so upgrade Azathoth on
+every machine first. `init` keeps everything the database holds.
+
+`azathoth remote serve` now runs jobs, 2 at once by default, and says so
+on a second line when it starts.
 
 ## 1.5.0
 

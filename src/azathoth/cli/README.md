@@ -3825,6 +3825,7 @@ azathoth remote serve
 
 ```text
 Serving remote protocol 1 at http://127.0.0.1:8470; it refuses restricted data.
+It runs 2 jobs at once.
 ```
 
 It listens on `127.0.0.1`, this machine only, and port 8470, until stopped
@@ -3865,6 +3866,22 @@ its policy allows, recording what each caller changes under their name
 (ADR 0136). It reads which model providers are on, and their keys, when
 it starts, so a provider turned on or a key changed takes a restart; the
 models a provider serves are asked of it on every call that needs them.
+
+The calls that run for minutes, such as a run or a benchmark run, are
+jobs: the server queues each in its database and runs it on its own
+threads, as its caller, while the caller follows its events (ADR 0138). It
+runs 2 at once; `--jobs` runs another number. `--jobs 0` runs none, and
+queues them for another server over the same PostgreSQL database to run:
+
+```text
+It runs no jobs; it queues them for another server over its database to run.
+```
+
+When the server stops, it hands back the jobs it is running. A server
+that stops without doing so, or whose machine does, leaves its jobs for
+another to take after 60 seconds. A resumed run and an invocation go on
+from their journals; any other job is ended as interrupted, to be
+submitted again.
 
 # Naming Remotes
 

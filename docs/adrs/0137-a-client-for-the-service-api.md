@@ -1,6 +1,6 @@
 # ADR 0137: A Client for the Service API
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0138
 - Date: 2026-11-22
 
 ## Context
