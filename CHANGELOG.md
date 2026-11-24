@@ -249,6 +249,19 @@ provider's tool prints one.
   the token a named remote is reached with now
   ([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
 
+### Serving on Windows
+
+- Serving a remote and running the queue worker are tested on Linux and
+  macOS. On Windows `azathoth remote serve` and `azathoth worker run` still
+  run, at their operator's own risk, after one line saying so
+  ([ADR 0142](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0142-remotes-are-served-from-linux-and-macos.md)).
+- Their tests are skipped on Windows, each saying why; every other test,
+  reaching a remote included, runs on every platform
+  ([ADR 0142](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0142-remotes-are-served-from-linux-and-macos.md)).
+- A server's runners claim no job once it is stopping, so a job one runner
+  hands back as the server stops is not taken by another, only to be
+  handed back again.
+
 ### Plugins
 
 - A remote calls a plugin's seams from several threads at once; Writing a

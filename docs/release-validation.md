@@ -53,7 +53,8 @@ and types once. A pull request runs the test suite on Linux with Python
 `main` runs it on all three with all three Pythons. All nine test jobs
 must be green on the commit a release is tagged from. Each runs the suite
 in parallel, one worker for each core, with pytest-xdist, and names its 25
-slowest tests.
+slowest tests. On Windows it skips the tests of serving a remote and
+running the queue worker, saying why (ADR 0142).
 
 The deterministic gate must never require:
 
