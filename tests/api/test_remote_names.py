@@ -1,4 +1,4 @@
-"""Tests for the remotes an instance names, through the service API (ADR 0126)."""
+"""Tests for the remotes an instance names, through the service API (ADRs 0126, 0141)."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -8,8 +8,15 @@ import pytest
 from azathoth import api
 from azathoth.api.remote import is_remote_url, no_token_message, not_named_message
 from azathoth.persistence.repositories import open_repositories
-from azathoth.remote import REMOTE_TOKEN_VARIABLE, PortfolioResponse
+from azathoth.remote import (
+    REMOTE_TOKEN_VARIABLE,
+    TOKEN_COMMANDS,
+    HttpClient,
+    PortfolioResponse,
+    shown_command,
+)
 from tests.remote.test_server import Remote
+from tests.remote.test_token_commands import printing_in_turn, python, runs
 
 URL = "http://remote.test"
 
@@ -266,3 +273,155 @@ def test_naming_a_remote_on_a_closed_instance_is_refused(
     for call in (closed.remotes.list, lambda: closed.remote("origin")):
         with pytest.raises(api.InstanceClosedError):
             call()
+
+
+# A token printed by a command (ADR 0141)
+
+
+def test_a_remote_may_be_named_with_the_command_its_token_is_printed_by(
+    instance: api.Azathoth,
+    database: Path,
+) -> None:
+    sso = instance.remotes.add("sso", URL, token_command=["gcloud", "auth", "print-identity-token"])
+
+    assert (sso.token_variable, sso.token_command) == (
+        None,
+        ("gcloud", "auth", "print-identity-token"),
+    )
+    assert instance.remotes.get("sso") == sso
+
+    with api.open(database) as again:
+        assert again.remotes.list() == (sso,)
+
+
+def test_a_remote_named_with_a_variable_and_a_command_is_an_invalid_argument(
+    instance: api.Azathoth,
+) -> None:
+    with pytest.raises(api.InvalidArgumentError) as caught:
+        instance.remotes.add("sso", URL, token_variable=SHARED_TOKEN, token_command=["gcloud"])
+
+    assert str(caught.value) == "Give a remote a token variable or a token command, not both."
+    assert instance.remotes.list() == ()
+
+
+def test_a_token_command_that_is_not_one_is_an_invalid_argument(
+    instance: api.Azathoth,
+) -> None:
+    with pytest.raises(api.InvalidArgumentError) as caught:
+        instance.remotes.add("sso", URL, token_command=[])
+
+    assert str(caught.value) == (
+        "A token command names the program that prints the token; it was empty."
+    )
+
+
+def test_naming_a_remote_with_a_command_does_not_run_it(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    count = tmp_path / "count"
+    instance.remotes.add("sso", URL, token_command=printing_in_turn(count, "azr_x"))
+
+    assert runs(count) == 0
+
+
+def test_a_name_reaches_its_remote_with_the_token_its_command_prints(
+    instance: api.Azathoth,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    served = Remote(tmp_path)
+    count = tmp_path / "count"
+    instance.remotes.add("sso", URL, token_command=printing_in_turn(count, served.token))
+    monkeypatch.setenv(REMOTE_TOKEN_VARIABLE, "azr_not_this_one")
+
+    remote = instance.remote("sso", http=lambda: served.client)
+
+    assert (remote.name, remote.url) == ("sso", URL)
+    assert remote.capabilities().protocol == 1
+    assert remote.capabilities().protocol == 1
+    assert runs(count) == 1
+
+
+def test_a_token_given_is_used_before_a_names_command(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    served = Remote(tmp_path)
+    count = tmp_path / "count"
+    instance.remotes.add("sso", URL, token_command=printing_in_turn(count, "azr_x"))
+
+    remote = instance.remote("sso", token=served.token, http=lambda: served.client)
+
+    assert remote.capabilities().protocol == 1
+    assert runs(count) == 0
+
+
+def test_a_name_whose_command_prints_no_token_says_why_before_anything_is_sent(
+    instance: api.Azathoth,
+) -> None:
+    command = python("import sys; sys.stderr.write('Reauthentication required.'); sys.exit(1)")
+    instance.remotes.add("sso", URL, token_command=command)
+
+    def unreached() -> HttpClient:
+        raise AssertionError("Nothing is sent without a token.")
+
+    with pytest.raises(api.InvalidArgumentError) as caught:
+        instance.remote("sso", http=unreached)
+
+    assert str(caught.value) == (
+        f"Token command `{shown_command(command)}` exited with status 1: Reauthentication required."
+    )
+
+
+def test_token_of_reads_a_names_variable_from_the_environment_given(
+    instance: api.Azathoth,
+) -> None:
+    staging = instance.remotes.add("staging", STAGING, token_variable=SHARED_TOKEN)
+
+    assert api.token_of(staging, environ={SHARED_TOKEN: "azr_staging"}) == "azr_staging"
+
+    with pytest.raises(api.InvalidArgumentError) as caught:
+        api.token_of(staging, environ={})
+
+    assert str(caught.value) == no_token_message(SHARED_TOKEN)
+
+
+def test_token_of_reads_a_names_variable_from_this_process_unless_given_one(
+    instance: api.Azathoth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = instance.remotes.add("origin", URL)
+    monkeypatch.setenv(REMOTE_TOKEN_VARIABLE, "azr_origin")
+
+    assert api.token_of(origin) == "azr_origin"
+
+
+def test_token_of_keeps_what_a_names_command_printed(
+    instance: api.Azathoth,
+    tmp_path: Path,
+) -> None:
+    count = tmp_path / "count"
+    sso = instance.remotes.add(
+        "sso", URL, token_command=printing_in_turn(count, "azr_first", "azr_second")
+    )
+
+    assert api.token_of(sso, environ={}) == "azr_first"
+    assert api.token_of(sso, environ={}) == "azr_first"
+    assert runs(count) == 1
+
+    TOKEN_COMMANDS.forget()
+
+    assert api.token_of(sso) == "azr_second"
+
+
+def test_token_of_says_why_a_names_command_printed_no_token(
+    instance: api.Azathoth,
+) -> None:
+    command = python("print()")
+    sso = instance.remotes.add("sso", URL, token_command=command)
+
+    with pytest.raises(api.InvalidArgumentError) as caught:
+        api.token_of(sso)
+
+    assert str(caught.value) == f"Token command `{shown_command(command)}` printed no token."

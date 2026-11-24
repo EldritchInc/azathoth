@@ -9,9 +9,10 @@ import pytest
 from azathoth import api
 from azathoth.api.connected import ConnectedInstance, Instance
 from azathoth.api.remote import no_token_message
-from azathoth.remote import REMOTE_TOKEN_VARIABLE
+from azathoth.remote import REMOTE_TOKEN_VARIABLE, TOKEN_COMMANDS
 from tests.remote.asgi import AsgiHttp
 from tests.remote.test_call_routes import ERIS, Served
+from tests.remote.test_token_commands import printing_in_turn, runs
 
 URL = "http://staging.test"
 
@@ -106,3 +107,23 @@ def test_each_connection_is_its_own(
     assert first is not second
     assert not second.closed
     assert second.workflows.list() == ()
+
+
+def test_a_named_remote_is_connected_to_with_the_token_its_command_prints_asked_each_call(
+    local: api.Azathoth,
+    http: AsgiHttp,
+    tmp_path: Path,
+) -> None:
+    count = tmp_path / "count"
+    local.remotes.add("sso", URL, token_command=printing_in_turn(count, "azr_one", "azr_two"))
+
+    with local.remote("sso", http=lambda: http).connect() as remote:
+        assert remote.workflows.list() == ()
+        assert remote.workflows.list() == ()
+
+        TOKEN_COMMANDS.forget()
+
+        assert remote.workflows.list() == ()
+
+    assert http.authorizations == ["Bearer azr_one", "Bearer azr_one", "Bearer azr_two"]
+    assert runs(count) == 2

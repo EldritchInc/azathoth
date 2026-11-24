@@ -50,6 +50,7 @@ from azathoth.providers import (
 from azathoth.remote import (
     REMOTE_PORTFOLIO_SNAPSHOT_TABLES,
     REMOTE_TABLES,
+    REMOTE_TOKEN_COMMAND_TABLES,
     REMOTE_TOKEN_TABLES,
     RemotePortfolioSnapshotRepository,
     RemoteRepository,
@@ -149,6 +150,7 @@ SCHEMA_TABLES: Final[tuple[Table, ...]] = (
     *REMOTE_PORTFOLIO_SNAPSHOT_TABLES,
     *REMOTE_TABLES,
     *SERVICE_JOB_TABLES,
+    *REMOTE_TOKEN_COMMAND_TABLES,
 )
 """Every table of the schema, in the order `initialize` creates them.
 

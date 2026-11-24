@@ -1,22 +1,25 @@
 """The remotes an instance names, so a command can say `origin` for its URL (ADR 0126).
 
-A name stands for a remote's URL and the environment variable its token is
-read from; the token itself is never kept, only where to find it, as ADR
-0119 keeps an MCP server's credentials. Names belong to the instance that
-gives them, as a git repository's remotes do, so two instances may give one
+A name stands for a remote's URL and where its token comes from: the
+environment variable it is read from, or the command that prints it (ADR
+0141). The token itself is never kept, only where to find it, as ADR 0119
+keeps an MCP server's credentials. Names belong to the instance that gives
+them, as a git repository's remotes do, so two instances may give one
 remote different names.
 """
 
+import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Final, Protocol, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from azathoth.persistence import Database, Row, SQLiteDatabase, Table, require_text
 from azathoth.remote.client import REMOTE_TOKEN_VARIABLE, require_remote_url
+from azathoth.remote.token_commands import TokenCommandError, require_token_command
 
 REMOTE_NAME_PATTERN: Final = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 """What a remote's name is made of: letters, digits, `_` and `-`.
@@ -46,7 +49,32 @@ REMOTE_TABLES: Final = (
 """The table the remotes an instance names are kept in (ADR 0126).
 
 Remotes were first named in this version, so there is nothing to backfill.
+A remote whose token a command prints keeps an empty `token_variable`.
 """
+
+REMOTE_TOKEN_COMMAND_TABLES: Final = (
+    Table(
+        name="remote_token_commands",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS
+                remote_token_commands (
+                    name TEXT NOT NULL PRIMARY KEY,
+                    command TEXT NOT NULL
+                )
+            """,
+        ),
+    ),
+)
+"""The table of the commands named remotes' tokens are printed by (ADR 0141).
+
+Each row's `name` is a remote's in `remotes`, and its `command` the JSON
+array of the command's arguments. Commands were first named in this
+version, so there is nothing to backfill.
+"""
+
+BOTH_TOKEN_SOURCES_MESSAGE: Final = "Give a remote a token variable or a token command, not both."
+"""Why naming a remote with both a token variable and a token command is refused."""
 
 
 class RemoteNameError(ValueError):
@@ -62,7 +90,11 @@ class RemoteNotNamedError(RemoteNameError):
 
 
 class NamedRemote(BaseModel):
-    """One remote this instance names: its URL, and where its token is read from."""
+    """One remote this instance names: its URL, and where its token comes from.
+
+    Its token is read from `token_variable`, or printed by `token_command`,
+    run as its arguments (ADR 0141); exactly one of them is given.
+    """
 
     model_config = ConfigDict(
         frozen=True,
@@ -73,9 +105,25 @@ class NamedRemote(BaseModel):
 
     url: str
 
-    token_variable: str = REMOTE_TOKEN_VARIABLE
+    token_variable: str | None = REMOTE_TOKEN_VARIABLE
+
+    token_command: tuple[str, ...] | None = None
 
     added_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def _one_token_source(
+        self,
+    ) -> Self:
+        """Refuse a remote whose token comes from both a variable and a command, or neither."""
+
+        if (self.token_variable is None) == (self.token_command is None):
+            raise ValueError(
+                "A named remote's token comes from a token variable or a token command, "
+                "exactly one."
+            )
+
+        return self
 
 
 def require_remote_name(
@@ -117,13 +165,18 @@ def require_token_variable(
 def _named(
     name: str,
     url: str,
-    token_variable: str,
+    token_variable: str | None,
+    token_command: Sequence[str] | None,
     added_at: datetime,
 ) -> NamedRemote:
-    """Return a named remote, refusing a name, URL or variable that is not one.
+    """Return a named remote, refusing a name, URL, variable or command that is not one.
+
+    With neither a variable nor a command, its token is read from
+    `REMOTE_TOKEN_VARIABLE`.
 
     Raises:
-        RemoteNameError: The name, URL or variable is not one.
+        RemoteNameError: The name, URL, variable or command is not one, or
+            both a variable and a command are given.
     """
 
     try:
@@ -131,10 +184,31 @@ def _named(
     except ValueError as exc:
         raise RemoteNameError(str(exc)) from None
 
+    named = require_remote_name(name)
+
+    if token_variable is not None and token_command is not None:
+        raise RemoteNameError(BOTH_TOKEN_SOURCES_MESSAGE)
+
+    if token_command is not None:
+        try:
+            command = require_token_command(token_command)
+        except TokenCommandError as exc:
+            raise RemoteNameError(str(exc)) from None
+
+        return NamedRemote(
+            name=named,
+            url=normalized,
+            token_variable=None,
+            token_command=command,
+            added_at=added_at,
+        )
+
     return NamedRemote(
-        name=require_remote_name(name),
+        name=named,
         url=normalized,
-        token_variable=require_token_variable(token_variable),
+        token_variable=require_token_variable(
+            REMOTE_TOKEN_VARIABLE if token_variable is None else token_variable
+        ),
         added_at=added_at,
     )
 
@@ -166,9 +240,13 @@ class RemoteRepository(Protocol):
         name: str,
         url: str,
         *,
-        token_variable: str = REMOTE_TOKEN_VARIABLE,
+        token_variable: str | None = None,
+        token_command: Sequence[str] | None = None,
     ) -> NamedRemote:
-        """Name a remote, and return it as named."""
+        """Name a remote, its token read from a variable or printed by a command, and return it.
+
+        With neither, its token is read from `REMOTE_TOKEN_VARIABLE`.
+        """
 
         ...
 
@@ -207,30 +285,35 @@ class SqlRemoteRepository:
     ) -> None:
         self._database = database
         self._clock = clock
-        database.prepare(REMOTE_TABLES)
+        database.prepare((*REMOTE_TABLES, *REMOTE_TOKEN_COMMAND_TABLES))
 
     def add(
         self,
         name: str,
         url: str,
         *,
-        token_variable: str = REMOTE_TOKEN_VARIABLE,
+        token_variable: str | None = None,
+        token_command: Sequence[str] | None = None,
     ) -> NamedRemote:
         """Name a remote, and return it as named, its URL without a trailing `/`.
 
+        Its token is read from `token_variable`, or printed by
+        `token_command`; with neither, it is read from
+        `REMOTE_TOKEN_VARIABLE`.
+
         Raises:
-            RemoteNameError: The name, URL or variable is not one.
+            RemoteNameError: The name, URL, variable or command is not one,
+                or both a variable and a command are given.
             RemoteAlreadyNamedError: A remote already has the name.
         """
 
-        remote = _named(name, url, token_variable, self._clock())
+        remote = _named(name, url, token_variable, token_command, self._clock())
 
         with self._database.transaction() as session:
             row = session.fetchone(
                 f"""
-                SELECT {_COLUMNS}
-                FROM remotes
-                WHERE name = ?
+                {_SELECTED}
+                WHERE remotes.name = ?
                 """,
                 (remote.name,),
             )
@@ -251,10 +334,22 @@ class SqlRemoteRepository:
                 (
                     remote.name,
                     remote.url,
-                    remote.token_variable,
+                    remote.token_variable or "",
                     remote.added_at.isoformat(),
                 ),
             )
+
+            if remote.token_command is not None:
+                session.execute(
+                    """
+                    INSERT INTO remote_token_commands (
+                        name,
+                        command
+                    )
+                    VALUES (?, ?)
+                    """,
+                    (remote.name, json.dumps(list(remote.token_command))),
+                )
 
         return remote
 
@@ -267,9 +362,8 @@ class SqlRemoteRepository:
         with self._database.transaction() as session:
             row = session.fetchone(
                 f"""
-                SELECT {_COLUMNS}
-                FROM remotes
-                WHERE name = ?
+                {_SELECTED}
+                WHERE remotes.name = ?
                 """,
                 (name,),
             )
@@ -284,9 +378,8 @@ class SqlRemoteRepository:
         with self._database.transaction() as session:
             rows = session.fetchall(
                 f"""
-                SELECT {_COLUMNS}
-                FROM remotes
-                ORDER BY name
+                {_SELECTED}
+                ORDER BY remotes.name
                 """
             )
 
@@ -305,9 +398,8 @@ class SqlRemoteRepository:
         with self._database.transaction() as session:
             row = session.fetchone(
                 f"""
-                SELECT {_COLUMNS}
-                FROM remotes
-                WHERE name = ?
+                {_SELECTED}
+                WHERE remotes.name = ?
                 """,
                 (name,),
             )
@@ -315,6 +407,13 @@ class SqlRemoteRepository:
             if row is None:
                 raise _not_named(name)
 
+            session.execute(
+                """
+                DELETE FROM remote_token_commands
+                WHERE name = ?
+                """,
+                (name,),
+            )
             session.execute(
                 """
                 DELETE FROM remotes
@@ -354,16 +453,22 @@ class InMemoryRemoteRepository:
         name: str,
         url: str,
         *,
-        token_variable: str = REMOTE_TOKEN_VARIABLE,
+        token_variable: str | None = None,
+        token_command: Sequence[str] | None = None,
     ) -> NamedRemote:
         """Name a remote, and return it as named, its URL without a trailing `/`.
 
+        Its token is read from `token_variable`, or printed by
+        `token_command`; with neither, it is read from
+        `REMOTE_TOKEN_VARIABLE`.
+
         Raises:
-            RemoteNameError: The name, URL or variable is not one.
+            RemoteNameError: The name, URL, variable or command is not one,
+                or both a variable and a command are given.
             RemoteAlreadyNamedError: A remote already has the name.
         """
 
-        remote = _named(name, url, token_variable, self._clock())
+        remote = _named(name, url, token_variable, token_command, self._clock())
         held = self._remotes.get(remote.name)
 
         if held is not None:
@@ -406,8 +511,31 @@ class InMemoryRemoteRepository:
         return removed
 
 
-_COLUMNS: Final = "name, url, token_variable, added_at"
-"""The columns a named remote is read from, in the order `_remote` reads them."""
+_SELECTED: Final = """
+    SELECT
+        remotes.name,
+        remotes.url,
+        remotes.token_variable,
+        remotes.added_at,
+        remote_token_commands.command
+    FROM remotes
+    LEFT JOIN remote_token_commands
+        ON remote_token_commands.name = remotes.name
+"""
+"""The query a named remote is read by, its columns in the order `_remote` reads them."""
+
+
+def _command(
+    held: object,
+) -> tuple[str, ...]:
+    """Return the token command a row holds as its JSON array of arguments."""
+
+    arguments: object = json.loads(require_text(held, "A remote's token command was not text."))
+
+    if not isinstance(arguments, list) or not all(isinstance(each, str) for each in arguments):
+        raise ValueError("A remote's token command was not a list of arguments.")
+
+    return tuple(str(each) for each in arguments)
 
 
 def _remote(
@@ -415,10 +543,17 @@ def _remote(
 ) -> NamedRemote:
     """Return the named remote one row holds."""
 
+    command = None if row[4] is None else _command(row[4])
+
     return NamedRemote(
         name=require_text(row[0], "A remote's name was not text."),
         url=require_text(row[1], "A remote's URL was not text."),
-        token_variable=require_text(row[2], "A remote's token variable was not text."),
+        token_variable=(
+            None
+            if command is not None
+            else require_text(row[2], "A remote's token variable was not text.")
+        ),
+        token_command=command,
         added_at=datetime.fromisoformat(
             require_text(row[3], "When a remote was named was not text.")
         ),
@@ -426,8 +561,10 @@ def _remote(
 
 
 __all__ = [
+    "BOTH_TOKEN_SOURCES_MESSAGE",
     "REMOTE_NAME_PATTERN",
     "REMOTE_TABLES",
+    "REMOTE_TOKEN_COMMAND_TABLES",
     "TOKEN_VARIABLE_PATTERN",
     "InMemoryRemoteRepository",
     "NamedRemote",

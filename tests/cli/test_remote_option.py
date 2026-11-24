@@ -32,6 +32,7 @@ from tests.cli.test_workflow_run import configure_database
 from tests.remote.asgi import AsgiHttp
 from tests.remote.test_call_routes import ERIS, Served
 from tests.remote.test_conditions import Refusing
+from tests.remote.test_token_commands import printing_in_turn, python, runs
 
 URL = "http://remote.test"
 
@@ -278,6 +279,42 @@ def test_a_remote_whose_token_is_not_set_is_refused_before_anything_is_sent(
 
     assert main(("goal", "list", "--remote", "origin")) == 1
     assert TOKEN_VARIABLE in capsys.readouterr().err
+    assert reaching.made == []
+
+
+def test_a_remote_named_with_a_token_command_is_read_with_the_token_it_prints(
+    database: Path,
+    remote: Served,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    reaching = reach(monkeypatch, remote)
+    count = tmp_path / "count"
+
+    with api.open(database) as instance:
+        instance.remotes.add("sso", URL, token_command=printing_in_turn(count, "azr_printed"))
+
+    assert main(("goal", "list", "--remote", "sso")) == 0
+    assert capsys.readouterr().out == f"{answer_accurately().id}  {answer_accurately().name}\n"
+    assert {made.authorizations[0] for made in reaching.made} == {"Bearer azr_printed"}
+    assert runs(count) == 1
+
+
+def test_a_remote_whose_token_command_fails_is_refused_before_anything_is_sent(
+    database: Path,
+    remote: Served,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reaching = reach(monkeypatch, remote)
+    command = python("import sys; sys.stderr.write('Run gcloud auth login.'); sys.exit(1)")
+
+    with api.open(database) as instance:
+        instance.remotes.add("sso", URL, token_command=command)
+
+    assert main(("goal", "list", "--remote", "sso")) == 1
+    assert capsys.readouterr().err.endswith("exited with status 1: Run gcloud auth login.\n")
     assert reaching.made == []
 
 

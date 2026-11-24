@@ -1,4 +1,4 @@
-"""Remote command-line parser construction (ADR 0124, ADR 0126)."""
+"""Remote command-line parser construction (ADR 0124, ADR 0126, ADR 0141)."""
 
 from __future__ import annotations
 
@@ -42,6 +42,8 @@ REMOTE_NAME_ATTRIBUTE = "remote_name"
 REMOTE_URL_ATTRIBUTE = "remote_url"
 
 REMOTE_TOKEN_VARIABLE_ATTRIBUTE = "remote_token_variable"
+
+REMOTE_TOKEN_COMMAND_ATTRIBUTE = "remote_token_command"
 
 REMOTE_WORKFLOWS_ATTRIBUTE = "remote_workflows"
 
@@ -160,8 +162,8 @@ def add_remote_parser(
             REMOTE_TARGET_ATTRIBUTE,
             metavar="REMOTE",
             help=(
-                "A remote's name, its token read from the variable it was named with, or its "
-                f"URL, its token read from {REMOTE_TOKEN_VARIABLE}."
+                "A remote's name, its token read from the variable or printed by the command "
+                f"it was named with, or its URL, its token read from {REMOTE_TOKEN_VARIABLE}."
             ),
         )
 
@@ -231,7 +233,9 @@ def add_remote_parser(
         help="The remote's http or https URL.",
     )
 
-    add_parser.add_argument(
+    token_source = add_parser.add_mutually_exclusive_group()
+
+    token_source.add_argument(
         "--token-variable",
         dest=REMOTE_TOKEN_VARIABLE_ATTRIBUTE,
         metavar="VARIABLE",
@@ -239,6 +243,18 @@ def add_remote_parser(
         help=(
             f"The environment variable its token is read from; {REMOTE_TOKEN_VARIABLE} by "
             "default. Only the variable's name is kept, never a token."
+        ),
+    )
+
+    token_source.add_argument(
+        "--token-command",
+        dest=REMOTE_TOKEN_COMMAND_ATTRIBUTE,
+        metavar="COMMAND",
+        default=None,
+        help=(
+            "A command that prints its token, such as 'gcloud auth print-identity-token', "
+            "instead of a variable. It is split as a shell would split it, but run without "
+            "one, whenever the remote is reached and no token it printed is kept."
         ),
     )
 
