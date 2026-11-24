@@ -16,9 +16,11 @@ from uuid import UUID
 
 from azathoth import api
 from azathoth.api.remote import reach
+from azathoth.cli import platforms
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.output_format import StatusOutputFormat
 from azathoth.cli.persistence import repositories
+from azathoth.cli.platforms import SERVING_ON_WINDOWS_WARNING
 from azathoth.cli.service import current_author
 from azathoth.remote import (
     MISSING_REMOTE_EXTRA_MESSAGE,
@@ -268,7 +270,9 @@ def serve_remote(
     installed, and the plugins installed for the remote's seams must be
     ones it can use; otherwise nothing is served, and the reason is
     printed. An SQLite database is served by one process at a time: a
-    second server on the same file is refused (ADR 0135).
+    second server on the same file is refused (ADR 0135). On Windows, where
+    serving is untested and at the operator's own risk, it says so first
+    (ADR 0142).
     """
 
     try:
@@ -280,6 +284,9 @@ def serve_remote(
         print(MISSING_REMOTE_EXTRA_MESSAGE, file=sys.stderr)
 
         return 1
+
+    if platforms.on_windows():
+        print(SERVING_ON_WINDOWS_WARNING, file=sys.stderr)
 
     configuration = CliRuntimeConfiguration.from_environment()
     held = repositories(configuration)

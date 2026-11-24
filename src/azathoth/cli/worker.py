@@ -10,9 +10,11 @@ from typing import Any, Final
 
 from pydantic import ValidationError
 
+from azathoth.cli import platforms
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.platforms import WORKER_ON_WINDOWS_WARNING
 from azathoth.cli.termination import (
     INTERRUPTED_MESSAGE,
     INTERRUPTED_STATUS,
@@ -172,7 +174,9 @@ def run_worker(
     way, leaving its message on the queue.
 
     With tracing on, each job is traced as `job run` traces it, with the
-    message's ID on its job span (ADR 0100).
+    message's ID on its job span (ADR 0100). On Windows, where the worker
+    is untested and at its operator's own risk, it says so once its
+    settings are valid (ADR 0142).
     """
 
     problems: list[str] = []
@@ -194,6 +198,9 @@ def run_worker(
             print(problem, file=sys.stderr)
 
         return 1
+
+    if platforms.on_windows():
+        print(WORKER_ON_WINDOWS_WARNING, file=sys.stderr)
 
     return run_traced(
         lambda telemetry: _run_traced_worker(
