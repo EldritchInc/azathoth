@@ -63,16 +63,21 @@ def served(
 def runners(
     path: Path,
     served: Served,
-    *,
-    stall_seconds: float = 60.0,
 ) -> JobRunners:
+    """Return a server's two runners, beating often and stalling only after a minute.
+
+    A job left by a runner that stopped beating long ago is recovered at
+    their first beat; a minute is never so short that a busy machine's late
+    beat makes these runners recover a job they are running themselves.
+    """
+
     return JobRunners(
         served.jobs,
         CallerInstances(open_repositories(path)),
         count=2,
         poll_seconds=0.02,
         beat_seconds=0.05,
-        stall_seconds=stall_seconds,
+        stall_seconds=60.0,
     )
 
 
@@ -220,7 +225,7 @@ def test_an_invocation_left_by_a_server_that_stopped_is_resumed_and_followed_to_
         idempotency_key="order-412",
     )
 
-    with runners(path, served, stall_seconds=0.1), connected(served) as remote:
+    with runners(path, served), connected(served) as remote:
         outcome = remote.jobs.follow(job_id)
         job = remote.jobs.get(job_id)
 
@@ -328,7 +333,7 @@ def test_a_run_left_by_a_server_that_stopped_before_it_started_is_run_again(
         input=api.RunInput(payload="one two"),
     )
 
-    with runners(path, served, stall_seconds=0.1), connected(served) as remote:
+    with runners(path, served), connected(served) as remote:
         result = remote.jobs.follow(job_id)
 
     assert (result.succeeded, result.result) == (True, 2)
