@@ -3,7 +3,8 @@
 `azathoth tool from-mcp` asks the service API's `tools.from_mcp` for the
 document of the tool named, its implementation pinned to the schemas the
 server serves now, and prints it. Nothing is stored: the operator reads the
-document and imports it as any other.
+document and imports it as any other. Given `--remote`, the remote asks
+the server, from where it runs (ADR 0140).
 """
 
 import sys
@@ -34,7 +35,9 @@ def tool_from_mcp(
     The implementation keeps the timeout named, if any; listing the tools is
     given that timeout, or 30 seconds. The server is named with the
     command's own options, so naming it twice or not at all is said in
-    their terms.
+    their terms. `connect`, which tests give, is what this machine's MCP
+    client connects to; a remote is never sent one, since it connects from
+    where it runs.
     """
 
     if url is not None and command:
@@ -48,16 +51,28 @@ def tool_from_mcp(
         return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
+    instance = service_instance(configuration)
 
     try:
-        exported = service_instance(configuration).tools.from_mcp(
-            tool,
-            url=url,
-            command=command,
-            authorization=authorization,
-            grants=grants,
-            timeout_seconds=timeout_seconds,
-            connect=connect,
+        exported = (
+            instance.tools.from_mcp(
+                tool,
+                url=url,
+                command=command,
+                authorization=authorization,
+                grants=grants,
+                timeout_seconds=timeout_seconds,
+            )
+            if connect is None
+            else instance.tools.from_mcp(
+                tool,
+                url=url,
+                command=command,
+                authorization=authorization,
+                grants=grants,
+                timeout_seconds=timeout_seconds,
+                connect=connect,
+            )
         )
     except api.ApiError as exc:
         print(str(exc), file=sys.stderr)
