@@ -65,6 +65,11 @@ with api.open("azathoth.db") as instance:
 | `tools.list()` | Every exact tool version at its latest revision. |
 | `tools.versions(id)` | Each version of one tool at its latest revision, as `tool versions` lists them. |
 | `tools.get(id, version, revision=None)` | One revision of one exact version, with its document. |
+| `tools.definition(id, version)` | The `ToolDefinitionDetail` the version has now, with its input and output schemas, as `tool show` shows it (ADR 0140). |
+| `tools.implementations(id, version)` | Each `ToolImplementationSummary` of one exact version, as `tool implementations` lists them. |
+| `tools.implementation(implementation_id)` | One `ToolImplementationDetail`, adding what it runs: its entrypoint, command, timeout, environment, MCP binding and source. |
+| `tools.test_cases(id)` | Each `ToolTestCaseSummary` of one tool, of every version, as `tool test-cases` lists them. |
+| `tools.test_case(test_case_id)` | One `ToolTestCaseDetail`, adding its description, inputs and expected output. |
 | `tools.history(id, version=None, limit=None)` | Its revisions newest first, of one version when it is named. |
 | `tools.export(id, version, revision=None)` | A `DocumentExport` of one revision of one exact version. |
 | `tools.compare_revisions(id, version, before, after)` | A `RevisionComparison` of two revisions of one exact version. |
@@ -751,6 +756,11 @@ refused.
 | `tools.list` | `read_catalog` |  |  |
 | `tools.versions` | `read_catalog` |  |  |
 | `tools.get` | `read_catalog` |  |  |
+| `tools.definition` | `read_catalog` |  |  |
+| `tools.implementations` | `read_catalog` |  |  |
+| `tools.implementation` | `read_catalog` |  |  |
+| `tools.test_cases` | `read_catalog` |  |  |
+| `tools.test_case` | `read_catalog` |  |  |
 | `tools.history` | `read_catalog` |  |  |
 | `tools.export` | `read_catalog` |  |  |
 | `tools.compare_revisions` | `read_catalog` |  |  |

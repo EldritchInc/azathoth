@@ -22,7 +22,7 @@ from azathoth.cli import (
     render_workflow_run_evaluations,
     render_workflow_run_feedback,
 )
-from azathoth.cli.parsing.targets import NOT_YET_ON_A_REMOTE
+from azathoth.cli.parsing.targets import remote_refusal
 from azathoth.cli.rendering.run_details import (
     render_run_detail,
     render_run_evaluations,
@@ -294,4 +294,5 @@ def test_a_restricted_run_shown_from_a_remote_warns_as_it_does_here(
 
 
 def test_the_commands_that_read_workflows_and_runs_now_run_on_a_remote() -> None:
-    assert not {"workflow list", "workflow show", "workflow runs", "run show"} & NOT_YET_ON_A_REMOTE
+    for command in ("workflow list", "workflow show", "workflow runs", "run show"):
+        assert remote_refusal(command) is None, command

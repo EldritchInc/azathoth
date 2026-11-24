@@ -14,10 +14,9 @@ from azathoth.cli import build_parser, main
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.parsing.targets import (
     NEVER_ON_A_REMOTE,
-    NOT_YET_ON_A_REMOTE,
     REMOTE_ATTRIBUTE,
     command_parsers,
-    not_yet_message,
+    remote_refusal,
 )
 from azathoth.cli.persistence import repositories
 from azathoth.cli.remote_choice import (
@@ -148,8 +147,7 @@ def test_every_command_takes_remote_but_those_that_never_run_on_one() -> None:
     commands = dict(command_parsers(build_parser()))
 
     assert set(NEVER_ON_A_REMOTE) == NEVER
-    assert set(commands) >= NOT_YET_ON_A_REMOTE
-    assert not NOT_YET_ON_A_REMOTE & NEVER
+    assert set(commands) >= NEVER
 
     for command, parser in commands.items():
         (option,) = [action for action in parser._actions if action.dest == REMOTE_ATTRIBUTE]
@@ -192,15 +190,9 @@ def test_a_command_that_never_runs_on_a_remote_says_why_in_a_sentence(
     assert capsys.readouterr().err == f"{NEVER_ON_A_REMOTE[command]}\n"
 
 
-def test_a_command_not_yet_run_on_a_remote_says_so(
-    database: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    assert main(("model", "list", "--remote", "origin")) == 2
-    assert capsys.readouterr().err == f"{not_yet_message('model list')}\n"
-    assert not_yet_message("workflow list") == (
-        "workflow list does not run on a remote yet, so it takes no --remote."
-    )
+def test_every_command_but_those_that_never_run_on_a_remote_runs_on_one() -> None:
+    for command, _ in command_parsers(build_parser()):
+        assert (remote_refusal(command) is None) is (command not in NEVER), command
 
 
 # Running on a remote

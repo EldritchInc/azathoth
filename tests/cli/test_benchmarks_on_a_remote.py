@@ -20,7 +20,7 @@ import pytest
 from azathoth import api
 from azathoth.api.benchmark_executions import execution_detail
 from azathoth.cli import main
-from azathoth.cli.parsing.targets import NOT_YET_ON_A_REMOTE
+from azathoth.cli.parsing.targets import remote_refusal
 from azathoth.cli.rendering.benchmarks import render_benchmark_run
 from azathoth.persistence.repositories import open_repositories
 from azathoth.remote.calling import CallerInstances
@@ -475,13 +475,11 @@ def test_a_run_whose_case_runs_are_gone_shows_its_totals_as_unknown(
 
 
 def test_the_benchmark_commands_now_run_on_a_remote() -> None:
-    assert (
-        not {
-            "benchmark add-case",
-            "benchmark compare",
-            "benchmark run",
-            "benchmark show",
-            "workflow optimize",
-        }
-        & NOT_YET_ON_A_REMOTE
-    )
+    for command in (
+        "benchmark add-case",
+        "benchmark compare",
+        "benchmark run",
+        "benchmark show",
+        "workflow optimize",
+    ):
+        assert remote_refusal(command) is None, command

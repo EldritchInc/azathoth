@@ -23,7 +23,7 @@ import pytest
 
 from azathoth import api
 from azathoth.cli import main
-from azathoth.cli.parsing.targets import NOT_YET_ON_A_REMOTE
+from azathoth.cli.parsing.targets import remote_refusal
 from azathoth.cli.remote_runs import CHILD_RUN_MESSAGE, on_remote
 from azathoth.persistence.repositories import open_repositories
 from azathoth.remote.calling import CallerInstances
@@ -516,16 +516,14 @@ def test_a_run_another_runs_step_started_takes_no_remote(
 
 
 def test_the_commands_that_run_workflows_now_run_on_a_remote() -> None:
-    assert (
-        not {
-            "workflow run",
-            "workflow invoke",
-            "job run",
-            "run resume",
-            "invocation resume",
-        }
-        & NOT_YET_ON_A_REMOTE
-    )
+    for command in (
+        "workflow run",
+        "workflow invoke",
+        "job run",
+        "run resume",
+        "invocation resume",
+    ):
+        assert remote_refusal(command) is None, command
 
 
 def test_a_job_request_naming_s3_is_refused_alike_here_and_on_a_remote(

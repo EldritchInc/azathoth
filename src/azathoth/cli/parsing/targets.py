@@ -3,8 +3,7 @@
 Every command takes `--remote <NAME>`, naming a remote this instance gave
 a name, or its URL, to run on that remote rather than on this machine's
 database. A command that never runs on a remote takes the option only to
-say why, in a sentence of its own; one whose way onto the service API is
-still to come says so too.
+say why, in a sentence of its own.
 """
 
 from argparse import SUPPRESS, ArgumentParser, _SubParsersAction
@@ -51,45 +50,13 @@ NEVER_ON_A_REMOTE: Final[Mapping[str, str]] = {
 }
 """Each command that never runs on a remote, and the sentence that says why."""
 
-NOT_YET_ON_A_REMOTE: Final = frozenset(
-    {
-        "model authorize",
-        "model deauthorize",
-        "model list",
-        "model policy",
-        "model portfolio",
-        "model show",
-        "tool implementation-show",
-        "tool implementations",
-        "tool install-standard",
-        "tool show",
-        "tool test-case-show",
-        "tool test-cases",
-    }
-)
-"""The commands that still read this machine's database themselves, so run on no remote yet."""
-
-
-def not_yet_message(
-    command: str,
-) -> str:
-    """Return what a command not yet run on a remote says when `--remote` names one."""
-
-    return f"{command} does not run on a remote yet, so it takes no --remote."
-
 
 def remote_refusal(
     command: str,
 ) -> str | None:
     """Return why a command takes no `--remote`, or None when it runs on a remote."""
 
-    if command in NEVER_ON_A_REMOTE:
-        return NEVER_ON_A_REMOTE[command]
-
-    if command in NOT_YET_ON_A_REMOTE:
-        return not_yet_message(command)
-
-    return None
+    return NEVER_ON_A_REMOTE.get(command)
 
 
 def command_parsers(
@@ -149,11 +116,9 @@ def add_remote_options(
 __all__ = [
     "COMMAND_PATH_ATTRIBUTE",
     "NEVER_ON_A_REMOTE",
-    "NOT_YET_ON_A_REMOTE",
     "REMOTE_ATTRIBUTE",
     "REMOTE_OPTION",
     "add_remote_options",
     "command_parsers",
-    "not_yet_message",
     "remote_refusal",
 ]

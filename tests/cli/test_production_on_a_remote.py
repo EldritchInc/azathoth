@@ -18,7 +18,7 @@ from pydantic import JsonValue
 
 from azathoth import api
 from azathoth.cli import main
-from azathoth.cli.parsing.targets import NOT_YET_ON_A_REMOTE
+from azathoth.cli.parsing.targets import remote_refusal
 from azathoth.cli.rendering import RecordedCitations, render_production_invocation
 from azathoth.cli.rendering.production_views import render_invocation_detail
 from azathoth.context import Context, LineageRun, LineageStep, WorkflowLineage, create_lineage_event
@@ -328,17 +328,15 @@ def test_an_invocations_checks_from_a_remote_render_as_kept_ones_do() -> None:
 
 
 def test_the_production_commands_now_run_on_a_remote() -> None:
-    assert (
-        not {
-            "workflow production",
-            "workflow revisions",
-            "workflow invocations",
-            "invocation show",
-            "workflow promote",
-            "workflow rollback",
-        }
-        & NOT_YET_ON_A_REMOTE
-    )
+    for command in (
+        "workflow production",
+        "workflow revisions",
+        "workflow invocations",
+        "invocation show",
+        "workflow promote",
+        "workflow rollback",
+    ):
+        assert remote_refusal(command) is None, command
 
 
 def test_an_emission_names_where_it_is_read_as_production_describes_it(

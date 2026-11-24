@@ -176,6 +176,116 @@ class ToolDetail(ToolSummary):
     )
 
 
+class ToolDefinitionDetail(ApiModel):
+    """The definition one exact tool version has now, as `tool show` shows it (ADR 0140)."""
+
+    id: UUID
+
+    name: str
+
+    version: str
+
+    description: str
+
+    input_schema: dict[str, JsonValue] = Field(
+        description="The JSON Schema its input meets.",
+    )
+
+    output_schema: dict[str, JsonValue] = Field(
+        description="The JSON Schema its output meets.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolImplementationSummary(ApiModel):
+    """One implementation of one exact tool version, as `tool implementations` lists it."""
+
+    implementation_id: UUID
+
+    tool_id: UUID
+
+    tool_version: str
+
+    version: str = Field(
+        description="The implementation's own version.",
+    )
+
+    runtime: str
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolMcpBinding(ApiModel):
+    """The MCP server tool an implementation calls, pinned to the schemas it served."""
+
+    server: str = Field(
+        description="The server, as its URL or the command that starts it.",
+    )
+
+    tool: str
+
+    schema_digest: str
+
+    authorization: str | None = Field(
+        description="The variable naming its bearer token, or None when it needs none.",
+    )
+
+
+class ToolImplementationDetail(ToolImplementationSummary):
+    """One implementation with what it runs, as `tool implementation-show` shows it (ADR 0140)."""
+
+    entrypoint: str | None = Field(
+        description="The function a process implementation runs, or None for an MCP one.",
+    )
+
+    argv: tuple[str, ...] | None = Field(
+        description="The command a process implementation runs, or None when it names none.",
+    )
+
+    timeout_seconds: float | None
+
+    environment: tuple[str, ...] = Field(
+        description="The variables it is given beyond the base environment.",
+    )
+
+    mcp: ToolMcpBinding | None = Field(
+        description="The MCP server tool it calls, or None for a process implementation.",
+    )
+
+    source: str | None = Field(
+        description="The source it runs, or None when it runs none.",
+    )
+
+
+class ToolTestCaseSummary(ApiModel):
+    """One verification case of one tool, as `tool test-cases` lists it."""
+
+    test_case_id: UUID
+
+    tool_id: UUID
+
+    name: str
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolTestCaseDetail(ToolTestCaseSummary):
+    """One verification case with its inputs and output, as `tool test-case-show` shows it."""
+
+    description: str
+
+    inputs: dict[str, JsonValue]
+
+    expected_output: dict[str, JsonValue]
+
+
 class BenchmarkSummary(ApiModel):
     """One revision of a benchmark dataset, as lists and histories show it."""
 
