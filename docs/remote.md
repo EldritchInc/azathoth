@@ -103,6 +103,14 @@ Serving remote protocol 1 at http://127.0.0.1:8470; it refuses restricted data.
 It runs 2 jobs at once.
 ```
 
+Serving is tested on Linux and macOS (ADR 0142). On Windows it serves as
+anywhere, after one line that says so first; for a remote others depend
+on, serve from WSL 2 or the container image instead:
+
+```text
+Serving a remote on Windows is untested and at your own risk; Azathoth tests serving on Linux and macOS (ADR 0142).
+```
+
 It listens on this machine only, on port 8470, until Ctrl-C stops it;
 `--host` and `--port` choose others. In the second terminal, check that it
 answers:

@@ -379,7 +379,12 @@ def stalled(
     call: str,
     **arguments: Any,
 ) -> UUID:
-    """Submit a job and leave it running under a runner that stopped beating long ago."""
+    """Submit a job and leave it running under a runner that stopped beating long ago.
+
+    Runners recover it at their first beat with their usual stall window; a
+    window of a fraction of a second would let a busy machine's late beat
+    make them recover the job they are running themselves.
+    """
 
     job_id = remote.submit(call, **arguments)
     gone = SqlServiceJobRepository(remote.repositories.database, clock=lambda: LONG_AGO)
@@ -457,7 +462,7 @@ def test_a_run_whose_named_run_never_journaled_runs_anew(
     never = UUID("c1390000-0000-4000-8000-0000000000bb")
     remote.jobs.record_run(job_id, never)
 
-    with remote.runners(stall_seconds=0.1):
+    with remote.runners():
         job = finished(remote, job_id)
 
     assert job.status is ServiceJobStatus.SUCCEEDED

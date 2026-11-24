@@ -121,7 +121,10 @@ class JobRunners:
 
     Start them, best as a context manager, and stop them when the server
     stops: stopping asks every running job to stop, and hands each back to
-    be recovered, then forgets the runners.
+    be recovered, then forgets the runners. A runner claims a job only
+    while its server is not stopping, deciding so and claiming under one
+    lock with the stop, so no claim begun before a stop takes a job another
+    runner hands back as it stops.
     """
 
     def __init__(
@@ -154,6 +157,7 @@ class JobRunners:
         self._stall_seconds = stall_seconds
         self._clock = clock
         self._stopping = threading.Event()
+        self._claiming = threading.Lock()
         self._held: dict[UUID, _Held] = {}
         self._lock = threading.Lock()
         self._runner_ids: tuple[str, ...] = ()
@@ -226,10 +230,12 @@ class JobRunners:
         """Ask every running job to stop, wait for the runners, and forget them.
 
         A job stopped this way is handed back as a stalled one is recovered,
-        unless its caller had asked it to stop, when it ends cancelled.
+        unless its caller had asked it to stop, when it ends cancelled. A
+        claim under way is waited for first, so no runner takes a job after.
         """
 
-        self._stopping.set()
+        with self._claiming:
+            self._stopping.set()
 
         with self._lock:
             for held in self._held.values():
@@ -265,12 +271,16 @@ class JobRunners:
     ) -> None:
         """Run one job after another until the server stops."""
 
-        while not self._stopping.is_set():
-            try:
-                job = self._jobs.claim(runner_id)
-            except Exception:
-                LOGGER.exception("Runner %s could not claim a job.", runner_id)
-                job = None
+        while True:
+            with self._claiming:
+                if self._stopping.is_set():
+                    return
+
+                try:
+                    job = self._jobs.claim(runner_id)
+                except Exception:
+                    LOGGER.exception("Runner %s could not claim a job.", runner_id)
+                    job = None
 
             if job is None:
                 self._stopping.wait(self._poll_seconds)

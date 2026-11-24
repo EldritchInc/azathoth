@@ -164,3 +164,4 @@ requests that made it:
 - [ADR 0139: A Run Job Names Its Run](0139-a-run-job-names-its-run.md)
 - [ADR 0140: The Command Line on a Remote](0140-the-command-line-on-a-remote.md)
 - [ADR 0141: Tokens Printed by a Command](0141-tokens-printed-by-a-command.md)
+- [ADR 0142: Remotes Are Served from Linux and macOS](0142-remotes-are-served-from-linux-and-macos.md)

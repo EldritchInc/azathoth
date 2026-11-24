@@ -448,6 +448,13 @@ Without it, `azathoth worker run` runs nothing and says so:
 azathoth worker needs boto3, which is not installed; install azathoth-ai[worker].
 ```
 
+The worker is tested on Linux and macOS. On Windows it runs as anywhere,
+after one line that says so first:
+
+```text
+Running the queue worker on Windows is untested and at your own risk; Azathoth tests it on Linux and macOS (ADR 0142).
+```
+
 The [CLI Reference](../src/azathoth/cli/README.md#run-a-worker) describes
 its options, its output, and how it stops.
 
