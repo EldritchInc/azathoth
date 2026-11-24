@@ -169,6 +169,23 @@ azathoth remote add staging https://staging.example.com --token-variable AZATHOT
 azathoth remote add staging https://staging.example.com --token-variable AZATHOTH_STAGING_TOKEN
 ```
 
+A remote behind single sign-on, or one whose policy accepts your identity
+provider's tokens, takes a token that lasts an hour or so. Name it with the
+command that prints one instead, and Azathoth runs that command whenever it
+reaches the remote and holds no fresh token from it (ADR 0141):
+
+```bash
+azathoth remote add team https://team.example.com --token-command "gcloud auth print-identity-token"
+```
+
+```powershell
+azathoth remote add team https://team.example.com --token-command "gcloud auth print-identity-token"
+```
+
+The command runs without a shell, so write a script for one that needs a
+pipe. Sign in to your provider's tool first: what it says when you are not
+signed in is what Azathoth shows.
+
 Push the workflow:
 
 ```bash
@@ -455,6 +472,13 @@ No token is set in this terminal:
 
 ```text
 No remote token was given; set AZATHOTH_REMOTE_TOKEN to one created on the remote with `azathoth remote token create`.
+```
+
+A remote's token command printed no token; run the command yourself, and
+sign in to its tool again if it says to:
+
+```text
+Token command `<COMMAND>` exited with status <STATUS>: <SAID>
 ```
 
 The remote is not running, or not at that URL:

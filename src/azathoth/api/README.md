@@ -607,7 +607,8 @@ portfolio kept, as of `portfolio_synced_at` (ADR 0125).
 reaches the remote it names (ADR 0126). A name is 1 to 64 letters, digits,
 `_` and `-`; it holds no `:`, `/` or `.`, so `instance.remote` reads
 anything that does as a URL. Each name keeps the variable its token is read
-from, `AZATHOTH_REMOTE_TOKEN` unless another is given, and never a token:
+from, `AZATHOTH_REMOTE_TOKEN` unless another is given, or the command that
+prints it, and never a token (ADR 0141):
 
 ```python
 with api.open("azathoth.db") as instance:
@@ -617,14 +618,28 @@ with api.open("azathoth.db") as instance:
         "https://staging.example.com",
         token_variable="AZATHOTH_STAGING_TOKEN",
     )
+    instance.remotes.add(
+        "team",
+        "https://team.example.com",
+        token_command=["gcloud", "auth", "print-identity-token"],
+    )
     pushed = instance.remote("staging").push(workflows=[workflow_id])
 ```
 
+A token command is run as its arguments, without a shell, when its remote
+is reached; it has 30 seconds to print the token alone, which is kept in
+the process until 30 seconds before a JWT's expiry, or for 5 minutes. A
+connected instance asks for it before each request. A command that prints
+no token is an `InvalidArgumentError`, saying why, before anything is sent.
+`api.token_of(remote, environ=None)` returns the token a `NamedRemote` is
+reached with now: the one its variable holds in `environ`, the process's
+own environment unless given, or the one its command prints.
+
 | Call | Returns |
 | --- | --- |
-| `remotes.list()` | Every `NamedRemote`, ordered by name: its `name`, `url`, `token_variable` and `added_at`. |
+| `remotes.list()` | Every `NamedRemote`, ordered by name: its `name`, `url`, `token_variable` or `token_command`, and `added_at`. |
 | `remotes.get(name)` | The `NamedRemote` of a name. |
-| `remotes.add(name, url, token_variable="AZATHOTH_REMOTE_TOKEN")` | The `NamedRemote` it named, its URL without a trailing `/`. |
+| `remotes.add(name, url, token_variable=None, token_command=None)` | The `NamedRemote` it named, its URL without a trailing `/`, its token read from `AZATHOTH_REMOTE_TOKEN` when neither is given. |
 | `remotes.remove(name)` | The `NamedRemote` it forgot. The last portfolio read from its URL is forgotten too, unless another name is kept for it; nothing at the remote changes. |
 
 A name already given is a `ConflictError`, and one never given a
@@ -635,6 +650,7 @@ Remote <NAME> is already named, for <URL>; remove it first, or choose another na
 No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
 Remote name '<NAME>' is not one: use 1 to 64 letters, digits, '_' or '-'.
 Token variable '<VARIABLE>' is not an environment variable's name: use letters, digits and '_', not beginning with a digit.
+Give a remote a token variable or a token command, not both.
 ```
 
 ```text

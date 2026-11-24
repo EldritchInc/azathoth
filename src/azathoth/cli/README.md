@@ -4025,14 +4025,42 @@ azathoth remote add staging https://staging.example.com --token-variable AZATHOT
 Named remote origin for https://azathoth.example.com; its token is read from AZATHOTH_REMOTE_TOKEN.
 ```
 
+A name may keep, with `--token-command`, the command that prints its
+remote's token instead, as an identity provider's tool prints one that
+lasts an hour (ADR 0141). The command is split as a shell would split it,
+kept as its arguments, and not run until the remote is reached; then it is
+run without a shell, given 30 seconds to print the token alone, and its
+token kept in the process until 30 seconds before a JWT's expiry, or for
+5 minutes. A name keeps a variable or a command, never both:
+
+```bash
+azathoth remote add team https://azathoth.example.com --token-command "gcloud auth print-identity-token"
+```
+
+```text
+Named remote team for https://azathoth.example.com; its token is printed by `gcloud auth print-identity-token`.
+```
+
+```text
+Give a remote a token variable or a token command, not both.
+```
+
 `remote list` lists the names, in order, one per line, with each one's URL
-and token variable. `remote remove` forgets a name, and the last portfolio
-read from its URL unless another name is kept for it; nothing at the remote
-changes:
+and token variable, or its command quoted. `remote remove` forgets a name,
+and the last portfolio read from its URL unless another name is kept for
+it; nothing at the remote changes:
 
 ```text
 origin  https://azathoth.example.com  AZATHOTH_REMOTE_TOKEN
+team  https://azathoth.example.com  `gcloud auth print-identity-token`
 Removed remote origin, for https://azathoth.example.com; nothing at the remote changed.
+```
+
+A command that does not print a token is refused before anything is sent,
+saying what it said on standard error:
+
+```text
+Token command `<COMMAND>` exited with status <STATUS>: <SAID>
 ```
 
 Names are durable state of this instance's database, as git remotes are of
@@ -4048,7 +4076,8 @@ No remote is named '<NAME>'; name one with `azathoth remote add <NAME> <URL>`.
 
 `remote push` sends workflows, tool versions and benchmarks to a remote,
 and `remote pull` brings them back (ADR 0124). Each names the remote by a
-name `remote add` gave it, its token read from that name's variable, or by
+name `remote add` gave it, its token read from that name's variable or
+printed by its command, or by
 its URL, its token read from `AZATHOTH_REMOTE_TOKEN`, so no command line
 holds it. A name holds no `:`, `/` or `.`, so anything that does is read as
 a URL. Each names what to send with `--workflow`, `--tool` and

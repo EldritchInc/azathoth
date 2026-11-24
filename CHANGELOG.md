@@ -15,7 +15,9 @@ may build on; a remote answers its requests together rather than one at a
 time, and serves every call of the service API, asking and telling as
 named; it runs the calls that take minutes as jobs, kept in its database
 and followed as they go; `api.connect` calls a remote as an instance of
-its own; and every command but a few runs on a remote with `--remote`.
+its own; every command but a few runs on a remote with `--remote`; and a
+named remote's token may be printed by a command, as an identity
+provider's tool prints one.
 
 ### The Action Catalog
 
@@ -225,6 +227,28 @@ its own; and every command but a few runs on a remote with `--remote`.
 - `tool from-mcp` no longer sends a remote what only tests give it
   ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
 
+### Tokens Printed by a Command
+
+- `azathoth remote add <NAME> <URL> --token-command "<COMMAND>"`, or
+  `instance.remotes.add(..., token_command=[...])`, names a remote whose
+  token a command prints, such as `gcloud auth print-identity-token`,
+  instead of one read from a variable; a name keeps one or the other,
+  never both, and `remote list` shows the command quoted
+  ([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
+- The command is run without a shell, given no input, and has 30 seconds
+  to print the token alone; one that does not is refused before anything
+  is sent, saying what it said on standard error
+  ([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
+- Its token is kept in the process, never on disk, until 30 seconds before
+  a JWT's expiry, or for 5 minutes. Pushes, pulls, statuses and `--remote`
+  reach a named remote with it, and a connected instance asks for it
+  before each request
+  ([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
+- `NamedRemote.token_command` holds a name's command, and `token_variable`
+  is `None` for such a name. `api.token_of(remote, environ=None)` returns
+  the token a named remote is reached with now
+  ([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
+
 ### Plugins
 
 - A remote calls a plugin's seams from several threads at once; Writing a
@@ -264,13 +288,16 @@ If you serve workflows with `azathoth-mcp`, upgrade it in the same command,
 as [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#upgrading-leaving-and-uninstalling) shows: 1.6 of it requires 1.6 of
 `azathoth-ai`.
 
-The database schema moves from version 7 to version 8, which adds the
+The database schema moves from version 7 to version 9, which adds the
 tables a remote keeps its jobs in
-([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md))
+and the table of the commands named remotes' tokens are printed by
+([ADR 0141](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0141-tokens-printed-by-a-command.md)).
 An SQLite file is upgraded the first time it is used. A PostgreSQL
 database refuses every command until `azathoth init` has run once, from
 any one machine, and 1.5 refuses it after that, so upgrade Azathoth on
-every machine first. `init` keeps everything the database holds.
+every machine first; a database 1.6.0b1 made, at version 8, is upgraded
+the same way. `init` keeps everything the database holds.
 
 `azathoth remote serve` now runs jobs, 2 at once by default, and says so
 on a second line when it starts.
