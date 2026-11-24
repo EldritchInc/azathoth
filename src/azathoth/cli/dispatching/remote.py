@@ -1,4 +1,4 @@
-"""Remote command dispatch for the Azathoth CLI (ADR 0124, ADR 0126)."""
+"""Remote command dispatch for the Azathoth CLI (ADR 0124, ADR 0126, ADR 0141)."""
 
 from argparse import Namespace
 from collections.abc import Callable
@@ -27,6 +27,7 @@ from azathoth.cli.parsing import (
     REMOTE_TOKEN_ACTION,
     REMOTE_TOKEN_ACTION_ATTRIBUTE,
     REMOTE_TOKEN_ALL_ATTRIBUTE,
+    REMOTE_TOKEN_COMMAND_ATTRIBUTE,
     REMOTE_TOKEN_CREATE_ACTION,
     REMOTE_TOKEN_LIST_ACTION,
     REMOTE_TOKEN_NAME_ATTRIBUTE,
@@ -99,6 +100,7 @@ def dispatch_remote_command(
             name=cast(str, getattr(arguments, REMOTE_NAME_ATTRIBUTE)),
             url=cast(str, getattr(arguments, REMOTE_URL_ATTRIBUTE)),
             token_variable=cast(str, getattr(arguments, REMOTE_TOKEN_VARIABLE_ATTRIBUTE)),
+            token_command=cast(str | None, getattr(arguments, REMOTE_TOKEN_COMMAND_ATTRIBUTE)),
         )
 
     if action == REMOTE_LIST_ACTION:

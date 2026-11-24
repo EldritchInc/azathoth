@@ -163,3 +163,4 @@ requests that made it:
 - [ADR 0138: Jobs on a Remote](0138-jobs-on-a-remote.md)
 - [ADR 0139: A Run Job Names Its Run](0139-a-run-job-names-its-run.md)
 - [ADR 0140: The Command Line on a Remote](0140-the-command-line-on-a-remote.md)
+- [ADR 0141: Tokens Printed by a Command](0141-tokens-printed-by-a-command.md)

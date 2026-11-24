@@ -1,6 +1,6 @@
 # ADR 0126: Named Remotes
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0141
 - Date: 2026-11-12
 
 ## Context

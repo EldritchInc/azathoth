@@ -6,6 +6,7 @@ so these commands read and write only that database: no runtime is loaded,
 and no provider credentials are needed.
 """
 
+import shlex
 import sys
 from collections.abc import Sequence
 from contextlib import suppress
@@ -35,6 +36,7 @@ from azathoth.remote import (
     RemoteTokenError,
     TokenAuthenticator,
     load_seams,
+    shown_command,
 )
 from azathoth.remote.calling import CallerInstances
 from azathoth.remote.jobs import DEFAULT_RUNNERS
@@ -378,12 +380,23 @@ def _remotes() -> api.Remotes:
     return api.Remotes(lambda: held)
 
 
+def token_source(
+    remote: NamedRemote,
+) -> str:
+    """Return where a named remote's token comes from: its variable, or its command quoted."""
+
+    if remote.token_command is not None:
+        return f"`{shown_command(remote.token_command)}`"
+
+    return REMOTE_TOKEN_VARIABLE if remote.token_variable is None else remote.token_variable
+
+
 def named_line(
     remote: NamedRemote,
 ) -> str:
-    """Return one named remote's line: its name, its URL and its token's variable."""
+    """Return one named remote's line: its name, its URL, and its token's variable or command."""
 
-    return f"{remote.name}  {remote.url}  {remote.token_variable}"
+    return f"{remote.name}  {remote.url}  {token_source(remote)}"
 
 
 def add_remote(
@@ -391,19 +404,40 @@ def add_remote(
     name: str,
     url: str,
     token_variable: str = REMOTE_TOKEN_VARIABLE,
+    token_command: str | None = None,
 ) -> int:
-    """Name the remote at a URL, its token read from a variable, so commands can name it."""
+    """Name the remote at a URL, its token read from a variable or printed by a command.
+
+    A command is split as a shell would split it, and kept as its arguments,
+    to be run without a shell whenever the remote is reached (ADR 0141); it
+    is not run here.
+    """
 
     try:
-        added = _remotes().add(name, url, token_variable=token_variable)
+        command = None if token_command is None else shlex.split(token_command)
+    except ValueError as exc:
+        print(
+            f"Token command {token_command!r} cannot be split into arguments: {exc}.",
+            file=sys.stderr,
+        )
+
+        return 1
+
+    try:
+        added = _remotes().add(
+            name,
+            url,
+            token_variable=None if command is not None else token_variable,
+            token_command=command,
+        )
     except api.ApiError as exc:
         print(str(exc), file=sys.stderr)
 
         return 1
 
-    print(
-        f"Named remote {added.name} for {added.url}; its token is read from {added.token_variable}."
-    )
+    told = "printed by" if added.token_command is not None else "read from"
+
+    print(f"Named remote {added.name} for {added.url}; its token is {told} {token_source(added)}.")
 
     return 0
 
@@ -700,6 +734,7 @@ __all__ = [
     "push_to_remote",
     "remote_status",
     "remove_remote",
+    "token_source",
     "revoke_remote_token",
     "runners_line",
     "serve_remote",

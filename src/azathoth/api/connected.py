@@ -141,14 +141,16 @@ class CallTransport:
     def __init__(
         self,
         url: str,
-        token: str,
+        token: str | Callable[[], str],
         *,
         http: HttpClient | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         """Reach the remote at `url` with `token`, over `http` when given, as tests do.
 
-        Without `http`, each call may take `timeout` seconds.
+        A `token` that is a function is asked for the token before each
+        request, as one a token command prints is (ADR 0141). Without
+        `http`, each call may take `timeout` seconds.
 
         Raises:
             ValueError: The URL is not an http or https URL.
@@ -185,7 +187,14 @@ class CallTransport:
     def _headers(
         self,
     ) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}", "Content-Type": JSON_MEDIA_TYPE}
+        return {"Authorization": f"Bearer {self._bearer()}", "Content-Type": JSON_MEDIA_TYPE}
+
+    def _bearer(
+        self,
+    ) -> str:
+        """Return the token the next request is sent with."""
+
+        return self._token() if callable(self._token) else self._token
 
     def _sent(
         self,
@@ -510,7 +519,7 @@ class CallTransport:
                 CALLS_ROUTE.format(name=name),
                 content=body,
                 headers={
-                    "Authorization": f"Bearer {self._token}",
+                    "Authorization": f"Bearer {self._bearer()}",
                     "Content-Type": JSON_MEDIA_TYPE,
                 },
             )

@@ -213,7 +213,7 @@ from azathoth.api.providers import (
     OPENROUTER_API_KEY_VARIABLE,
     ProviderSettings,
 )
-from azathoth.api.remote import Remote, Remotes, connect
+from azathoth.api.remote import Remote, Remotes, connect, token_of
 from azathoth.api.running import (
     GENERATED_KEY_PREFIX,
     MAX_INPUT_FILE_BYTES,
@@ -459,4 +459,5 @@ __all__ = [
     "open",
     "parse_run_event",
     "service_call",
+    "token_of",
 ]

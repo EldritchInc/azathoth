@@ -3,7 +3,8 @@
 `instance.remote(url)` names a remote, by its URL or by a name
 `instance.remotes` gave it (ADR 0126); each call reaches it afresh, with
 the token given, or the one in its token variable, `AZATHOTH_REMOTE_TOKEN`
-unless the name says another. A push sends the
+unless the name says another, or the one its name's token command prints
+(ADR 0141). A push sends the
 latest revision of each document named, the revisions it was reached by,
 and what it needs at the remote; a pull brings the same back, forking a
 lineage that diverged here; a status compares the two sides (ADR 0125).
@@ -14,7 +15,7 @@ whose every call is sent to it (ADR 0137).
 """
 
 import os
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from uuid import UUID
 
@@ -44,6 +45,8 @@ from azathoth.remote import (
     RemoteNameError,
     RemoteNotNamedError,
     RemoteStatus,
+    TokenCommandError,
+    command_token,
     pull_from,
     push_to,
     require_remote_url,
@@ -68,6 +71,64 @@ def no_token_message(
 
 NO_TOKEN_MESSAGE = no_token_message(REMOTE_TOKEN_VARIABLE)
 """What naming a remote by its URL without a token says."""
+
+Tokens = Callable[[], str]
+"""What returns the token a remote is reached with now, asked before each request."""
+
+
+def _fixed(
+    token: str,
+) -> Tokens:
+    """Return what gives one token, every time."""
+
+    return lambda: token
+
+
+def _printed(
+    command: Sequence[str],
+) -> Tokens:
+    """Return what gives the token a command prints, kept until shortly before it expires.
+
+    Its refusal is the service API's: an invalid argument, saying why the
+    command printed no token.
+    """
+
+    def printed() -> str:
+        try:
+            return command_token(command)
+        except TokenCommandError as exc:
+            raise InvalidArgumentError(str(exc)) from None
+
+    return printed
+
+
+def token_of(
+    remote: NamedRemote,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> str:
+    """Return the token a named remote is reached with now (ADRs 0126, 0141).
+
+    It is the one its variable holds in `environ`, the process's own
+    environment unless given, or the one its token command prints. A
+    command's token is kept in this process until shortly before it
+    expires, so the command is not run for every request.
+
+    Raises:
+        InvalidArgumentError: Its variable is not set, or its command
+            printed no token, saying why.
+    """
+
+    if remote.token_command is not None:
+        return _printed(remote.token_command)()
+
+    variable = REMOTE_TOKEN_VARIABLE if remote.token_variable is None else remote.token_variable
+    given = (os.environ if environ is None else environ).get(variable)
+
+    if not given:
+        raise InvalidArgumentError(no_token_message(variable))
+
+    return given
 
 
 def is_remote_url(
@@ -129,18 +190,23 @@ class Remote:
         *,
         token: str | None = None,
         token_variable: str = REMOTE_TOKEN_VARIABLE,
+        token_command: Sequence[str] | None = None,
         name: str | None = None,
         http: Callable[[], HttpClient] | None = None,
     ) -> None:
         """Name the remote at `url`, reached with `token`, or the one `token_variable` holds.
 
-        `name` is the name this instance gave it, if it was reached by one.
-        `http`, when given, makes the HTTP client each call is sent over, as
-        tests do.
+        With `token_command` and no `token`, it is reached with the token
+        the command prints, which is asked for again before each request,
+        so one kept until shortly before it expires is replaced then (ADR
+        0141). The command is run now, so a remote it cannot reach is
+        refused at once. `name` is the name this instance gave it, if it was
+        reached by one. `http`, when given, makes the HTTP client each call
+        is sent over, as tests do.
 
         Raises:
-            InvalidArgumentError: The URL is not an http or https URL, or no
-                token is given or set.
+            InvalidArgumentError: The URL is not an http or https URL, no
+                token is given or set, or the token command printed none.
         """
 
         try:
@@ -148,12 +214,17 @@ class Remote:
         except ValueError as exc:
             raise InvalidArgumentError(str(exc)) from None
 
-        given = token if token is not None else os.environ.get(token_variable)
+        if token is None and token_command is not None:
+            self._tokens = _printed(token_command)
+            self._tokens()
+        else:
+            given = token if token is not None else os.environ.get(token_variable)
 
-        if not given:
-            raise InvalidArgumentError(no_token_message(token_variable))
+            if not given:
+                raise InvalidArgumentError(no_token_message(token_variable))
 
-        self._token = given
+            self._tokens = _fixed(given)
+
         self._name = name
         self._repositories = repositories
         self._http = http
@@ -184,14 +255,15 @@ class Remote:
         Every call of the instance returned is sent to the remote (ADR
         0137), each of which may take `timeout` seconds; nothing is sent
         until a call is made. A remote reached by its name is called with
-        the token its own variable holds, as for a push. The instance does
-        not need this instance kept open. Close it when done, best as a
-        context manager.
+        the token its own variable holds, or its command prints, as for a
+        push; a command's is asked for before each request. The instance
+        does not need this instance kept open. Close it when done, best as
+        a context manager.
         """
 
         return connected(
             self._url,
-            token=self._token,
+            token=self._tokens,
             http=None if self._http is None else self._http(),
             timeout=timeout,
         )
@@ -327,12 +399,18 @@ class Remote:
     def _client(
         self,
     ) -> Iterator[RemoteClient]:
-        """Reach the remote for one call, raising what goes wrong as the service API's errors."""
+        """Reach the remote for one call, raising what goes wrong as the service API's errors.
+
+        Raises:
+            InvalidArgumentError: Its token command printed no token.
+        """
+
+        token = self._tokens()
 
         try:
             with RemoteClient(
                 self._url,
-                self._token,
+                token,
                 http=None if self._http is None else self._http(),
             ) as client:
                 yield client
@@ -397,23 +475,34 @@ class Remotes:
         name: str,
         url: str,
         *,
-        token_variable: str = REMOTE_TOKEN_VARIABLE,
+        token_variable: str | None = None,
+        token_command: Sequence[str] | None = None,
     ) -> NamedRemote:
-        """Name the remote at `url`, its token read from `token_variable`, and return it.
+        """Name the remote at `url`, its token read from a variable or printed by a command.
 
-        Only the variable's name is kept, never a token.
+        Its token is read from `token_variable`, `AZATHOTH_REMOTE_TOKEN`
+        unless given, or printed by `token_command`, the arguments of a
+        command run without a shell whenever the remote is reached and no
+        token it printed is kept (ADR 0141). Only the variable's name or the
+        command is kept, never a token, and the command is not run here.
 
         A remote never serves it, since it names this instance's own
         remotes, and remotes never hold each other's tokens (ADR 0127).
 
         Raises:
             InstanceClosedError: The instance was closed.
-            InvalidArgumentError: The name, URL or variable is not one.
+            InvalidArgumentError: The name, URL, variable or command is not
+                one, or both a variable and a command are given.
             ConflictError: A remote already has the name.
         """
 
         try:
-            return self._repositories().remotes.add(name, url, token_variable=token_variable)
+            return self._repositories().remotes.add(
+                name,
+                url,
+                token_variable=token_variable,
+                token_command=token_command,
+            )
         except RemoteAlreadyNamedError as exc:
             raise ConflictError(str(exc)) from None
         except RemoteNameError as exc:
@@ -475,12 +564,14 @@ def connect(
 def connected(
     url: str,
     *,
-    token: str | None,
+    token: str | Tokens | None,
     token_variable: str = REMOTE_TOKEN_VARIABLE,
     http: HttpClient | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> ConnectedInstance:
     """Return an instance calling a remote, with `token` or the one its variable holds.
+
+    A `token` that is a function is asked for the token before each request.
 
     Raises:
         InvalidArgumentError: The URL is not an http or https URL, or no
@@ -509,13 +600,13 @@ def reach(
 ) -> Remote:
     """Return the remote a URL, or a name this instance gave it, names.
 
-    A named remote's token is read from its own variable, unless `token` is
-    given.
+    A named remote's token is read from its own variable, or printed by its
+    own command, unless `token` is given.
 
     Raises:
         InstanceClosedError: The instance was closed.
-        InvalidArgumentError: The URL is not an http or https URL, or no
-            token is given or set.
+        InvalidArgumentError: The URL is not an http or https URL, no token
+            is given or set, or the name's token command printed none.
         NotFoundError: No remote has the name.
     """
 
@@ -528,7 +619,10 @@ def reach(
         named.url,
         repositories,
         token=token,
-        token_variable=named.token_variable,
+        token_variable=(
+            REMOTE_TOKEN_VARIABLE if named.token_variable is None else named.token_variable
+        ),
+        token_command=named.token_command,
         name=named.name,
         http=http,
     )
@@ -545,4 +639,5 @@ __all__ = [
     "no_token_message",
     "not_named_message",
     "reach",
+    "token_of",
 ]
