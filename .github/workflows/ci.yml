@@ -39,14 +39,13 @@ jobs:
       - name: Type check
         run: mypy src/azathoth packages/azathoth-mcp/src/azathoth_mcp tests
 
-      - name: Test
-        run: pytest
-
   tests:
     name: tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
 
+    # A pull request runs Linux with every Python, and macOS and Windows
+    # with the newest; a push to main runs all nine, before a release.
     strategy:
       fail-fast: false
       matrix:
@@ -58,6 +57,15 @@ jobs:
           - "3.11"
           - "3.12"
           - "3.13"
+        exclude:
+          - os: ${{ github.event_name == 'pull_request' && 'macos-latest' || 'none' }}
+            python-version: "3.11"
+          - os: ${{ github.event_name == 'pull_request' && 'macos-latest' || 'none' }}
+            python-version: "3.12"
+          - os: ${{ github.event_name == 'pull_request' && 'windows-latest' || 'none' }}
+            python-version: "3.11"
+          - os: ${{ github.event_name == 'pull_request' && 'windows-latest' || 'none' }}
+            python-version: "3.12"
 
     steps:
       - name: Check out repository
@@ -73,7 +81,7 @@ jobs:
         run: python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 
       - name: Test
-        run: python -m pytest
+        run: python -m pytest --durations=25
 
   container:
     name: container image
