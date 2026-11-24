@@ -183,6 +183,11 @@ def on_remote(
     at the remote; the command waits for that, up to `CANCEL_WAIT_SECONDS`,
     and then stops as it was asked to.
 
+    The call says it has ended by setting an event, which the command
+    waits on, rather than by the thread being joined: before Python 3.13,
+    a join that Ctrl-C interrupts takes the thread for ended, so a second
+    join would not wait for the remote to stop the job.
+
     Raises:
         ApiError: The call raised it.
     """
@@ -190,22 +195,25 @@ def on_remote(
     token = api.CancellationToken()
     outcome: list[T] = []
     raised: list[BaseException] = []
+    ended = threading.Event()
 
     def make() -> None:
         try:
             outcome.append(call(token))
         except BaseException as error:  # noqa: BLE001 - handed to the waiting thread
             raised.append(error)
+        finally:
+            ended.set()
 
     worker = threading.Thread(target=make, name="azathoth-remote-call", daemon=True)
     worker.start()
 
     try:
-        while worker.is_alive():
-            worker.join(0.1)
+        while not ended.wait(0.1):
+            pass
     except BaseException:
         token.cancel()
-        worker.join(CANCEL_WAIT_SECONDS)
+        ended.wait(CANCEL_WAIT_SECONDS)
 
         raise
 
