@@ -1,6 +1,6 @@
 # ADR 0138: Jobs on a Remote
 
-- Status: Accepted
+- Status: Accepted; amended by ADR 0139
 - Date: 2026-11-23
 
 ## Context

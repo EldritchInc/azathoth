@@ -166,16 +166,36 @@ def test_the_refusal_table_names_an_interrupted_job_by_its_code() -> None:
     assert f"`{INTERRUPTED_CODE}`" in row
 
 
+def status_of(
+    number: str,
+) -> str:
+    """Return the status line of the decision with a number."""
+
+    (path,) = ADRS.glob(f"{number}-*.md")
+
+    return next(
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("- Status:")
+    )
+
+
 def test_the_decisions_the_jobs_amend_say_so() -> None:
     for number in ("0127", "0136", "0137"):
-        (path,) = ADRS.glob(f"{number}-*.md")
-        status = next(
-            line
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.startswith("- Status:")
-        )
+        status = status_of(number)
 
         assert status.startswith("- Status: Accepted; amended by ")
-        assert status.endswith("ADR 0138")
+        assert "ADR 0138" in status.split("amended by ", 1)[1].split(", ")
 
     assert "(0138-jobs-on-a-remote.md)" in (ADRS / "README.md").read_text(encoding="utf-8")
+
+
+def test_the_decision_a_run_job_names_its_run_amends_the_jobs() -> None:
+    assert status_of("0138") == "- Status: Accepted; amended by ADR 0139"
+    assert status_of("0139") == "- Status: Accepted"
+    assert "(0139-a-run-job-names-its-run.md)" in (ADRS / "README.md").read_text(encoding="utf-8")
+
+    adr = flat(ADRS / "0139-a-run-job-names-its-run.md")
+
+    assert f"not beaten in {STALL_SECONDS:g} seconds" in adr
+    assert f"{BEAT_SECONDS:g} seconds each" in adr

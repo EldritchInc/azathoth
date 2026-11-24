@@ -548,6 +548,12 @@ as None and reads the remote's models from the last snapshot. The service
 API's `instance.remote(url)` and `azathoth remote push` and `pull` call
 them.
 
+Every command given `--remote` calls the remote's service API through
+the `ConnectedInstance` that `instance.remote(target).connect()` returns,
+made once for the command and closed when it ends (ADR 0140). It asks the
+policy and tells the audit as any caller does, and what it changes is
+recorded as the caller its token names.
+
 ## Tokens
 
 The core's `TokenAuthenticator` reads the tokens a remote's owner issues

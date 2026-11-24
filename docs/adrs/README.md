@@ -161,3 +161,5 @@ requests that made it:
 - [ADR 0136: The Service API Over HTTP](0136-the-service-api-over-http.md)
 - [ADR 0137: A Client for the Service API](0137-a-client-for-the-service-api.md)
 - [ADR 0138: Jobs on a Remote](0138-jobs-on-a-remote.md)
+- [ADR 0139: A Run Job Names Its Run](0139-a-run-job-names-its-run.md)
+- [ADR 0140: The Command Line on a Remote](0140-the-command-line-on-a-remote.md)
