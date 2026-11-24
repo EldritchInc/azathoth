@@ -4,6 +4,7 @@ Each test runs the same job locally and through a remote over one SQLite
 database, with the remote's own runners, and requires the same answer.
 """
 
+import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -18,7 +19,7 @@ from azathoth.api.connected import ConnectedInstance
 from azathoth.persistence.repositories import open_repositories
 from azathoth.remote import Action, Principal
 from azathoth.remote.calling import CallerInstances, job_signature
-from azathoth.remote.jobs import ServiceJobStatus, SqlServiceJobRepository
+from azathoth.remote.jobs import ServiceJob, ServiceJobStatus, SqlServiceJobRepository
 from azathoth.remote.runners import JobRunners
 from tests.api.test_invoke import promote
 from tests.api.test_run_started import ONCE_WORKFLOW_ID, appeared, stock_once
@@ -257,6 +258,62 @@ def test_a_run_a_stopping_server_handed_back_is_resumed_by_its_run_and_followed_
     assert held is not None and held.run_id == result.run_id
     assert held.attempts == 2
     assert (result.succeeded, result.result) == (True, 1)
+
+
+def test_a_stopping_server_claims_nothing_so_a_job_it_handed_back_waits_for_the_next(
+    path: Path,
+    served: Served,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A runner whose claim began before its server stopped never takes a job handed back.
+
+    One runner holds the run while the other's claim is held up, as a busy
+    machine holds one up; the server stops meanwhile, handing the run back.
+    The held-up claim must not then take it, only for its own runner to
+    hand it back again as it stops.
+    """
+
+    marker = path.parent / "slept"
+    claim = served.jobs.claim
+    armed = threading.Event()
+    entered = threading.Event()
+    release = threading.Event()
+
+    def held_up(
+        runner_id: str,
+    ) -> ServiceJob | None:
+        if armed.is_set() and not entered.is_set():
+            entered.set()
+            release.wait(30)
+
+        return claim(runner_id)
+
+    monkeypatch.setattr(served.jobs, "claim", held_up)
+    serving = runners(path, served)
+    serving.start()
+
+    with connected(served) as remote:
+        accepted = remote.jobs.submit(
+            "runs.run",
+            ONCE_WORKFLOW_ID,
+            input=api.RunInput(payload=str(marker)),
+        )
+        appeared(marker)
+        armed.set()
+
+        assert entered.wait(30)
+
+        stopping = threading.Thread(target=serving.stop)
+        stopping.start()
+        time.sleep(0.5)
+        release.set()
+        stopping.join(60)
+
+    held = served.jobs.get(accepted.job_id)
+
+    assert not stopping.is_alive()
+    assert held is not None
+    assert (held.status, held.attempts) == (ServiceJobStatus.QUEUED, 1)
 
 
 def test_a_run_left_by_a_server_that_stopped_before_it_started_is_run_again(
