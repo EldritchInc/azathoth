@@ -1,8 +1,10 @@
 """Benchmark case authoring commands for the Azathoth CLI.
 
 `benchmark add-case` calls the service API (ADR 0130), so a case is made by
-the same rules wherever it is added. A file is read here, as every command
-reads a local file, and given to the API with the URI it was read from.
+the same rules wherever it is added, on this machine or, given `--remote`,
+on a remote (ADR 0140). A file is read and checked here, as every command
+reads a local file, and given to the API with the URI it was read from; the
+instance that adds the case keeps its content in its own content store.
 """
 
 import sys
@@ -14,10 +16,9 @@ from pydantic import JsonValue
 from azathoth import api
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.inputs import WorkflowInputFile, resolve_input_file
-from azathoth.cli.persistence import repositories
 from azathoth.cli.service import service_instance
 from azathoth.evaluation import CitationExpectation, OutcomeComparison
-from azathoth.inputs import InputResolutionError, InputSourceError
+from azathoth.inputs import InMemoryContentStore, InputResolutionError, InputSourceError
 from azathoth.sensitivity import Sensitivity
 
 
@@ -102,7 +103,7 @@ def add_benchmark_case(
 
                 return 1
 
-            read = _read(input_file, configuration)
+            read = _read(input_file)
 
             if read is None:
                 return 1
@@ -135,18 +136,19 @@ def add_benchmark_case(
 
 def _read(
     input_file: WorkflowInputFile,
-    configuration: CliRuntimeConfiguration,
 ) -> tuple[api.RunFile, str] | None:
     """Return a file's content and the URI it was read from, or report why it cannot be read.
 
     It is resolved as `workflow run --input-file` resolves a file, so it is
-    refused with the same messages, before the API is given its content.
+    refused with the same messages, before the API is given its content. It
+    is resolved into a store of its own, since the API keeps the content in
+    the content store of the instance that adds the case.
     """
 
     try:
         resolved = resolve_input_file(
             input_file,
-            store=repositories(configuration).content,
+            store=InMemoryContentStore(),
         )
     except (
         InputSourceError,

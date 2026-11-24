@@ -53,10 +53,6 @@ NEVER_ON_A_REMOTE: Final[Mapping[str, str]] = {
 
 NOT_YET_ON_A_REMOTE: Final = frozenset(
     {
-        "benchmark add-case",
-        "benchmark compare",
-        "benchmark run",
-        "benchmark show",
         "model authorize",
         "model deauthorize",
         "model list",
@@ -69,7 +65,6 @@ NOT_YET_ON_A_REMOTE: Final = frozenset(
         "tool show",
         "tool test-case-show",
         "tool test-cases",
-        "workflow optimize",
     }
 )
 """The commands that still read this machine's database themselves, so run on no remote yet."""

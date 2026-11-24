@@ -1,5 +1,11 @@
-"""Human-readable workflow optimization rendering."""
+"""Human-readable workflow optimization rendering.
 
+`workflow optimize` here renders the session it ran; given `--remote`, it
+renders the summary the remote's service API returns, in the same lines
+(ADR 0140).
+"""
+
+from azathoth import api
 from azathoth.optimization import (
     WorkflowOptimizationSession,
     resolve_workflow_experiment_winner,
@@ -243,3 +249,82 @@ def _append_scorecard(
             f"  Overall: {scorecard.overall_score:.6f}",
         )
     )
+
+
+def render_optimization_summary(
+    summary: api.OptimizationSummary,
+) -> str:
+    """Render a session's summary as `render_workflow_optimization_session` renders the session."""
+
+    lines = [
+        f"Workflow: {summary.workflow_name}",
+        f"Workflow ID: {summary.workflow_id}",
+        f"Initial Candidates: {summary.initial_candidates}",
+        f"Generations: {len(summary.generations)}",
+        f"Total Judge Calls: {summary.judge_calls}",
+        f"Total Judge Cost: ${summary.judge_cost_usd:.6f}",
+    ]
+
+    for generation in summary.generations:
+        lines.extend(("", f"Generation {generation.generation}"))
+        lines.extend(_experiment_lines(generation.experiment))
+        lines.append(f"Next Population: {generation.proposed}")
+
+    lines.append("")
+
+    if summary.final_experiment is None:
+        lines.append(f"Final Evaluation: not run. {summary.final_skipped}")
+    else:
+        lines.append("Final Evaluation")
+        lines.extend(_experiment_lines(summary.final_experiment))
+
+    lines.extend(("", f"Winning Experiment ID: {summary.winning_experiment_id}"))
+
+    return "\n".join(lines)
+
+
+def _experiment_lines(
+    experiment: api.OptimizationExperiment,
+) -> list[str]:
+    """Return one experiment's identity, judging, and winner, as `_append_experiment` does."""
+
+    lines = [
+        f"Experiment ID: {experiment.experiment_id}",
+        f"Evaluated Candidates: {experiment.evaluated}",
+        f"Judge Calls: {experiment.judge_calls}",
+        f"Judge Cost: ${experiment.judge_cost_usd:.6f}",
+        "Winner:",
+        f"  Workflow ID: {experiment.winner_workflow_id}",
+        "  Strategy IDs: "
+        + ", ".join(str(strategy_id) for strategy_id in experiment.winner_strategy_ids),
+    ]
+
+    for step in experiment.winner_steps:
+        lines.extend(
+            (
+                "",
+                f"  Step: {step.name}",
+                f"  Step ID: {step.step_id}",
+                f"  Strategy ID: {step.strategy_id}",
+                *((f"  Model: {step.model}",) if step.model is not None else ()),
+            )
+        )
+
+    scorecard = experiment.winner_scorecard
+
+    lines.extend(
+        (
+            f"  Quality: {scorecard.quality_score:.6f}",
+            f"  Reliability: {scorecard.reliability_score:.6f}",
+            f"  Latency: {scorecard.latency_score:.6f}",
+            f"  Cost: {scorecard.cost_score:.6f}",
+            *(
+                (f"  Citations: {scorecard.citation_score:.6f}",)
+                if scorecard.citation_score is not None
+                else ()
+            ),
+            f"  Overall: {scorecard.overall_score:.6f}",
+        )
+    )
+
+    return lines

@@ -9,14 +9,19 @@ API's (ADR 0130), so both refuse a benchmark alike.
 import sys
 from uuid import UUID
 
+from azathoth import api
 from azathoth.api.benchmark_execution import (
+    compared_workflows,
     missing_cases,
+    scoring_policy,
     undeclared_result,
     unsupported_comparison,
 )
+from azathoth.api.optimization import GENERATIONS_MESSAGE
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
 from azathoth.evaluation import BenchmarkDataset
+from azathoth.workflows import WorkflowScoringPolicy
 
 
 def _reported(
@@ -33,6 +38,53 @@ def _reported(
     )
 
     return False
+
+
+def comparison_policy(
+    workflow_ids: tuple[UUID, ...],
+    *,
+    target_latency_seconds: float,
+    target_cost_usd: float,
+) -> WorkflowScoringPolicy | None:
+    """Return the policy a comparison scores by, reporting why its arguments are refused.
+
+    Two distinct workflows or more and targets above zero are checked
+    first, as `benchmarks.compare` checks them, before the benchmark.
+    """
+
+    try:
+        compared_workflows(workflow_ids)
+
+        return scoring_policy(target_latency_seconds, target_cost_usd)
+    except api.InvalidArgumentError as exc:
+        _reported(str(exc))
+
+        return None
+
+
+def optimization_policy(
+    generations: int,
+    *,
+    target_latency_seconds: float,
+    target_cost_usd: float,
+) -> WorkflowScoringPolicy | None:
+    """Return the policy a session scores by, reporting why its arguments are refused.
+
+    At least one generation and targets above zero are checked first, as
+    `optimization.optimize` checks them, before the benchmark.
+    """
+
+    if generations < 1:
+        _reported(GENERATIONS_MESSAGE)
+
+        return None
+
+    try:
+        return scoring_policy(target_latency_seconds, target_cost_usd)
+    except api.InvalidArgumentError as exc:
+        _reported(str(exc))
+
+        return None
 
 
 def configured_benchmark(

@@ -1,7 +1,13 @@
-"""Human-readable workflow benchmark rendering."""
+"""Human-readable workflow benchmark rendering.
+
+`benchmark run` here renders the result it measured; given `--remote`, it
+renders the execution the remote saved, as the service API returns it, in
+the same lines (ADR 0140).
+"""
 
 from uuid import UUID
 
+from azathoth import api
 from azathoth.workflows import (
     WorkflowBenchmarkResult,
 )
@@ -48,6 +54,62 @@ def render_workflow_benchmark_result(
             (
                 f"Judge Calls: {result.judge_calls}",
                 f"Judge Cost: ${result.judge_cost_usd:.6f}",
+            )
+        )
+
+    return "\n".join(lines)
+
+
+def render_benchmark_run(
+    execution: api.BenchmarkExecutionDetail,
+) -> str:
+    """Render a saved benchmark run as `render_workflow_benchmark_result` renders its result.
+
+    Totals the API could not measure, because a case run is no longer
+    kept, are shown as unknown.
+
+    Raises:
+        ValueError: The execution is not a run.
+    """
+
+    if execution.kind != "run":
+        raise ValueError(f"Benchmark execution {execution.execution_id} is not a run.")
+
+    (candidate,) = execution.candidates
+
+    lines = [
+        f"Execution ID: {execution.execution_id}",
+        f"Benchmark ID: {execution.benchmark_id}",
+        f"Workflow ID: {candidate.workflow_id}",
+        f"Cases Run: {candidate.cases_run}",
+        f"Cases Passed: {candidate.cases_passed}",
+        f"Accuracy: {candidate.accuracy:.6f}",
+        *(
+            f"Passed ({tally.comparison}): {tally.cases_passed}/{tally.cases_run}"
+            for tally in candidate.tallies
+        ),
+        f"Run failures: {candidate.run_failures}",
+        "Total Tokens: "
+        + (str(candidate.total_tokens) if candidate.total_tokens is not None else "unknown"),
+        "Total Latency: "
+        + (
+            f"{candidate.total_latency_ms} ms"
+            if candidate.total_latency_ms is not None
+            else "unknown"
+        ),
+        "Total Cost: "
+        + (
+            f"${candidate.total_cost_usd:.6f}"
+            if candidate.total_cost_usd is not None
+            else "unknown"
+        ),
+    ]
+
+    if candidate.judged_semantically:
+        lines.extend(
+            (
+                f"Judge Calls: {candidate.judge_calls}",
+                f"Judge Cost: ${candidate.judge_cost_usd:.6f}",
             )
         )
 

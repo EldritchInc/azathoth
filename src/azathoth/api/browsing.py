@@ -65,6 +65,7 @@ from azathoth.api.models import (
     BenchmarkSummary,
     CaseCitations,
     CaseComparison,
+    ComparisonCount,
     DocumentExport,
     DocumentProblem,
     Revision,
@@ -1306,10 +1307,17 @@ class Benchmarks:
             command=_benchmark_command(selected),
         )
 
+        dataset = selected.dataset
+
         return BenchmarkDetail(
             **summary.model_dump(),
             latest_number=history[-1].number,
-            document=_document(encode_benchmark_document(selected.dataset)),
+            document=_document(encode_benchmark_document(dataset)),
+            cited_cases=sum(case.expected.citations is not None for case in dataset.cases),
+            comparisons=tuple(
+                ComparisonCount(comparison=comparison.value, cases=count)
+                for comparison, count in dataset.comparison_counts().items()
+            ),
         )
 
     def export(
@@ -1633,7 +1641,9 @@ class Benchmarks:
         """Return one saved run or comparison with every workflow, best first, and every case.
 
         Each case carries its evaluation's score and reason while the
-        evaluation is kept. It is the `read_runs` action (ADR 0130).
+        evaluation is kept, and each workflow the totals its case runs
+        measured while every one of them is kept (ADR 0140). It is the
+        `read_runs` action (ADR 0130).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1652,6 +1662,12 @@ class Benchmarks:
             for case in candidate.cases
             if (evaluation := repositories.run_evaluations.get(case.evaluation_id)) is not None
         }
+        runs = {
+            case.run_id: run
+            for candidate in saved.candidates
+            for case in candidate.cases
+            if (run := repositories.runs.get(case.run_id)) is not None
+        }
 
         return execution_detail(
             saved,
@@ -1659,6 +1675,7 @@ class Benchmarks:
                 repositories.benchmarks.revisions(saved.benchmark_id), saved
             ),
             evaluations=evaluations,
+            runs=runs,
         )
 
     def run(

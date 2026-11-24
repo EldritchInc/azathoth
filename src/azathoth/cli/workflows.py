@@ -13,6 +13,7 @@ from azathoth.cli.benchmark_checks import (
     benchmark_has_cases,
     comparisons_supported,
     configured_benchmark,
+    optimization_policy,
     results_declared,
 )
 from azathoth.cli.benchmark_execution import case_runner
@@ -40,6 +41,7 @@ from azathoth.cli.promotion import (
     WorkflowExperimentNotFoundError,
     promote_configured_workflow,
 )
+from azathoth.cli.remote_benchmarks import optimize_on_remote
 from azathoth.cli.remote_choice import chosen_remote
 from azathoth.cli.remote_runs import (
     child_run,
@@ -88,7 +90,6 @@ from azathoth.workflows import (
     WorkflowGenerationError,
     WorkflowResultError,
     WorkflowRollbackError,
-    WorkflowScoringPolicy,
     roll_back_workflow_production,
 )
 
@@ -588,14 +589,34 @@ def optimize_workflow(
     """Empirically optimize one configured workflow against a durable benchmark.
 
     Every candidate runs every benchmark case, and each case judges the
-    workflow's declared result with its own comparison. A missing or empty
-    benchmark, an unsupported comparison, and a workflow without a declared
-    result are rejected before runtime bootstrap, without provider credentials
-    and without executing any case.
+    workflow's declared result with its own comparison. Fewer than one
+    generation, a target not above zero, a missing or empty benchmark, an
+    unsupported comparison, and a workflow without a declared result are
+    rejected before runtime bootstrap, as `optimization.optimize` rejects
+    them, without provider credentials and without executing any case.
 
     Every generation's candidate runs, evaluations, and experiment record are
     saved to the configured database, so the session can be inspected later.
+    Given `--remote`, the remote optimizes it and saves them (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return optimize_on_remote(
+            workflow_id=workflow_id,
+            benchmark_id=benchmark_id,
+            target_latency_seconds=target_latency_seconds,
+            target_cost_usd=target_cost_usd,
+            generations=generations,
+        )
+
+    policy = optimization_policy(
+        generations,
+        target_latency_seconds=target_latency_seconds,
+        target_cost_usd=target_cost_usd,
+    )
+
+    if policy is None:
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -630,10 +651,7 @@ def optimize_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 dataset=dataset,
-                scoring_policy=WorkflowScoringPolicy(
-                    target_latency_seconds=target_latency_seconds,
-                    target_cost_usd=target_cost_usd,
-                ),
+                scoring_policy=policy,
                 max_generations=generations,
                 recorder=WorkflowExperimentEvidenceRecorder(
                     runs=repositories(configuration).runs,
