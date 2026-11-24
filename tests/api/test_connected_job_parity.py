@@ -1,4 +1,4 @@
-"""Tests that a remote's jobs answer as local calls do, and outlive its servers (ADR 0138).
+"""Tests that a remote's jobs answer as local calls do, and outlive its servers (ADR 0138, 0139).
 
 Each test runs the same job locally and through a remote over one SQLite
 database, with the remote's own runners, and requires the same answer.
@@ -19,8 +19,9 @@ from azathoth.persistence.repositories import open_repositories
 from azathoth.remote import Action, Principal
 from azathoth.remote.calling import CallerInstances, job_signature
 from azathoth.remote.jobs import ServiceJobStatus, SqlServiceJobRepository
-from azathoth.remote.runners import JobRunners, interrupted_message
+from azathoth.remote.runners import JobRunners
 from tests.api.test_invoke import promote
+from tests.api.test_run_started import ONCE_WORKFLOW_ID, appeared, stock_once
 from tests.api.test_runs import COUNT_WORKFLOW_ID, SLEEP_WORKFLOW_ID, stock
 from tests.remote.asgi import AsgiHttp
 from tests.remote.test_call_routes import ERIS, Served
@@ -44,6 +45,7 @@ def path(
 
     with api.open(database) as instance:
         stock(instance)
+        stock_once(instance)
 
     promote(str(database), COUNT_WORKFLOW_ID)
 
@@ -229,21 +231,50 @@ def test_an_invocation_left_by_a_server_that_stopped_is_resumed_and_followed_to_
     assert (job.status, job.attempts) == (ServiceJobStatus.SUCCEEDED, 2)
 
 
-def test_a_run_left_by_a_server_that_stopped_is_refused_saying_how_to_resume_it(
+def test_a_run_a_stopping_server_handed_back_is_resumed_by_its_run_and_followed_to_its_end(
     path: Path,
     served: Served,
 ) -> None:
-    job_id = stalled(served, path, "runs.run", workflow_id=COUNT_WORKFLOW_ID)
+    marker = path.parent / "slept"
 
-    with (
-        runners(path, served, stall_seconds=0.1),
-        connected(served) as remote,
-        pytest.raises(api.RemoteRefusedError) as caught,
-    ):
-        remote.jobs.follow(job_id)
+    with connected(served) as remote:
+        with runners(path, served):
+            accepted = remote.jobs.submit(
+                "runs.run",
+                ONCE_WORKFLOW_ID,
+                input=api.RunInput(payload=str(marker)),
+            )
+            appeared(marker)
 
-    assert (caught.value.status, caught.value.refusal) == (409, "interrupted")
-    assert str(caught.value) == interrupted_message("runs.run")
+        handed_back = remote.jobs.get(accepted.job_id)
+
+        with runners(path, served):
+            result = remote.jobs.follow(accepted.job_id)
+
+    held = served.jobs.get(accepted.job_id)
+
+    assert handed_back.status is ServiceJobStatus.QUEUED
+    assert held is not None and held.run_id == result.run_id
+    assert held.attempts == 2
+    assert (result.succeeded, result.result) == (True, 1)
+
+
+def test_a_run_left_by_a_server_that_stopped_before_it_started_is_run_again(
+    path: Path,
+    served: Served,
+) -> None:
+    job_id = stalled(
+        served,
+        path,
+        "runs.run",
+        workflow_id=COUNT_WORKFLOW_ID,
+        input=api.RunInput(payload="one two"),
+    )
+
+    with runners(path, served, stall_seconds=0.1), connected(served) as remote:
+        result = remote.jobs.follow(job_id)
+
+    assert (result.succeeded, result.result) == (True, 2)
 
 
 def test_a_job_queued_while_no_server_runs_jobs_runs_once_one_does(

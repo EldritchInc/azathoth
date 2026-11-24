@@ -20,13 +20,22 @@ too.
 
 import inspect
 import threading
+import types
 import typing
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import cache
-from typing import Any, Final
+from typing import Annotated, Any, Final
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    ValidationError,
+    create_model,
+)
 
 from azathoth.api.calls import SERVICE_CALLS, ServiceCall, service_call
 from azathoth.api.errors import InvalidArgumentError
@@ -227,6 +236,36 @@ class JobSignature(CallSignature):
         return self.events.validate_json(body)
 
 
+def _models_first(
+    hint: Any,
+) -> Any:
+    """Return a parameter's type, reading a model before any JSON value it could also be.
+
+    A JSON value, such as an invocation's input, would take every object,
+    a file given as one included, so a union of models and a JSON value is
+    read as each of its models first, and only then as the value.
+    """
+
+    if typing.get_origin(hint) not in (typing.Union, types.UnionType):
+        return hint
+
+    members = typing.get_args(hint)
+
+    if JsonValue not in members:
+        return hint
+
+    models = tuple(
+        member for member in members if isinstance(member, type) and issubclass(member, BaseModel)
+    )
+
+    if not models:
+        return hint
+
+    others = tuple(member for member in members if member not in models)
+
+    return Annotated[typing.Union[*models, *others], Field(union_mode="left_to_right")]
+
+
 def _built(
     call: ServiceCall,
     skipped: Callable[[str], bool],
@@ -245,7 +284,7 @@ def _built(
             continue
 
         default = ... if parameter.default is inspect.Parameter.empty else parameter.default
-        fields[parameter.name] = (hints[parameter.name], default)
+        fields[parameter.name] = (_models_first(hints[parameter.name]), default)
 
     arguments = create_model(
         f"Arguments of {call.name}",

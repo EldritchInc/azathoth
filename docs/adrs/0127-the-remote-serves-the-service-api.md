@@ -1,6 +1,6 @@
 # ADR 0127: The Remote Serves the Service API
 
-- Status: Accepted; amended by ADR 0133, ADR 0134, ADR 0136, ADR 0137, ADR 0138
+- Status: Accepted; amended by ADR 0133, ADR 0134, ADR 0136, ADR 0137, ADR 0138, ADR 0140
 - Date: 2026-11-17
 
 ## Context

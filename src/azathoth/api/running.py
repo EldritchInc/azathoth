@@ -40,6 +40,7 @@ from azathoth.api.models import (
     Annotations,
     ChildStatus,
     ContextChanged,
+    EvaluationEvidence,
     InterruptedRun,
     InvocationError,
     InvocationFinished,
@@ -47,12 +48,15 @@ from azathoth.api.models import (
     RunChildSummary,
     RunDetail,
     RunError,
+    RunEvaluation,
     RunEvent,
     RunFeedback,
     RunFile,
     RunFinished,
     RunInput,
+    RunLineage,
     RunResult,
+    RunSource,
     RunStarted,
     RunStepDetail,
     RunSummary,
@@ -61,12 +65,18 @@ from azathoth.api.models import (
     StepKind,
     StepMetrics,
     StepReadiness,
+    StepResource,
     StepStarted,
     StepTrial,
     WorkflowReadiness,
 )
 from azathoth.api.resuming import ConfiguredRunResumeError, resume_configured_workflow
-from azathoth.context import Context, context_sensitivity, create_input_sensitivity_event
+from azathoth.context import (
+    Context,
+    context_sensitivity,
+    create_input_sensitivity_event,
+    lineage_of,
+)
 from azathoth.inputs import (
     JSON_MEDIA_TYPE,
     ContentStore,
@@ -128,6 +138,7 @@ from azathoth.workflows import (
     WorkflowNamedValueReference,
     WorkflowResultError,
     WorkflowRun,
+    WorkflowRunEvaluation,
     WorkflowRunEvent,
     WorkflowRunner,
     WorkflowSpecification,
@@ -259,6 +270,7 @@ class _CallbackObserver:
                 status=step_status(event.status),
                 failure=_failure_message(event.failure),
                 confidence=event.confidence,
+                emits_values=event.step.emit_values,
             )
         )
 
@@ -373,13 +385,15 @@ class Runs:
             content=repositories.tool_content,
         )
 
-        observer.emit(RunStarted(workflow_id=workflow_id))
+        run_id = uuid4()
+        observer.emit(RunStarted(workflow_id=workflow_id, run_id=run_id))
 
         run = asyncio.run(
             _until_cancelled(
                 runner.run_recording_failures(
                     candidate,
                     _context(source, repositories.content, sensitivity),
+                    run_id=run_id,
                 ),
                 cancel,
             )
@@ -572,10 +586,14 @@ class Runs:
         newest_first = sorted(runs, key=lambda run: run.started_at, reverse=True)[:limit]
         invocations = _invocations(repositories)
         judgments = latest_dispositions(repositories.feedback.feedback())
+        sources = _sources(repositories, workflow_id, invocations)
 
         return tuple(
             _summary(run, _judged(run, history), invocations.get(run.id)).model_copy(
-                update={"feedback": judgments.get(run.id)}
+                update={
+                    "feedback": judgments.get(run.id),
+                    "source": sources.get(run.id, "configured"),
+                }
             )
             for run in newest_first
         )
@@ -606,18 +624,30 @@ class Runs:
             )
 
         has_result, value, error = _judged(run, repositories.workflows.revisions(run.workflow.id))
-        summary = _summary(run, (has_result, value, error), _invocations(repositories).get(run.id))
+        invocations = _invocations(repositories)
+        summary = _summary(run, (has_result, value, error), invocations.get(run.id))
         has_input, given = _run_input(run)
         judgments = latest_dispositions(repositories.feedback.feedback_for_run(run_id))
+        sources = _sources(repositories, run.workflow.id, invocations)
 
         return RunDetail(
-            **summary.model_copy(update={"feedback": judgments.get(run_id)}).model_dump(),
+            **summary.model_copy(
+                update={
+                    "feedback": judgments.get(run_id),
+                    "source": sources.get(run_id, "configured"),
+                }
+            ).model_dump(),
             has_result=has_result,
             result=value,
             has_input=has_input,
             input=given,
             resumes=journal_resumes(entries),
             steps=tuple(_step_detail(step) for step in run.steps),
+            lineage=_lineage(run.initial_context),
+            evaluations=tuple(
+                _evaluation(record)
+                for record in repositories.run_evaluations.evaluations_for_run(run_id)
+            ),
         )
 
     def record_feedback(
@@ -760,7 +790,7 @@ class Runs:
             content=repositories.tool_content,
         )
 
-        observer.emit(RunStarted(workflow_id=entries[0].workflow_id))
+        observer.emit(RunStarted(workflow_id=entries[0].workflow_id, run_id=run_id))
 
         try:
             run, specification = asyncio.run(
@@ -1145,6 +1175,80 @@ def _unfinished_message(
     return f"Run {run_id} has not finished; resume it with azathoth run resume {run_id}."
 
 
+def _sources(
+    repositories: Repositories,
+    workflow_id: UUID,
+    invocations: Mapping[UUID, UUID],
+) -> dict[UUID, RunSource]:
+    """Return what made each of a workflow's kept runs that a run asked for did not.
+
+    A run a benchmark execution recorded came from a benchmark, and one an
+    experiment observed from an optimization. A run that executed a
+    production invocation came from production, over both.
+    """
+
+    sources: dict[UUID, RunSource] = {
+        case.run_id: "benchmark"
+        for execution in repositories.benchmark_executions.executions_for_workflow(workflow_id)
+        for candidate in execution.candidates
+        if candidate.workflow.id == workflow_id
+        for case in candidate.cases
+    }
+
+    for experiment in repositories.experiments.experiments_for_workflow(workflow_id):
+        for observation in experiment.observations:
+            for case in observation.cases:
+                sources[case.run_id] = "experiment"
+
+    for run_id in invocations:
+        sources[run_id] = "production"
+
+    return sources
+
+
+def _lineage(
+    context: Context,
+) -> RunLineage | None:
+    """Return where a run its initial context names a parent of came from, or None for a root."""
+
+    lineage = lineage_of(context)
+
+    if lineage is None:
+        return None
+
+    return RunLineage(
+        depth=lineage.depth,
+        parent_workflow_id=lineage.parent.workflow_id,
+        parent_run_id=lineage.parent.run_id,
+        parent_step_id=lineage.parent.step_id,
+        parent_attempt=lineage.parent.attempt,
+        root_workflow_id=lineage.root.workflow_id,
+        root_run_id=lineage.root.run_id,
+    )
+
+
+def _evaluation(
+    record: WorkflowRunEvaluation,
+) -> RunEvaluation:
+    """Return the API's view of one evaluator judgment of a kept run."""
+
+    evaluation = record.evaluation
+
+    return RunEvaluation(
+        evaluation_id=record.id,
+        evaluated_at=record.evaluated_at,
+        evaluator_name=evaluation.evaluator_name,
+        evaluator_version=evaluation.evaluator_version,
+        status=evaluation.status.value,
+        score=evaluation.score,
+        threshold=evaluation.threshold,
+        reason=evaluation.reason,
+        evidence=tuple(
+            EvaluationEvidence(label=item.label, value=item.value) for item in evaluation.evidence
+        ),
+    )
+
+
 def _invocations(
     repositories: Repositories,
 ) -> dict[UUID, UUID]:
@@ -1317,6 +1421,18 @@ def _step_detail(
             )
             for attempt in step.attempts
             if attempt.failure is not None
+        ),
+        resources=(
+            tuple(
+                StepResource(
+                    kind=resource.kind,
+                    identifier=resource.identifier,
+                    attributes=dict(resource.attributes),
+                )
+                for resource in execution.resources
+            )
+            if execution is not None
+            else ()
         ),
     )
 

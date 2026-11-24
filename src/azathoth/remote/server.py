@@ -702,7 +702,9 @@ class RemoteServer:
         Each is sent with its number as its ID, so a client that reconnects
         with `Last-Event-ID` is sent only what it missed. A stream quiet for
         `keep_alive_seconds` sends a comment, so neither side takes it for
-        lost.
+        lost. Once the job is seen to have ended, the events are read once
+        more, since a runner keeps its last before it ends the job, perhaps
+        after the stream last read them.
         """
 
         jobs = self._job_store()
@@ -724,6 +726,10 @@ class RemoteServer:
 
             if job is None or job.status.finished:
                 if job is not None:
+                    for event in await self._blocking(partial(jobs.events, job_id, after=last)):
+                        last = event.sequence
+                        yield server_sent(JOB_EVENT, event.event, event_id=event.sequence)
+
                     ended = JobView.viewed(job).model_dump_json()
                     yield server_sent(FINISHED_EVENT, ended, event_id=last)
 

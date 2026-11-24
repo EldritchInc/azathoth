@@ -14,8 +14,8 @@ its audit for every call of the service API, and what a remote's plugins
 may build on; a remote answers its requests together rather than one at a
 time, and serves every call of the service API, asking and telling as
 named; it runs the calls that take minutes as jobs, kept in its database
-and followed as they go; and `api.connect` calls a remote as an instance
-of its own.
+and followed as they go; `api.connect` calls a remote as an instance of
+its own; and every command but a few runs on a remote with `--remote`.
 
 ### The Action Catalog
 
@@ -157,10 +157,20 @@ of its own.
   queues them for another server over the same PostgreSQL database
   ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
 - A job outlives the request that submitted it. When its server stops, or
-  stops beating for 60 seconds, a resumed run or an invocation is queued
-  again and goes on from its journal; any other job is refused 409
+  stops beating for 90 seconds, a run, a resumed run or an invocation is
+  queued again and goes on from its journal; any other job is refused 409
   `interrupted`, saying how to go on
-  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+  ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md),
+  [ADR 0139](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0139-a-run-job-names-its-run.md)).
+- `RunStarted` names its run in `run_id` before the run starts, here and on
+  a remote, so a `runs.run` job a stopped server left is resumed from the
+  run's journal, and a runner is taken for stopped only once a run it held
+  has let its lease go
+  ([ADR 0139](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0139-a-run-job-names-its-run.md)).
+- A job's event stream reads its events once more when it sees the job
+  has finished, so its last event, such as `invocation_finished`, is never
+  lost
+  ([ADR 0139](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0139-a-run-job-names-its-run.md)).
 - `GET /v1/jobs` lists the caller's own jobs, `GET /v1/jobs/{job_id}`
   returns one with its result, `POST /v1/jobs/{job_id}/cancel` stops one,
   and `GET /v1/jobs/{job_id}/events` streams its events as server-sent
@@ -174,6 +184,46 @@ of its own.
 - `GET /v1/service` says in `jobs` how many jobs wait and run, and how many
   runners beat in the last 60 seconds
   ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
+
+### The Command Line on a Remote
+
+- Every command takes `--remote <NAME>`, a remote this instance named, or
+  its URL, and runs on that remote, printing exactly what it prints here:
+  the same lines, records and exit status. Without `--remote`, a command
+  runs as it always has
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- Fourteen commands never run on a remote, such as `init`, `remote push`
+  and `tool verify`, and say why in one line, with status 2
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- A run, an invocation, a job request, a resume, a benchmark run or
+  comparison and an optimization run as jobs on the remote and are shown
+  as they go; Ctrl-C or SIGTERM stops the job there. A file given as input
+  is read here, as only `file:` references are, and sent
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- A command a step of another run started takes no `--remote`, since it
+  runs where its parent does
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- A remote with no such name, or no token, is refused in one line, with
+  status 1, before a command does anything; so is a remote that cannot be
+  reached, or one whose policy refuses the caller
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- The service API's views hold all a command prints: a run's `source`,
+  `lineage` and `evaluations`, a step's `resources` and `emits_values`, an
+  invocation's `error_code`, `request_digest`, `lineage`, `input_provenance`
+  and `citations`, a production's `emissions`, a benchmark's `cited_cases`
+  and `comparisons`, an execution's totals, and an optimization's
+  experiments with their winners
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- `tools.definition`, `tools.implementations`, `tools.implementation`,
+  `tools.test_cases` and `tools.test_case` read a tool's current
+  artifacts, each the `read_catalog` action, and the tool commands read
+  through them
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- An argument that is a model or a JSON value, such as `runs.invoke`'s
+  input, is read over HTTP as the model first, so a file arrives as a file
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
+- `tool from-mcp` no longer sends a remote what only tests give it
+  ([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)).
 
 ### Plugins
 
@@ -220,6 +270,20 @@ every machine first. `init` keeps everything the database holds.
 
 `azathoth remote serve` now runs jobs, 2 at once by default, and says so
 on a second line when it starts.
+
+A few refusals now say what the service API says
+([ADR 0140](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0140-the-command-line-on-a-remote.md)):
+
+- `benchmark run` and `benchmark compare` refuse a benchmark with no
+  cases before any case runs, rather than ending in a traceback or saying
+  no case was recorded.
+- `benchmark compare` refuses fewer than two distinct workflows with
+  `A comparison needs at least two distinct workflows.`, and `workflow
+  optimize` no generations with `An optimization session needs at least
+  one generation.`; both refuse a target not above zero with `Input
+  should be greater than 0`, rather than the whole validation error.
+- An error of the service API that a command does not report itself is
+  reported in one line, with status 1, rather than as a traceback.
 
 ## 1.5.0
 

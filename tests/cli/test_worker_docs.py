@@ -2,7 +2,7 @@
 
 import json
 import re
-from argparse import ArgumentParser, _SubParsersAction
+from argparse import SUPPRESS, ArgumentParser, _SubParsersAction
 from pathlib import Path
 
 import pytest
@@ -231,7 +231,7 @@ def test_the_options_table_lists_every_worker_run_option() -> None:
         option
         for action in run._actions
         for option in action.option_strings
-        if option.startswith("--") and option != "--help"
+        if option.startswith("--") and option != "--help" and action.help != SUPPRESS
     ]
 
     assert documented == options

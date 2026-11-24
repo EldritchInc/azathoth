@@ -176,6 +176,116 @@ class ToolDetail(ToolSummary):
     )
 
 
+class ToolDefinitionDetail(ApiModel):
+    """The definition one exact tool version has now, as `tool show` shows it (ADR 0140)."""
+
+    id: UUID
+
+    name: str
+
+    version: str
+
+    description: str
+
+    input_schema: dict[str, JsonValue] = Field(
+        description="The JSON Schema its input meets.",
+    )
+
+    output_schema: dict[str, JsonValue] = Field(
+        description="The JSON Schema its output meets.",
+    )
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolImplementationSummary(ApiModel):
+    """One implementation of one exact tool version, as `tool implementations` lists it."""
+
+    implementation_id: UUID
+
+    tool_id: UUID
+
+    tool_version: str
+
+    version: str = Field(
+        description="The implementation's own version.",
+    )
+
+    runtime: str
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolMcpBinding(ApiModel):
+    """The MCP server tool an implementation calls, pinned to the schemas it served."""
+
+    server: str = Field(
+        description="The server, as its URL or the command that starts it.",
+    )
+
+    tool: str
+
+    schema_digest: str
+
+    authorization: str | None = Field(
+        description="The variable naming its bearer token, or None when it needs none.",
+    )
+
+
+class ToolImplementationDetail(ToolImplementationSummary):
+    """One implementation with what it runs, as `tool implementation-show` shows it (ADR 0140)."""
+
+    entrypoint: str | None = Field(
+        description="The function a process implementation runs, or None for an MCP one.",
+    )
+
+    argv: tuple[str, ...] | None = Field(
+        description="The command a process implementation runs, or None when it names none.",
+    )
+
+    timeout_seconds: float | None
+
+    environment: tuple[str, ...] = Field(
+        description="The variables it is given beyond the base environment.",
+    )
+
+    mcp: ToolMcpBinding | None = Field(
+        description="The MCP server tool it calls, or None for a process implementation.",
+    )
+
+    source: str | None = Field(
+        description="The source it runs, or None when it runs none.",
+    )
+
+
+class ToolTestCaseSummary(ApiModel):
+    """One verification case of one tool, as `tool test-cases` lists it."""
+
+    test_case_id: UUID
+
+    tool_id: UUID
+
+    name: str
+
+    command: str = Field(
+        description="The `azathoth` command that shows it.",
+    )
+
+
+class ToolTestCaseDetail(ToolTestCaseSummary):
+    """One verification case with its inputs and output, as `tool test-case-show` shows it."""
+
+    description: str
+
+    inputs: dict[str, JsonValue]
+
+    expected_output: dict[str, JsonValue]
+
+
 class BenchmarkSummary(ApiModel):
     """One revision of a benchmark dataset, as lists and histories show it."""
 
@@ -215,6 +325,20 @@ class BenchmarkDetail(BenchmarkSummary):
 
     document: dict[str, JsonValue] = Field(
         description="The revision as `azathoth benchmark import` accepts it.",
+    )
+
+    cited_cases: int = Field(
+        default=0,
+        ge=0,
+        description="How many of its cases name what their run must cite (ADR 0140).",
+    )
+
+    comparisons: tuple["ComparisonCount", ...] = Field(
+        default=(),
+        description=(
+            "How many of its cases each comparison judges, in the order comparisons are "
+            "declared; a comparison no case uses is left out (ADR 0140)."
+        ),
     )
 
 
@@ -389,6 +513,16 @@ CaseComparison = Literal["exact", "normalized", "semantic", "schema"]
 
 CaseSource = Literal["run", "file", "json"]
 """Where a benchmark case came from: a recorded run, a file, or JSON given as it is (ADR 0130)."""
+
+
+class ComparisonCount(ApiModel):
+    """How many cases of a benchmark revision one comparison judges (ADR 0140)."""
+
+    comparison: CaseComparison
+
+    cases: int = Field(
+        ge=1,
+    )
 
 
 class CitedSegmentSummary(ApiModel):
@@ -631,6 +765,33 @@ class ExecutionCandidate(ExecutionCandidateSummary):
 
     tallies: tuple[ComparisonTally, ...] = Field(
         description="Its pass counts by comparison, for each comparison its cases used.",
+    )
+
+    total_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The tokens its case runs' steps measured, or None once any of its runs is not "
+            "kept (ADR 0140)."
+        ),
+    )
+
+    total_latency_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The provider latency its case runs' steps measured, or None once any of its runs "
+            "is not kept."
+        ),
+    )
+
+    total_cost_usd: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "What its case runs' steps cost, never counting judging, or None once any of its "
+            "runs is not kept."
+        ),
     )
 
     scorecard: CandidateScorecard | None = Field(
@@ -1190,6 +1351,11 @@ class InvocationSummary(ApiModel):
         description="The `azathoth` command that shows it.",
     )
 
+    error_code: str | None = Field(
+        default=None,
+        description="The production code of a failed one's error, such as `timeout` (ADR 0140).",
+    )
+
 
 class ProductionStepModels(ApiModel):
     """The models production runs one prompt step on, in the order it tries them (ADR 0063)."""
@@ -1239,6 +1405,16 @@ class ProductionRevisionSummary(ApiModel):
     )
 
 
+class ProductionEmission(ApiModel):
+    """One value a workflow's production returns, and where in its run it is read (ADR 0140)."""
+
+    name: str
+
+    source: str = Field(
+        description="Where the value is read, as `azathoth workflow production` describes it.",
+    )
+
+
 class ProductionState(ApiModel):
     """What a workflow's production runs now, as `azathoth workflow production` shows it."""
 
@@ -1271,6 +1447,11 @@ class ProductionState(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows it.",
+    )
+
+    emissions: tuple[ProductionEmission, ...] = Field(
+        default=(),
+        description="What every invocation returns, in the order it is declared (ADR 0140).",
     )
 
 
@@ -1448,6 +1629,10 @@ class RunFeedback(ApiModel):
     )
 
 
+RunSource = Literal["configured", "benchmark", "experiment", "production"]
+"""What made a kept run: a run asked for, a benchmark's case, an optimization's, or production."""
+
+
 class RunSummary(ApiModel):
     """One kept run of a workflow, as a list of its runs shows it (ADR 0121)."""
 
@@ -1493,6 +1678,15 @@ class RunSummary(ApiModel):
         description="The run's latest judgment, or None when it was never judged (ADR 0129).",
     )
 
+    source: RunSource = Field(
+        default="configured",
+        description=(
+            "What made the run: `production` for an invocation's, `experiment` for an "
+            "optimization's, `benchmark` for a benchmark case's, and otherwise `configured` "
+            "(ADR 0140)."
+        ),
+    )
+
 
 class StepMetrics(ApiModel):
     """What a step's strategy measured as it ran; what it did not measure is None."""
@@ -1522,6 +1716,19 @@ class StepFailure(ApiModel):
     exception_type: str
 
     message: str
+
+
+class StepResource(ApiModel):
+    """One resource an executed step's strategy used, such as a model it called (ADR 0140)."""
+
+    kind: str
+
+    identifier: str
+
+    attributes: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="What the strategy recorded of the resource, by name.",
+    )
 
 
 class RunStepDetail(RunStep):
@@ -1559,6 +1766,67 @@ class RunStepDetail(RunStep):
         description="Each attempt that failed, in order; a failed step's last is its failure.",
     )
 
+    resources: tuple[StepResource, ...] = Field(
+        default=(),
+        description="The resources an executed step's strategy used, in the order it named them.",
+    )
+
+
+class RunLineage(ApiModel):
+    """Where a run a step of another run started came from (ADRs 0104 and 0140)."""
+
+    depth: int = Field(
+        ge=0,
+        description="How far below its root run it is: 1 for a run its root's step started.",
+    )
+
+    parent_workflow_id: UUID
+
+    parent_run_id: UUID
+
+    parent_step_id: UUID
+
+    parent_attempt: int = Field(
+        ge=1,
+        description="The attempt of the parent step that started it.",
+    )
+
+    root_workflow_id: UUID
+
+    root_run_id: UUID
+
+
+class EvaluationEvidence(ApiModel):
+    """One piece of what an evaluator judged by."""
+
+    label: str
+
+    value: JsonValue
+
+
+class RunEvaluation(ApiModel):
+    """One evaluator's judgment of a kept run, as it was recorded (ADR 0140)."""
+
+    evaluation_id: UUID
+
+    evaluated_at: datetime
+
+    evaluator_name: str
+
+    evaluator_version: str
+
+    status: str = Field(
+        description="What the evaluator concluded, such as `passed` or `failed`.",
+    )
+
+    score: float
+
+    threshold: float
+
+    reason: str
+
+    evidence: tuple[EvaluationEvidence, ...]
+
 
 class RunDetail(RunSummary):
     """One kept run with its input, its result and each of its steps."""
@@ -1584,6 +1852,16 @@ class RunDetail(RunSummary):
         description="Every step, in the order the run recorded them.",
     )
 
+    lineage: RunLineage | None = Field(
+        default=None,
+        description="Where a run another run's step started came from; None for any other run.",
+    )
+
+    evaluations: tuple[RunEvaluation, ...] = Field(
+        default=(),
+        description="Every evaluator judgment of the run, in the order they were recorded.",
+    )
+
 
 class StepTrial(ApiModel):
     """One step of a workflow document, tried alone and kept nowhere (ADR 0121)."""
@@ -1592,6 +1870,20 @@ class StepTrial(ApiModel):
 
     warnings: tuple[str, ...] = Field(
         description="What went wrong beside the step, such as an event callback that raised.",
+    )
+
+
+class CitationRecord(ApiModel):
+    """The checks one cited step of a run kept, in the content store (ADRs 0116 and 0140)."""
+
+    step_id: UUID
+
+    record: str = Field(
+        description="The digest the record is kept under.",
+    )
+
+    checks: tuple[dict[str, JsonValue], ...] | None = Field(
+        description="Each check, in the order the step's reply held them; None when not kept.",
     )
 
 
@@ -1627,6 +1919,26 @@ class InvocationDetail(ApiModel):
 
     command: str = Field(
         description="The `azathoth` command that shows the invocation.",
+    )
+
+    request_digest: str | None = Field(
+        default=None,
+        description="The digest of the request a keyed invocation was made under (ADR 0097).",
+    )
+
+    lineage: RunLineage | None = Field(
+        default=None,
+        description="Where one a step of another run made came from; None for any other.",
+    )
+
+    input_provenance: dict[str, JsonValue] | None = Field(
+        default=None,
+        description="Where its input was read from, when it was read (ADR 0112).",
+    )
+
+    citations: tuple[CitationRecord, ...] = Field(
+        default=(),
+        description="The checks each cited step of its run kept, in the order it kept them.",
     )
 
 
@@ -1670,6 +1982,15 @@ class RunStarted(ApiModel):
 
     workflow_id: UUID
 
+    run_id: UUID | None = Field(
+        default=None,
+        description=(
+            "The run, named before it starts: the new run of `runs.run`, or the run a resume "
+            "goes on with. An invocation's run is named through its invocation, so it is None "
+            "for one (ADR 0139)."
+        ),
+    )
+
 
 class StepStarted(ApiModel):
     """A step began its first attempt; retries never start it again."""
@@ -1704,6 +2025,14 @@ class StepFinished(ApiModel):
     )
 
     confidence: float | None
+
+    emits_values: bool = Field(
+        default=False,
+        description=(
+            "Whether the step declares that it emits its values, as `--output jsonl` shows "
+            "them (ADR 0140)."
+        ),
+    )
 
 
 class ContextChanged(ApiModel):
@@ -2189,12 +2518,62 @@ OptimizationEvent = Annotated[
 """One event of an optimization session, told apart by its `type`."""
 
 
+class OptimizedStep(ApiModel):
+    """One step of an experiment's winner, as the candidate that won built it (ADR 0140)."""
+
+    step_id: UUID
+
+    name: str = Field(
+        description="The name of the strategy the step runs.",
+    )
+
+    strategy_id: UUID
+
+    model: str | None = Field(
+        description=(
+            "The provider-qualified model the strategy is bound to, or None for a strategy "
+            "bound to none."
+        ),
+    )
+
+
+class OptimizationExperiment(ApiModel):
+    """One experiment of a session: what it judged, what judging cost, and its winner (ADR 0140)."""
+
+    experiment_id: UUID
+
+    evaluated: int = Field(
+        ge=1,
+        description="How many candidates it evaluated.",
+    )
+
+    judge_calls: int = Field(
+        ge=0,
+    )
+
+    judge_cost_usd: float = Field(
+        ge=0.0,
+    )
+
+    winner_workflow_id: UUID
+
+    winner_strategy_ids: tuple[UUID, ...]
+
+    winner_steps: tuple[OptimizedStep, ...] = Field(
+        description="Each step of the winner, in the workflow's order.",
+    )
+
+    winner_scorecard: CandidateScorecard
+
+
 class OptimizationGeneration(ApiModel):
     """One generation of a session: the experiment that measured it, and what it proposed."""
 
     generation: int = Field(
         ge=1,
     )
+
+    experiment: OptimizationExperiment
 
     experiment_id: UUID
 
@@ -2213,6 +2592,15 @@ class OptimizationSummary(ApiModel):
 
     workflow_id: UUID
 
+    workflow_name: str = Field(
+        description="The workflow's name, as the session's first candidate was built (ADR 0140).",
+    )
+
+    initial_candidates: int = Field(
+        ge=1,
+        description="How many candidates the first generation started from.",
+    )
+
     benchmark_id: UUID
 
     generations: tuple[OptimizationGeneration, ...] = Field(
@@ -2225,6 +2613,10 @@ class OptimizationSummary(ApiModel):
 
     final_skipped: str | None = Field(
         description="Why the final evaluation did not run, or None when it ran.",
+    )
+
+    final_experiment: OptimizationExperiment | None = Field(
+        description="The final evaluation, or None when it did not run (ADR 0140).",
     )
 
     winning_experiment_id: UUID = Field(
@@ -2363,6 +2755,7 @@ __all__ = [
     "BenchmarkSummary",
     "ContextChanged",
     "DocumentProblem",
+    "EvaluationEvidence",
     "Initialization",
     "InstanceDescription",
     "InvocationDetail",
@@ -2378,11 +2771,14 @@ __all__ = [
     "Revision",
     "RunDetail",
     "RunError",
+    "RunEvaluation",
     "RunEvent",
     "RunFile",
     "RunFinished",
     "RunInput",
+    "RunLineage",
     "RunResult",
+    "RunSource",
     "RunStarted",
     "RunStep",
     "RunStepDetail",
@@ -2393,6 +2789,7 @@ __all__ = [
     "StepKind",
     "StepMetrics",
     "StepReadiness",
+    "StepResource",
     "StepStarted",
     "StepTrial",
     "ToolDetail",

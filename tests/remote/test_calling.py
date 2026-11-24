@@ -69,7 +69,7 @@ def test_every_served_call_but_a_job_has_a_signature() -> None:
     expected = [call.name for call in SERVICE_CALLS if call.served and not call.job]
 
     assert list(call_signatures()) == expected
-    assert len(expected) == 66
+    assert len(expected) == 71
 
 
 def test_a_job_is_a_call_that_takes_a_callback_for_its_events() -> None:

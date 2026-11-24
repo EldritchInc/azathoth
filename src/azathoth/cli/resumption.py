@@ -4,7 +4,8 @@
 the specification revision it started from. `invocation resume` resumes a
 production invocation from the production state it started from. Either
 keeps its run's ID, and reports the finished run exactly as the command
-that started it would have.
+that started it would have. Given `--remote`, either resumes on that
+remote, and reports as it does here (ADR 0140).
 """
 
 import asyncio
@@ -16,6 +17,8 @@ from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.output_format import DEFAULT_WORKFLOW_OUTPUT_FORMAT, WorkflowOutputFormat
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_choice import chosen_remote
+from azathoth.cli.remote_runs import resume_invocation_on_remote, resume_run_on_remote
 from azathoth.cli.reporting import (
     report_configured_run,
     report_invocation_result,
@@ -41,6 +44,9 @@ def resume_run(
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Resume one interrupted configured run, persist it, and report it as `workflow run` does."""
+
+    if chosen_remote() is not None:
+        return resume_run_on_remote(run_id, output=output)
 
     return run_traced(
         lambda telemetry: _resume_run(
@@ -111,6 +117,9 @@ def resume_invocation(
     output: WorkflowOutputFormat = DEFAULT_WORKFLOW_OUTPUT_FORMAT,
 ) -> int:
     """Resume one incomplete production invocation and report it as `workflow invoke` does."""
+
+    if chosen_remote() is not None:
+        return resume_invocation_on_remote(invocation_id, output=output)
 
     return run_traced(
         lambda telemetry: _resume_invocation(

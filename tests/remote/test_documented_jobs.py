@@ -11,10 +11,11 @@ from azathoth.api.calls import SERVICE_CALLS
 from azathoth.cli.remote import runners_line
 from azathoth.persistence.repositories import open_repositories
 from azathoth.remote.calling import CallerInstances
-from azathoth.remote.jobs import DEFAULT_RUNNERS, RUNNER_ALIVE_SECONDS
+from azathoth.remote.jobs import DEFAULT_RUNNERS
 from azathoth.remote.runners import (
     BEAT_SECONDS,
     INTERRUPTED_CODE,
+    STALL_SECONDS,
     JobRunners,
     failed_message,
     interrupted_message,
@@ -111,7 +112,6 @@ def test_the_adr_quotes_what_a_job_says_exactly(
     for message in (
         failed_message("<CALL>"),
         interrupted_message("<CALL>"),
-        interrupted_message("runs.run"),
         refused.json()["error"].replace(job, "<NAME>", 1),
         NO_JOBS_MESSAGE,
         dropped_message(tmp_path, monkeypatch),
@@ -123,7 +123,6 @@ def test_the_remote_readme_quotes_what_a_job_says_exactly() -> None:
     for message in (
         failed_message("<CALL>"),
         interrupted_message("<CALL>"),
-        interrupted_message("runs.run"),
         NO_JOBS_MESSAGE,
         f"event: {JOB_EVENT}",
         f"event: {FINISHED_EVENT}",
@@ -153,7 +152,8 @@ def test_the_numbers_the_documents_give_are_the_remotes() -> None:
     assert f"quiet for {KEEP_ALIVE_SECONDS:g} seconds" in remote
     assert f"quiet for {KEEP_ALIVE_SECONDS:g} seconds" in adr
     assert f"every {BEAT_SECONDS:g} seconds" in remote
-    assert f"in {RUNNER_ALIVE_SECONDS:g} seconds" in remote
+    assert f"in {STALL_SECONDS:g} seconds" in remote
+    assert f"after {STALL_SECONDS:g} seconds" in flat(CLI)
     assert f"`{JOB_KEY_PREFIX}<JOB_ID>`" in remote
     assert f"`{JOB_KEY_PREFIX}<JOB_ID>`" in adr
     assert f"up to {connected_module.RECONNECTS} more times" in flat(API)
@@ -166,16 +166,36 @@ def test_the_refusal_table_names_an_interrupted_job_by_its_code() -> None:
     assert f"`{INTERRUPTED_CODE}`" in row
 
 
+def status_of(
+    number: str,
+) -> str:
+    """Return the status line of the decision with a number."""
+
+    (path,) = ADRS.glob(f"{number}-*.md")
+
+    return next(
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("- Status:")
+    )
+
+
 def test_the_decisions_the_jobs_amend_say_so() -> None:
     for number in ("0127", "0136", "0137"):
-        (path,) = ADRS.glob(f"{number}-*.md")
-        status = next(
-            line
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.startswith("- Status:")
-        )
+        status = status_of(number)
 
         assert status.startswith("- Status: Accepted; amended by ")
-        assert status.endswith("ADR 0138")
+        assert "ADR 0138" in status.split("amended by ", 1)[1].split(", ")
 
     assert "(0138-jobs-on-a-remote.md)" in (ADRS / "README.md").read_text(encoding="utf-8")
+
+
+def test_the_decision_a_run_job_names_its_run_amends_the_jobs() -> None:
+    assert status_of("0138") == "- Status: Accepted; amended by ADR 0139"
+    assert status_of("0139") == "- Status: Accepted"
+    assert "(0139-a-run-job-names-its-run.md)" in (ADRS / "README.md").read_text(encoding="utf-8")
+
+    adr = flat(ADRS / "0139-a-run-job-names-its-run.md")
+
+    assert f"not beaten in {STALL_SECONDS:g} seconds" in adr
+    assert f"{BEAT_SECONDS:g} seconds each" in adr

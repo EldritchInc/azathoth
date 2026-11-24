@@ -8,10 +8,12 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
+from azathoth import api
 from azathoth.cli.benchmark_checks import (
     benchmark_has_cases,
     comparisons_supported,
     configured_benchmark,
+    optimization_policy,
     results_declared,
 )
 from azathoth.cli.benchmark_execution import case_runner
@@ -38,6 +40,14 @@ from azathoth.cli.production import invoke_active_production_workflow
 from azathoth.cli.promotion import (
     WorkflowExperimentNotFoundError,
     promote_configured_workflow,
+)
+from azathoth.cli.remote_benchmarks import optimize_on_remote
+from azathoth.cli.remote_choice import chosen_remote
+from azathoth.cli.remote_runs import (
+    child_run,
+    deploy_on_remote,
+    invoke_on_remote,
+    run_on_remote,
 )
 from azathoth.cli.rendering import (
     render_workflow_optimization_session,
@@ -80,7 +90,6 @@ from azathoth.workflows import (
     WorkflowGenerationError,
     WorkflowResultError,
     WorkflowRollbackError,
-    WorkflowScoringPolicy,
     roll_back_workflow_production,
 )
 
@@ -124,7 +133,30 @@ def run_workflow(
 
     The input is labelled with `sensitivity` when it is given (ADR 0123);
     a run given a label needs input.
+
+    With `--remote`, the run is made on that remote and reported as it is
+    here (ADR 0140); a run another run's step started takes no remote.
     """
+
+    if chosen_remote() is not None:
+        if child_run():
+            return 2
+
+        if sensitivity is not None and workflow_input is None:
+            print(SENSITIVITY_WITHOUT_INPUT_MESSAGE, file=sys.stderr)
+
+            return 1
+
+        return run_on_remote(
+            workflow_id,
+            payload=(
+                workflow_input.payload if isinstance(workflow_input, WorkflowRunInput) else None
+            ),
+            given=isinstance(workflow_input, WorkflowRunInput),
+            workflow_file=workflow_input if isinstance(workflow_input, WorkflowInputFile) else None,
+            output=output,
+            sensitivity=sensitivity,
+        )
 
     return run_traced(
         lambda telemetry: _run_workflow(
@@ -262,7 +294,16 @@ def promote_workflow(
     With an experiment ID, the experiment's winner is promoted instead of the
     configured candidate (ADR 0092). Who promotes is told as for an import,
     before the runtime is loaded, and recorded with the revision (ADR 0128).
+
+    Given `--remote`, the remote promotes, as the caller its token names
+    (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return deploy_on_remote(
+            lambda instance: instance.production.promote(workflow_id, experiment_id=experiment_id),
+            status="promoted",
+        )
 
     author = current_author()
 
@@ -317,7 +358,16 @@ def rollback_workflow(
     Only durable state is read, so the runtime is never loaded and no
     provider credentials are needed; the portfolio decides whether the
     restored state's models may still run.
+
+    Given `--remote`, the remote rolls back, as the caller its token names
+    (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return deploy_on_remote(
+            lambda instance: _roll_back_on(instance, workflow_id, to=to),
+            status="rolled back",
+        )
 
     author = current_author()
 
@@ -354,6 +404,29 @@ def rollback_workflow(
     return 0
 
 
+def _roll_back_on(
+    instance: api.Instance,
+    workflow_id: UUID,
+    *,
+    to: UUID | None,
+) -> api.ProductionRevisionSummary:
+    """Roll a remote workflow back, refusing one the remote knows nothing of as not in production.
+
+    Here, a workflow with no production is not in production, whether or
+    not it is configured, so it is refused the same way there.
+
+    Raises:
+        ApiError: The remote refused the rollback.
+    """
+
+    try:
+        instance.production.get(workflow_id)
+    except api.NotFoundError as exc:
+        raise api.NothingToRollBackToError(f"Workflow {workflow_id} is not in production.") from exc
+
+    return instance.production.roll_back(workflow_id, to=to)
+
+
 def invoke_workflow(
     *,
     workflow_id: UUID,
@@ -386,7 +459,22 @@ def invoke_workflow(
 
     The input is labelled with `sensitivity` when it is given, and the label
     is part of a keyed request (ADR 0123).
+
+    With `--remote`, the invocation is made on that remote and reported as
+    it is here (ADR 0140); one another run's step started takes no remote.
     """
+
+    if chosen_remote() is not None:
+        if child_run():
+            return 2
+
+        return invoke_on_remote(
+            workflow_id,
+            payload=payload,
+            output=output,
+            idempotency_key=idempotency_key,
+            sensitivity=sensitivity,
+        )
 
     return run_traced(
         lambda telemetry: _invoke_workflow(
@@ -501,14 +589,34 @@ def optimize_workflow(
     """Empirically optimize one configured workflow against a durable benchmark.
 
     Every candidate runs every benchmark case, and each case judges the
-    workflow's declared result with its own comparison. A missing or empty
-    benchmark, an unsupported comparison, and a workflow without a declared
-    result are rejected before runtime bootstrap, without provider credentials
-    and without executing any case.
+    workflow's declared result with its own comparison. Fewer than one
+    generation, a target not above zero, a missing or empty benchmark, an
+    unsupported comparison, and a workflow without a declared result are
+    rejected before runtime bootstrap, as `optimization.optimize` rejects
+    them, without provider credentials and without executing any case.
 
     Every generation's candidate runs, evaluations, and experiment record are
     saved to the configured database, so the session can be inspected later.
+    Given `--remote`, the remote optimizes it and saves them (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return optimize_on_remote(
+            workflow_id=workflow_id,
+            benchmark_id=benchmark_id,
+            target_latency_seconds=target_latency_seconds,
+            target_cost_usd=target_cost_usd,
+            generations=generations,
+        )
+
+    policy = optimization_policy(
+        generations,
+        target_latency_seconds=target_latency_seconds,
+        target_cost_usd=target_cost_usd,
+    )
+
+    if policy is None:
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -543,10 +651,7 @@ def optimize_workflow(
                 runtime=runtime,
                 workflow_id=workflow_id,
                 dataset=dataset,
-                scoring_policy=WorkflowScoringPolicy(
-                    target_latency_seconds=target_latency_seconds,
-                    target_cost_usd=target_cost_usd,
-                ),
+                scoring_policy=policy,
                 max_generations=generations,
                 recorder=WorkflowExperimentEvidenceRecorder(
                     runs=repositories(configuration).runs,

@@ -331,6 +331,39 @@ Its portfolio is as last read, at <TIME>.
 workflow a1000000-0000-4000-8000-000000000002  unknown  here 1 <DIGEST>  there unknown
 ```
 
+## 9. Work on the Remote
+
+Every command but a few takes `--remote`, and then runs on the remote
+rather than on this instance's database, printing what it prints here
+(ADR 0140). Serve the remote again in the first terminal, as in step 3.
+Then, from the laptop instance, run the pushed workflow at the remote,
+where the server's runners run it:
+
+```bash
+azathoth workflow run a1000000-0000-4000-8000-000000000002 --input '"that is not dead"' --output result --remote origin
+```
+
+```powershell
+azathoth workflow run a1000000-0000-4000-8000-000000000002 --input '"that is not dead"' --output result --remote origin
+```
+
+```text
+4
+```
+
+The run is kept at the remote, not here: `azathoth workflow runs
+a1000000-0000-4000-8000-000000000002 --remote origin` lists it, and the
+same command without `--remote` does not. Ctrl-C stops a run at the
+remote before the command stops. A file given with `--input-file` is read
+here and sent.
+
+What acts on this instance itself, or names its remote already, never
+takes `--remote`, and says why:
+
+```text
+init prepares this machine's database, so it takes no --remote.
+```
+
 ## Tokens
 
 List a remote's tokens, and revoke one that is lost or no longer needed, on

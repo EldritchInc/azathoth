@@ -2,7 +2,8 @@
 
 Commands the API covers call it through the instance this module opens over
 the configured database, so the command line, azathoth-mcp and the local
-editor share one way to read and change it.
+editor share one way to read and change it. A command run with `--remote`
+is given the instance connected to that remote instead (ADR 0140).
 """
 
 import sys
@@ -11,26 +12,44 @@ from collections.abc import Sequence
 from azathoth import api
 from azathoth.cli.bootstrap import current_models
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
+from azathoth.cli.persistence import local_repositories, repositories
+from azathoth.cli.remote_choice import connected_instance
 from azathoth.providers import ModelCatalog, ProviderModel
 from azathoth.revisions import Author, AuthorError, LineageRecord, resolve_author
 
 
 def service_instance(
     configuration: CliRuntimeConfiguration,
-) -> api.Azathoth:
+) -> api.Instance:
     """Return the service API over the configured database, reaching no provider.
 
     The instance is made over the command line's own repositories rather
     than opened, so a command treats a database that does not exist yet as
-    it always has: an SQLite file is created as it is first used.
+    it always has: an SQLite file is created as it is first used. A command
+    run with `--remote` is given the instance connected to that remote.
 
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
             `postgres` extra is not installed.
+        InvalidArgumentError: The remote's URL is not an http or https URL,
+            or its token is not set.
+        NotFoundError: No remote has the name `--remote` gave.
     """
 
+    connected = connected_instance(configuration, _local_instance)
+
+    if connected is not None:
+        return connected
+
     return api.Azathoth(repositories(configuration))
+
+
+def _local_instance(
+    configuration: CliRuntimeConfiguration,
+) -> api.Azathoth:
+    """Return the service API over the configured database, to find a remote it names."""
+
+    return api.Azathoth(local_repositories(configuration))
 
 
 class CatalogDirectory:
@@ -92,19 +111,28 @@ def catalog_directories(
 
 def provider_instance(
     configuration: CliRuntimeConfiguration,
-) -> api.Azathoth:
+) -> api.Instance:
     """Return the service API over the configured database, serving what the providers serve.
 
     A command that asks what the providers serve, such as adding a judge,
     calls this one. The models are the ones every other command discovers,
     asked once as the instance is made, so the API and the command line
-    never see different models.
+    never see different models. A command run with `--remote` is given the
+    instance connected to that remote, which asks its own providers.
 
     Raises:
         DatabaseUnavailableError: The database is PostgreSQL, and the
             `postgres` extra is not installed.
+        InvalidArgumentError: The remote's URL is not an http or https URL,
+            or its token is not set.
         ModelDiscoveryError: A provider that is on could not be discovered.
+        NotFoundError: No remote has the name `--remote` gave.
     """
+
+    connected = connected_instance(configuration, _local_instance)
+
+    if connected is not None:
+        return connected
 
     return api.Azathoth(
         repositories(configuration),
@@ -190,6 +218,35 @@ def lineage_lines(
     )
 
 
+def revision_lineage_lines(
+    revision: api.Revision,
+) -> tuple[str, ...]:
+    """Return the lines `show` names a revision's digest, parent and author with (ADR 0122).
+
+    They are the lines `lineage_lines` gives, read from the service API's
+    view of the revision, so a revision a remote holds is shown the same
+    (ADR 0140).
+    """
+
+    if revision.parent_number is not None:
+        parent_line = f"Parent: revision {revision.parent_number}"
+    elif revision.parent_digest is not None:
+        parent_line = f"Parent: {revision.parent_digest}"
+    else:
+        parent_line = "Parent: none"
+
+    author = revision.author
+
+    if author is None:
+        author_line = "Author: unknown"
+    elif author.email is None:
+        author_line = f"Author: {author.name}"
+    else:
+        author_line = f"Author: {author.name} <{author.email}>"
+
+    return (f"Revision Digest: {revision.revision_digest}", parent_line, author_line)
+
+
 def current_author() -> Author | None:
     """Return who a command records as the author, or say why it cannot tell (ADR 0122).
 
@@ -210,6 +267,7 @@ __all__ = [
     "current_author",
     "history_line",
     "lineage_lines",
+    "revision_lineage_lines",
     "identical_note",
     "import_note",
     "CatalogDirectory",

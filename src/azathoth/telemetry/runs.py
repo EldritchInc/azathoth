@@ -277,10 +277,12 @@ class TracingWorkflowRunner(WorkflowRunner):
         context: Context,
         *,
         invocation_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> WorkflowRun:
         """Execute and trace a workflow candidate, propagating FAIL_WORKFLOW failures.
 
-        A failure that escapes marks the run span failed with its type.
+        A failure that escapes marks the run span failed with its type. A run
+        given `run_id` runs under it (ADR 0139).
         """
 
         with traced_run(self._telemetry, workflow_id=workflow.metadata.id) as trace:
@@ -288,6 +290,7 @@ class TracingWorkflowRunner(WorkflowRunner):
                 workflow,
                 context,
                 invocation_id=invocation_id,
+                run_id=run_id,
             )
 
             trace.record(run)
@@ -320,14 +323,19 @@ class TracingWorkflowRunner(WorkflowRunner):
         context: Context,
         *,
         invocation_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> WorkflowRun:
-        """Execute and trace a workflow candidate, returning completed failure evidence."""
+        """Execute and trace a workflow candidate, returning completed failure evidence.
+
+        A run given `run_id` runs under it (ADR 0139).
+        """
 
         with traced_run(self._telemetry, workflow_id=workflow.metadata.id) as trace:
             run = await self._traced_runner(trace).run_recording_failures(
                 workflow,
                 context,
                 invocation_id=invocation_id,
+                run_id=run_id,
             )
 
             trace.record(run)

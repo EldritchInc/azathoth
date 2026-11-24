@@ -65,6 +65,11 @@ with api.open("azathoth.db") as instance:
 | `tools.list()` | Every exact tool version at its latest revision. |
 | `tools.versions(id)` | Each version of one tool at its latest revision, as `tool versions` lists them. |
 | `tools.get(id, version, revision=None)` | One revision of one exact version, with its document. |
+| `tools.definition(id, version)` | The `ToolDefinitionDetail` the version has now, with its input and output schemas, as `tool show` shows it (ADR 0140). |
+| `tools.implementations(id, version)` | Each `ToolImplementationSummary` of one exact version, as `tool implementations` lists them. |
+| `tools.implementation(implementation_id)` | One `ToolImplementationDetail`, adding what it runs: its entrypoint, command, timeout, environment, MCP binding and source. |
+| `tools.test_cases(id)` | Each `ToolTestCaseSummary` of one tool, of every version, as `tool test-cases` lists them. |
+| `tools.test_case(test_case_id)` | One `ToolTestCaseDetail`, adding its description, inputs and expected output. |
 | `tools.history(id, version=None, limit=None)` | Its revisions newest first, of one version when it is named. |
 | `tools.export(id, version, revision=None)` | A `DocumentExport` of one revision of one exact version. |
 | `tools.compare_revisions(id, version, before, after)` | A `RevisionComparison` of two revisions of one exact version. |
@@ -312,9 +317,9 @@ run makes them:
 
 | Event | `type` | Carries |
 | --- | --- | --- |
-| `RunStarted` | `run_started` | The workflow. |
+| `RunStarted` | `run_started` | The workflow, and the run it starts or resumes; None for an invocation's, named through its invocation. |
 | `StepStarted` | `step_started` | The step, its dependency layer, and its message. |
-| `StepFinished` | `step_finished` | Its status, its final failure's message, its confidence. |
+| `StepFinished` | `step_finished` | Its status, its final failure's message, its confidence, and whether its values follow it as `context_changed`. |
 | `ContextChanged` | `context_changed` | The values the step declared, by name. |
 | `RunFinished` | `run_finished` | The kept run's ID, and whether it succeeded. |
 | `InvocationFinished` | `invocation_finished` | The invocation, if one was made, and its status. |
@@ -529,6 +534,29 @@ be resumed, as a `ConflictError`:
 ```text
 Invocation <INVOCATION_ID> has already completed.
 ```
+
+## What the Command Line Prints
+
+Given `--remote`, every command prints from the service API's views what
+it prints here from the database (ADR 0140), so the views hold all of it:
+
+| View | Adds |
+| --- | --- |
+| `RunSummary` | `source`: what made the run, `configured`, `benchmark`, `experiment` or `production`. |
+| `RunDetail` | `lineage`: where a child run sits below its parent and its root; `evaluations`: each judgment kept, with its evidence. |
+| `RunStepDetail` | `resources`: what an executed step's strategy used, such as a model it called or a tool it ran. |
+| `InvocationSummary` | `error_code`: a failed invocation's code, such as `timeout`. |
+| `ProductionState` | `emissions`: each value production returns, as a `ProductionEmission` naming where in its run it is read. |
+| `InvocationDetail` | `request_digest`, `lineage`, `input_provenance`, and `citations`: each `CitationRecord` its run's steps kept, with its checks. |
+| `BenchmarkDetail` | `cited_cases`, and `comparisons`: how many cases each comparison judges. |
+| `ExecutionCandidate` | `total_tokens`, `total_latency_ms` and `total_cost_usd` its case runs measured, or `None` once any of them is not kept. |
+| `OptimizationSummary` | `workflow_name`, `initial_candidates`, `final_experiment`, and each generation's `experiment`: an `OptimizationExperiment` with what it judged, what judging cost, and its winner's `OptimizedStep`s and scorecard. |
+
+The tool commands read a tool's current artifacts through `tools.definition`,
+`tools.implementations`, `tools.implementation`, `tools.test_cases` and
+`tools.test_case`, which return a `ToolDefinitionDetail`, `ToolImplementationSummary`
+items, a `ToolImplementationDetail` with its `ToolMcpBinding`, `ToolTestCaseSummary`
+items and a `ToolTestCaseDetail`.
 
 ## Remotes
 
@@ -751,6 +779,11 @@ refused.
 | `tools.list` | `read_catalog` |  |  |
 | `tools.versions` | `read_catalog` |  |  |
 | `tools.get` | `read_catalog` |  |  |
+| `tools.definition` | `read_catalog` |  |  |
+| `tools.implementations` | `read_catalog` |  |  |
+| `tools.implementation` | `read_catalog` |  |  |
+| `tools.test_cases` | `read_catalog` |  |  |
+| `tools.test_case` | `read_catalog` |  |  |
 | `tools.history` | `read_catalog` |  |  |
 | `tools.export` | `read_catalog` |  |  |
 | `tools.compare_revisions` | `read_catalog` |  |  |

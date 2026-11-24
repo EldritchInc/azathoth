@@ -276,7 +276,7 @@ def test_events_arrive_in_the_order_the_run_makes_them(
         "context_changed",
         "run_finished",
     )
-    assert events[0] == api.RunStarted(workflow_id=COUNT_WORKFLOW_ID)
+    assert events[0] == api.RunStarted(workflow_id=COUNT_WORKFLOW_ID, run_id=result.run_id)
     assert events[1] == api.StepStarted(step_id=COUNT_STEP_ID, layer=0, message="Counting")
     assert events[2] == api.StepFinished(
         step_id=COUNT_STEP_ID,

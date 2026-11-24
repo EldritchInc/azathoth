@@ -3,12 +3,13 @@
 import asyncio
 import json
 import sys
-from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID
 
 from azathoth import api
 from azathoth.cli.benchmark_checks import (
+    benchmark_has_cases,
+    comparison_policy,
     comparisons_supported,
     configured_benchmark,
     results_declared,
@@ -21,6 +22,8 @@ from azathoth.cli.benchmark_execution import (
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_benchmarks import compare_benchmarks_on_remote, run_benchmark_on_remote
+from azathoth.cli.remote_choice import chosen_remote
 from azathoth.cli.rendering import (
     render_workflow_benchmark_comparison_execution,
     render_workflow_benchmark_execution,
@@ -33,16 +36,13 @@ from azathoth.cli.service import (
     history_line,
     identical_note,
     import_note,
-    lineage_lines,
+    revision_lineage_lines,
     service_instance,
 )
 from azathoth.evaluation import (
-    BenchmarkDatasetRevision,
-    BenchmarkRepository,
     SemanticJudgingError,
     UnsupportedComparisonError,
 )
-from azathoth.revisions import LineageRecord
 from azathoth.runtime import (
     JudgeUnavailableError,
     WorkflowNotConfiguredError,
@@ -51,7 +51,6 @@ from azathoth.workflows import (
     WorkflowBenchmarkEvidenceRecorder,
     WorkflowGenerationError,
     WorkflowResultError,
-    WorkflowScoringPolicy,
 )
 
 
@@ -71,28 +70,22 @@ def show_benchmark(
     *,
     revision: int | None = None,
 ) -> int:
-    """Show one imported revision of a benchmark dataset, the latest by default."""
+    """Show one imported revision of a benchmark dataset, the latest by default.
+
+    Only durable state is read, through `benchmarks.get` (ADR 0140), so a
+    benchmark a remote holds is shown as one here is.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).benchmarks
+    try:
+        detail = service_instance(configuration).benchmarks.get(benchmark_id, revision=revision)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    selected = _selected_revision(
-        repository,
-        benchmark_id,
-        revision,
-    )
-
-    if selected is None:
         return 1
 
-    latest = repository.latest_revision(benchmark_id)
-
-    _print_benchmark_dataset(
-        selected,
-        latest_number=latest.number if latest is not None else selected.number,
-        lineage=repository.lineage(benchmark_id),
-    )
+    _print_benchmark_dataset(detail)
 
     return 0
 
@@ -163,51 +156,6 @@ def list_benchmark_history(
     return 0
 
 
-def _selected_revision(
-    repository: BenchmarkRepository,
-    benchmark_id: UUID,
-    revision: int | None,
-) -> BenchmarkDatasetRevision | None:
-    """Return the requested revision, printing the failure when there is none."""
-
-    latest = repository.latest_revision(benchmark_id)
-
-    if latest is None:
-        print(
-            f"Benchmark dataset {benchmark_id} is not configured.",
-            file=sys.stderr,
-        )
-
-        return None
-
-    if revision is None:
-        return latest
-
-    selected = repository.revision(
-        benchmark_id,
-        revision,
-    )
-
-    if selected is None:
-        print(
-            f"Benchmark dataset {benchmark_id} has no revision {revision}.",
-            file=sys.stderr,
-        )
-
-    return selected
-
-
-def _render_imported_at(
-    revision: BenchmarkDatasetRevision,
-) -> str:
-    """Render when one revision was imported, or that it is unknown."""
-
-    if revision.imported_at is None:
-        return "unknown"
-
-    return revision.imported_at.isoformat()
-
-
 def list_benchmark_cases(
     benchmark_id: UUID,
 ) -> int:
@@ -262,41 +210,35 @@ def show_benchmark_case(
 
 
 def _print_benchmark_dataset(
-    revision: BenchmarkDatasetRevision,
-    *,
-    latest_number: int,
-    lineage: Sequence[LineageRecord],
+    detail: api.BenchmarkDetail,
 ) -> None:
     """Render one imported revision of a reusable benchmark workload, and its lineage."""
 
-    dataset = revision.dataset
+    revision = detail.revision
+    imported = revision.imported_at.isoformat() if revision.imported_at is not None else "unknown"
 
-    print(f"ID: {dataset.id}")
-    print(f"Revision: {revision.number} of {latest_number}")
-    print(f"Imported: {_render_imported_at(revision)}")
+    print(f"ID: {detail.id}")
+    print(f"Revision: {revision.number} of {detail.latest_number}")
+    print(f"Imported: {imported}")
     print(f"Content Digest: {revision.content_digest}")
 
-    for line in lineage_lines(revision.number, lineage):
+    for line in revision_lineage_lines(revision):
         print(line)
-    print(f"Name: {dataset.name}")
-    print(f"Version: {dataset.version}")
-    print(f"Description: {dataset.description}")
-    print(f"Cases: {len(dataset.cases)}")
+    print(f"Name: {detail.name}")
+    print(f"Version: {detail.version}")
+    print(f"Description: {detail.description}")
+    print(f"Cases: {detail.case_count}")
 
-    for line in render_sensitivity_lines(dataset.sensitivity):
+    for line in render_sensitivity_lines(detail.sensitivity):
         print(line)
 
-    cited = sum(case.expected.citations is not None for case in dataset.cases)
-
-    if cited:
-        print(f"Cited Cases: {cited}")
-
-    counts = dataset.comparison_counts()
+    if detail.cited_cases:
+        print(f"Cited Cases: {detail.cited_cases}")
 
     print(
         "Comparisons: "
         + (
-            ", ".join(f"{comparison.value} {count}" for comparison, count in counts.items())
+            ", ".join(f"{counted.comparison} {counted.cases}" for counted in detail.comparisons)
             or "none"
         )
     )
@@ -435,12 +377,16 @@ def run_benchmark(
 ) -> int:
     """Execute one configured workflow against a durable benchmark.
 
-    Each case judges the workflow's declared result. Unsupported comparisons
-    and workflows without a declared result are rejected before runtime
-    bootstrap, without executing any case. Every case run, every evaluation,
-    and one execution record are saved, and the execution identifier leads
-    the output.
+    Each case judges the workflow's declared result. A benchmark without
+    cases, unsupported comparisons and workflows without a declared result
+    are rejected before runtime bootstrap, without executing any case.
+    Every case run, every evaluation, and one execution record are saved,
+    and the execution identifier leads the output. Given `--remote`, the
+    remote runs it (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return run_benchmark_on_remote(benchmark_id=benchmark_id, workflow_id=workflow_id)
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -450,6 +396,9 @@ def run_benchmark(
     )
 
     if dataset is None:
+        return 1
+
+    if not benchmark_has_cases(dataset):
         return 1
 
     if not comparisons_supported(
@@ -513,12 +462,32 @@ def compare_benchmarks(
 ) -> int:
     """Compare configured workflows against a durable benchmark.
 
-    Each case judges every workflow's declared result. Unsupported
-    comparisons and workflows without a declared result are rejected before
-    runtime bootstrap, without executing any case. Every case run, every
+    Each case judges every workflow's declared result. Fewer than two
+    distinct workflows, a target not above zero, a benchmark without cases,
+    unsupported comparisons and workflows without a declared result are
+    rejected before runtime bootstrap, as `benchmarks.compare` rejects them,
+    without executing any case. Every case run, every
     evaluation, and one execution record are saved, and the comparison is
-    rendered from that saved record.
+    rendered from that saved record. Given `--remote`, the remote compares
+    them (ADR 0140).
     """
+
+    if chosen_remote() is not None:
+        return compare_benchmarks_on_remote(
+            benchmark_id=benchmark_id,
+            workflow_ids=workflow_ids,
+            target_latency_seconds=target_latency_seconds,
+            target_cost_usd=target_cost_usd,
+        )
+
+    policy = comparison_policy(
+        workflow_ids,
+        target_latency_seconds=target_latency_seconds,
+        target_cost_usd=target_cost_usd,
+    )
+
+    if policy is None:
+        return 1
 
     configuration = CliRuntimeConfiguration.from_environment()
 
@@ -528,6 +497,9 @@ def compare_benchmarks(
     )
 
     if dataset is None:
+        return 1
+
+    if not benchmark_has_cases(dataset):
         return 1
 
     if not comparisons_supported(
@@ -554,10 +526,7 @@ def compare_benchmarks(
                 runtime=runtime,
                 workflow_ids=workflow_ids,
                 dataset=dataset,
-                scoring_policy=WorkflowScoringPolicy(
-                    target_latency_seconds=target_latency_seconds,
-                    target_cost_usd=target_cost_usd,
-                ),
+                scoring_policy=policy,
                 recorder=recorder,
                 workflow_runner=case_runner(repositories(configuration)),
             )

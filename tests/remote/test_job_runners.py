@@ -1,4 +1,4 @@
-"""Tests of the runners that run a remote's jobs, and of recovering what they leave (ADR 0138)."""
+"""Tests of a remote's job runners, and of recovering what they leave (ADR 0138, 0139)."""
 
 import json
 import time
@@ -17,12 +17,13 @@ from azathoth.remote.calling import CallerInstances, job_signature
 from azathoth.remote.jobs import ServiceJob, ServiceJobStatus, SqlServiceJobRepository
 from azathoth.remote.runners import (
     FAILED_CODE,
-    INTERRUPTED_CODE,
+    REQUEUED,
     RESUMED_AS_SUBMITTED,
     JobRunners,
     failed_message,
     interrupted_message,
 )
+from tests.api.test_run_started import ONCE_WORKFLOW_ID, appeared, stock_once
 from tests.api.test_runs import (
     COUNT_WORKFLOW_ID,
     MISSING_ID,
@@ -42,6 +43,7 @@ class Remote:
     ) -> None:
         with api.open(path) as instance:
             stock(instance)
+            stock_once(instance)
 
         self.path = path
         self.repositories: Repositories = open_repositories(path)
@@ -309,30 +311,37 @@ def test_runners_are_recorded_while_they_run_and_beat_for_the_jobs_they_hold(
     assert remote.jobs.runners() == ()
 
 
-def test_a_server_that_stops_interrupts_a_run_it_cannot_hand_on(
+def test_a_server_that_stops_hands_a_run_back_to_be_resumed_by_the_run_it_named(
     remote: Remote,
 ) -> None:
+    marker = remote.path.parent / "slept"
     job_id = remote.submit(
         "runs.run",
-        workflow_id=SLEEP_WORKFLOW_ID,
-        input=api.RunInput(payload="x"),
+        workflow_id=ONCE_WORKFLOW_ID,
+        input=api.RunInput(payload=str(marker)),
     )
 
     with remote.runners():
-        until(lambda: "step_started" in remote.event_types(job_id))
+        appeared(marker)
 
-    job = remote.job(job_id)
+    handed_back = remote.job(job_id)
+    (named,) = [
+        json.loads(event.event)["run_id"]
+        for event in remote.jobs.events(job_id)
+        if json.loads(event.event)["type"] == "run_started"
+    ]
 
-    assert (job.status, job.refusal_status) == (ServiceJobStatus.INTERRUPTED, 409)
-    assert job.refusal is not None
-    assert json.loads(job.refusal) == {
-        "error": interrupted_message("runs.run"),
-        "code": INTERRUPTED_CODE,
-    }
-    assert interrupted_message("runs.run") == (
-        "The server running this job stopped before it finished. A run it started is named by "
-        "runs.interrupted, and runs.resume resumes it from its journal."
-    )
+    assert (handed_back.status, handed_back.call) == (ServiceJobStatus.QUEUED, "runs.run")
+    assert handed_back.run_id == UUID(named)
+
+    with remote.runners():
+        job = finished(remote, job_id)
+
+    assert (job.status, job.attempts) == (ServiceJobStatus.SUCCEEDED, 2)
+    assert job.result is not None
+    assert json.loads(job.result)["run_id"] == named
+    assert json.loads(job.result)["result"] == 1
+    assert remote.event_types(job_id).count("run_started") == 2
 
 
 def test_a_server_that_stops_ends_a_job_its_caller_asked_to_stop_as_cancelled(
@@ -395,31 +404,76 @@ def test_a_resume_left_by_a_runner_that_stopped_is_queued_again_as_it_was(
     assert json.loads(job.arguments) == {"run_id": str(run_id)}
 
 
-@pytest.mark.parametrize(
-    ("call", "arguments"),
-    [
-        ("runs.run", {"workflow_id": COUNT_WORKFLOW_ID}),
-        ("benchmarks.run", {"benchmark_id": MISSING_ID, "workflow_id": COUNT_WORKFLOW_ID}),
-    ],
-)
 def test_a_job_nothing_resumes_left_by_a_runner_that_stopped_is_interrupted(
     remote: Remote,
-    call: str,
-    arguments: dict[str, Any],
 ) -> None:
-    job_id = stalled(remote, call, **arguments)
+    job_id = stalled(remote, "benchmarks.run", benchmark_id=MISSING_ID, workflow_id=MISSING_ID)
 
     assert remote.runners().recover() == 1
 
     job = remote.job(job_id)
 
-    assert job.status is ServiceJobStatus.INTERRUPTED
+    assert (job.status, job.refusal_status) == (ServiceJobStatus.INTERRUPTED, 409)
     assert job.refusal is not None
-    assert json.loads(job.refusal)["error"] == interrupted_message(call)
+    assert json.loads(job.refusal) == {
+        "error": interrupted_message("benchmarks.run"),
+        "code": "interrupted",
+    }
 
 
-def test_only_resumes_and_invocations_go_on_where_they_were() -> None:
+def test_a_run_left_before_it_named_its_run_is_run_again_as_submitted(
+    remote: Remote,
+) -> None:
+    job_id = stalled(
+        remote,
+        "runs.run",
+        workflow_id=COUNT_WORKFLOW_ID,
+        input=api.RunInput(payload="one two"),
+    )
+
+    assert remote.runners().recover() == 1
+    assert (remote.job(job_id).status, remote.job(job_id).call) == (
+        ServiceJobStatus.QUEUED,
+        "runs.run",
+    )
+
+    with remote.runners():
+        job = finished(remote, job_id)
+
+    assert (job.status, job.attempts) == (ServiceJobStatus.SUCCEEDED, 2)
+    assert job.result is not None
+    assert json.loads(job.result)["result"] == 2
+
+
+def test_a_run_whose_named_run_never_journaled_runs_anew(
+    remote: Remote,
+) -> None:
+    job_id = stalled(
+        remote,
+        "runs.run",
+        workflow_id=COUNT_WORKFLOW_ID,
+        input=api.RunInput(payload="one two three"),
+    )
+    never = UUID("c1390000-0000-4000-8000-0000000000bb")
+    remote.jobs.record_run(job_id, never)
+
+    with remote.runners(stall_seconds=0.1):
+        job = finished(remote, job_id)
+
+    assert job.status is ServiceJobStatus.SUCCEEDED
+    assert job.result is not None
+    assert json.loads(job.result)["result"] == 3
+    assert job.run_id is not None and job.run_id != never
+    assert json.loads(job.result)["run_id"] == str(job.run_id)
+
+
+def test_only_runs_resumes_and_invocations_go_on_where_they_were() -> None:
     assert frozenset({"runs.resume", "invocations.resume", "runs.invoke"}) == RESUMED_AS_SUBMITTED
+    assert RESUMED_AS_SUBMITTED | {"runs.run"} == REQUEUED
+    assert interrupted_message("runs.run") == (
+        "The server running this job stopped before it finished, and nothing resumes "
+        "runs.run; submit it again."
+    )
     assert interrupted_message("benchmarks.run") == (
         "The server running this job stopped before it finished, and nothing resumes "
         "benchmarks.run; submit it again."

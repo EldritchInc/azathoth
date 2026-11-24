@@ -74,7 +74,8 @@ azathoth
 │   ├── run <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>
 │   │   ├── --media-type <TYPE>     (only with --input-file)
-│   │   └── --sensitivity <LABEL>   (only with an input)
+│   │   ├── --sensitivity <LABEL>   (only with an input)
+│   │   └── --output jsonl|text|result
 │   ├── optimize <WORKFLOW_ID>
 │   │   ├── --benchmark <BENCHMARK_ID>
 │   │   ├── --target-latency <SECONDS>
@@ -82,11 +83,14 @@ azathoth
 │   │   └── --generations <COUNT>
 │   ├── promote <WORKFLOW_ID>
 │   │   └── --experiment <EXPERIMENT_ID>
+│   ├── rollback <WORKFLOW_ID>
+│   │   └── --to <PRODUCTION_REVISION_ID>
 │   ├── invoke <WORKFLOW_ID>
 │   │   ├── --input <JSON> | --input-file <FILE>   (exactly one)
 │   │   ├── --media-type <TYPE>     (only with --input-file)
 │   │   ├── --sensitivity <LABEL>
-│   │   └── --idempotency-key <KEY>
+│   │   ├── --idempotency-key <KEY>
+│   │   └── --output jsonl|text|result
 │   ├── production <WORKFLOW_ID>
 │   ├── revisions <WORKFLOW_ID>
 │   │   └── --limit <COUNT>
@@ -101,6 +105,7 @@ azathoth
 │   ├── show <RUN_ID>
 │   ├── annotations <RUN_ID>
 │   ├── children <RUN_ID>
+│   ├── interrupted <WORKFLOW_ID>
 │   ├── resume <RUN_ID>
 │   │   └── --output <FORMAT>
 │   └── feedback <RUN_ID>
@@ -109,7 +114,8 @@ azathoth
 │       └── --corrected-output <JSON>   (only with --bad)
 │
 ├── experiment
-│   └── show <EXPERIMENT_ID>
+│   ├── show <EXPERIMENT_ID>
+│   └── compare <EXPERIMENT_ID>
 │
 ├── invocation
 │   ├── show <INVOCATION_ID>
@@ -128,7 +134,9 @@ azathoth
 │   │   ├── --wait-seconds <SECONDS>
 │   │   ├── --visibility-timeout-seconds <SECONDS>
 │   │   ├── --extend-every-seconds <SECONDS>
-│   │   └── --heartbeat-file <PATH>
+│   │   ├── --heartbeat-file <PATH>
+│   │   ├── --allow-input-bucket <BUCKET[/PREFIX]>   (repeat for each bucket)
+│   │   └── --max-input-bytes <BYTES>
 │   └── health
 │       ├── --heartbeat-file <PATH>
 │       └── --max-age-seconds <SECONDS>
@@ -146,6 +154,16 @@ azathoth
 │   │   └── --force
 │   ├── portfolio
 │   └── usage <MODEL_IDENTIFIER>
+│
+├── spend
+│   ├── --since <DATE_OR_TIME>
+│   ├── --until <DATE_OR_TIME>
+│   ├── --by day|week|month
+│   ├── --group workflow|model|provider|source
+│   ├── --time-zone <IANA_ZONE>
+│   ├── --workflow <WORKFLOW_ID>
+│   ├── --output text|json|csv
+│   └── --output-file <PATH>
 │
 ├── judge
 │   ├── add <MODEL_IDENTIFIER>
@@ -174,7 +192,8 @@ azathoth
 │   ├── serve
 │   │   ├── --host <HOST>
 │   │   ├── --port <PORT>
-│   │   └── --accept-restricted
+│   │   ├── --accept-restricted
+│   │   └── --jobs <N>
 │   └── token
 │       ├── create <NAME>
 │       ├── list
@@ -228,6 +247,10 @@ azathoth
     │   └── --revision <NUMBER>
     ├── diff <BENCHMARK_ID> <BEFORE> <AFTER>
     │   └── --output text|json
+    ├── create
+    │   ├── --name <NAME>
+    │   ├── --description <TEXT>
+    │   └── --version <VERSION>
     ├── cases <BENCHMARK_ID>
     ├── case-show <BENCHMARK_ID> <CASE_ID>
     ├── add-case <BENCHMARK_ID>
@@ -240,6 +263,14 @@ azathoth
     │   ├── --on-unverified fail|ignore
     │   ├── --sensitivity <LABEL>
     │   └── --description <TEXT>
+    ├── edit-case <BENCHMARK_ID> <CASE_ID>
+    │   ├── --comparison exact|normalized|semantic|schema
+    │   ├── --expected <JSON>
+    │   ├── --description <TEXT>
+    │   ├── --sensitivity <LABEL>
+    │   ├── --require-citation <SOURCE:SEGMENT> | --no-citations
+    │   └── --on-unverified fail|ignore
+    ├── remove-case <BENCHMARK_ID> <CASE_ID>
     ├── run <BENCHMARK_ID>
     │   └── --workflow <WORKFLOW_ID>
     ├── compare <BENCHMARK_ID>
@@ -251,7 +282,11 @@ azathoth
     └── execution-show <EXECUTION_ID>
 ```
 
-This is the actual V1 operator surface.
+This is the actual V1 operator surface, and a test keeps it naming every
+command and option the parser has. Every command but `init`, `worker`,
+the `remote` commands and `tool verify` also takes `--remote <NAME>`, to
+run on a remote rather than on this machine's database; Running a Command
+on a Remote says what it does.
 
 # Architectural Role
 
@@ -3812,6 +3847,94 @@ command B
 Durable portfolio authorization and durable workflow intent remain separate
 from that changing provider state.
 
+# Running a Command on a Remote
+
+Every command but fourteen takes `--remote <NAME>`, a remote this instance
+named with `remote add`, or its URL, and runs on that remote rather than
+on this machine's database (ADR 0140). Its token is read as a push reads
+it, from the variable its name keeps, or from `AZATHOTH_REMOTE_TOKEN` for
+a URL:
+
+```bash
+azathoth workflow list --remote origin
+azathoth workflow run a1000000-0000-4000-8000-000000000002 --input '"that is not dead"' --output result --remote origin
+```
+
+```powershell
+azathoth workflow list --remote origin
+azathoth workflow run a1000000-0000-4000-8000-000000000002 --input '"that is not dead"' --output result --remote origin
+```
+
+A command on a remote prints exactly what it prints here: the same lines
+on standard output and standard error, the same JSON Lines records, and
+the same exit status. Without `--remote` a command runs as it always has.
+Whatever it changes there, an import, an authorization or a declared
+policy, is recorded as the caller the remote's token names.
+
+The calls that run for minutes, `workflow run`, `workflow invoke`, `job
+run`, `run resume`, `invocation resume`, `benchmark run`, `benchmark
+compare` and `workflow optimize`, run as jobs on the remote's runners
+(ADR 0138), and their step messages and records are shown as the remote
+tells them. Ctrl-C or SIGTERM stops the job at the remote, waiting up to
+30 seconds for it to stop, and then the command stops as it would here,
+with status 130 or 143.
+
+A file given with `--input-file`, or named by a job request, is read and
+checked here, as it is for a run here, and sent to the remote, which keeps
+its content in its own content store. Only `file:` references are read, so
+a reference to S3 is refused alike here and on a remote. `invocation show
+--links` makes its links with this machine's credentials.
+
+A command that a step of another run started runs where its parent runs,
+so it takes no `--remote`, and exits with status 2:
+
+```text
+A run another run's step started runs where its parent runs, so it takes no --remote.
+```
+
+The remote is reached before the command does anything, so a remote with
+no such name, or whose token is not set, is refused in one line with
+status 1 by every command:
+
+```text
+No remote is named 'nowhere'; name one with `azathoth remote add <NAME> <URL>`.
+```
+
+A remote that cannot be reached, or whose policy refuses the caller, is
+reported in one line with status 1 too:
+
+```text
+The remote at <URL> could not be reached: <REASON>
+<PRINCIPAL> may not <ACTION> on this remote: only its owner may.
+```
+
+`tool install-standard` on a remote prints each tool once the remote
+answers, so a tool that stops the installation is reported without the
+tools the remote installed before it.
+
+## Commands That Never Run on a Remote
+
+Fourteen commands act on what is this machine's, or name their remote
+themselves. Each takes `--remote` only to say why it never runs on one,
+and exits with status 2:
+
+| Command | Says |
+| --- | --- |
+| `init` | init prepares this machine's database, so it takes no --remote. |
+| `worker run` | worker run works a queue on this machine, so it takes no --remote. |
+| `worker health` | worker health checks this machine's worker, so it takes no --remote. |
+| `remote serve` | remote serve runs a remote rather than calling one, so it takes no --remote. |
+| `remote push` | remote push names the remote it pushes to itself, so it takes no --remote. |
+| `remote pull` | remote pull names the remote it pulls from itself, so it takes no --remote. |
+| `remote status` | remote status names the remote it asks itself, so it takes no --remote. |
+| `remote add` | remote add names the remotes of this machine's database, so it takes no --remote. |
+| `remote list` | remote list names the remotes of this machine's database, so it takes no --remote. |
+| `remote remove` | remote remove names the remotes of this machine's database, so it takes no --remote. |
+| `remote token create` | remote token create keeps a token in the database a remote is served from, so it takes no --remote. |
+| `remote token list` | remote token list reads the tokens of the database a remote is served from, so it takes no --remote. |
+| `remote token revoke` | remote token revoke changes the tokens of the database a remote is served from, so it takes no --remote. |
+| `tool verify` | tool verify runs a tool's tests on this machine, so it takes no --remote. |
+
 # Serving a Remote
 
 `remote serve` serves this instance's workflows, tools and benchmarks, so
@@ -3879,9 +4002,9 @@ It runs no jobs; it queues them for another server over its database to run.
 
 When the server stops, it hands back the jobs it is running. A server
 that stops without doing so, or whose machine does, leaves its jobs for
-another to take after 60 seconds. A resumed run and an invocation go on
-from their journals; any other job is ended as interrupted, to be
-submitted again.
+another to take after 90 seconds. A run, a resumed run and an
+invocation go on from their journals; any other job is ended as
+interrupted, to be submitted again.
 
 # Naming Remotes
 

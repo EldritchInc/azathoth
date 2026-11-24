@@ -1,20 +1,19 @@
 """Workflow configuration commands for the Azathoth CLI."""
 
+import json
 import sys
 from pathlib import Path
 from uuid import UUID
 
 from azathoth import api
-from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
-from azathoth.cli.persistence import repositories
 from azathoth.cli.rendering._json import render_json_value
 from azathoth.cli.service import (
     author_note,
     history_line,
     identical_note,
     import_note,
-    lineage_lines,
+    revision_lineage_lines,
     service_instance,
 )
 from azathoth.prompting import (
@@ -23,24 +22,29 @@ from azathoth.prompting import (
 )
 from azathoth.workflows import (
     ToolStepSpecification,
-    WorkflowRepository,
     WorkflowResultReference,
-    WorkflowSpecificationRevision,
+    decode_workflow_document,
     describe_value_reference,
 )
 
 
 def list_workflows() -> int:
-    """List configured durable workflows."""
+    """List every imported workflow at its latest revision, through `workflows.list` (ADR 0140).
+
+    Only durable state is read, so no provider is asked anything.
+    """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    runtime = load_runtime(configuration)
+    try:
+        workflows = service_instance(configuration).workflows.list()
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    for specification in runtime.workflows.specifications:
-        metadata = specification.metadata
+        return 1
 
-        print(f"{metadata.id}  {metadata.version}  {metadata.name}")
+    for workflow in workflows:
+        print(f"{workflow.id}  {workflow.version}  {workflow.name}")
 
     return 0
 
@@ -53,40 +57,34 @@ def show_workflow(
     """Show one imported revision of a durable workflow, the latest by default.
 
     A workflow that declares an input or output schema shows it after its
-    result (ADR 0118). Only durable state is read, so no provider
-    credentials are needed.
+    result (ADR 0118). Only durable state is read, through `workflows.get`
+    (ADR 0140), so no provider credentials are needed.
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).workflows
+    try:
+        selected = service_instance(configuration).workflows.get(workflow_id, revision=revision)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
-    selected = _selected_revision(
-        repository,
-        workflow_id,
-        revision,
-    )
-
-    if selected is None:
         return 1
 
-    latest = repository.latest_revision(workflow_id)
-
-    specification = selected.specification
+    specification = decode_workflow_document(json.dumps(selected.document))
 
     metadata = specification.metadata
 
     print(f"ID: {metadata.id}")
 
-    print(f"Revision: {selected.number} of {latest.number if latest is not None else '?'}")
+    print(f"Revision: {selected.revision.number} of {selected.latest_number}")
 
-    print(f"Imported: {_render_imported_at(selected)}")
+    imported = selected.revision.imported_at
 
-    print(f"Content Digest: {selected.content_digest}")
+    print(f"Imported: {imported.isoformat() if imported is not None else 'unknown'}")
 
-    lineage = repository.lineage(workflow_id)
+    print(f"Content Digest: {selected.revision.content_digest}")
 
-    for line in lineage_lines(selected.number, lineage):
+    for line in revision_lineage_lines(selected.revision):
         print(line)
 
     print(f"Name: {metadata.name}")
@@ -214,49 +212,6 @@ def list_workflow_history(
         )
 
     return 0
-
-
-def _selected_revision(
-    repository: WorkflowRepository,
-    workflow_id: UUID,
-    revision: int | None,
-) -> WorkflowSpecificationRevision | None:
-    """Return the requested revision, printing the failure when there is none."""
-
-    if repository.latest_revision(workflow_id) is None:
-        print(
-            f"Workflow {workflow_id} is not configured.",
-            file=sys.stderr,
-        )
-
-        return None
-
-    if revision is None:
-        return repository.latest_revision(workflow_id)
-
-    selected = repository.revision(
-        workflow_id,
-        revision,
-    )
-
-    if selected is None:
-        print(
-            f"Workflow {workflow_id} has no revision {revision}.",
-            file=sys.stderr,
-        )
-
-    return selected
-
-
-def _render_imported_at(
-    revision: WorkflowSpecificationRevision,
-) -> str:
-    """Render when one revision was imported, or that it is unknown."""
-
-    if revision.imported_at is None:
-        return "unknown"
-
-    return revision.imported_at.isoformat()
 
 
 def import_workflow(

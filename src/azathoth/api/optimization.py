@@ -12,8 +12,6 @@ import asyncio
 from collections.abc import Callable
 from uuid import UUID
 
-from pydantic import ValidationError
-
 from azathoth.api.benchmark_execution import (
     BenchmarkRuntimeAccess,
     Cancellable,
@@ -21,6 +19,7 @@ from azathoth.api.benchmark_execution import (
     checked_dataset,
     judged_sensitivity,
     refused,
+    scoring_policy,
     undeclared_result,
 )
 from azathoth.api.browsing import RepositoriesAccess
@@ -32,11 +31,14 @@ from azathoth.api.errors import (
 from azathoth.api.experiments import experiment_command
 from azathoth.api.models import (
     CandidateFinished,
+    CandidateScorecard,
     GenerationFinished,
     GenerationStarted,
     OptimizationEvent,
+    OptimizationExperiment,
     OptimizationGeneration,
     OptimizationSummary,
+    OptimizedStep,
 )
 from azathoth.evaluation import BenchmarkDataset, OutcomeComparison
 from azathoth.optimization import (
@@ -45,12 +47,15 @@ from azathoth.optimization import (
     WorkflowOptimizationSession,
     WorkflowOptimizationSessionRunner,
     WorkflowOptimizer,
+    resolve_workflow_experiment_winner,
 )
 from azathoth.persistence.repositories import Repositories
+from azathoth.prompting import ContextPromptStrategy, PromptStrategy
 from azathoth.runtime import RuntimeEnvironment
 from azathoth.workflows import (
     WorkflowBenchmarkResult,
     WorkflowCandidate,
+    WorkflowCandidateStep,
     WorkflowExperimentEvidence,
     WorkflowExperimentEvidenceRecorder,
     WorkflowExperimentResult,
@@ -357,12 +362,67 @@ async def optimize_configured_workflow(
     )
 
 
-def _summary(
+def _optimized_step(
+    step: WorkflowCandidateStep,
+) -> OptimizedStep:
+    """Return one step of a winning candidate: its strategy, and the model it is bound to."""
+
+    strategy = step.strategy
+    binding = (
+        strategy.model_binding
+        if isinstance(strategy, (PromptStrategy, ContextPromptStrategy))
+        else None
+    )
+
+    return OptimizedStep(
+        step_id=step.id,
+        name=strategy.metadata.name,
+        strategy_id=strategy.metadata.id,
+        model=None if binding is None else binding.identifier,
+    )
+
+
+def _experiment(
+    experiment: WorkflowExperimentResult,
+    candidates: tuple[WorkflowCandidate, ...],
+) -> OptimizationExperiment:
+    """Return what one experiment of a session judged, among `candidates`, and its winner."""
+
+    evidence = experiment.winner_evidence
+    winner = resolve_workflow_experiment_winner(experiment=experiment, candidates=candidates)
+    scorecard = evidence.scorecard
+
+    return OptimizationExperiment(
+        experiment_id=experiment.id,
+        evaluated=len(experiment.evidence),
+        judge_calls=experiment.judge_calls,
+        judge_cost_usd=experiment.judge_cost_usd,
+        winner_workflow_id=evidence.candidate_signature.workflow_id,
+        winner_strategy_ids=evidence.candidate_signature.strategy_ids,
+        winner_steps=tuple(_optimized_step(step) for step in winner.steps),
+        winner_scorecard=CandidateScorecard(
+            quality_score=scorecard.quality_score,
+            reliability_score=scorecard.reliability_score,
+            latency_score=scorecard.latency_score,
+            cost_score=scorecard.cost_score,
+            citation_score=scorecard.citation_score,
+            overall_score=scorecard.overall_score,
+            rationale=scorecard.rationale,
+        ),
+    )
+
+
+def optimization_summary(
     session: WorkflowOptimizationSession,
     workflow_id: UUID,
     benchmark_id: UUID,
 ) -> OptimizationSummary:
-    """Return what one session measured."""
+    """Return what one session measured, with each experiment's winner as it was built.
+
+    Each generation's experiment judged the population before it: the
+    session's first candidates, and then what the generation before
+    proposed. The final evaluation judged the last generation's proposals.
+    """
 
     experiments = tuple(result.previous_experiment for result in session.generations)
 
@@ -374,24 +434,36 @@ def _summary(
     assert winning is not None
 
     last = session.generations[-1].generation
+    generations: list[OptimizationGeneration] = []
+    evaluated = tuple(session.initial_candidates)
+
+    for result in session.generations:
+        measured = result.previous_experiment
+        generations.append(
+            OptimizationGeneration(
+                generation=result.generation,
+                experiment=_experiment(measured, evaluated),
+                experiment_id=measured.id,
+                winner_strategy_ids=measured.winner_evidence.candidate_signature.strategy_ids,
+                winner_score=measured.winner_evidence.scorecard.overall_score,
+                proposed=len(result.candidates),
+            )
+        )
+        evaluated = tuple(result.candidates)
 
     return OptimizationSummary(
         workflow_id=workflow_id,
+        workflow_name=session.initial_candidates[0].metadata.name,
+        initial_candidates=len(session.initial_candidates),
         benchmark_id=benchmark_id,
-        generations=tuple(
-            OptimizationGeneration(
-                generation=result.generation,
-                experiment_id=result.previous_experiment.id,
-                winner_strategy_ids=(
-                    result.previous_experiment.winner_evidence.candidate_signature.strategy_ids
-                ),
-                winner_score=result.previous_experiment.winner_evidence.scorecard.overall_score,
-                proposed=len(result.candidates),
-            )
-            for result in session.generations
-        ),
+        generations=tuple(generations),
         final_experiment_id=(
             session.final_experiment.id if session.final_experiment is not None else None
+        ),
+        final_experiment=(
+            None
+            if session.final_experiment is None
+            else _experiment(session.final_experiment, session.final_population)
         ),
         final_skipped=(
             None
@@ -438,16 +510,7 @@ def optimize_workflow(
     if generations < 1:
         raise InvalidArgumentError(GENERATIONS_MESSAGE)
 
-    try:
-        policy = WorkflowScoringPolicy(
-            target_latency_seconds=target_latency_seconds,
-            target_cost_usd=target_cost_usd,
-        )
-    except ValidationError as exc:
-        raise InvalidArgumentError(
-            str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
-        ) from exc
-
+    policy = scoring_policy(target_latency_seconds, target_cost_usd)
     dataset = checked_dataset(repositories, benchmark_id, ())
     undeclared = undeclared_result(repositories, (workflow_id,))
 
@@ -474,7 +537,7 @@ def optimize_workflow(
         )
     )
 
-    return _summary(session, workflow_id, benchmark_id)
+    return optimization_summary(session, workflow_id, benchmark_id)
 
 
 class Optimization:
@@ -542,6 +605,7 @@ __all__ = [
     "GENERATIONS_MESSAGE",
     "Optimization",
     "OptimizationEventCallback",
+    "optimization_summary",
     "optimize_configured_workflow",
     "optimize_workflow",
 ]

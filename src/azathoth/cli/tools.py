@@ -1,4 +1,9 @@
-"""Durable tool inspection commands for the Azathoth CLI."""
+"""Durable tool inspection commands for the Azathoth CLI.
+
+Every command but `tool verify` reads or writes through the service API,
+so given `--remote` it does so on that remote, and prints what it prints
+here (ADR 0140).
+"""
 
 import json
 import shlex
@@ -12,17 +17,13 @@ from azathoth.api.models import StandardTool
 from azathoth.api.standard_tools import install_standard_tools as api_install_standard_tools
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_choice import chosen_remote
 from azathoth.cli.service import (
     author_note,
     history_line,
     identical_note,
     import_note,
     service_instance,
-)
-from azathoth.tools import (
-    ToolDefinition,
-    ToolImplementation,
-    ToolTestCase,
 )
 
 
@@ -42,22 +43,14 @@ def show_tool(
     *,
     version: str,
 ) -> int:
-    """Show one exact durable tool definition version."""
+    """Show one exact durable tool definition version, through `tools.definition` (ADR 0140)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    definition = repository.get_definition(
-        tool_id,
-        version,
-    )
-
-    if definition is None:
-        print(
-            f"Tool {tool_id}@{version} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        definition = service_instance(configuration).tools.definition(tool_id, version)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
@@ -95,33 +88,22 @@ def list_tool_implementations(
     *,
     version: str,
 ) -> int:
-    """List implementations for one exact durable tool definition."""
+    """List implementations for one exact durable tool definition, through the API (ADR 0140)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    definition = repository.get_definition(
-        tool_id,
-        version,
-    )
-
-    if definition is None:
-        print(
-            f"Tool {tool_id}@{version} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        implementations = service_instance(configuration).tools.implementations(tool_id, version)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    implementations = tuple(
-        implementation
-        for implementation in repository.implementations()
-        if (implementation.tool_id == tool_id and implementation.tool_version == version)
-    )
-
     for implementation in implementations:
-        print(f"{implementation.id}  {implementation.version}  {implementation.runtime}")
+        print(
+            f"{implementation.implementation_id}  {implementation.version}  "
+            f"{implementation.runtime}"
+        )
 
     return 0
 
@@ -129,21 +111,14 @@ def list_tool_implementations(
 def show_tool_implementation(
     implementation_id: UUID,
 ) -> int:
-    """Show one durable tool implementation."""
+    """Show one durable tool implementation, through `tools.implementation` (ADR 0140)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    implementation = repository.get_implementation(
-        implementation_id,
-    )
-
-    if implementation is None:
-        print(
-            f"Tool implementation {implementation_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        implementation = service_instance(configuration).tools.implementation(implementation_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
@@ -157,30 +132,19 @@ def show_tool_implementation(
 def list_tool_test_cases(
     tool_id: UUID,
 ) -> int:
-    """List durable verification cases for one tool identity."""
+    """List durable verification cases for one tool identity, through the API (ADR 0140)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    definitions = tuple(
-        definition for definition in repository.definitions() if definition.id == tool_id
-    )
-
-    if not definitions:
-        print(
-            f"Tool {tool_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        test_cases = service_instance(configuration).tools.test_cases(tool_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
-    test_cases = tuple(
-        test_case for test_case in repository.test_cases() if test_case.tool_id == tool_id
-    )
-
     for test_case in test_cases:
-        print(f"{test_case.id}  {test_case.name}")
+        print(f"{test_case.test_case_id}  {test_case.name}")
 
     return 0
 
@@ -188,21 +152,14 @@ def list_tool_test_cases(
 def show_tool_test_case(
     test_case_id: UUID,
 ) -> int:
-    """Show one durable tool verification case."""
+    """Show one durable tool verification case, through `tools.test_case` (ADR 0140)."""
 
     configuration = CliRuntimeConfiguration.from_environment()
 
-    repository = repositories(configuration).tools
-
-    test_case = repository.get_test_case(
-        test_case_id,
-    )
-
-    if test_case is None:
-        print(
-            f"Tool test case {test_case_id} is not configured.",
-            file=sys.stderr,
-        )
+    try:
+        test_case = service_instance(configuration).tools.test_case(test_case_id)
+    except api.ApiError as exc:
+        print(str(exc), file=sys.stderr)
 
         return 1
 
@@ -214,7 +171,7 @@ def show_tool_test_case(
 
 
 def _print_tool_definition(
-    definition: ToolDefinition,
+    definition: api.ToolDefinitionDetail,
 ) -> None:
     """Render one exact durable tool capability contract."""
 
@@ -226,7 +183,7 @@ def _print_tool_definition(
     print("Input Schema:")
     print(
         json.dumps(
-            definition.input_schema.json_schema,
+            definition.input_schema,
             ensure_ascii=False,
             indent=2,
         )
@@ -235,7 +192,7 @@ def _print_tool_definition(
     print("Output Schema:")
     print(
         json.dumps(
-            definition.output_schema.json_schema,
+            definition.output_schema,
             ensure_ascii=False,
             indent=2,
         )
@@ -243,21 +200,21 @@ def _print_tool_definition(
 
 
 def _print_tool_implementation(
-    implementation: ToolImplementation,
+    implementation: api.ToolImplementationDetail,
 ) -> None:
     """Render one durable executable tool implementation."""
 
-    print(f"ID: {implementation.id}")
+    print(f"ID: {implementation.implementation_id}")
     print(f"Tool ID: {implementation.tool_id}")
     print(f"Tool Version: {implementation.tool_version}")
     print(f"Implementation Version: {implementation.version}")
     print(f"Runtime: {implementation.runtime}")
 
-    if implementation.mcp is None:
+    if implementation.entrypoint is not None:
         print(f"Entrypoint: {implementation.entrypoint}")
 
-    if implementation.command is not None:
-        print(f"Command: {shlex.join(implementation.command)}")
+    if implementation.argv is not None:
+        print(f"Command: {shlex.join(implementation.argv)}")
 
     if implementation.timeout_seconds is not None:
         print(f"Timeout: {implementation.timeout_seconds:g} seconds")
@@ -265,13 +222,15 @@ def _print_tool_implementation(
     if implementation.environment:
         print(f"Environment: {', '.join(implementation.environment)}")
 
-    if implementation.mcp is not None:
-        print(f"MCP Server: {implementation.mcp.server.describe()}")
-        print(f"MCP Tool: {implementation.mcp.tool}")
-        print(f"Schema Digest: {implementation.mcp.schema_digest}")
+    binding = implementation.mcp
 
-        if implementation.mcp.credentials.authorization is not None:
-            print(f"Authorization: {implementation.mcp.credentials.authorization}")
+    if binding is not None:
+        print(f"MCP Server: {binding.server}")
+        print(f"MCP Tool: {binding.tool}")
+        print(f"Schema Digest: {binding.schema_digest}")
+
+        if binding.authorization is not None:
+            print(f"Authorization: {binding.authorization}")
 
     if implementation.source is not None:
         print("Source:")
@@ -279,11 +238,11 @@ def _print_tool_implementation(
 
 
 def _print_tool_test_case(
-    test_case: ToolTestCase,
+    test_case: api.ToolTestCaseDetail,
 ) -> None:
     """Render one durable tool verification case."""
 
-    print(f"ID: {test_case.id}")
+    print(f"ID: {test_case.test_case_id}")
     print(f"Tool ID: {test_case.tool_id}")
     print(f"Name: {test_case.name}")
     print(f"Description: {test_case.description}")
@@ -443,9 +402,26 @@ def install_standard_tools() -> int:
     The documents are installed in their fixed order. The first one that
     cannot be saved, because one of its artifact IDs belongs to another tool
     or version, stops the installation and is reported.
+
+    Given `--remote`, the remote installs them through `tools.install_standard`
+    and each is printed once it answers, so one that stops the installation
+    is reported without the tools installed before it (ADR 0140).
     """
 
     configuration = CliRuntimeConfiguration.from_environment()
+
+    if chosen_remote() is not None:
+        try:
+            installed = service_instance(configuration).tools.install_standard()
+        except api.ApiError as exc:
+            print(str(exc), file=sys.stderr)
+
+            return 1
+
+        for tool in installed:
+            print_standard_tool(tool)
+
+        return 0
 
     try:
         api_install_standard_tools(repositories(configuration).tools, each=print_standard_tool)

@@ -984,17 +984,20 @@ class WorkflowRunner:
         context: Context,
         *,
         invocation_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> WorkflowRun:
         """Execute a workflow candidate and propagate FAIL_WORKFLOW failures.
 
         A run that executes a production invocation names it, and its
-        journal records it on every entry.
+        journal records it on every entry. A run given `run_id` runs under
+        it, so its caller may name it before it starts; otherwise it is new.
         """
 
         result = await self._run(
             workflow=workflow,
             context=context,
             invocation_id=invocation_id,
+            run_id=run_id,
         )
 
         if result.error is not None:
@@ -1008,17 +1011,20 @@ class WorkflowRunner:
         context: Context,
         *,
         invocation_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> WorkflowRun:
         """Execute a workflow candidate and return completed failure evidence.
 
         A run that executes a production invocation names it, and its
-        journal records it on every entry.
+        journal records it on every entry. A run given `run_id` runs under
+        it, so its caller may name it before it starts; otherwise it is new.
         """
 
         result = await self._run(
             workflow=workflow,
             context=context,
             invocation_id=invocation_id,
+            run_id=run_id,
         )
 
         return result.run
@@ -1125,6 +1131,7 @@ class WorkflowRunner:
         workflow: WorkflowCandidate,
         context: Context,
         invocation_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> _WorkflowExecutionResult:
         """Execute a workflow candidate while preserving terminal failure evidence.
 
@@ -1135,7 +1142,7 @@ class WorkflowRunner:
                 recorded, or the run's lease was lost. The run stops there.
         """
 
-        run_id = uuid4()
+        run_id = uuid4() if run_id is None else run_id
         lineage = run_lineage(
             context,
             workflow_id=workflow.metadata.id,

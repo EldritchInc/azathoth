@@ -1,10 +1,23 @@
-"""Current provider model commands for the Azathoth command-line application."""
+"""Current provider model commands for the Azathoth command-line application.
+
+Given `--remote`, each asks that remote's service API instead, and prints
+what it prints here (ADR 0140).
+"""
 
 import sys
 
 from azathoth.cli.bootstrap import load_runtime
 from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.persistence import repositories
+from azathoth.cli.remote_choice import chosen_remote
+from azathoth.cli.remote_models import (
+    authorize_model_on_remote,
+    deauthorize_model_on_remote,
+    list_models_on_remote,
+    list_portfolio_on_remote,
+    model_policy_on_remote,
+    show_model_on_remote,
+)
 from azathoth.cli.service import current_author
 from azathoth.providers import (
     ModelCapability,
@@ -27,6 +40,9 @@ from azathoth.workflows import (
 def list_models() -> int:
     """List models currently available from configured providers."""
 
+    if chosen_remote() is not None:
+        return list_models_on_remote()
+
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
 
@@ -40,6 +56,9 @@ def show_model(
     identifier: str,
 ) -> int:
     """Show one currently available provider model."""
+
+    if chosen_remote() is not None:
+        return show_model_on_remote(identifier)
 
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
@@ -62,6 +81,9 @@ def show_model(
 def list_portfolio_models() -> int:
     """List models authorized for organizational model selection."""
 
+    if chosen_remote() is not None:
+        return list_portfolio_on_remote()
+
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
 
@@ -81,6 +103,9 @@ def authorize_model(
     `data_policy` is what the operator declares the model's provider does
     with data it is sent; unknown unless declared (ADR 0123).
     """
+
+    if chosen_remote() is not None:
+        return authorize_model_on_remote(identifier, data_policy=data_policy)
 
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)
@@ -137,6 +162,11 @@ def model_policy(
     and when, is recorded, and shown with it. Only durable state is read,
     so the runtime is never loaded and no provider credentials are needed.
     """
+
+    if chosen_remote() is not None:
+        return model_policy_on_remote(
+            identifier, retains_data=retains_data, trains_on_data=trains_on_data
+        )
 
     configuration = CliRuntimeConfiguration.from_environment()
     repository = repositories(configuration).portfolio
@@ -217,6 +247,9 @@ def deauthorize_model(
     the semantic judge rotation: judges must be authorized, so the judge must
     be removed from the rotation first.
     """
+
+    if chosen_remote() is not None:
+        return deauthorize_model_on_remote(identifier, force=force)
 
     configuration = CliRuntimeConfiguration.from_environment()
     runtime = load_runtime(configuration)

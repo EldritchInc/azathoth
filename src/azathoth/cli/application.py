@@ -5,6 +5,7 @@ from argparse import Namespace
 from collections.abc import Sequence
 from typing import cast
 
+from azathoth import api
 from azathoth.cli.annotations import (
     export_invocation_annotations,
     export_run_annotations,
@@ -28,6 +29,7 @@ from azathoth.cli.benchmarks import (
     show_benchmark_case,
     show_benchmark_execution,
 )
+from azathoth.cli.configuration import CliRuntimeConfiguration
 from azathoth.cli.dispatching import (
     dispatch_benchmark_authoring_command,
     dispatch_benchmark_command,
@@ -89,6 +91,11 @@ from azathoth.cli.parsing import (
     WORKFLOW_COMMAND,
     build_parser,
 )
+from azathoth.cli.parsing.targets import (
+    COMMAND_PATH_ATTRIBUTE,
+    REMOTE_ATTRIBUTE,
+    remote_refusal,
+)
 from azathoth.cli.production_inspection import (
     list_workflow_invocations,
     list_workflow_revisions,
@@ -107,6 +114,7 @@ from azathoth.cli.remote import (
     revoke_remote_token,
     serve_remote,
 )
+from azathoth.cli.remote_choice import RemoteChosenError, choosing
 from azathoth.cli.resumption import resume_invocation, resume_run
 from azathoth.cli.revision_diffs import diff_benchmark, diff_tool, diff_workflow
 from azathoth.cli.runs import (
@@ -116,6 +124,7 @@ from azathoth.cli.runs import (
     record_run_feedback,
     show_run,
 )
+from azathoth.cli.service import service_instance
 from azathoth.cli.spend import spend_command
 from azathoth.cli.streams import use_utf8_streams
 from azathoth.cli.termination import (
@@ -188,6 +197,15 @@ def main(
     `worker run` handles its own signals, and drains on the first of them
     (ADR 0107). A worker without its extra, whose queue cannot be used, or
     whose heartbeat cannot be written is reported in one line, with status 1.
+
+    A command given `--remote` runs on that remote (ADR 0140). One that
+    never runs on a remote says why in one line and exits with status 2, as
+    a command given an option it does not take does. Any other is connected
+    to the remote before it does anything, so a remote with no such name,
+    or no token, is reported in one line with status 1 by every command
+    alike; so is a refusal of the service API that a command does not
+    report itself, such as a remote that cannot be reached or a caller its
+    policy refuses.
     """
 
     use_utf8_streams(
@@ -199,8 +217,21 @@ def main(
 
     arguments = parser.parse_args(argv)
 
+    target = cast(str | None, getattr(arguments, REMOTE_ATTRIBUTE, None))
+
+    if target is not None:
+        refusal = remote_refusal(cast(str, getattr(arguments, COMMAND_PATH_ATTRIBUTE, "")))
+
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+
+            return 2
+
     try:
-        with terminating_on_sigterm():
+        with terminating_on_sigterm(), choosing(target):
+            if target is not None:
+                service_instance(CliRuntimeConfiguration.from_environment())
+
             result = _dispatch(arguments)
     except KeyboardInterrupt:
         print(
@@ -230,6 +261,8 @@ def main(
         WorkerError,
         InputUnavailableError,
         ContentStoreError,
+        RemoteChosenError,
+        api.ApiError,
     ) as exc:
         #
         # A PostgreSQL database that cannot be used here, because the
@@ -244,7 +277,11 @@ def main(
         # does a worker without its extra, whose queue cannot be used, or
         # whose heartbeat cannot be written (ADR 0107), or that cannot
         # reach S3 for an input it is allowed to read (ADR 0108). So does
-        # a content store that is misconfigured or refuses (ADR 0108).
+        # a content store that is misconfigured or refuses (ADR 0108). So
+        # does a command run on a remote that asks for this machine's
+        # database itself, and a refusal of the service API the command
+        # does not report itself, such as a remote that cannot be found,
+        # reached or used by this caller (ADR 0140).
         #
         print(
             str(exc),

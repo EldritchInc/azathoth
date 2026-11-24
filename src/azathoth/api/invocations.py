@@ -16,9 +16,15 @@ from pydantic import JsonValue
 
 from azathoth.api.annotations import invocation_annotations
 from azathoth.api.browsing import LIMIT_MESSAGE, RepositoriesAccess
-from azathoth.api.errors import ConflictError, InvalidArgumentError, NotFoundError
+from azathoth.api.errors import (
+    ConflictError,
+    ContentUnavailableError,
+    InvalidArgumentError,
+    NotFoundError,
+)
 from azathoth.api.models import (
     Annotations,
+    CitationRecord,
     InvocationDetail,
     InvocationError,
     InvocationFinished,
@@ -33,14 +39,18 @@ from azathoth.api.running import (
     EventCallback,
     RuntimeAccess,
     _CallbackObserver,
+    _lineage,
     _until_cancelled,
     step_status,
 )
 from azathoth.context import context_sensitivity
+from azathoth.persistence.repositories import Repositories
+from azathoth.prompting import CitationCheckError, stored_citation_checks
 from azathoth.telemetry import NO_TELEMETRY, Telemetry
 from azathoth.telemetry.invocations import traced_invocation
 from azathoth.telemetry.runs import tracing_runner
 from azathoth.workflows import (
+    WORKFLOW_INPUT_RESOLVED_EVENT_TYPE,
     ProductionInvocation,
     ProductionInvocationFailure,
     ProductionInvocationResult,
@@ -48,6 +58,7 @@ from azathoth.workflows import (
     ProductionInvocationSuccess,
     WorkflowRun,
     journal_resumes,
+    journaled_citations,
     resume_production_invocation,
 )
 from azathoth.workflows.production_invocation import PRODUCTION_INVOCATION_EVENT_TYPE
@@ -120,6 +131,11 @@ class Invocations:
                     sensitivity=context_sensitivity(invocation.initial_context),
                     run_id=association.run_id if association is not None else None,
                     command=f"azathoth invocation show {invocation.id}",
+                    error_code=(
+                        outcome.error_code.value
+                        if isinstance(outcome, ProductionInvocationFailure)
+                        else None
+                    ),
                 )
             )
 
@@ -237,12 +253,17 @@ class Invocations:
         An invocation with no outcome yet is `incomplete`; its run, when its
         journal records one, is named without its steps.
 
+        It names the checks each cited step of its run kept, as `azathoth
+        invocation show` does (ADR 0140).
+
         It is the `read_runs` action, and for a run of restricted input the
         `read_restricted` action too (ADR 0134).
 
         Raises:
             InstanceClosedError: The instance was closed.
             NotFoundError: No invocation has this ID.
+            ContentUnavailableError: A record of its run's citations is not a
+                record of checks.
         """
 
         repositories = self._repositories()
@@ -290,6 +311,12 @@ class Invocations:
             caller_metadata=dict(invocation.caller_metadata),
             run=_run(run_id, run, resumes),
             command=f"azathoth invocation show {invocation.id}",
+            request_digest=(
+                invocation.idempotency.request_digest if invocation.idempotency else None
+            ),
+            lineage=_lineage(invocation.initial_context),
+            input_provenance=_provenance(invocation),
+            citations=() if run_id is None else _citations(repositories, run_id),
         )
 
 
@@ -335,6 +362,41 @@ def _resumed_outcome(
         warnings=warnings,
         command=f"azathoth invocation show {invocation.id}",
     )
+
+
+def _provenance(
+    invocation: ProductionInvocation,
+) -> dict[str, JsonValue] | None:
+    """Return where an invocation's input was read from, when it was read (ADR 0112)."""
+
+    for event in invocation.initial_context.events:
+        if event.event_type == WORKFLOW_INPUT_RESOLVED_EVENT_TYPE:
+            return dict(event.payload)
+
+    return None
+
+
+def _citations(
+    repositories: Repositories,
+    run_id: UUID,
+) -> tuple[CitationRecord, ...]:
+    """Return every record of checks a run's cited steps kept, with the checks it holds.
+
+    Raises:
+        ContentUnavailableError: A record is not a record of checks.
+    """
+
+    try:
+        return tuple(
+            CitationRecord(
+                step_id=step_id,
+                record=digest,
+                checks=stored_citation_checks(repositories.content, digest),
+            )
+            for step_id, digest in journaled_citations(repositories.run_journal, run_id)
+        )
+    except CitationCheckError as exc:
+        raise ContentUnavailableError(str(exc)) from exc
 
 
 def _input(

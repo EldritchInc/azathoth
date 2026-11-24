@@ -65,6 +65,7 @@ from azathoth.api.models import (
     BenchmarkSummary,
     CaseCitations,
     CaseComparison,
+    ComparisonCount,
     DocumentExport,
     DocumentProblem,
     Revision,
@@ -72,9 +73,14 @@ from azathoth.api.models import (
     RunFile,
     RunInput,
     StandardTool,
+    ToolDefinitionDetail,
     ToolDetail,
+    ToolImplementationDetail,
+    ToolImplementationSummary,
     ToolImport,
     ToolSummary,
+    ToolTestCaseDetail,
+    ToolTestCaseSummary,
     ToolUsage,
     WorkflowCheck,
     WorkflowDetail,
@@ -82,6 +88,15 @@ from azathoth.api.models import (
     WorkflowSummary,
 )
 from azathoth.api.standard_tools import install_standard_tools
+from azathoth.api.tool_artifacts import (
+    definition_detail,
+    implementation_detail,
+    implementation_not_found_message,
+    implementation_summary,
+    verification_case_detail,
+    verification_case_not_found_message,
+    verification_case_summary,
+)
 from azathoth.api.usage import tool_usage_of
 from azathoth.evaluation import (
     BenchmarkCase,
@@ -929,6 +944,119 @@ class Tools:
             document=_document(encode_tool_document(selected.document)),
         )
 
+    def definition(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> ToolDefinitionDetail:
+        """Return the definition one exact tool version has now, as `tool show` shows it.
+
+        It is the definition the version's latest import made current, with
+        the schemas its input and output meet. It is the `read_catalog`
+        action (ADR 0140).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The tool has no such version.
+        """
+
+        definition = self._repositories().tools.get_definition(tool_id, version)
+
+        if definition is None:
+            raise NotFoundError(f"Tool {tool_id}@{version} is not configured.")
+
+        return definition_detail(definition)
+
+    def implementations(
+        self,
+        tool_id: UUID,
+        version: str,
+    ) -> tuple[ToolImplementationSummary, ...]:
+        """Return each implementation of one exact tool version, as `tool implementations` does.
+
+        They are the implementations kept now, in the order they were kept.
+        It is the `read_catalog` action (ADR 0140).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: The tool has no such version.
+        """
+
+        repository = self._repositories().tools
+
+        if repository.get_definition(tool_id, version) is None:
+            raise NotFoundError(f"Tool {tool_id}@{version} is not configured.")
+
+        return tuple(
+            implementation_summary(implementation)
+            for implementation in repository.implementations()
+            if implementation.tool_id == tool_id and implementation.tool_version == version
+        )
+
+    def implementation(
+        self,
+        implementation_id: UUID,
+    ) -> ToolImplementationDetail:
+        """Return one implementation with what it runs, as `tool implementation-show` shows it.
+
+        It is the `read_catalog` action (ADR 0140).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No implementation is kept with this ID.
+        """
+
+        implementation = self._repositories().tools.get_implementation(implementation_id)
+
+        if implementation is None:
+            raise NotFoundError(implementation_not_found_message(implementation_id))
+
+        return implementation_detail(implementation)
+
+    def test_cases(
+        self,
+        tool_id: UUID,
+    ) -> tuple[ToolTestCaseSummary, ...]:
+        """Return each verification case of one tool, of every version, as `tool test-cases` does.
+
+        It is the `read_catalog` action (ADR 0140).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No version of the tool is configured.
+        """
+
+        repository = self._repositories().tools
+
+        if not any(definition.id == tool_id for definition in repository.definitions()):
+            raise NotFoundError(f"Tool {tool_id} is not configured.")
+
+        return tuple(
+            verification_case_summary(test_case)
+            for test_case in repository.test_cases()
+            if test_case.tool_id == tool_id
+        )
+
+    def test_case(
+        self,
+        test_case_id: UUID,
+    ) -> ToolTestCaseDetail:
+        """Return one verification case with its inputs and output, as `tool test-case-show` does.
+
+        It is the `read_catalog` action (ADR 0140).
+
+        Raises:
+            InstanceClosedError: The instance was closed.
+            NotFoundError: No verification case is kept with this ID.
+        """
+
+        test_case = self._repositories().tools.get_test_case(test_case_id)
+
+        if test_case is None:
+            raise NotFoundError(verification_case_not_found_message(test_case_id))
+
+        return verification_case_detail(test_case)
+
     def export(
         self,
         tool_id: UUID,
@@ -1306,10 +1434,17 @@ class Benchmarks:
             command=_benchmark_command(selected),
         )
 
+        dataset = selected.dataset
+
         return BenchmarkDetail(
             **summary.model_dump(),
             latest_number=history[-1].number,
-            document=_document(encode_benchmark_document(selected.dataset)),
+            document=_document(encode_benchmark_document(dataset)),
+            cited_cases=sum(case.expected.citations is not None for case in dataset.cases),
+            comparisons=tuple(
+                ComparisonCount(comparison=comparison.value, cases=count)
+                for comparison, count in dataset.comparison_counts().items()
+            ),
         )
 
     def export(
@@ -1633,7 +1768,9 @@ class Benchmarks:
         """Return one saved run or comparison with every workflow, best first, and every case.
 
         Each case carries its evaluation's score and reason while the
-        evaluation is kept. It is the `read_runs` action (ADR 0130).
+        evaluation is kept, and each workflow the totals its case runs
+        measured while every one of them is kept (ADR 0140). It is the
+        `read_runs` action (ADR 0130).
 
         Raises:
             InstanceClosedError: The instance was closed.
@@ -1652,6 +1789,12 @@ class Benchmarks:
             for case in candidate.cases
             if (evaluation := repositories.run_evaluations.get(case.evaluation_id)) is not None
         }
+        runs = {
+            case.run_id: run
+            for candidate in saved.candidates
+            for case in candidate.cases
+            if (run := repositories.runs.get(case.run_id)) is not None
+        }
 
         return execution_detail(
             saved,
@@ -1659,6 +1802,7 @@ class Benchmarks:
                 repositories.benchmarks.revisions(saved.benchmark_id), saved
             ),
             evaluations=evaluations,
+            runs=runs,
         )
 
     def run(

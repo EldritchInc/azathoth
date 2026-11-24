@@ -11,7 +11,7 @@ returning why, for each caller to report as it reports.
 import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import Any, Final, Protocol, TypeVar
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -460,6 +460,44 @@ def _recorder(
     )
 
 
+COMPARED_WORKFLOWS_MESSAGE: Final = "A comparison needs at least two distinct workflows."
+"""What a comparison of fewer than two distinct workflows is refused with."""
+
+
+def compared_workflows(
+    workflow_ids: tuple[UUID, ...],
+) -> None:
+    """Refuse a comparison of fewer than two workflows, or of one workflow twice.
+
+    Raises:
+        InvalidArgumentError: Fewer than two distinct workflows are named.
+    """
+
+    if len(workflow_ids) < 2 or len(workflow_ids) != len(set(workflow_ids)):
+        raise InvalidArgumentError(COMPARED_WORKFLOWS_MESSAGE)
+
+
+def scoring_policy(
+    target_latency_seconds: float,
+    target_cost_usd: float,
+) -> WorkflowScoringPolicy:
+    """Return the policy that scores latency and cost against these targets.
+
+    Raises:
+        InvalidArgumentError: A target is not above zero, said as the policy says it.
+    """
+
+    try:
+        return WorkflowScoringPolicy(
+            target_latency_seconds=target_latency_seconds,
+            target_cost_usd=target_cost_usd,
+        )
+    except ValidationError as exc:
+        raise InvalidArgumentError(
+            str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
+        ) from exc
+
+
 def checked_dataset(
     repositories: Repositories,
     benchmark_id: UUID,
@@ -607,19 +645,8 @@ def compare_benchmark(
     if cancel is not None and cancel.cancelled:
         raise RunCancelledError()
 
-    if len(workflow_ids) < 2 or len(workflow_ids) != len(set(workflow_ids)):
-        raise InvalidArgumentError("A comparison needs at least two distinct workflows.")
-
-    try:
-        policy = WorkflowScoringPolicy(
-            target_latency_seconds=target_latency_seconds,
-            target_cost_usd=target_cost_usd,
-        )
-    except ValidationError as exc:
-        raise InvalidArgumentError(
-            str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
-        ) from exc
-
+    compared_workflows(workflow_ids)
+    policy = scoring_policy(target_latency_seconds, target_cost_usd)
     dataset = checked_dataset(repositories, benchmark_id, workflow_ids)
     observer = _EventObserver(on_event, cancel, len(dataset.cases))
 
@@ -645,8 +672,11 @@ def compare_benchmark(
 
 
 __all__ = [
+    "COMPARED_WORKFLOWS_MESSAGE",
     "BenchmarkEventCallback",
     "checked_dataset",
+    "compared_workflows",
+    "scoring_policy",
     "refused",
     "BenchmarkRuntimeAccess",
     "Cancellable",
