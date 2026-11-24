@@ -5,11 +5,13 @@ saying why, so a run lists each one it left out. Every other test, the
 client's of a remote included, runs on every platform.
 """
 
+import ast
+import re
 from pathlib import Path
 
 import pytest
 
-from tests.conftest import SERVER_MODULES, SERVER_REASON, TESTS, marks_for
+from tests.conftest import SERVER_MODULES, SERVER_REASON, SERVER_TESTS, TESTS, marks_for
 
 CLIENT_MODULES = (
     "remote/test_client.py",
@@ -33,6 +35,43 @@ CLIENT_MODULES = (
 )
 """Tests of reaching a remote, which Windows does, and of the warnings it is given."""
 
+EXEMPT_MODULES = ("cli/test_untested_platforms.py", "test_platforms.py")
+"""The modules that serve and run the worker as Windows would, faking which platform it is,
+and this one, whose examples of serving and running the worker are only text."""
+
+NAMES_SERVING_OR_THE_WORKER = re.compile(r'"worker",\s*"run"|"remote",\s*"serve"')
+"""How a test names serving a remote or running the worker on the command line."""
+
+RUNS_A_COMMAND = re.compile(r"\bmain\(|\brun\(capsys|\bserve\(capsys")
+"""How a test runs a command line, rather than only parsing it."""
+
+CALLS_SERVING_OR_THE_WORKER = re.compile(r"\brun_worker\(|\bserve_remote\(")
+"""How a test serves a remote or runs the worker by calling it."""
+
+
+def serves_or_runs_the_worker(
+    source: str,
+) -> bool:
+    """Return whether a test's source serves a remote or runs the worker."""
+
+    return bool(CALLS_SERVING_OR_THE_WORKER.search(source)) or bool(
+        NAMES_SERVING_OR_THE_WORKER.search(source) and RUNS_A_COMMAND.search(source)
+    )
+
+
+def functions_of(
+    module: Path,
+) -> dict[str, str]:
+    """Return each test function in a module, by name, with its source."""
+
+    source = module.read_text(encoding="utf-8")
+
+    return {
+        node.name: ast.get_source_segment(source, node) or ""
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+    }
+
 
 def names(
     marks: list[pytest.MarkDecorator],
@@ -45,6 +84,43 @@ def test_every_server_module_is_a_test_module_here() -> None:
     assert all((TESTS / module).is_file() for module in SERVER_MODULES), sorted(
         module for module in SERVER_MODULES if not (TESTS / module).is_file()
     )
+
+
+def test_every_single_server_test_is_a_test_here() -> None:
+    for test in SERVER_TESTS:
+        module, name = test.split("::")
+
+        assert module not in SERVER_MODULES, test
+        assert name in functions_of(TESTS / module), test
+
+
+def test_every_test_that_serves_or_runs_the_worker_is_left_out_on_windows() -> None:
+    unmarked = [
+        f"{module}::{name}"
+        for path in sorted(TESTS.rglob("test_*.py"))
+        if (module := path.relative_to(TESTS).as_posix()) not in SERVER_MODULES
+        and module not in EXEMPT_MODULES
+        for name, source in functions_of(path).items()
+        if serves_or_runs_the_worker(source) and f"{module}::{name}" not in SERVER_TESTS
+    ]
+
+    assert unmarked == []
+
+
+def test_running_the_worker_counts_and_only_parsing_its_options_does_not() -> None:
+    assert serves_or_runs_the_worker('main(("worker", "run", "--queue-url", URL))')
+    assert serves_or_runs_the_worker('run(capsys, "remote", "serve")')
+    assert serves_or_runs_the_worker("cli_worker.run_worker(URL)")
+    assert not serves_or_runs_the_worker('build_parser().parse_args(("worker", "run"))')
+
+
+def test_a_single_server_test_is_marked_and_skipped_on_windows_its_neighbours_not() -> None:
+    module = TESTS / "cli" / "test_content_store_commands.py"
+    worker = "test_a_worker_whose_s3_store_cannot_open_stops_before_it_receives"
+
+    assert names(marks_for(module, "linux", worker)) == ["server"]
+    assert names(marks_for(module, "win32", worker)) == ["server", "skip"]
+    assert marks_for(module, "win32", "test_content_already_in_s3_is_not_written_again") == []
 
 
 def test_no_test_of_reaching_a_remote_is_left_out_on_windows() -> None:

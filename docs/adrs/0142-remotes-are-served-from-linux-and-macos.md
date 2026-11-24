@@ -39,7 +39,8 @@ machine can serve from WSL 2, or from the container image, instead.
 ### Their tests are skipped on Windows, saying why
 
 `tests/conftest.py` names the modules that test serving a remote or
-running the worker. Their tests are marked `server` on every platform, and
+running the worker, and the few tests of them in modules that test
+something else. Their tests are marked `server` on every platform, and
 skipped on Windows, each with this reason, so a run lists every test it
 left out:
 
@@ -52,8 +53,9 @@ here, the client of a remote, a connected instance, the command line on a
 remote, token commands, every documentation test, and `azathoth-mcp`,
 which AI clients start on the same machine. A test names the server
 modules, and keeps those of reaching a remote, the documentation and the
-MCP server off the list, so moving a test across the line is a deliberate
-change.
+MCP server off the list; another finds any test elsewhere that serves a
+remote or runs the worker and is not on it. Moving a test across the line
+is a deliberate change.
 
 ## Consequences
 
