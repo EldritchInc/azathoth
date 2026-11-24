@@ -51,7 +51,8 @@ Continuous integration (`.github/workflows/ci.yml`) runs lint, formatting
 and types once. A pull request runs the test suite on Linux with Python
 3.11, 3.12 and 3.13, and on macOS and Windows with Python 3.13. A push to
 `main` runs it on all three with all three Pythons. All nine test jobs
-must be green on the commit a release is tagged from. Each names its 25
+must be green on the commit a release is tagged from. Each runs the suite
+in parallel, one worker for each core, with pytest-xdist, and names its 25
 slowest tests.
 
 The deterministic gate must never require:

@@ -81,7 +81,7 @@ jobs:
         run: python -m pip install -e ".[dev]" -e packages/azathoth-mcp
 
       - name: Test
-        run: python -m pytest --durations=25
+        run: python -m pytest -n auto --durations=25
 
   container:
     name: container image

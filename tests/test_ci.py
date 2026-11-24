@@ -4,11 +4,15 @@ A pull request runs the suite on Linux with every Python Azathoth supports,
 and on macOS and Windows with the newest; a push to `main` runs it on every
 platform with every Python, the nine jobs a release is tagged after. The
 `quality` job lints, formats and type-checks, and leaves the tests to the
-matrix. The workflow is read as text, as the other workflow tests read it.
+matrix. The matrix runs the suite in parallel, one worker for each core;
+the PostgreSQL and image tests, which share a database and an image, run
+one at a time. The workflow is read as text, as the other workflow tests
+read it.
 """
 
 import itertools
 import re
+import tomllib
 from pathlib import Path
 
 from tests.container.test_workflows import job
@@ -18,6 +22,8 @@ PROJECT_ROOT = Path(__file__).parents[1]
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 
 RELEASE_VALIDATION = PROJECT_ROOT / "docs" / "release-validation.md"
+
+PARALLEL = "pytest-xdist>=3.6,<4"
 
 PLATFORMS = ("ubuntu-latest", "macos-latest", "windows-latest")
 
@@ -109,7 +115,19 @@ def test_windows_has_longer_and_every_run_names_its_slowest_tests() -> None:
     tests = job("ci.yml", "tests")
 
     assert "    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}\n" in tests
-    assert "        run: python -m pytest --durations=25\n" in tests
+    assert "        run: python -m pytest -n auto --durations=25\n" in tests
+
+
+def test_the_matrix_runs_the_suite_in_parallel_and_development_installs_what_does() -> None:
+    project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert PARALLEL in project["project"]["optional-dependencies"]["dev"]
+    assert "-n auto" in job("ci.yml", "tests")
+
+
+def test_the_postgresql_and_image_tests_run_one_at_a_time() -> None:
+    for name in ("postgres", "container"):
+        assert " -n " not in job("ci.yml", name), name
 
 
 def test_the_quality_job_leaves_the_tests_to_the_matrix() -> None:
