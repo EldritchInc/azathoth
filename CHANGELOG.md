@@ -260,6 +260,10 @@ python -m pip install --upgrade azathoth-ai
 azathoth init
 ```
 
+If you serve workflows with `azathoth-mcp`, upgrade it in the same command,
+as [Installing Azathoth](https://github.com/EldritchInc/azathoth/blob/main/docs/install.md#upgrading-leaving-and-uninstalling) shows: 1.6 of it requires 1.6 of
+`azathoth-ai`.
+
 The database schema moves from version 7 to version 8, which adds the
 tables a remote keeps its jobs in
 ([ADR 0138](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0138-jobs-on-a-remote.md)).
