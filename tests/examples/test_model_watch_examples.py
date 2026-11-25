@@ -16,6 +16,7 @@ from types import ModuleType
 from typing import Any
 from uuid import UUID
 
+import jsonschema
 import pytest
 
 from azathoth import api
@@ -25,6 +26,13 @@ from azathoth.tools import (
     ToolDocument,
     decode_tool_document,
     encode_tool_document,
+)
+from azathoth.workflows import (
+    ToolStepSpecification,
+    WorkflowNamedValueReference,
+    WorkflowSpecification,
+    decode_workflow_document,
+    encode_workflow_document,
 )
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -575,7 +583,7 @@ def test_discover_runs_as_a_step_and_records_its_first_run(
 ) -> None:
     path = tmp_path / "ledger.json"
 
-    said = run_tool(DISCOVER_DOCUMENT, {"ledger": str(path), "targets": [TARGET]})
+    said = run_tool(DISCOVER_DOCUMENT, {"watch": {"ledger": str(path), "targets": [TARGET]}})
 
     assert said["first_run"] is True
     assert json.loads(path.read_text(encoding="utf-8"))["models"] == {}
@@ -591,7 +599,7 @@ def test_discover_fails_its_step_on_a_target_the_instance_does_not_hold(
     missing = {**TARGET, "benchmark": "f1000000-0000-4000-8000-000000000999"}
 
     with pytest.raises(ToolExecutionError) as caught:
-        run_tool(DISCOVER_DOCUMENT, {"ledger": str(path), "targets": [missing]})
+        run_tool(DISCOVER_DOCUMENT, {"watch": {"ledger": str(path), "targets": [missing]}})
 
     assert str(caught.value).endswith(
         "Target 1's benchmark f1000000-0000-4000-8000-000000000999 is not on this instance."
@@ -1136,7 +1144,10 @@ def test_propose_never_promotes(
 def test_benchmark_runs_as_a_step_and_says_a_target_it_cannot_try(
     instance: Path,
 ) -> None:
-    said = run_tool(BENCHMARK_DOCUMENT, {"targets": [TARGET], "new_models": []})
+    said = run_tool(
+        BENCHMARK_DOCUMENT,
+        {"watch": {"ledger": "unused", "targets": [TARGET]}, "new_models": [served("acme/new")]},
+    )
 
     (result,) = said["results"]
 
@@ -1165,15 +1176,205 @@ def test_propose_runs_as_a_step_and_writes_the_ledger(
     said = run_tool(
         PROPOSE_DOCUMENT,
         {
-            "ledger": str(path),
+            "watch": {"ledger": str(path), "targets": [TARGET]},
             "compared": [compared_target("w1")],
             "new_models": [{"identifier": "acme/lost"}],
             "added": ["acme/lost"],
+            "discovered": "1 new model since last night.",
+            "approved": "Approved 1 model on this machine for testing.",
+            "tested": "Tested 1 new model.",
+            "measured": "No new model beat what runs now on cost at the same accuracy.",
         },
     )
 
+    assert said["summary"] == [
+        "1 new model since last night.",
+        "Approved 1 model on this machine for testing.",
+        "Tested 1 new model.",
+        "No new model beat what runs now on cost at the same accuracy.",
+        "Nothing to propose tonight. 1 new model rejected.",
+    ]
     assert said["rejected"] == ["acme/lost"]
     assert said["kept_authorized"] == []
     assert json.loads(path.read_text(encoding="utf-8"))["models"]["acme/lost"]["status"] == (
         "rejected"
     )
+
+
+# Nothing new
+
+
+def test_nothing_is_optimized_on_a_night_with_nothing_new(
+    benchmarking: ModuleType,
+) -> None:
+    optimization = Optimization()
+
+    said = benchmarking.benchmark(optimization, [TARGET], [], refused=api.ApiError)
+
+    assert said == {"results": [], "message": "Nothing new to test tonight."}
+    assert optimization.asked == []
+
+
+def test_nothing_is_compared_on_a_night_with_nothing_new(
+    comparing: ModuleType,
+) -> None:
+    said = comparing.compare(Experiments({}), [], [], refused=api.ApiError)
+
+    assert said == {"compared": [], "message": "Nothing new to compare tonight."}
+
+
+def test_nothing_is_proposed_or_recorded_on_a_night_with_nothing_new(
+    proposing: ModuleType,
+) -> None:
+    portfolio = Removing(authorized=())
+
+    said, after = propose(proposing, [], (), portfolio)
+
+    assert said == {
+        "proposals": [],
+        "rejected": [],
+        "kept_authorized": [],
+        "message": "Nothing to propose tonight.",
+    }
+    assert after == ledger(acme__old="baseline")
+
+
+# The workflow
+
+
+WORKFLOW_DOCUMENT = EXAMPLE / "workflows" / "model-watch.json"
+
+WATCH_DOCUMENT = EXAMPLE / "watch.json"
+
+REEL_STEPS = (
+    "Discover New Models",
+    "Add to Local Portfolio",
+    "Benchmark Against New Models",
+    "Compare Cost & Quality",
+    "Propose Winner",
+)
+
+
+def read_workflow() -> WorkflowSpecification:
+    return decode_workflow_document(WORKFLOW_DOCUMENT.read_text(encoding="utf-8"))
+
+
+def test_the_workflow_document_is_canonical() -> None:
+    assert f"{encode_workflow_document(read_workflow())}\n" == WORKFLOW_DOCUMENT.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_the_workflow_runs_the_five_steps_in_order_each_saying_what_it_did() -> None:
+    workflow = read_workflow()
+
+    assert workflow.metadata.id == UUID("d7000000-0000-4000-8000-000000000020")
+    assert tuple(step.message for step in workflow.steps) == REEL_STEPS
+    assert all(step.emit_values for step in workflow.steps)
+    assert all(not step.conditions for step in workflow.steps)
+    assert [step.depends_on for step in workflow.steps] == [
+        (),
+        *[(workflow.steps[index].id,) for index in range(4)],
+    ]
+
+
+def test_each_step_runs_its_tool_of_the_example() -> None:
+    names = [read_tool(path).definition.name for path in TOOL_DOCUMENTS]
+    specifications = [step.specification for step in read_workflow().steps]
+
+    assert all(isinstance(each, ToolStepSpecification) for each in specifications)
+    assert [
+        each.requirement.name for each in specifications if isinstance(each, ToolStepSpecification)
+    ] == names
+
+
+def test_each_step_says_what_it_did_under_a_name_of_its_own() -> None:
+    said = [
+        [binding.name for binding in step.outputs if binding.path == ("message",)]
+        for step in read_workflow().steps
+    ]
+
+    assert said == [["discovered"], ["approved"], ["tested"], ["measured"], ["proposed"]]
+
+
+def test_the_result_is_the_proposal_report_and_the_input_is_the_watch() -> None:
+    workflow = read_workflow()
+    schema = read_tool(DISCOVER_DOCUMENT).definition.input_schema.json_schema
+
+    assert isinstance(schema, dict)
+
+    properties = schema["properties"]
+
+    assert isinstance(properties, dict)
+    assert workflow.result == WorkflowNamedValueReference(name="report")
+    assert workflow.input_schema == properties["watch"]
+
+
+def test_the_demo_watch_is_a_valid_input_naming_two_ticket_triage_targets() -> None:
+    watch = json.loads(WATCH_DOCUMENT.read_text(encoding="utf-8"))
+
+    schema = read_workflow().input_schema
+
+    assert isinstance(schema, dict)
+
+    jsonschema.validate(watch, schema)
+
+    assert [(target["workflow"], target["benchmark"]) for target in watch["targets"]] == [
+        (CLASSIFY_WORKFLOW_ID, CLASSIFY_BENCHMARK_ID),
+        (OTHER_WORKFLOW_ID, OTHER_BENCHMARK_ID),
+    ]
+
+
+def test_the_workflow_runs_end_to_end_on_its_first_night(
+    instance: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from azathoth.cli import main
+
+    with api.open(instance) as opened:
+        opened.workflows.import_document(
+            (TRIAGE / "workflows" / "triage-ticket.json").read_text(encoding="utf-8")
+        )
+        opened.benchmarks.import_document(
+            (TRIAGE / "benchmarks" / "triage-ticket.json").read_text(encoding="utf-8")
+        )
+
+    for path in TOOL_DOCUMENTS:
+        assert main(["tool", "import", str(path)]) == 0
+
+    assert main(["workflow", "import", str(WORKFLOW_DOCUMENT)]) == 0
+
+    ledger_path = tmp_path / "ledger.json"
+    watch = {**json.loads(WATCH_DOCUMENT.read_text(encoding="utf-8")), "ledger": str(ledger_path)}
+    watch_path = tmp_path / "watch.json"
+    watch_path.write_text(json.dumps(watch), encoding="utf-8")
+    capsys.readouterr()
+
+    status = main(
+        [
+            "workflow",
+            "run",
+            "d7000000-0000-4000-8000-000000000020",
+            "--input-file",
+            str(watch_path),
+            "--output",
+            "result",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert status == 0, captured.err
+
+    report = json.loads(captured.out)
+
+    assert report["proposals"] == []
+    assert report["summary"] == [
+        "Watching from now: 0 models served tonight are the baseline, and only models "
+        "released after them are tried.",
+        "Approved 0 models on this machine for testing. Production stays locked.",
+        "Nothing new to test tonight.",
+        "Nothing new to compare tonight.",
+        "Nothing to propose tonight.",
+    ]
+    assert json.loads(ledger_path.read_text(encoding="utf-8"))["models"] == {}

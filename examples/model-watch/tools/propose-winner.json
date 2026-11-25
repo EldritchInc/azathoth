@@ -8,8 +8,69 @@
       "json_schema": {
         "type": "object",
         "properties": {
-          "ledger": {
-            "type": "string"
+          "watch": {
+            "type": "object",
+            "properties": {
+              "ledger": {
+                "type": "string",
+                "minLength": 1
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "providers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "modalities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "targets": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "workflow": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "benchmark": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target_latency": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "target_cost": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "generations": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "workflow",
+                    "benchmark",
+                    "target_latency",
+                    "target_cost"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "ledger",
+              "targets"
+            ]
           },
           "compared": {
             "type": "array",
@@ -28,10 +89,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "discovered": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "string"
+          },
+          "tested": {
+            "type": "string"
+          },
+          "measured": {
+            "type": "string"
           }
         },
         "required": [
-          "ledger",
+          "watch",
           "compared",
           "new_models",
           "added"
@@ -62,13 +135,20 @@
           },
           "message": {
             "type": "string"
+          },
+          "summary": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "proposals",
           "rejected",
           "kept_authorized",
-          "message"
+          "message",
+          "summary"
         ]
       }
     }
@@ -81,7 +161,7 @@
       "version": "1.0.0",
       "runtime": "process",
       "entrypoint": "run",
-      "source": "\"\"\"Propose Winner: record what became of each new model, and leave a winner for a human.\n\nA new model wins when, on some target, the winner holds its quality and one\nof its steps runs on that model. Each target with such a winner becomes a\nproposal: its experiment and the `azathoth workflow promote` command that\npromotes it. The step never promotes; a person does, when they choose.\n\nEvery new model is then recorded in the ledger: `proposed`, with the\nworkflows it won, or `rejected`. A rejected model the watch added tonight is\ndeauthorized again, so this machine's portfolio holds only what someone\nchose; one authorized before tonight is left as it was. When a target could\nnot be tried, the models that won nothing are deauthorized but not recorded,\nso the next run tries them again.\n\"\"\"\n\nimport json\nimport os\nimport sys\nfrom datetime import UTC, datetime\nfrom pathlib import Path\n\nfrom azathoth import api\n\nLEDGER_VERSION = 1\n\n\nclass WatchError(Exception):\n    \"\"\"The watch cannot go on; the message says why.\"\"\"\n\n\ndef read_ledger(path):\n    try:\n        ledger = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, ValueError):\n        raise WatchError(f\"The ledger at {path} could not be read as JSON.\") from None\n\n    if (\n        not isinstance(ledger, dict)\n        or ledger.get(\"version\") != LEDGER_VERSION\n        or not isinstance(ledger.get(\"models\"), dict)\n    ):\n        raise WatchError(f\"The ledger at {path} is not a model-watch ledger.\")\n\n    return ledger\n\n\ndef write_ledger(path, ledger):\n    path.parent.mkdir(parents=True, exist_ok=True)\n    written = path.with_name(f\"{path.name}.tmp\")\n    written.write_text(f\"{json.dumps(ledger, indent=2, sort_keys=True)}\\n\", encoding=\"utf-8\")\n    os.replace(written, path)\n\n\ndef plural(count, one, many):\n    return f\"{count} {one if count == 1 else many}\"\n\n\ndef propose(ledger, compared, new_models, added, portfolio, *, now, missing, refused):\n    \"\"\"Return what the step says, and the ledger after it, deauthorizing the losers it added.\n\n    `missing` is the error deauthorizing a model no longer authorized fails\n    with, which leaves nothing to take back. `refused` are the others it may\n    fail with; such a model is named, and left authorized.\n    \"\"\"\n\n    stamp = now.astimezone(UTC).isoformat(timespec=\"seconds\")\n    won = {}\n    proposals = []\n\n    for target in compared:\n        if target.get(\"problem\") is None and target[\"holds_quality\"] and target[\"new_models_used\"]:\n            proposals.append(\n                {\n                    \"workflow\": target[\"workflow\"],\n                    \"experiment\": target[\"experiment\"],\n                    \"new_models_used\": target[\"new_models_used\"],\n                    \"cost_percent\": target[\"cost_percent\"],\n                    \"command\": target[\"command\"],\n                }\n            )\n\n            for identifier in target[\"new_models_used\"]:\n                won.setdefault(identifier, []).append(target[\"workflow\"])\n\n    complete = all(target.get(\"problem\") is None for target in compared)\n    models = dict(ledger[\"models\"])\n    kept_authorized = []\n\n    for model in new_models:\n        identifier = model[\"identifier\"]\n\n        if identifier in won:\n            models[identifier] = {\"seen\": stamp, \"status\": \"proposed\", \"won\": won[identifier]}\n            continue\n\n        if identifier in added:\n            try:\n                portfolio.remove(identifier)\n            except missing:\n                pass\n            except refused:\n                kept_authorized.append(identifier)\n\n        if complete:\n            models[identifier] = {\"seen\": stamp, \"status\": \"rejected\"}\n\n    rejected = [model[\"identifier\"] for model in new_models if model[\"identifier\"] not in won]\n\n    if proposals:\n        message = f\"Waiting for a human: {plural(len(proposals), 'proposal', 'proposals')}.\"\n    else:\n        message = \"Nothing to propose tonight.\"\n\n    if rejected:\n        message = f\"{message} {plural(len(rejected), 'new model', 'new models')} rejected.\"\n\n    if not complete:\n        message = f\"{message} Not every target was tried, so the rejected are tried again.\"\n\n    said = {\n        \"proposals\": proposals,\n        \"rejected\": rejected,\n        \"kept_authorized\": kept_authorized,\n        \"message\": message,\n    }\n\n    return said, {**ledger, \"models\": models}\n\n\ndef main():\n    inputs = json.load(sys.stdin)\n    database = os.environ.get(\"AZATHOTH_DATABASE\", \"azathoth.db\")\n\n    try:\n        path = Path(os.path.expanduser(inputs[\"ledger\"]))\n        ledger = read_ledger(path)\n\n        with api.open(database) as instance:\n            said, updated = propose(\n                ledger,\n                inputs[\"compared\"],\n                inputs.get(\"new_models\", []),\n                set(inputs.get(\"added\", [])),\n                instance.portfolio,\n                now=datetime.now(UTC),\n                missing=api.NotFoundError,\n                refused=api.ApiError,\n            )\n    except (WatchError, api.ApiError) as exc:\n        sys.stderr.buffer.write(str(exc).encode(\"utf-8\"))\n        sys.exit(1)\n\n    write_ledger(path, updated)\n    json.dump(said, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "source": "\"\"\"Propose Winner: record what became of each new model, and leave a winner for a human.\n\nA new model wins when, on some target, the winner holds its quality and one\nof its steps runs on that model. Each target with such a winner becomes a\nproposal: its experiment and the `azathoth workflow promote` command that\npromotes it. The step never promotes; a person does, when they choose.\n\nEvery new model is then recorded in the ledger: `proposed`, with the\nworkflows it won, or `rejected`. A rejected model the watch added tonight is\ndeauthorized again, so this machine's portfolio holds only what someone\nchose; one authorized before tonight is left as it was. When a target could\nnot be tried, the models that won nothing are deauthorized but not recorded,\nso the next run tries them again.\n\nThe step also gathers what each step said, in order, as the run's summary:\n`discovered`, `approved`, `tested` and `measured`, then its own. The ledger\nis the watch's, the workflow's input.\n\"\"\"\n\nimport json\nimport os\nimport sys\nfrom datetime import UTC, datetime\nfrom pathlib import Path\n\nfrom azathoth import api\n\nLEDGER_VERSION = 1\n\n\nclass WatchError(Exception):\n    \"\"\"The watch cannot go on; the message says why.\"\"\"\n\n\ndef read_ledger(path):\n    try:\n        ledger = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, ValueError):\n        raise WatchError(f\"The ledger at {path} could not be read as JSON.\") from None\n\n    if (\n        not isinstance(ledger, dict)\n        or ledger.get(\"version\") != LEDGER_VERSION\n        or not isinstance(ledger.get(\"models\"), dict)\n    ):\n        raise WatchError(f\"The ledger at {path} is not a model-watch ledger.\")\n\n    return ledger\n\n\ndef write_ledger(path, ledger):\n    path.parent.mkdir(parents=True, exist_ok=True)\n    written = path.with_name(f\"{path.name}.tmp\")\n    written.write_text(f\"{json.dumps(ledger, indent=2, sort_keys=True)}\\n\", encoding=\"utf-8\")\n    os.replace(written, path)\n\n\ndef plural(count, one, many):\n    return f\"{count} {one if count == 1 else many}\"\n\n\ndef propose(ledger, compared, new_models, added, portfolio, *, now, missing, refused):\n    \"\"\"Return what the step says, and the ledger after it, deauthorizing the losers it added.\n\n    `missing` is the error deauthorizing a model no longer authorized fails\n    with, which leaves nothing to take back. `refused` are the others it may\n    fail with; such a model is named, and left authorized.\n    \"\"\"\n\n    stamp = now.astimezone(UTC).isoformat(timespec=\"seconds\")\n    won = {}\n    proposals = []\n\n    for target in compared:\n        if target.get(\"problem\") is None and target[\"holds_quality\"] and target[\"new_models_used\"]:\n            proposals.append(\n                {\n                    \"workflow\": target[\"workflow\"],\n                    \"experiment\": target[\"experiment\"],\n                    \"new_models_used\": target[\"new_models_used\"],\n                    \"cost_percent\": target[\"cost_percent\"],\n                    \"command\": target[\"command\"],\n                }\n            )\n\n            for identifier in target[\"new_models_used\"]:\n                won.setdefault(identifier, []).append(target[\"workflow\"])\n\n    complete = all(target.get(\"problem\") is None for target in compared)\n    models = dict(ledger[\"models\"])\n    kept_authorized = []\n\n    for model in new_models:\n        identifier = model[\"identifier\"]\n\n        if identifier in won:\n            models[identifier] = {\"seen\": stamp, \"status\": \"proposed\", \"won\": won[identifier]}\n            continue\n\n        if identifier in added:\n            try:\n                portfolio.remove(identifier)\n            except missing:\n                pass\n            except refused:\n                kept_authorized.append(identifier)\n\n        if complete:\n            models[identifier] = {\"seen\": stamp, \"status\": \"rejected\"}\n\n    rejected = [model[\"identifier\"] for model in new_models if model[\"identifier\"] not in won]\n\n    if proposals:\n        message = f\"Waiting for a human: {plural(len(proposals), 'proposal', 'proposals')}.\"\n    else:\n        message = \"Nothing to propose tonight.\"\n\n    if not new_models:\n        return {\n            \"proposals\": [],\n            \"rejected\": [],\n            \"kept_authorized\": [],\n            \"message\": message,\n        }, ledger\n\n    if rejected:\n        message = f\"{message} {plural(len(rejected), 'new model', 'new models')} rejected.\"\n\n    if not complete:\n        message = f\"{message} Not every target was tried, so the rejected are tried again.\"\n\n    said = {\n        \"proposals\": proposals,\n        \"rejected\": rejected,\n        \"kept_authorized\": kept_authorized,\n        \"message\": message,\n    }\n\n    return said, {**ledger, \"models\": models}\n\n\ndef main():\n    inputs = json.load(sys.stdin)\n    database = os.environ.get(\"AZATHOTH_DATABASE\", \"azathoth.db\")\n\n    try:\n        path = Path(os.path.expanduser(inputs[\"watch\"][\"ledger\"]))\n        ledger = read_ledger(path)\n\n        with api.open(database) as instance:\n            said, updated = propose(\n                ledger,\n                inputs[\"compared\"],\n                inputs.get(\"new_models\", []),\n                set(inputs.get(\"added\", [])),\n                instance.portfolio,\n                now=datetime.now(UTC),\n                missing=api.NotFoundError,\n                refused=api.ApiError,\n            )\n    except (WatchError, api.ApiError) as exc:\n        sys.stderr.buffer.write(str(exc).encode(\"utf-8\"))\n        sys.exit(1)\n\n    write_ledger(path, updated)\n    earlier = [inputs.get(name) for name in (\"discovered\", \"approved\", \"tested\", \"measured\")]\n    said[\"summary\"] = [line for line in (*earlier, said[\"message\"]) if line]\n    json.dump(said, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
       "command": [
         "python"
       ],
