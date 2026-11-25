@@ -35,6 +35,20 @@ DISCOVER_DOCUMENT = EXAMPLE / "tools" / "discover-new-models.json"
 
 PORTFOLIO_DOCUMENT = EXAMPLE / "tools" / "add-to-local-portfolio.json"
 
+BENCHMARK_DOCUMENT = EXAMPLE / "tools" / "benchmark-against-new-models.json"
+
+COMPARE_DOCUMENT = EXAMPLE / "tools" / "compare-cost-and-quality.json"
+
+PROPOSE_DOCUMENT = EXAMPLE / "tools" / "propose-winner.json"
+
+TOOL_DOCUMENTS = (
+    DISCOVER_DOCUMENT,
+    PORTFOLIO_DOCUMENT,
+    BENCHMARK_DOCUMENT,
+    COMPARE_DOCUMENT,
+    PROPOSE_DOCUMENT,
+)
+
 TRIAGE = PROJECT_ROOT / "examples" / "ticket-triage"
 
 CLASSIFY_WORKFLOW_ID = "f1000000-0000-4000-8000-000000000010"
@@ -158,14 +172,14 @@ def discover(
 # The documents
 
 
-@pytest.mark.parametrize("path", [DISCOVER_DOCUMENT, PORTFOLIO_DOCUMENT])
+@pytest.mark.parametrize("path", TOOL_DOCUMENTS)
 def test_each_tool_document_is_canonical(
     path: Path,
 ) -> None:
     assert f"{encode_tool_document(read_tool(path))}\n" == path.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("path", [DISCOVER_DOCUMENT, PORTFOLIO_DOCUMENT])
+@pytest.mark.parametrize("path", TOOL_DOCUMENTS)
 def test_each_tool_runs_python_with_the_instance_and_providers_granted(
     path: Path,
 ) -> None:
@@ -177,12 +191,19 @@ def test_each_tool_runs_python_with_the_instance_and_providers_granted(
 
 
 def test_the_tools_have_the_ids_the_example_gives_them() -> None:
-    assert read_tool(DISCOVER_DOCUMENT).definition.id == UUID(
-        "d7000000-0000-4000-8000-000000000001"
-    )
-    assert read_tool(PORTFOLIO_DOCUMENT).definition.id == UUID(
-        "d7000000-0000-4000-8000-000000000002"
-    )
+    assert [read_tool(path).definition.id for path in TOOL_DOCUMENTS] == [
+        UUID(f"d7000000-0000-4000-8000-00000000000{number}") for number in range(1, 6)
+    ]
+
+
+def test_benchmarking_may_take_an_hour_and_every_other_step_two_minutes() -> None:
+    assert [read_tool(path).implementations[0].timeout_seconds for path in TOOL_DOCUMENTS] == [
+        120.0,
+        120.0,
+        3600.0,
+        120.0,
+        120.0,
+    ]
 
 
 # Discover New Models
@@ -496,7 +517,7 @@ def test_a_model_authorized_already_or_no_longer_served_is_left_and_said(
     )
 
 
-@pytest.mark.parametrize("path", [DISCOVER_DOCUMENT, PORTFOLIO_DOCUMENT])
+@pytest.mark.parametrize("path", TOOL_DOCUMENTS)
 def test_no_tool_pushes_promotes_or_reaches_a_remote(
     path: Path,
 ) -> None:
@@ -585,3 +606,574 @@ def test_add_to_local_portfolio_runs_as_a_step(
 
     assert said["unavailable"] == ["acme/gone"]
     assert said["added"] == []
+
+
+# Benchmark Against New Models
+
+
+@pytest.fixture(scope="module")
+def benchmarking() -> ModuleType:
+    return loaded(BENCHMARK_DOCUMENT)
+
+
+@pytest.fixture(scope="module")
+def comparing() -> ModuleType:
+    return loaded(COMPARE_DOCUMENT)
+
+
+@pytest.fixture(scope="module")
+def proposing() -> ModuleType:
+    return loaded(PROPOSE_DOCUMENT)
+
+
+OTHER_WORKFLOW_ID = "f1000000-0000-4000-8000-000000000030"
+
+OTHER_BENCHMARK_ID = "f1000000-0000-4000-8000-000000000060"
+
+OTHER = {
+    "workflow": OTHER_WORKFLOW_ID,
+    "benchmark": OTHER_BENCHMARK_ID,
+    "target_latency": 30,
+    "target_cost": 0.1,
+    "generations": 2,
+}
+
+
+class Summary:
+    def __init__(
+        self,
+        experiment: UUID,
+    ) -> None:
+        self.winning_experiment_id = experiment
+
+
+class Optimization:
+    """A stand-in for an instance's optimization, recording each session it was asked for."""
+
+    def __init__(
+        self,
+        *,
+        failing: dict[str, Exception] | None = None,
+    ) -> None:
+        self.failing = failing or {}
+        self.asked: list[tuple[UUID, UUID, float, float, int]] = []
+
+    def optimize(
+        self,
+        workflow_id: UUID,
+        benchmark_id: UUID,
+        *,
+        target_latency_seconds: float,
+        target_cost_usd: float,
+        generations: int,
+    ) -> Summary:
+        self.asked.append(
+            (workflow_id, benchmark_id, target_latency_seconds, target_cost_usd, generations)
+        )
+
+        if str(workflow_id) in self.failing:
+            raise self.failing[str(workflow_id)]
+
+        return Summary(UUID(int=len(self.asked)))
+
+
+def test_each_target_is_optimized_on_its_own_benchmark_and_targets(
+    benchmarking: ModuleType,
+) -> None:
+    optimization = Optimization()
+
+    said = benchmarking.benchmark(
+        optimization, [TARGET, OTHER], [served("acme/a")], refused=api.ApiError
+    )
+
+    assert optimization.asked == [
+        (UUID(CLASSIFY_WORKFLOW_ID), UUID(CLASSIFY_BENCHMARK_ID), 5.0, 0.01, 1),
+        (UUID(OTHER_WORKFLOW_ID), UUID(OTHER_BENCHMARK_ID), 30.0, 0.1, 2),
+    ]
+    assert said == {
+        "results": [
+            {
+                "workflow": CLASSIFY_WORKFLOW_ID,
+                "benchmark": CLASSIFY_BENCHMARK_ID,
+                "experiment": str(UUID(int=1)),
+                "problem": None,
+            },
+            {
+                "workflow": OTHER_WORKFLOW_ID,
+                "benchmark": OTHER_BENCHMARK_ID,
+                "experiment": str(UUID(int=2)),
+                "problem": None,
+            },
+        ],
+        "message": "Tested 1 new model on 2 workflows' own cases. Not a leaderboard.",
+    }
+
+
+def test_a_target_that_cannot_be_optimized_says_why_and_the_rest_go_on(
+    benchmarking: ModuleType,
+) -> None:
+    optimization = Optimization(
+        failing={CLASSIFY_WORKFLOW_ID: api.InvalidArgumentError("Benchmark has no cases.")}
+    )
+
+    said = benchmarking.benchmark(
+        optimization,
+        [TARGET, OTHER],
+        [served("acme/a"), served("acme/b")],
+        refused=api.ApiError,
+    )
+
+    assert [(result["experiment"], result["problem"]) for result in said["results"]] == [
+        (None, "Benchmark has no cases."),
+        (str(UUID(int=2)), None),
+    ]
+    assert said["message"] == (
+        "Tested 2 new models on 1 workflow's own cases. Not a leaderboard. "
+        "1 target could not be tried."
+    )
+
+
+# Compare Cost & Quality
+
+
+def comparison(
+    *,
+    winner: tuple[bool, ...],
+    baseline: tuple[bool, ...] | None,
+    models: tuple[str, ...],
+    cost_percent: float | None,
+    experiment: UUID | None = None,
+) -> dict[str, Any]:
+    """Return an experiment comparison as `azathoth.api` dumps it to JSON."""
+
+    experiment = UUID(int=1) if experiment is None else experiment
+
+    return {
+        "experiment_id": str(experiment),
+        "workflow_id": CLASSIFY_WORKFLOW_ID,
+        "baseline": None if baseline is None else "production",
+        "reason": "Production already runs the winner." if baseline is None else None,
+        "steps": [
+            {"step_id": str(UUID(int=index)), "winner_model": model, "baseline_model": "x/y"}
+            for index, model in enumerate(models)
+        ],
+        "cases": [
+            {
+                "case_id": str(UUID(int=index)),
+                "winner_passed": passed,
+                "baseline_passed": None if baseline is None else baseline[index],
+            }
+            for index, passed in enumerate(winner)
+        ],
+        "command": f"azathoth workflow promote {CLASSIFY_WORKFLOW_ID} --experiment {experiment}",
+        "savings": None if cost_percent is None else {"cost_percent": cost_percent},
+    }
+
+
+class Dumped:
+    def __init__(
+        self,
+        value: dict[str, Any],
+    ) -> None:
+        self.value = value
+
+    def model_dump(
+        self,
+        *,
+        mode: str,
+    ) -> dict[str, Any]:
+        return self.value
+
+
+class Experiments:
+    """A stand-in for an instance's experiments: each comparison, by experiment ID."""
+
+    def __init__(
+        self,
+        compared: dict[UUID, dict[str, Any]],
+    ) -> None:
+        self.compared = compared
+
+    def compare(
+        self,
+        experiment_id: UUID,
+    ) -> Dumped:
+        if experiment_id not in self.compared:
+            raise api.ExperimentNotFoundError(f"Experiment {experiment_id} was not found.")
+
+        return Dumped(self.compared[experiment_id])
+
+
+def result_of(
+    experiment: UUID | None,
+    workflow: str = CLASSIFY_WORKFLOW_ID,
+    problem: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "workflow": workflow,
+        "benchmark": CLASSIFY_BENCHMARK_ID,
+        "experiment": None if experiment is None else str(experiment),
+        "problem": problem,
+    }
+
+
+def test_a_winner_on_a_new_model_that_passes_as_many_cases_is_same_accuracy_cheaper(
+    comparing: ModuleType,
+) -> None:
+    experiments = Experiments(
+        {
+            UUID(int=1): comparison(
+                winner=(True, True, False),
+                baseline=(True, True, False),
+                models=("acme/new", "x/y"),
+                cost_percent=62.4,
+            )
+        }
+    )
+
+    said = comparing.compare(
+        experiments, [result_of(UUID(int=1))], [served("acme/new")], refused=api.ApiError
+    )
+
+    assert said["message"] == "Same accuracy. 62% cheaper."
+    assert said["compared"] == [
+        {
+            "workflow": CLASSIFY_WORKFLOW_ID,
+            "experiment": str(UUID(int=1)),
+            "baseline": "production",
+            "reason": None,
+            "cases": 3,
+            "winner_passed": 2,
+            "baseline_passed": 2,
+            "holds_quality": True,
+            "new_models_used": ["acme/new"],
+            "cost_percent": 62.4,
+            "latency_percent": None,
+            "command": (
+                f"azathoth workflow promote {CLASSIFY_WORKFLOW_ID} --experiment {UUID(int=1)}"
+            ),
+            "problem": None,
+        }
+    ]
+
+
+def test_the_best_saving_is_said_among_winners_that_hold_quality_on_a_new_model(
+    comparing: ModuleType,
+) -> None:
+    experiments = Experiments(
+        {
+            UUID(int=1): comparison(
+                winner=(True,), baseline=(True,), models=("acme/new",), cost_percent=30.0
+            ),
+            UUID(int=2): comparison(
+                winner=(False,), baseline=(True,), models=("acme/new",), cost_percent=90.0
+            ),
+            UUID(int=3): comparison(
+                winner=(True,), baseline=(True,), models=("x/old",), cost_percent=80.0
+            ),
+        }
+    )
+    results = [result_of(UUID(int=number), f"w{number}") for number in (1, 2, 3)]
+
+    said = comparing.compare(experiments, results, [served("acme/new")], refused=api.ApiError)
+
+    assert said["message"] == "Same accuracy. 30% cheaper."
+    assert [target["holds_quality"] for target in said["compared"]] == [True, False, True]
+    assert [target["new_models_used"] for target in said["compared"]] == [
+        ["acme/new"],
+        ["acme/new"],
+        [],
+    ]
+
+
+def test_nothing_cheaper_on_a_new_model_is_said(
+    comparing: ModuleType,
+) -> None:
+    experiments = Experiments(
+        {
+            UUID(int=1): comparison(
+                winner=(True,), baseline=None, models=("x/old",), cost_percent=None
+            )
+        }
+    )
+
+    said = comparing.compare(
+        experiments, [result_of(UUID(int=1))], [served("acme/new")], refused=api.ApiError
+    )
+
+    assert said["message"] == "No new model beat what runs now on cost at the same accuracy."
+    assert said["compared"][0]["baseline_passed"] is None
+    assert said["compared"][0]["holds_quality"] is True
+
+
+def test_a_target_that_was_not_tried_or_cannot_be_compared_keeps_its_problem(
+    comparing: ModuleType,
+) -> None:
+    said = comparing.compare(
+        Experiments({}),
+        [result_of(None, "w1", "Benchmark has no cases."), result_of(UUID(int=9), "w2")],
+        [],
+        refused=api.ApiError,
+    )
+
+    assert said["compared"] == [
+        {"workflow": "w1", "problem": "Benchmark has no cases.", "new_models_used": []},
+        {
+            "workflow": "w2",
+            "problem": f"Experiment {UUID(int=9)} was not found.",
+            "new_models_used": [],
+        },
+    ]
+
+
+# Propose Winner
+
+
+class Removing:
+    """A stand-in for an instance's portfolio, recording each model removed."""
+
+    def __init__(
+        self,
+        *,
+        authorized: tuple[str, ...],
+        in_use: tuple[str, ...] = (),
+    ) -> None:
+        self.authorized = list(authorized)
+        self.in_use = set(in_use)
+        self.removed: list[str] = []
+
+    def remove(
+        self,
+        identifier: str,
+    ) -> None:
+        if identifier not in self.authorized:
+            raise api.NotFoundError(f"Model {identifier!r} is not authorized.")
+
+        if identifier in self.in_use:
+            raise api.ConflictError(f"Model {identifier!r} is in use.")
+
+        self.authorized.remove(identifier)
+        self.removed.append(identifier)
+
+
+def compared_target(
+    workflow: str,
+    *,
+    holds: bool = True,
+    used: tuple[str, ...] = (),
+    problem: str | None = None,
+) -> dict[str, Any]:
+    if problem is not None:
+        return {"workflow": workflow, "problem": problem, "new_models_used": []}
+
+    return {
+        "workflow": workflow,
+        "experiment": str(UUID(int=7)),
+        "holds_quality": holds,
+        "new_models_used": list(used),
+        "cost_percent": 40.0,
+        "command": f"azathoth workflow promote {workflow} --experiment {UUID(int=7)}",
+        "problem": None,
+    }
+
+
+def propose(
+    proposing: ModuleType,
+    compared: list[dict[str, Any]],
+    new: tuple[str, ...],
+    portfolio: Removing,
+    *,
+    added: tuple[str, ...] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    said, after = proposing.propose(
+        ledger(acme__old="baseline"),
+        compared,
+        [served(identifier) for identifier in new],
+        set(new if added is None else added),
+        portfolio,
+        now=TONIGHT,
+        missing=api.NotFoundError,
+        refused=api.ApiError,
+    )
+
+    return said, after
+
+
+def test_a_new_model_that_won_is_proposed_for_a_human_and_the_rest_rejected(
+    proposing: ModuleType,
+) -> None:
+    portfolio = Removing(authorized=("acme/new", "acme/lost"))
+
+    said, after = propose(
+        proposing,
+        [compared_target("w1", used=("acme/new",)), compared_target("w2")],
+        ("acme/new", "acme/lost"),
+        portfolio,
+    )
+
+    assert said == {
+        "proposals": [
+            {
+                "workflow": "w1",
+                "experiment": str(UUID(int=7)),
+                "new_models_used": ["acme/new"],
+                "cost_percent": 40.0,
+                "command": f"azathoth workflow promote w1 --experiment {UUID(int=7)}",
+            }
+        ],
+        "rejected": ["acme/lost"],
+        "kept_authorized": [],
+        "message": "Waiting for a human: 1 proposal. 1 new model rejected.",
+    }
+    assert portfolio.removed == ["acme/lost"]
+    assert after["models"] == {
+        "acme/old": {"seen": LAST_NIGHT, "status": "baseline"},
+        "acme/new": {"seen": "2026-11-25T03:00:00+00:00", "status": "proposed", "won": ["w1"]},
+        "acme/lost": {"seen": "2026-11-25T03:00:00+00:00", "status": "rejected"},
+    }
+
+
+def test_a_model_that_won_one_target_and_lost_another_is_kept_and_proposed(
+    proposing: ModuleType,
+) -> None:
+    portfolio = Removing(authorized=("acme/new",))
+
+    said, after = propose(
+        proposing,
+        [compared_target("w1", used=("acme/new",)), compared_target("w2", holds=False)],
+        ("acme/new",),
+        portfolio,
+    )
+
+    assert [proposal["workflow"] for proposal in said["proposals"]] == ["w1"]
+    assert portfolio.removed == []
+    assert after["models"]["acme/new"]["won"] == ["w1"]
+
+
+def test_a_winner_that_loses_accuracy_is_never_proposed(
+    proposing: ModuleType,
+) -> None:
+    said, after = propose(
+        proposing,
+        [compared_target("w1", holds=False, used=("acme/new",))],
+        ("acme/new",),
+        Removing(authorized=("acme/new",)),
+    )
+
+    assert said["proposals"] == []
+    assert said["message"] == "Nothing to propose tonight. 1 new model rejected."
+    assert after["models"]["acme/new"]["status"] == "rejected"
+
+
+def test_only_the_models_the_watch_added_are_taken_back(
+    proposing: ModuleType,
+) -> None:
+    portfolio = Removing(authorized=("acme/mine", "acme/added"))
+
+    said, _ = propose(
+        proposing,
+        [compared_target("w1")],
+        ("acme/mine", "acme/added"),
+        portfolio,
+        added=("acme/added",),
+    )
+
+    assert portfolio.removed == ["acme/added"]
+    assert portfolio.authorized == ["acme/mine"]
+    assert said["rejected"] == ["acme/mine", "acme/added"]
+
+
+def test_a_rejected_model_that_cannot_be_taken_back_is_named(
+    proposing: ModuleType,
+) -> None:
+    said, _ = propose(
+        proposing,
+        [compared_target("w1")],
+        ("acme/used", "acme/gone"),
+        Removing(authorized=("acme/used",), in_use=("acme/used",)),
+    )
+
+    assert said["kept_authorized"] == ["acme/used"]
+
+
+def test_when_a_target_was_not_tried_the_losers_are_taken_back_but_tried_again(
+    proposing: ModuleType,
+) -> None:
+    portfolio = Removing(authorized=("acme/new", "acme/lost"))
+
+    said, after = propose(
+        proposing,
+        [
+            compared_target("w1", used=("acme/new",)),
+            compared_target("w2", problem="Benchmark has no cases."),
+        ],
+        ("acme/new", "acme/lost"),
+        portfolio,
+    )
+
+    assert portfolio.removed == ["acme/lost"]
+    assert "acme/lost" not in after["models"]
+    assert after["models"]["acme/new"]["status"] == "proposed"
+    assert said["message"] == (
+        "Waiting for a human: 1 proposal. 1 new model rejected. "
+        "Not every target was tried, so the rejected are tried again."
+    )
+
+
+def test_propose_never_promotes(
+    proposing: ModuleType,
+) -> None:
+    assert "production" not in {
+        node.attr
+        for node in ast.walk(ast.parse(read_tool(PROPOSE_DOCUMENT).implementations[0].source or ""))
+        if isinstance(node, ast.Attribute)
+    }
+
+
+# The later steps, as a workflow runs them
+
+
+def test_benchmark_runs_as_a_step_and_says_a_target_it_cannot_try(
+    instance: Path,
+) -> None:
+    said = run_tool(BENCHMARK_DOCUMENT, {"targets": [TARGET], "new_models": []})
+
+    (result,) = said["results"]
+
+    assert result["experiment"] is None
+    assert result["problem"]
+
+
+def test_compare_runs_as_a_step(
+    instance: Path,
+) -> None:
+    said = run_tool(
+        COMPARE_DOCUMENT,
+        {"results": [result_of(UUID(int=9))], "new_models": []},
+    )
+
+    assert said["compared"][0]["problem"] == f"Experiment {UUID(int=9)} was not found."
+
+
+def test_propose_runs_as_a_step_and_writes_the_ledger(
+    instance: Path,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(ledger()), encoding="utf-8")
+
+    said = run_tool(
+        PROPOSE_DOCUMENT,
+        {
+            "ledger": str(path),
+            "compared": [compared_target("w1")],
+            "new_models": [{"identifier": "acme/lost"}],
+            "added": ["acme/lost"],
+        },
+    )
+
+    assert said["rejected"] == ["acme/lost"]
+    assert said["kept_authorized"] == []
+    assert json.loads(path.read_text(encoding="utf-8"))["models"]["acme/lost"]["status"] == (
+        "rejected"
+    )
