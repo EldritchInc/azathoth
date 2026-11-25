@@ -6,18 +6,33 @@ release dates are on the
 [GitHub releases](https://github.com/EldritchInc/azathoth/releases) and on
 [PyPI](https://pypi.org/project/azathoth-ai/#history).
 
-## Unreleased
+## 1.6.0
 
 Azathoth 1.6 makes a remote an Azathoth people work on, not only one they
-push to. So far it names, in code, what a remote asks its policy and tells
-its audit for every call of the service API, and what a remote's plugins
-may build on; a remote answers its requests together rather than one at a
+push to. It names, in code, what a remote asks its policy and tells its
+audit for every call of the service API, and what a remote's plugins may
+build on; a remote answers its requests together rather than one at a
 time, and serves every call of the service API, asking and telling as
 named; it runs the calls that take minutes as jobs, kept in its database
 and followed as they go; `api.connect` calls a remote as an instance of
 its own; every command but a few runs on a remote with `--remote`; and a
 named remote's token may be printed by a command, as an identity
-provider's tool prints one.
+provider's tool prints one. A new example, the model watch, tries the
+models released since its last run on your own workflows' benchmarks, and
+leaves any that do the same work for less for you to promote. The
+database schema moves from version 7 to version 9, as Upgrading From 1.5
+below says.
+
+This release changes what the image runs on AWS: the stack's one-off
+`init` task moves its database from schema version 7 to version 9, and its
+workers run jobs as 1.5's did. Release validation requires a release that
+changes what the stack runs to be deployed to an AWS sandbox before it
+ships, and no sandbox was available, so this release was not deployed. The
+template was read, the worker run against botocore's `Stubber` and the S3
+tools against a stand-in for S3, as for every release; what only a real
+deployment proves, that the stack's workers run jobs on real SQS and S3, is
+unproven for 1.6.0, as what 1.5.0, 1.4.0 and 1.3.0 left unproven still is
+([Release Validation](https://github.com/EldritchInc/azathoth/blob/main/docs/release-validation.md#9-the-aws-deployment)).
 
 ### The Action Catalog
 

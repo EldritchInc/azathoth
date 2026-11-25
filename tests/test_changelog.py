@@ -25,6 +25,7 @@ UNRELEASED = "Unreleased"
 """The entry for what is on `main` but not yet released, renamed when it is."""
 
 RELEASE_DECISIONS = {
+    "1.6.0": range(134, 143),
     "1.5.0": range(127, 134),
     "1.4.0": range(120, 127),
     "1.3.0": range(112, 120),
@@ -38,6 +39,9 @@ record after the newest belongs to `Unreleased`.
 """
 
 NEXT_ADR = max(RELEASE_DECISIONS[next(iter(RELEASE_DECISIONS))]) + 1
+
+RELEASE_1_6 = "1.6.0"
+"""The entry that records 1.6."""
 
 RELEASE_1_5 = "1.5.0"
 """The entry that records 1.5."""
@@ -127,7 +131,7 @@ def fenced(
 def test_the_releases_are_listed_newest_first_starting_with_this_one() -> None:
     releases = RELEASE_HEADING.findall(text())
 
-    assert releases == ["1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]
+    assert releases == ["1.6.0", "1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]
     assert releases[: len(RELEASE_DECISIONS)] == list(RELEASE_DECISIONS)
 
     if is_final(__version__):
@@ -205,9 +209,60 @@ def test_this_releases_upgrade_runs_the_install_guides_upgrade_commands() -> Non
     upgrade = entry(latest_release())
 
     for language in ("bash", "powershell"):
-        assert fenced(upgrade, language, "### Upgrading From 1.4") == fenced(
+        assert fenced(upgrade, language, "### Upgrading From 1.5") == fenced(
             install, language, "## Upgrading, Leaving and Uninstalling"
         )
+
+
+def test_1_5s_upgrade_from_1_4_still_shows_its_commands() -> None:
+    upgrade = entry(RELEASE_1_5)
+
+    for language in ("bash", "powershell"):
+        assert fenced(upgrade, language, "### Upgrading From 1.4") == (
+            "python -m pip install --upgrade azathoth-ai\nazathoth init\n"
+        )
+
+
+def test_1_6_says_it_makes_a_remote_an_azathoth_people_work_on() -> None:
+    release = " ".join(entry(RELEASE_1_6).split())
+
+    assert "Azathoth 1.6 makes a remote an Azathoth people work on" in release
+    assert "So far" not in release
+
+    for section in (
+        "### The Action Catalog",
+        "### A Remote Serves Requests Together",
+        "### The Service API on a Remote",
+        "### A Client for the Service API",
+        "### Jobs on a Remote",
+        "### The Command Line on a Remote",
+        "### Tokens Printed by a Command",
+        "### Serving on Windows",
+        "### Examples",
+        "### Plugins",
+        "### Upgrading From 1.5",
+    ):
+        assert f"\n{section}\n" in entry(RELEASE_1_6), section
+
+
+def test_1_6_says_what_an_existing_installation_will_notice() -> None:
+    upgrade = " ".join(entry(RELEASE_1_6).split())
+
+    assert "The database schema moves from version 7 to version 9" in upgrade
+    assert "1.6 of it requires 1.6 of `azathoth-ai`" in upgrade
+    assert "upgrade Azathoth on every machine first" in upgrade
+    assert "`azathoth remote serve` now runs jobs, 2 at once by default" in upgrade
+
+
+def test_1_6_says_it_was_not_deployed_to_aws_because_no_sandbox_was_available() -> None:
+    release = " ".join(entry(RELEASE_1_6).split())
+
+    assert "no sandbox was available, so this release was not deployed" in release
+    assert "moves its database from schema version 7 to version 9" in release
+    assert "is unproven for 1.6.0, as what 1.5.0, 1.4.0 and 1.3.0 left unproven still is" in (
+        release
+    )
+    assert f"]({REPOSITORY}/docs/release-validation.md#9-the-aws-deployment)" in release
 
 
 def test_1_4s_upgrade_from_1_3_still_shows_its_commands() -> None:
