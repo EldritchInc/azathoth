@@ -1,0 +1,133 @@
+{
+  "definition": {
+    "id": "d7000000-0000-4000-8000-000000000003",
+    "name": "benchmark_against_new_models",
+    "description": "Optimize each target's workflow against its own benchmark, with tonight's new models authorized here, as workflow optimize does.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "watch": {
+            "type": "object",
+            "properties": {
+              "ledger": {
+                "type": "string",
+                "minLength": 1
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "providers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "modalities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "targets": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "workflow": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "benchmark": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target_latency": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "target_cost": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "generations": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "workflow",
+                    "benchmark",
+                    "target_latency",
+                    "target_cost"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "ledger",
+              "targets"
+            ]
+          },
+          "new_models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "watch",
+          "new_models"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "results",
+          "message"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "d7000000-0000-4000-8000-000000000013",
+      "tool_id": "d7000000-0000-4000-8000-000000000003",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Benchmark Against New Models: optimize each target's workflow on its own benchmark.\n\nEach target's workflow is optimized against its benchmark, under its own\nlatency and cost targets, as `azathoth workflow optimize` does: the models\nauthorized here, tonight's new ones among them, are tried on the cases the\noperator wrote, not on a leaderboard. Optimizing never promotes.\n\nA target that cannot be optimized, such as one whose benchmark has no\ncases, says why, and the other targets go on. On a night with nothing new,\nnothing is optimized. The targets are the watch's, the workflow's input.\n\"\"\"\n\nimport json\nimport os\nimport sys\nfrom uuid import UUID\n\nfrom azathoth import api\n\n\ndef plural(count, one, many):\n    return f\"{count} {one if count == 1 else many}\"\n\n\ndef benchmark(optimization, targets, new_models, *, refused):\n    \"\"\"Optimize each target, and return what the step says of them.\n\n    `refused` are the errors a target's optimizing may fail with, which\n    fail that target alone.\n    \"\"\"\n\n    if not new_models:\n        return {\"results\": [], \"message\": \"Nothing new to test tonight.\"}\n\n    results = []\n\n    for target in targets:\n        result = {\"workflow\": target[\"workflow\"], \"benchmark\": target[\"benchmark\"]}\n\n        try:\n            summary = optimization.optimize(\n                UUID(target[\"workflow\"]),\n                UUID(target[\"benchmark\"]),\n                target_latency_seconds=float(target[\"target_latency\"]),\n                target_cost_usd=float(target[\"target_cost\"]),\n                generations=int(target.get(\"generations\", 1)),\n            )\n        except refused as exc:\n            result.update(experiment=None, problem=str(exc))\n        else:\n            result.update(experiment=str(summary.winning_experiment_id), problem=None)\n\n        results.append(result)\n\n    tried = [result for result in results if result[\"problem\"] is None]\n    workflows = plural(len(tried), \"workflow's\", \"workflows'\")\n    message = (\n        f\"Tested {plural(len(new_models), 'new model', 'new models')} on {workflows} own \"\n        \"cases. Not a leaderboard.\"\n    )\n\n    if len(tried) < len(results):\n        failed = len(results) - len(tried)\n        message = f\"{message} {plural(failed, 'target', 'targets')} could not be tried.\"\n\n    return {\"results\": results, \"message\": message}\n\n\ndef main():\n    inputs = json.load(sys.stdin)\n    database = os.environ.get(\"AZATHOTH_DATABASE\", \"azathoth.db\")\n\n    try:\n        with api.open(database, providers=api.ProviderSettings.from_environment()) as instance:\n            said = benchmark(\n                instance.optimization,\n                inputs[\"watch\"][\"targets\"],\n                inputs.get(\"new_models\", []),\n                refused=(api.ApiError, ValueError),\n            )\n    except api.ApiError as exc:\n        sys.stderr.buffer.write(str(exc).encode(\"utf-8\"))\n        sys.exit(1)\n\n    json.dump(said, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 3600.0,
+      "environment": [
+        "AZATHOTH_DATABASE",
+        "AZATHOTH_AUTHOR",
+        "OPENROUTER_API_KEY",
+        "AZATHOTH_BEDROCK",
+        "AZATHOTH_BEDROCK_PRICING",
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}

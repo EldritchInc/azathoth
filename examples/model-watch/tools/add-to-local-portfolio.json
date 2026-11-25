@@ -1,0 +1,82 @@
+{
+  "definition": {
+    "id": "d7000000-0000-4000-8000-000000000002",
+    "name": "add_to_local_portfolio",
+    "description": "Authorize new models in this machine's portfolio for testing, and touch no remote or production.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "new_models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "new_models"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "added": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "already": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "added",
+          "already",
+          "unavailable",
+          "message"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "d7000000-0000-4000-8000-000000000012",
+      "tool_id": "d7000000-0000-4000-8000-000000000002",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Add to Local Portfolio: authorize tonight's new models on this machine, for testing.\n\nEach new model is authorized in the portfolio of the instance\n`AZATHOTH_DATABASE` names: the operator's own, which runs the benchmarks.\nNothing is pushed, and no remote's portfolio or production is touched, so\nproduction stays locked. A model already authorized here is left as it was,\nand is never deauthorized by the watch; one no provider serves any longer\nis skipped.\n\nThe step returns the models it added, which the watch alone may take away\nagain, those already authorized, and those no longer served.\n\"\"\"\n\nimport json\nimport os\nimport sys\n\nfrom azathoth import api\n\n\ndef plural(count, one, many):\n    return f\"{count} {one if count == 1 else many}\"\n\n\ndef add_to_portfolio(portfolio, identifiers, *, conflict, missing):\n    \"\"\"Authorize each model; return what the step says of it.\n\n    `conflict` and `missing` are the errors `portfolio.add` raises for a\n    model already authorized and for one no provider serves.\n    \"\"\"\n\n    added = []\n    already = []\n    unavailable = []\n\n    for identifier in identifiers:\n        try:\n            portfolio.add(identifier)\n        except conflict:\n            already.append(identifier)\n        except missing:\n            unavailable.append(identifier)\n        else:\n            added.append(identifier)\n\n    parts = [f\"Approved {plural(len(added), 'model', 'models')} on this machine for testing.\"]\n\n    if already:\n        parts.append(f\"{plural(len(already), 'was', 'were')} already approved here.\")\n\n    if unavailable:\n        parts.append(f\"{plural(len(unavailable), 'is', 'are')} no longer served.\")\n\n    parts.append(\"Production stays locked.\")\n\n    return {\n        \"added\": added,\n        \"already\": already,\n        \"unavailable\": unavailable,\n        \"message\": \" \".join(parts),\n    }\n\n\ndef main():\n    inputs = json.load(sys.stdin)\n    identifiers = [model[\"identifier\"] for model in inputs.get(\"new_models\", [])]\n    database = os.environ.get(\"AZATHOTH_DATABASE\", \"azathoth.db\")\n\n    try:\n        with api.open(database, providers=api.ProviderSettings.from_environment()) as instance:\n            said = add_to_portfolio(\n                instance.portfolio,\n                identifiers,\n                conflict=api.ConflictError,\n                missing=api.NotFoundError,\n            )\n    except api.ApiError as exc:\n        sys.stderr.buffer.write(str(exc).encode(\"utf-8\"))\n        sys.exit(1)\n\n    json.dump(said, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 120.0,
+      "environment": [
+        "AZATHOTH_DATABASE",
+        "AZATHOTH_AUTHOR",
+        "OPENROUTER_API_KEY",
+        "AZATHOTH_BEDROCK",
+        "AZATHOTH_BEDROCK_PRICING",
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}

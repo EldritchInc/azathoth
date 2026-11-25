@@ -1,0 +1,366 @@
+{
+  "metadata": {
+    "id": "d7000000-0000-4000-8000-000000000020",
+    "name": "model watch",
+    "description": "Each night, find the models released since the last run, approve them on this machine only, benchmark the targets' workflows with them on their own cases, compare cost and quality, and propose any winner for a human to promote.",
+    "version": "1.0.0"
+  },
+  "steps": [
+    {
+      "id": "d7000000-0000-4000-8000-000000000021",
+      "specification": {
+        "requirement": {
+          "name": "discover_new_models",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [],
+      "inputs": [
+        {
+          "name": "watch",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "new_models",
+          "path": [
+            "new_models"
+          ]
+        },
+        {
+          "name": "discovered",
+          "path": [
+            "message"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Discover New Models",
+      "emit_values": true
+    },
+    {
+      "id": "d7000000-0000-4000-8000-000000000022",
+      "specification": {
+        "requirement": {
+          "name": "add_to_local_portfolio",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "d7000000-0000-4000-8000-000000000021"
+      ],
+      "inputs": [
+        {
+          "name": "new_models",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000021",
+            "name": "new_models"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "added",
+          "path": [
+            "added"
+          ]
+        },
+        {
+          "name": "approved",
+          "path": [
+            "message"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Add to Local Portfolio",
+      "emit_values": true
+    },
+    {
+      "id": "d7000000-0000-4000-8000-000000000023",
+      "specification": {
+        "requirement": {
+          "name": "benchmark_against_new_models",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "d7000000-0000-4000-8000-000000000022"
+      ],
+      "inputs": [
+        {
+          "name": "watch",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "new_models",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000021",
+            "name": "new_models"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "results",
+          "path": [
+            "results"
+          ]
+        },
+        {
+          "name": "tested",
+          "path": [
+            "message"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Benchmark Against New Models",
+      "emit_values": true
+    },
+    {
+      "id": "d7000000-0000-4000-8000-000000000024",
+      "specification": {
+        "requirement": {
+          "name": "compare_cost_and_quality",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "d7000000-0000-4000-8000-000000000023"
+      ],
+      "inputs": [
+        {
+          "name": "results",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000023",
+            "name": "results"
+          }
+        },
+        {
+          "name": "new_models",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000021",
+            "name": "new_models"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "compared",
+          "path": [
+            "compared"
+          ]
+        },
+        {
+          "name": "measured",
+          "path": [
+            "message"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Compare Cost & Quality",
+      "emit_values": true
+    },
+    {
+      "id": "d7000000-0000-4000-8000-000000000025",
+      "specification": {
+        "requirement": {
+          "name": "propose_winner",
+          "version": "1.0.0",
+          "runtime": "process"
+        }
+      },
+      "depends_on": [
+        "d7000000-0000-4000-8000-000000000024"
+      ],
+      "inputs": [
+        {
+          "name": "watch",
+          "source": {
+            "event_type": "workflow.input.received",
+            "field_name": "input"
+          }
+        },
+        {
+          "name": "compared",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000024",
+            "name": "compared"
+          }
+        },
+        {
+          "name": "new_models",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000021",
+            "name": "new_models"
+          }
+        },
+        {
+          "name": "added",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000022",
+            "name": "added"
+          }
+        },
+        {
+          "name": "discovered",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000021",
+            "name": "discovered"
+          }
+        },
+        {
+          "name": "approved",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000022",
+            "name": "approved"
+          }
+        },
+        {
+          "name": "tested",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000023",
+            "name": "tested"
+          }
+        },
+        {
+          "name": "measured",
+          "source": {
+            "producer_step_id": "d7000000-0000-4000-8000-000000000024",
+            "name": "measured"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "report",
+          "path": []
+        },
+        {
+          "name": "proposed",
+          "path": [
+            "message"
+          ]
+        }
+      ],
+      "conditions": [],
+      "retry_policy": {
+        "max_attempts": 1,
+        "initial_delay_seconds": 0.0,
+        "backoff_multiplier": 1.0,
+        "maximum_delay_seconds": null
+      },
+      "failure_policy": "fail_workflow",
+      "message": "Propose Winner",
+      "emit_values": true
+    }
+  ],
+  "result": {
+    "name": "report"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "ledger": {
+        "type": "string",
+        "minLength": 1
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "providers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "modalities": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "targets": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "properties": {
+            "workflow": {
+              "type": "string",
+              "minLength": 1
+            },
+            "benchmark": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_latency": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "target_cost": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "generations": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "workflow",
+            "benchmark",
+            "target_latency",
+            "target_cost"
+          ]
+        }
+      }
+    },
+    "required": [
+      "ledger",
+      "targets"
+    ]
+  }
+}

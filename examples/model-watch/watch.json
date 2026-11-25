@@ -1,0 +1,21 @@
+{
+  "ledger": "~/.azathoth/model-watch-ledger.json",
+  "limit": 5,
+  "modalities": [
+    "text"
+  ],
+  "targets": [
+    {
+      "workflow": "f1000000-0000-4000-8000-000000000010",
+      "benchmark": "f1000000-0000-4000-8000-000000000050",
+      "target_latency": 5,
+      "target_cost": 0.01
+    },
+    {
+      "workflow": "f1000000-0000-4000-8000-000000000030",
+      "benchmark": "f1000000-0000-4000-8000-000000000060",
+      "target_latency": 30,
+      "target_cost": 0.05
+    }
+  ]
+}

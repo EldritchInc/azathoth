@@ -1,0 +1,138 @@
+{
+  "definition": {
+    "id": "d7000000-0000-4000-8000-000000000001",
+    "name": "discover_new_models",
+    "description": "List the models providers serve now that the watch's ledger has never considered, after checking the targets.",
+    "version": "1.0.0",
+    "input_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "watch": {
+            "type": "object",
+            "properties": {
+              "ledger": {
+                "type": "string",
+                "minLength": 1
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "providers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "modalities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "targets": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "workflow": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "benchmark": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target_latency": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "target_cost": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "generations": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "workflow",
+                    "benchmark",
+                    "target_latency",
+                    "target_cost"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "ledger",
+              "targets"
+            ]
+          }
+        },
+        "required": [
+          "watch"
+        ]
+      }
+    },
+    "output_schema": {
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "new_models": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "new": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "first_run": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "new_models",
+          "new",
+          "waiting",
+          "first_run",
+          "message"
+        ]
+      }
+    }
+  },
+  "implementations": [
+    {
+      "id": "d7000000-0000-4000-8000-000000000011",
+      "tool_id": "d7000000-0000-4000-8000-000000000001",
+      "tool_version": "1.0.0",
+      "version": "1.0.0",
+      "runtime": "process",
+      "entrypoint": "run",
+      "source": "\"\"\"Discover New Models: the models served now that this watch has never considered.\n\nThe ledger, a JSON file at `ledger`, holds every model the watch has\nconsidered, with when and what became of it. A model is new when a provider\nserves it and the ledger does not hold it, so one tried and rejected a week\nago never comes back. The first run records every model served as the\nbaseline and tries none, so a watch starts from what exists that night.\n\nThe step reads the watch, the workflow's input, as `watch`: its `ledger`,\n`targets`, and optional `limit`, `providers` and `modalities`.\n\nOnly the models whose input and output take every one of `modalities`,\ntext unless named, and of `providers`, when named, are watched. At most\n`limit` new models are tried a night, in identifier order; the rest wait,\nunrecorded, for the next run.\n\nThe targets are checked first, so a mistake in them fails the watch before\nanything is authorized: each names a workflow and a benchmark this instance\nholds, and a latency and a cost above 0, and no workflow is named twice.\n\"\"\"\n\nimport json\nimport os\nimport sys\nfrom datetime import UTC, datetime\nfrom pathlib import Path\nfrom uuid import UUID\n\nfrom azathoth import api\n\nLEDGER_VERSION = 1\nDEFAULT_LIMIT = 5\nDEFAULT_MODALITIES = (\"text\",)\nKEPT = (\n    \"identifier\",\n    \"provider\",\n    \"display_name\",\n    \"input_modalities\",\n    \"output_modalities\",\n    \"context_window_tokens\",\n    \"input_usd_per_million_tokens\",\n    \"output_usd_per_million_tokens\",\n)\n\n\nclass WatchError(Exception):\n    \"\"\"The watch cannot go on; the message says why.\"\"\"\n\n\ndef read_ledger(path):\n    \"\"\"Return the ledger at a path, or None before the first run.\"\"\"\n\n    if not path.exists():\n        return None\n\n    try:\n        ledger = json.loads(path.read_text(encoding=\"utf-8\"))\n    except (OSError, UnicodeDecodeError, ValueError):\n        raise WatchError(f\"The ledger at {path} could not be read as JSON.\") from None\n\n    if (\n        not isinstance(ledger, dict)\n        or ledger.get(\"version\") != LEDGER_VERSION\n        or not isinstance(ledger.get(\"models\"), dict)\n    ):\n        raise WatchError(f\"The ledger at {path} is not a model-watch ledger.\")\n\n    return ledger\n\n\ndef write_ledger(path, ledger):\n    \"\"\"Write a ledger whole, replacing the one before only once it is written.\"\"\"\n\n    path.parent.mkdir(parents=True, exist_ok=True)\n    written = path.with_name(f\"{path.name}.tmp\")\n    written.write_text(f\"{json.dumps(ledger, indent=2, sort_keys=True)}\\n\", encoding=\"utf-8\")\n    os.replace(written, path)\n\n\ndef number(value):\n    \"\"\"Return whether a value is a JSON number, and not a boolean.\"\"\"\n\n    return isinstance(value, int | float) and not isinstance(value, bool)\n\n\ndef check_targets(targets):\n    \"\"\"Return the targets, or refuse the first that is not one, by its place in the list.\"\"\"\n\n    if not isinstance(targets, list) or not targets:\n        raise WatchError(\n            \"Name at least one target: a workflow, and the benchmark to try new models on.\"\n        )\n\n    named = set()\n\n    for place, target in enumerate(targets, start=1):\n        if not isinstance(target, dict):\n            raise WatchError(f\"Target {place} is not an object.\")\n\n        for key in (\"workflow\", \"benchmark\"):\n            if not isinstance(target.get(key), str) or not target[key]:\n                raise WatchError(f\"Target {place} names no {key}.\")\n\n        for key in (\"target_latency\", \"target_cost\"):\n            if not number(target.get(key)) or target[key] <= 0:\n                raise WatchError(f\"Target {place}'s {key} is not a number above 0.\")\n\n        if target[\"workflow\"] in named:\n            raise WatchError(\n                f\"Target {place} names workflow {target['workflow']} again; name each once.\"\n            )\n\n        named.add(target[\"workflow\"])\n\n    return targets\n\n\ndef check_limit(limit):\n    \"\"\"Return how many new models to try a night, or refuse one that is not a count.\"\"\"\n\n    if limit is None:\n        return DEFAULT_LIMIT\n\n    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:\n        raise WatchError(\"The limit is how many new models to try a night: 1 or more.\")\n\n    return limit\n\n\ndef watched(model, providers, modalities):\n    \"\"\"Return whether the watch watches a model, by its provider and modalities.\"\"\"\n\n    if providers and model[\"provider\"] not in providers:\n        return False\n\n    return all(\n        modality in model[\"input_modalities\"] and modality in model[\"output_modalities\"]\n        for modality in modalities\n    )\n\n\ndef plural(count, one, many):\n    return f\"{count} {one if count == 1 else many}\"\n\n\ndef discover(served, ledger, *, providers, modalities, limit, now):\n    \"\"\"Return what the step says of the models served, and the ledger after it.\n\n    `served` are the models providers serve now, as `azathoth.api` lists them.\n    \"\"\"\n\n    stamp = now.astimezone(UTC).isoformat(timespec=\"seconds\")\n\n    if ledger is None:\n        baseline = {model[\"identifier\"]: {\"seen\": stamp, \"status\": \"baseline\"} for model in served}\n        said = {\n            \"new_models\": [],\n            \"new\": 0,\n            \"waiting\": 0,\n            \"first_run\": True,\n            \"message\": (\n                f\"Watching from now: {plural(len(served), 'model', 'models')} served tonight \"\n                \"are the baseline, and only models released after them are tried.\"\n            ),\n        }\n\n        return said, {\"version\": LEDGER_VERSION, \"checked_at\": stamp, \"models\": baseline}\n\n    fresh = sorted(\n        (\n            model\n            for model in served\n            if model[\"identifier\"] not in ledger[\"models\"]\n            and watched(model, providers, modalities)\n        ),\n        key=lambda model: model[\"identifier\"],\n    )\n    chosen = fresh[:limit]\n    waiting = len(fresh) - len(chosen)\n    since = ledger.get(\"checked_at\", \"the last run\")\n    message = f\"{plural(len(fresh), 'new model', 'new models')} since {since}.\"\n\n    if waiting:\n        message = f\"{message} Trying {len(chosen)} tonight; {waiting} wait for the next run.\"\n\n    said = {\n        \"new_models\": [{key: model.get(key) for key in KEPT} for model in chosen],\n        \"new\": len(fresh),\n        \"waiting\": waiting,\n        \"first_run\": False,\n        \"message\": message,\n    }\n\n    return said, {**ledger, \"checked_at\": stamp}\n\n\ndef check_held(instance, targets):\n    \"\"\"Refuse a target whose workflow or benchmark this instance does not hold.\"\"\"\n\n    for place, target in enumerate(targets, start=1):\n        for key, held in ((\"workflow\", instance.workflows), (\"benchmark\", instance.benchmarks)):\n            try:\n                held.get(UUID(target[key]))\n            except ValueError:\n                raise WatchError(f\"Target {place}'s {key} {target[key]} is not an ID.\") from None\n            except api.NotFoundError:\n                raise WatchError(\n                    f\"Target {place}'s {key} {target[key]} is not on this instance.\"\n                ) from None\n\n\ndef main():\n    watch = json.load(sys.stdin)[\"watch\"]\n\n    try:\n        targets = check_targets(watch.get(\"targets\"))\n        limit = check_limit(watch.get(\"limit\"))\n        providers = tuple(watch.get(\"providers\") or ())\n        modalities = tuple(watch.get(\"modalities\") or DEFAULT_MODALITIES)\n        path = Path(os.path.expanduser(watch[\"ledger\"]))\n        ledger = read_ledger(path)\n        database = os.environ.get(\"AZATHOTH_DATABASE\", \"azathoth.db\")\n        settings = api.ProviderSettings.from_environment()\n\n        with api.open(database, providers=settings) as instance:\n            check_held(instance, targets)\n            served = [model.model_dump(mode=\"json\") for model in instance.models.list()]\n    except (WatchError, api.ApiError) as exc:\n        sys.stderr.buffer.write(str(exc).encode(\"utf-8\"))\n        sys.exit(1)\n\n    said, updated = discover(\n        served,\n        ledger,\n        providers=providers,\n        modalities=modalities,\n        limit=limit,\n        now=datetime.now(UTC),\n    )\n    write_ledger(path, updated)\n    json.dump(said, sys.stdout)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "command": [
+        "python"
+      ],
+      "timeout_seconds": 120.0,
+      "environment": [
+        "AZATHOTH_DATABASE",
+        "AZATHOTH_AUTHOR",
+        "OPENROUTER_API_KEY",
+        "AZATHOTH_BEDROCK",
+        "AZATHOTH_BEDROCK_PRICING",
+        "AWS_*"
+      ]
+    }
+  ],
+  "test_cases": []
+}
