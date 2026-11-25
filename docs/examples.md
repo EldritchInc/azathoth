@@ -580,6 +580,12 @@ benchmark: [Novel Example](../examples/novel/README.md).
 
 ## Also in `examples/`
 
+- `model-watch/`: a workflow to run every night. It finds the models
+  released since its last run, approves them on your machine only, tries
+  them on your own workflows' benchmarks, and leaves any that do the same
+  work for less waiting for you to promote. It needs a provider, and the
+  ticket-triage example imported for its demo watch; see
+  [Model Watch Example](../examples/model-watch/README.md).
 - `goals/accurate-answer.json`: a goal document, for `azathoth goal import`.
 - `documents/claim.pdf` and `documents/segment-claim.json`: a two-page
   claim, and a workflow that divides it with the standard `segment_pdf` tool

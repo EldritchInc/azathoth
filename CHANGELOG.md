@@ -262,6 +262,18 @@ provider's tool prints one.
   hands back as the server stops is not taken by another, only to be
   handed back again.
 
+### Examples
+
+- `examples/model-watch/` is a workflow to run every night: Discover New
+  Models, Add to Local Portfolio, Benchmark Against New Models, Compare Cost
+  & Quality, and Propose Winner. A ledger remembers every model it has
+  considered, so a rejected model never comes back; new models are
+  authorized on the local instance only, tried on each target's own
+  benchmark, and any winner that keeps its accuracy on a new model is
+  proposed with its promote command, never promoted. It is built on what
+  1.5 already does, optimizing and promoting an experiment's winner, and
+  needs no decision of its own.
+
 ### Plugins
 
 - A remote calls a plugin's seams from several threads at once; Writing a
