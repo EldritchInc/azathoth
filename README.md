@@ -207,7 +207,7 @@ explains each of these in depth.
 
 ## Project Status
 
-Azathoth 1.5 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
+Azathoth 1.6 supports Python 3.11, 3.12 and 3.13 on Linux, macOS and
 Windows, all tested in CI. Serving a remote and running the queue worker
 are tested on Linux and macOS; on Windows they run at your own risk
 ([ADR 0142](https://github.com/EldritchInc/azathoth/blob/main/docs/adrs/0142-remotes-are-served-from-linux-and-macos.md)).

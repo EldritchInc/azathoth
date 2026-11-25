@@ -89,7 +89,7 @@ def current_documents() -> list[Path]:
 
 
 def test_package_exposes_version() -> None:
-    assert __version__ == "1.6.0b2"
+    assert __version__ == "1.6.0"
 
 
 @pytest.mark.parametrize(
